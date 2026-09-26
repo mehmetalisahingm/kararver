@@ -2,6 +2,10 @@
 
 > Bu doküman klasik “en az özellikli MVP” değildir. Hedef; ilk günden gerçek kullanıcıya açılabilecek, güven veren, moderasyonu olan, büyümeye hazır ve veri toplayabileceğimiz güçlü bir V1 çıkarmaktır.
 
+## Planların birlikte kullanımı
+
+Güncel kapsam, ekip görevleri, büyüme akışları ve haftalık teslimler için [Ürün ve Ekip Planı](docs/PRODUCT_TEAM_PLAN.md) ana kaynaktır. Bu belge temel işlev/güvenlik gereksinimlerini tamamlar. Farklılık olduğunda ana plan esas alınır. Anketler, yorumlar, farklı kategoriler/topluluklar, bütün trend formatları ve kapsamlı admin V1 içinde korunur.
+
 ## 1. Ürün fikri
 
 KararVer; kullanıcıların bir konuda kısa sürede topluluğun fikrini alabildiği, anket/karar gönderileri oluşturabildiği ve gündemde yükselen konuları keşfedebildiği Türkiye odaklı sosyal karar platformudur.
@@ -28,9 +32,13 @@ V1 sonunda platformda şunlar çalışır durumda olmalıdır:
 - Oy verme ve sonuç sistemi
 - Yorumlar ve cevaplar
 - Ana akış
-- Kategori sistemi
+- Kategori ve temel topluluk sistemi
+- Fotoğraf galerisi ve lokal görsel moderasyon
+- Alternatif öneriler
+- Karar güncellemesi ve sonucu takip etme
 - Arama
 - Haftanın yükselenleri
+- Haftanın En Çok Oy Verilenleri / En Çok Konuşulanları / Değişkenleri
 - Günün yükselenleri / trendler
 - Kaydetme
 - Bildirimler
@@ -112,6 +120,7 @@ Bir kullanıcı aşağıdaki alanlarla anket açabilir:
 - 24 saat
 - 3 gün
 - 7 gün
+- 14 gün / 30 gün (haftalık karşılaştırmaya uygun anketler)
 
 Admin isterse minimum ve maksimum süreleri değiştirebilmelidir.
 
@@ -123,7 +132,7 @@ Admin isterse minimum ve maksimum süreleri değiştirebilmelidir.
 - Anket bittikten sonra yeni oy kabul edilmez.
 - Sonuçlar yüzdelik ve toplam oy olarak gösterilir.
 
-Tercihen kullanıcı, anket kapanmadan önce oyunu değiştirebilir. Bu davranış sistem ayarı olarak açılıp kapatılabilir.
+Kullanıcı anket kapanmadan, sistem ayarı izin veriyorsa oyunu değiştirebilir. İlk oy sonrası soru/seçenekler ve sonuç görünürlüğü dondurulur. Gizli sonuçlar API/cache/paylaşım kartında da korunur; kapanış sonrası görünür olur. Manipülasyonla geçersiz sayılan oylar ve haftalık karşılaştırma için ana plandaki kurallar uygulanır.
 
 ---
 
@@ -203,7 +212,12 @@ Listeler:
 
 - Günün Yükselenleri
 - Haftanın Yükselenleri
+- Haftanın En Çok Oy Verilenleri
+- Haftanın En Çok Konuşulanları
+- Haftanın Değişkenleri
 - Kategori Bazlı Yükselenler
+
+Her formatın ayrı ölçümü vardır. Haftanın Değişkenleri iki tamamlanmış 7 günlük pencere sonundaki geçerli dağılımları karşılaştırır; örneklem eşikleri, snapshot ve gizlilik kuralları ana planda tanımlıdır. Ham rapor sayısı doğrudan ceza değildir; editör öne çıkarmaları organik puandan ayrı tutulur.
 
 ---
 
@@ -504,7 +518,7 @@ Her anketin benzersiz URL’si olmalıdır.
 
 Örnek:
 
-`/anket/iphone-17-alinir-mi-abc123`
+`/karar/iphone-17-alinir-mi-abc123`
 
 Gerekli alanlar:
 
@@ -584,77 +598,15 @@ Bunlar V1.1+ roadmap’e taşınabilir.
 
 # 23. 5 haftalık geliştirme hedefi
 
-Ekip modeli: 3 ana geliştirici + gerektiğinde geliştirmeye giren 2 reviewer/developer.
+Ayrıntılı görev tablosu [ana planın 21–23. bölümlerindedir](docs/PRODUCT_TEAM_PLAN.md#21-ekip-dağılımı). Faruk kullanıcı arayüzünü, Ümit çekirdek/keşif backend'ini, Mert medya/moderasyon/toplulukları sahiplenir. Utku yönetim güvenliği/bildirim altyapısını; Mehmet büyüme, geri dönüş ve admin içerik yönetimini geliştirir. Mehmet ve Utku ürün/QA için de kapasite ayırır.
 
-## Hafta 1 — Temel altyapı
+1. **Hafta 1:** Sözleşmeler, CI/staging ve gerçek hesapla oluştur → oy ver akışı.
+2. **Hafta 2:** Yorum/alternatif, medya/rapor, kaydetme, karar güncellemesi ve bildirim altyapısı.
+3. **Hafta 3:** Bütün trend formatları, farklı kategoriler, topluluklar ve ekip içi alfa.
+4. **Hafta 4:** Kapsamlı admin/moderasyon tamamlanması; kabul kapıları sonrası kapalı beta.
+5. **Hafta 5:** Beta düzeltmeleri, performans, restore/geri alma, paylaşım/SEO ve yayın kabulü.
 
-- Proje kurulumu
-- Database schema
-- Auth
-- Kullanıcı profili
-- Anket CRUD
-- Oy sistemi
-- Temel UI design system
-- CI / branch / PR düzeni
-
-Çıkış: Kullanıcı kayıt olur, anket açar ve oy verebilir.
-
-## Hafta 2 — Sosyal ürün
-
-- Yorumlar
-- Cevaplar
-- Kategoriler
-- Ana akış
-- Arama
-- Profil ekranları
-- Kaydetme
-- Bildirim altyapısı
-
-Çıkış: Ürün gerçek bir sosyal platform gibi kullanılmaya başlar.
-
-## Hafta 3 — Keşfet ve yükselenler
-
-- Günün yükselenleri
-- Haftanın yükselenleri
-- Trend score
-- Keşfet sayfası
-- En çok oy alanlar
-- Feed sıralaması
-- Pagination/cache iyileştirmeleri
-
-Çıkış: İçerik keşfi ve geri dönüş döngüsü oluşur.
-
-## Hafta 4 — Admin, moderasyon ve güvenlik
-
-- Admin dashboard
-- User management
-- Poll/comment management
-- Reports queue
-- Ban/suspend sistemi
-- Sistem ayarları
-- Audit logs
-- Rate limiting
-- Spam kontrolleri
-- Güvenlik kontrolleri
-
-Çıkış: Platform yönetilebilir ve gerçek kullanıcıya açılmaya yakın hale gelir.
-
-## Hafta 5 — Production hazırlığı
-
-- Bug fixing
-- UI/UX polish
-- Mobil testler
-- Performans testleri
-- SEO
-- Analytics event’leri
-- Backup stratejisi
-- Error logging
-- Production deploy
-- Domain/DNS/SSL/Cloudflare ayarları
-- Kapalı beta
-- Kritik bug düzeltmeleri
-
-Çıkış: Public V1 MVP.
+Beş hafta hedef takvimdir; eksik kabul varsa sahibi/tarihi güncellenir. Anket, yorum, çoklu trend, topluluk veya admin kapsamı takvim uğruna sessizce çıkartılmaz.
 
 ---
 
@@ -684,6 +636,11 @@ KararVer public olarak açılmadan önce:
 - [ ] Temel SEO tamam
 - [ ] Analytics event’leri geliyor
 - [ ] Kritik ve yüksek öncelikli bug kalmamış
+- [ ] Topluluklar, alternatif öneriler ve bütün trend formatları çalışıyor
+- [ ] Görsel moderasyon/karantina doğrulandı
+- [ ] Karar güncellemesi, takip ve bildirim tercihleri çalışıyor
+- [ ] Kapsamlı adminin öne çıkarma, duyuru ve acil durum kontrolleri çalışıyor
+- [ ] Ana plandaki kanıt gerektiren yayın kapıları tamamlandı
 
 ---
 
@@ -693,6 +650,6 @@ KararVer’in ilk sürümündeki amaç çok fazla özellik koymak değil; kullan
 
 **Sor → Oy Al → Sonucu Gör → Tartış → Yükseleni Keşfet → Tekrar Katıl**
 
-Yeni bir özellik bu döngüyü güçlendirmiyorsa ilk V1’e eklenmemelidir.
+Yeni geliştirmeler bu döngüyü ve farklı alanlarda sosyal katılımı güçlendirmelidir. Ana planda tanımlı geniş V1 kapsamı korunur.
 
 Bu kapsam klasik bir MVP’den daha güçlüdür; fakat 5 kişilik hibrit ekip ve yapay zekâ destekli geliştirme ile doğru görev bölümü yapıldığında yaklaşık 5 haftalık hedefe göre planlanmıştır.
