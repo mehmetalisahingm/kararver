@@ -1,0 +1,19 @@
+{
+  "name": "kararver",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24.14.0 <25",
+    "pnpm": "10.34.5"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --if-present run dev",
+    "build": "pnpm -r --if-present run build",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "db:migrate": "pnpm --filter @kararver/db --if-present run db:migrate",
+    "db:seed": "pnpm --filter @kararver/db --if-present run db:seed",
+    "db:reset": "pnpm --filter @kararver/db --if-present run db:reset"
+  }
+}

@@ -1,0 +1,53 @@
+# KararVer CODEOWNERS
+# Kurallar ve gerekçe: docs/TECH_DECISIONS.md → "Modül sahipliği".
+# - Bir dosyada birden fazla sahip varsa, sahiplerden BİRİNİN onayı yeterlidir.
+#   Ortak/kritik dosyalar bu yüzden en az iki kişiye atanır; kimse tek başına kilitlemez.
+# - Sonraki satır öncekini ezer; özel yollar en altta yazılır.
+# - Mert ve Utku'nun GitHub kullanıcı adları eklenince TODO satırları açılacak.
+
+# Varsayılan: kök dosyalar ve atanmamış her şey
+*                                   @farukkemree @mehmetalisahingm @umitefe0
+
+# Frontend (Ümit)
+/apps/web/                          @umitefe0
+/ui/                                @umitefe0
+
+# Backend — Faruk modülleri (issue #2)
+/apps/api/src/modules/auth/         @farukkemree
+/apps/api/src/modules/users/        @farukkemree
+/apps/api/src/modules/polls/        @farukkemree
+/apps/api/src/modules/votes/        @farukkemree
+/apps/api/src/modules/comments/     @farukkemree
+/apps/api/src/modules/categories/   @farukkemree
+/apps/api/src/modules/feed/         @farukkemree
+/apps/api/src/modules/search/       @farukkemree
+/apps/api/src/modules/trends/       @farukkemree
+/apps/worker/src/jobs/trends/       @farukkemree
+/apps/worker/src/jobs/snapshots/    @farukkemree
+
+# Backend — Mert modülleri
+# TODO(@mert): /apps/api/src/modules/media/        @<mert>
+# TODO(@mert): /apps/api/src/modules/moderation/   @<mert>
+# TODO(@mert): /apps/api/src/modules/reports/      @<mert>
+# TODO(@mert): /apps/api/src/modules/communities/  @<mert>
+# TODO(@mert): /apps/worker/src/jobs/media/        @<mert>
+
+# Backend — Utku modülleri
+# TODO(@utku): /apps/api/src/modules/admin/        @<utku>
+# TODO(@utku): /apps/api/src/modules/settings/     @<utku>
+# TODO(@utku): /apps/api/src/modules/audit/        @<utku>
+
+# Mehmet modülleri (KV-07 ürün olayları; #2 ile doğrulanacak)
+/apps/api/src/modules/analytics/    @mehmetalisahingm
+
+# Ortak paketler: sahibi Faruk, ama tek kişi kilidi olmasın diye ikinci onaylayıcı var.
+# Başka modülü etkileyen değişiklikte o modülün sahibi de PR'a eklenir (belgeye bakın).
+/packages/db/                       @farukkemree @mehmetalisahingm
+/packages/contracts/                @farukkemree @mehmetalisahingm @umitefe0
+
+# Altyapı / kritik ortak dosyalar
+/docker-compose.yml                 @farukkemree @mehmetalisahingm
+/.env.example                       @farukkemree @mehmetalisahingm
+/.env.staging.example               @farukkemree @mehmetalisahingm
+/.github/                           @farukkemree @mehmetalisahingm
+/docs/TECH_DECISIONS.md             @farukkemree @mehmetalisahingm @umitefe0
