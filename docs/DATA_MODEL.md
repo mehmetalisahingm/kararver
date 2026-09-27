@@ -469,7 +469,7 @@ pnpm db:test
 | `prisma migrate diff --from-empty --to-schema prisma/schema --script` | ✅ Migration'ın 1. bölümüyle birebir aynı (20 tablo, 9 enum) |
 | `prisma generate` ve `tsc` (`src` + `test`) | ✅ Hatasız |
 | Test dosyası DB olmadan çalıştırıldı | ✅ Yükleniyor, 27 testi kaydediyor, anlaşılır bağlantı hatasıyla duruyor. `_test` koruması çalışıyor |
-| **Testlerin gerçek PostgreSQL'de çalışması** | ⏳ **Henüz çalıştırılmadı.** Yazarın makinesinde Docker çalışmıyor (sanallaştırma hatası). Docker'ı olan bir reviewer'dan `docker compose up -d && pnpm db:test` sonucu bekleniyor |
+| **Gerçek PostgreSQL 17.11 testi** | ✅ 2026-09-27: GitHub Actions üzerinde 27/27 geçti; migrate reset/diff ve 20 eşzamanlı oy dahil. [Koşu](https://github.com/mehmetalisahingm/kararver/actions/runs/36335631011). Aynı koşuda storage geçti; UI hashchange bekleme hatası sonraki committe düzeltildi. |
 
 ### 11.4 Açık konular
 
