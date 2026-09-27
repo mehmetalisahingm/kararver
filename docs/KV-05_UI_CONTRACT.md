@@ -1,5 +1,16 @@
 # KV-05 — KararVer ortak UI sözleşmesi
 
+## Referans görsele uyarlama
+
+Ümit'in 27 Eylül'de paylaştığı görsel doğrultusunda giriş sayfası, fotoğraflı anket akışı, kompakt trend/kategori panelleri, profil ve yönetim paneli görsel örnekleri eklendi. Girişte büyük manzara ve “Herkesin fikri var, karar senin.” başlığı; mobilde koyu yüzeyler ve dairesel mor oluştur eylemi kullanılır.
+
+- İlk açılış `#home`; örnek akış `#feed`; profil `#profile`; yönetim görünümü `#admin`.
+- Üstteki güneş/ay düğmesi açık/koyu tema arasında geçer; yenilemede koyu varsayılana döner. Tercih kalıcı saklanmaz.
+- `reference.css` görsel uyarlama katmanıdır; ana vurgu `#653CFF`, açık temada arka plan `#F5F6FA`, yüzey `#FFFFFF` olur. Aşağıdaki ilk token sözleşmesinin üstüne bu tema değerleri uygulanır.
+- Arama ve kategori seçimi yalnızca üç örnek anketi filtreler. Kaydet düğmesi yalnızca geçici görünümü değiştirir; backend veya yerel depolama kullanmaz.
+- Yönetim/profil metrikleri örnek olarak etiketlidir; gerçek yetki, moderasyon, analitik, kullanıcı veya takipçi sistemi uygulanmaz. Ekip sahipliği korunur.
+- Fotoğraf kaynakları `ui/design-system/assets/README.md` içinde; bütün dosyalar yerel sunulur. Yeni bir servis veya ücretli API entegrasyonu yoktur.
+
 Sahip: Ümit (@umitefe0). İlgili görev: [#7](https://github.com/mehmetalisahingm/kararver/issues/7).
 
 ## Teslim ve sınır
@@ -122,3 +133,7 @@ npm test
 ```
 
 Sistem tarayıcısı kullanılacaksa `KV_BROWSER_PATH` tam executable yolunu alır (bu durumda browser indirmek gerekmez). `KV_PREVIEW_URL` varsayılan olarak `http://127.0.0.1:4173`; `KV_TEST_OUTPUT` isteğe bağlı rapor dizinidir. JSON rapor ve ekran görüntüleri varsayılan `test-results/` altında oluşur ve Git'e alınmaz. Test paketleri yalnızca geliştirme içindir; önizleme bunları kullanmaz.
+
+### Referans uyarlaması doğrulaması
+
+11 yüzey × 5 genişlik taşma/navigasyon kontrolü geçti. Açık ve koyu temalarda toplam 43 axe-core taraması ihlalsiz tamamlandı. Arama/kategori/sonuçsuz durum/sıfırlama ve geçici kaydetme etkileşimleri geçti. Giriş, açık masaüstü akış ve koyu mobil akış ekran görüntüleri incelendi. Gerçek cihaz ve backend testleri kapsam dışıdır.

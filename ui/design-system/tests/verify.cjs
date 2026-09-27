@@ -28,7 +28,7 @@ const { AxeBuilder } = require('@axe-core/playwright');
     await route('feed');
     for (const width of [360, 390, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
-      for (const target of ['feed', 'components', 'create', 'explore', 'notifications', 'profile', 'not-found', 'server-error']) {
+      for (const target of ['home', 'feed', 'components', 'create', 'explore', 'notifications', 'profile', 'categories', 'admin', 'not-found', 'server-error']) {
         await route(target);
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
         assert.equal(overflow, false, `${target} overflows at ${width}px`);
@@ -39,10 +39,11 @@ const { AxeBuilder } = require('@axe-core/playwright');
       assert.equal(await page.locator('.preview-sidebar').isVisible(), width >= 768);
       report.viewports.push(width);
     }
-    report.checks.push('8 surfaces: no horizontal overflow at 360/390/768/1024/1440; navigation breakpoints');
+    report.checks.push('11 surfaces: no horizontal overflow at 360/390/768/1024/1440; navigation breakpoints');
     await page.setViewportSize({ width: 1440, height: 1100 });
     await route('feed');
     await page.screenshot({ path: path.join(output, 'desktop.png'), fullPage: true });
+    if (!(await page.locator('.state-tools').evaluate(el => el.open))) await page.locator('.state-tools summary').click();
     for (const state of ['loading', 'empty', 'error']) {
       await page.locator(`[data-feed-state="${state}"]`).click();
       assert.equal(await page.locator(`[data-feed-panel="${state}"]`).isVisible(), true);
@@ -103,10 +104,30 @@ const { AxeBuilder } = require('@axe-core/playwright');
     assert.equal(await page.locator('#main').evaluate(el => el === document.activeElement), true);
     await page.screenshot({ path: path.join(output, 'mobile-form.png'), fullPage: true });
     await route('feed');
+    if (!(await page.locator('.state-tools').evaluate(el => el.open))) await page.locator('.state-tools summary').click();
     await page.locator('[data-feed-state="loading"]').click();
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal(await page.locator('.kv-skeleton').first().evaluate(el => getComputedStyle(el).animationName), 'none');
     report.checks.push('Mobile navigation active state/focus and reduced motion');
+    await route('feed');
+    await page.locator('[data-category="Seyahat"]').click();
+    assert.equal(await page.locator('[data-poll-category]:visible').count(), 1);
+    await page.locator('#search-input').fill('eşleşmeyenkelime');
+    await page.locator('#search-form button').click();
+    assert.equal(await page.locator('#no-matches').isVisible(), true);
+    await page.getByRole('button', { name: 'Filtreleri temizle' }).click();
+    assert.equal(await page.locator('[data-poll-category]:visible').count(), 3);
+    await page.locator('.save-poll').first().click();
+    assert.equal(await page.locator('.save-poll').first().getAttribute('aria-pressed'), 'true');
+    await page.getByRole('button', { name: 'Açık temaya geç' }).click();
+    for (const width of [360, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const target of ['home', 'feed', 'components', 'create', 'explore', 'profile', 'categories', 'admin']) {
+        await route(target);
+        await audit(`light-${target}-${width}`);
+      }
+    }
+    report.checks.push('Category/search/no results/reset, save preview, both themes accessibility');
     assert.deepEqual(runtimeErrors, []);
     report.checks.push('No browser runtime errors');
     report.passed = true;
