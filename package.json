@@ -10,11 +10,12 @@
     "dev": "pnpm -r --parallel --if-present run dev",
     "build": "pnpm -r --if-present run build",
     "lint": "pnpm -r --if-present run lint",
-    "test": "pnpm -r --if-present run test",
+    "test": "pnpm contracts:test && pnpm db:test",
+    "contracts:test": "node --test packages/contracts/test/*.test.mjs",
+    "ui:test": "node scripts/test-ui.mjs",
     "typecheck": "pnpm -r --if-present run typecheck",
-    "db:migrate": "pnpm --filter @kararver/db --if-present run db:migrate",
-    "db:seed": "pnpm --filter @kararver/db --if-present run db:seed",
-    "db:reset": "pnpm --filter @kararver/db --if-present run db:reset",
+    "db:migrate": "pnpm --filter @kararver/db run db:migrate",
+    "db:reset": "pnpm --filter @kararver/db run db:reset",
     "db:test": "pnpm --filter @kararver/db run test:db"
   }
 }

@@ -342,7 +342,7 @@ ACTIVE | RESTRICTED | SUSPENDED ──► BANNED ──► ACTIVE   (sadece admi
 
 Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından itibaren, Europe/Istanbul takvim günleriyle** tanımlanır.
 
-> **Teyit bekliyor:** Bu tanım `main`'deki `PRODUCT_TEAM_PLAN.md` §8'de yazılı değil. Faruk'un kararıyla buraya yazıldı (açılış günü kısmi gün, pencere sonları İstanbul gece yarısı). Ürün tarafından onayı Mehmet'ten bekleniyor (KV-02 PR'ı).
+> **Onaylandı:** Mehmet, PR #63 incelemesinde 2026-09-27 tarihinde Europe/Istanbul takvim günü yaklaşımını kabul etti. Açılış günü kısmi gün, pencere sonları İstanbul gece yarısıdır; tam 168 saatlik kayan pencere kullanılmaz.
 
 ### 8.1 Tanımlar
 - `open_local_date = (polls.opens_at AT TIME ZONE 'Europe/Istanbul')::date`: Anketin açıldığı İstanbul günü.
@@ -475,7 +475,7 @@ pnpm db:test
 
 | # | Konu | Kim |
 |---|---|---|
-| 1 | Snapshot pencere tanımının (§8) ürün onayı; `main`'deki planda yok | Mehmet |
+| 1 | Snapshot pencere tanımı PR #63 incelemesinde onaylandı; §8 güncellendi | Tamamlandı |
 | 2 | `LOCKED` durumundaki anket oy alabilir mi? | KV-11 |
 | 3 | Hesap silmede KVKK kapsamı: hangi alanlar anonimleşir, oylar ne olur | Faruk + Utku |
 | 4 | Kullanıcı adında izinli karakterler (Türkçe harf olacak mı?) | KV-09 |
