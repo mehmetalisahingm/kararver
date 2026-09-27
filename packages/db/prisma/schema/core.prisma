@@ -81,14 +81,17 @@ model User {
   commentLikes CommentLike[]
 
   // Mert — media.prisma (KV-16)
-  uploadedMedia            MediaAsset[]       @relation("MediaUploader")
-  reviewedMedia            MediaAsset[]       @relation("MediaReviewer")
+  uploadedMedia            MediaAsset[]          @relation("MediaUploader")
+  reviewedMedia            MediaAsset[]          @relation("MediaReviewer")
   // Mert — moderation.prisma (KV-24)
-  reportsFiled             Report[]           @relation("ReportReporter")
-  reportsAgainst           Report[]           @relation("ReportTargetUser")
-  reportsResolved          Report[]           @relation("ReportResolver")
-  moderationActionsTaken   ModerationAction[] @relation("ModerationActor")
-  moderationActionsAgainst ModerationAction[] @relation("ModerationTargetUser")
+  reportsFiled             Report[]              @relation("ReportReporter")
+  reportsAgainst           Report[]              @relation("ReportTargetUser")
+  reportsResolved          Report[]              @relation("ReportResolver")
+  moderationActionsTaken   ModerationAction[]    @relation("ModerationActor")
+  moderationActionsAgainst ModerationAction[]    @relation("ModerationTargetUser")
+  // Mert — community.prisma (KV-31)
+  createdCommunities       Community[]           @relation("CommunityCreator")
+  communityMemberships     CommunityMembership[]
 
   @@index([status])
   @@map("users")

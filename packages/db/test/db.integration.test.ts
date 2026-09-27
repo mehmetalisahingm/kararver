@@ -590,7 +590,83 @@ describe("reports ve moderation_actions (KV-24)", () => {
   });
 });
 
-// ─── 8. Türkçe normalizasyon ──────────────────────────────────
+// ─── 8. Topluluk (KV-31) ──────────────────────────────────────
+
+describe("communities ve community_memberships (KV-31)", () => {
+  async function createCommunity(createdById: string, slug = `kampus-${shortId()}`): Promise<string> {
+    const id = randomUUID();
+    await db.$executeRaw`
+      INSERT INTO communities (id, slug, name, created_by_id, updated_at)
+      VALUES (${id}::uuid, ${slug}, 'Samsun Üniversitesi', ${createdById}::uuid, now())`;
+    return id;
+  }
+
+  async function join(communityId: string, userId: string, role = "MEMBER"): Promise<void> {
+    await db.$executeRaw`
+      INSERT INTO community_memberships (community_id, user_id, role, updated_at)
+      VALUES (${communityId}::uuid, ${userId}::uuid, ${role}::community_role, now())`;
+  }
+
+  test("aynı kullanıcı topluluğa ikinci kez katılamaz; ayrılıp yeniden katılabilir", async () => {
+    const community = await createCommunity(await createUser());
+    const user = await createUser();
+    await join(community, user);
+    await expectDbError(join(community, user), UNIQUE_VIOLATION);
+
+    await db.$executeRaw`DELETE FROM community_memberships WHERE community_id = ${community}::uuid AND user_id = ${user}::uuid`;
+    await join(community, user);
+  });
+
+  test("slug benzersiz ve URL biçiminde, ad boş olamaz", async () => {
+    const admin = await createUser();
+    const slug = `topluluk-${shortId()}`;
+    await createCommunity(admin, slug);
+    await expectDbError(createCommunity(admin, slug), UNIQUE_VIOLATION);
+    await expectDbError(createCommunity(admin, "Samsun Üni"), CHECK_VIOLATION);
+    await expectDbError(createCommunity(admin, "cift--tire"), CHECK_VIOLATION);
+    await expectDbError(
+      db.$executeRaw`
+        INSERT INTO communities (id, slug, name, created_by_id, updated_at)
+        VALUES (${randomUUID()}::uuid, ${`bos-${shortId()}`}, '   ', ${admin}::uuid, now())`,
+      CHECK_VIOLATION,
+    );
+  });
+
+  test("üye sayısı negatif olamaz", async () => {
+    const community = await createCommunity(await createUser());
+    await expectDbError(
+      db.$executeRaw`UPDATE communities SET member_count = member_count - 1 WHERE id = ${community}::uuid`,
+      CHECK_VIOLATION,
+    );
+  });
+
+  test("moderatör rolü üyelikte tutulur ve kaldırılabilir", async () => {
+    const community = await createCommunity(await createUser());
+    const moderator = await createUser();
+    await join(community, moderator, "MODERATOR");
+    await db.$executeRaw`
+      UPDATE community_memberships SET role = 'MEMBER', updated_at = now()
+      WHERE community_id = ${community}::uuid AND user_id = ${moderator}::uuid`;
+    const row = await one(db.$queryRaw<{ role: string }[]>`
+      SELECT role::text FROM community_memberships
+      WHERE community_id = ${community}::uuid AND user_id = ${moderator}::uuid`);
+    assert.equal(row.role, "MEMBER");
+  });
+
+  test("anketi olan topluluk silinemez; kapatmak anketleri etkilemez", async () => {
+    const author = await createUser();
+    const community = await createCommunity(author);
+    const { pollId } = await createPoll(author);
+    await db.$executeRaw`UPDATE polls SET community_id = ${community}::uuid WHERE id = ${pollId}::uuid`;
+
+    await expectDbError(db.$executeRaw`DELETE FROM communities WHERE id = ${community}::uuid`, FK_VIOLATION);
+    await db.$executeRaw`UPDATE communities SET status = 'LOCKED', updated_at = now() WHERE id = ${community}::uuid`;
+    const poll = await one(db.$queryRaw<{ status: string }[]>`SELECT status::text FROM polls WHERE id = ${pollId}::uuid`);
+    assert.equal(poll.status, "ACTIVE");
+  });
+});
+
+// ─── 9. Türkçe normalizasyon ──────────────────────────────────
 
 describe("kv_normalize", () => {
   const cases: [string, string][] = [

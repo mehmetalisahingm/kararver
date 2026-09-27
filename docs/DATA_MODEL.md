@@ -18,7 +18,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 | `core.prisma` | Faruk | Hesap, kategori/etiket, anket, seçenek, oy, oy geçmişi, yorum | ✅ |
 | `trends.prisma` | Faruk | Günlük snapshot, trend çalıştırmaları ve skorları | ✅ |
 | `media.prisma` | **Mert** | `MediaAsset`: nesne anahtarları, işlenmiş kopya metadata'sı, moderasyon sonucu ([MEDIA_MODERATION.md](./MEDIA_MODERATION.md)) | ✅ KV-16 (şema) |
-| `community.prisma` | **Mert** | `Community`, şimdilik **iskelet** | 🟡 KV-31'de genişletilecek |
+| `community.prisma` | **Mert** | `Community` (slug, ad, görsel, üye sayısı, oluşturan), `CommunityMembership` (üyelik + topluluk rolü) | ✅ KV-31 (şema) |
 | `moderation.prisma` | Mert | `Report`, `ModerationAction` (append-only). Engelli görsel hash listesi KV-38'de eklenecek | ✅ KV-24 (şema) |
 | `admin.prisma` | Utku | Roller, yaptırımlar, audit, ayarlar, bildirimler | ⏳ KV-04 / KV-21 / KV-39 / KV-40 |
 | `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ⏳ KV-22 / KV-23 / KV-42 / KV-15 |
@@ -383,7 +383,7 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 | Sahip | Tablo (planlanan) | Çekirdeğe bağlantısı | Kural |
 |---|---|---|---|
 | Mert | `media_assets` (KV-16) | `users.avatar_media_id`, `poll_media.media_id` ona bağlanır; `uploader_id`, `reviewed_by_id → users.id` | Anket ve profilde sadece `status = APPROVED` görseller gösterilir (sorgu kuralı). `public_object_key` sadece `APPROVED` iken dolu olabilir (`media_assets_public_key_check`) |
-| Mert | `communities` (iskelet var), `community_memberships` | `polls.community_id` ona bağlanır; üyelik `users`'a bağlanır | Topluluk kapatılsa bile anketler silinmez (`RESTRICT`) |
+| Mert | `communities`, `community_memberships` (KV-31) | `polls.community_id` ona bağlanır; üyelik PK'si `(community_id, user_id)`; `created_by_id → users.id`, `image_media_id → media_assets.id` | Topluluk kapatılsa (`status = LOCKED`) bile anketler silinmez (`RESTRICT`). Topluluk moderatörlüğü `community_memberships.role = MODERATOR`'dır; yetki istemciden değil bu satırdan okunur. `member_count` üyelikle aynı transaction'da güncellenir |
 | Mert | `reports`, `moderation_actions` (KV-24) | Hedef başına ayrı nullable FK: `poll_id`, `comment_id`, `media_id`, `reported_user_id` / `target_user_id`, ve "tam olarak biri dolu" CHECK'i | Tek `target_type`/`target_id` çifti FK bütünlüğünü kaybettirdiği için önerilmez. Kullanıcı aynı hedefi bir kez raporlar (unique). `moderation_actions` append-only (trigger), gerekçe zorunlu. Karar güncellemesi raporu için FK, KV-23 tablosu açılınca eklenir |
 | Utku | `user_roles`, `sanctions` | `users.id` | Yaptırım `users.status`'u da günceller (§7.2) |
 | Utku | `audit_logs` | `actor_id → users.id`; hedef `target_type` + `target_id` | Append-only (KV-39); polimorfik hedef burada kabul edilir |
@@ -450,7 +450,7 @@ pnpm db:test
   ```
 - **Sunucu çalışmıyorsa:** Test `PostgreSQL'e bağlanılamadı (...). Sunucu çalışıyor mu?` mesajıyla durur.
 
-### 11.2 Test kapsamı (40 test)
+### 11.2 Test kapsamı (45 test)
 
 | Grup | Ne doğrulanır |
 |---|---|
@@ -462,6 +462,7 @@ pnpm db:test
 | `kv_normalize` | TECH_DECISIONS §3.9 tablosu ve ek örnekler: `Şişe→sise`, `IŞIK/ışık→isik`, `İstanbul→istanbul`, `ağaç→agac`, `Göz→goz`, `Üzüm→uzum`, `ÇİÇEK→cicek`, `Iğdır→igdir` |
 | `media_assets` (KV-16, +6 test) | Onaylanmamış görsel public anahtar alamaz; onaylı görsel public ve işlenmiş kopya olmadan var olamaz; onaydan sonra kaldırmada public anahtar aynı UPDATE'te boşaltılmalı; risk skoru 0–1; inceleme alanları birlikte dolar; yükleyen FK'si ve galerideki görselin silinememesi |
 | `reports` / `moderation_actions` (KV-24, +7 test) | Rapor tam olarak bir hedefe bağlanır; aynı kullanıcı aynı hedefi iki kez raporlayamaz; kendini raporlayamaz; sonuçlanan rapor sonuçlandıranı taşır, açık rapor taşımaz; raporlanan anket hard delete edilemez; işlem gerekçesiz/hedefsiz yazılamaz; moderasyon geçmişi `KV_MODERATION_ACTIONS_APPEND_ONLY` ile korunur |
+| `communities` / `community_memberships` (KV-31, +5 test) | Aynı kullanıcı ikinci kez katılamaz, ayrılıp yeniden katılabilir; slug benzersiz ve URL biçiminde, ad boş olamaz; üye sayısı negatif olamaz; moderatör rolü üyelikte tutulur ve kaldırılabilir; anketi olan topluluk silinemez, kapatmak anketleri etkilemez |
 
 ### 11.3 Bu PR'daki kanıt
 
