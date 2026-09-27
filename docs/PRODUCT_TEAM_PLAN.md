@@ -632,39 +632,11 @@ Hard delete yerine mümkün olduğunca soft delete tercih edilir.
 
 Bu eşit sayıda issue anlamına gelmez; işlerin zorluğu ve review sorumluluğu da hesaba katılır. Utku ve Mehmet'in review/QA yükü teknik iş yüklerinin bir parçasıdır.
 
-Hiçbir kişi tüm kritik altyapıyı tek başına taşımamalıdır. Özellikle eski plandaki Ümit yoğunluğu dağıtılmıştır.
+Hiçbir kişi tüm kritik altyapıyı tek başına taşımamalıdır.
 
 ---
 
-## FARUK — Product UI / Frontend
-
-**Toplam hedef yük: ~%20**
-
-Ana sahiplik:
-
-- design system ve premium mor/dark tema
-- app shell / navigation
-- ana feed
-- anket kartları
-- anket detay ekranı
-- anket oluşturma UI
-- oy verme ve sonuç UI
-- yorum / alternatif öneri UI
-- profil / kaydedilenler UI
-- responsive/mobile polish
-- loading / empty / error states
-
-Paylaşılan işler:
-
-- Mehmet ile keşfet/trend ekranları
-- Utku ile admin frontend'in kritik ekranları
-- Mert ile topluluk/media UI
-
-Faruk artık bütün admin + trend + community frontend'ini tek başına taşımayacaktır.
-
----
-
-## ÜMİT — Core Backend / Data
+## FARUK — Core Backend / Data
 
 **Toplam hedef yük: ~%20**
 
@@ -690,7 +662,35 @@ Paylaşılan / devredilen işler:
 - media/moderation backend → **Mert** ana sahip
 - notifications → **Mert + Mehmet**
 
-Ümit'in görevi çekirdek veri ve karar bütünlüğüdür; bütün backend'i tek başına taşımaz.
+Faruk'un görevi çekirdek veri ve karar bütünlüğüdür; bütün backend'i tek başına taşımaz.
+
+---
+
+## ÜMİT — Product UI / Frontend
+
+**Toplam hedef yük: ~%20**
+
+Ana sahiplik:
+
+- design system ve premium mor/dark tema
+- app shell / navigation
+- ana feed
+- anket kartları
+- anket detay ekranı
+- anket oluşturma UI
+- oy verme ve sonuç UI
+- yorum / alternatif öneri UI
+- profil / kaydedilenler UI
+- responsive/mobile polish
+- loading / empty / error states
+
+Paylaşılan işler:
+
+- Mehmet ile keşfet/trend ekranları
+- Utku ile admin frontend'in kritik ekranları
+- Mert ile topluluk/media UI
+
+Ümit bütün admin + trend + community frontend'ini tek başına taşımayacaktır.
 
 ---
 
@@ -718,9 +718,9 @@ Ek sorumluluk:
 
 - notification delivery altyapısına destek
 - admin moderation araçlarının entegrasyonu
-- media/community UI'da Faruk'a destek
+- media/community UI'da Ümit'e destek
 
-Mert artık sadece destek geliştirici değildir; bağımsız iki büyük alanın sahibidir: **Media/Moderation + Community**.
+Mert sadece destek geliştirici değildir; bağımsız iki büyük alanın sahibidir: **Media/Moderation + Community**.
 
 ---
 
@@ -740,7 +740,7 @@ Ana teknik sahiplik:
 - scheduled feature start/end
 - audit log backend
 - rate-limit/security ayarları
-- admin frontend'in users/reports/settings bölümlerinde Faruk'a destek
+- admin frontend'in users/reports/settings bölümlerinde Ümit'e destek
 
 Review/QA sahipliği:
 
@@ -773,7 +773,7 @@ Ana teknik sahiplik:
 - feed ranking / sorting
 - Günün/Haftanın Yükselenleri veri akışı
 - analytics event şeması
-- trend/keşfet frontend'inde Faruk'a destek
+- trend/keşfet frontend'inde Ümit'e destek
 - notification kurallarında Mert'e destek
 
 Product/review sahipliği:
@@ -836,6 +836,15 @@ Review'ın amacı bloklamak değil kritik hata yakalamaktır.
 
 ## Faruk
 
+- DB schema v1
+- migrations
+- auth backend
+- user/session
+- poll/options/vote modelleri
+- ilk core API contracts
+
+## Ümit
+
 - design tokens
 - global dark/purple theme
 - responsive app shell
@@ -843,15 +852,6 @@ Review'ın amacı bloklamak değil kritik hata yakalamaktır.
 - login/register UI
 - feed mock
 - poll card component
-
-## Ümit
-
-- DB schema v1
-- migrations
-- auth backend
-- user/session
-- poll/options/vote modelleri
-- ilk core API contracts
 
 ## Mert
 
@@ -886,21 +886,21 @@ Kullanıcı kayıt olabilir, login olabilir, temel feed'i görebilir; anket mode
 
 ## Faruk
 
-- poll create UI tamamlama
-- poll detail
-- oy verme UI
-- sonuç animasyonu
-- comments UI
-- alternative suggestion UI
-
-## Ümit
-
 - poll CRUD
 - vote idempotency
 - vote change policy
 - comments/replies
 - save/bookmark
 - cooldown çekirdeği
+
+## Ümit
+
+- poll create UI tamamlama
+- poll detail
+- oy verme UI
+- sonuç animasyonu
+- comments UI
+- alternative suggestion UI
 
 ## Mert
 
@@ -936,19 +936,19 @@ KararVer'in temel döngüsü fotoğraf dahil uçtan uca çalışır.
 
 ## Faruk
 
-- profil / saved UI
-- search/keşfet UI
-- kategori ekranları
-- trend kart componentleri
-- community UI temel ekranları
-
-## Ümit
-
 - core API stabilizasyonu
 - notification event hooks
 - category APIs
 - query/index optimizasyonu
 - pagination
+
+## Ümit
+
+- profil / saved UI
+- search/keşfet UI
+- kategori ekranları
+- trend kart componentleri
+- community UI temel ekranları
 
 ## Mert
 
@@ -985,17 +985,17 @@ Platform artık yalnızca anket sitesi değil; keşfedilebilir, trendleri ve top
 
 ## Faruk
 
-- admin dashboard UI
-- polls/comments UI
-- featured content UI
-- responsive/admin polish
-
-## Ümit
-
 - core backend hardening
 - transaction/data integrity test fixes
 - admin metrics için core aggregate sorgular
 - DB performans düzeltmeleri
+
+## Ümit
+
+- admin dashboard UI
+- polls/comments UI
+- featured content UI
+- responsive/admin polish
 
 ## Mert
 
@@ -1036,19 +1036,19 @@ Gerçek kullanıcı trafiğini yönetebilecek admin, moderasyon ve güvenlik sis
 
 ## Faruk
 
-- mobile/desktop polish
-- skeleton/empty/error states
-- paylaşım kartları
-- SEO UI detayları
-- frontend performans
-
-## Ümit
-
 - DB index final
 - pagination/performance final
 - production DB/config
 - backup planı
 - core error handling
+
+## Ümit
+
+- mobile/desktop polish
+- skeleton/empty/error states
+- paylaşım kartları
+- SEO UI detayları
+- frontend performans
 
 ## Mert
 
@@ -1147,8 +1147,8 @@ Gerçek kullanıcı trafiğini yönetebilecek admin, moderasyon ve güvenlik sis
 
 - Herkesin toplam yükü haftalık kontrol edilir.
 - Bir kişinin açık işi diğerlerinin belirgin biçimde üstüne çıkarsa yeni işler en az yüklü kişiye kaydırılır.
-- Ümit artık tüm backend'in varsayılan sahibi değildir.
-- Faruk tüm frontend'in varsayılan sahibi değildir; Mert, Utku ve Mehmet kendi alanlarının UI/entegrasyonlarına girer.
+- Faruk tüm backend'in varsayılan sahibi değildir.
+- Ümit tüm frontend'in varsayılan sahibi değildir; Mert, Utku ve Mehmet kendi alanlarının UI/entegrasyonlarına girer.
 - Mehmet ve Utku review kuyruğu oluşturmaz; review ile birlikte kendi teknik modüllerini geliştirir.
 - Bir iş başka kişiyi 1 günden fazla bloke edecekse görev bölünür.
 - Bir kişinin haftalık yükü yaklaşık **%25'ten fazla** büyürse görev yeniden dağıtılır.
