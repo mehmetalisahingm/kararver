@@ -13,3 +13,7 @@ Ana ürün döngüsü:
 ## İlk hedef
 
 5 kişilik hibrit ekip (3 ana geliştirici + gerektiğinde geliştirmeye giren 2 reviewer/developer) ile yaklaşık 5 haftada public V1 MVP çıkarmak.
+
+## Teknik kararlar ve kurulum
+
+Stack, sürümler, modül sahipliği ve sıfırdan kurulum adımları için [`docs/TECH_DECISIONS.md`](./docs/TECH_DECISIONS.md) dosyasına bakın.

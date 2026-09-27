@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "kararver-local",
+      "credentials": [
+        {
+          "accessKey": "kararver-local",
+          "secretKey": "kararver-local-only-not-a-secret"
+        }
+      ],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}
