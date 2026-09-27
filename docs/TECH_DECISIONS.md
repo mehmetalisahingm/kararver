@@ -274,7 +274,7 @@ Sahiplik `.github/CODEOWNERS` dosyasına birebir yansıtılır.
 Amaç: kimse kimseyi kilitlemesin, ama ortak dosyalar kimseye sürpriz olmasın.
 
 1. **CODEOWNERS'ta kilit yok:** Ortak dosyalara en az iki sahip atanır ve **birinin onayı yeterlidir**. Branch protection'da "code owner onayı zorunlu" ayarı ekip kararıyla açılır. Açılsa bile iki sahip olduğu için tek kişi bekleme yaratmaz.
-2. **Prisma schema:** Schema, sahip başına ayrı dosyalara bölünür: `prisma/schema/core.prisma` (Faruk), `media.prisma` ve `community.prisma` (Mert), `admin.prisma` (Utku: RBAC, yaptırımlar, audit, ayarlar, bildirimler), `growth.prisma` (Mehmet: bookmarks, featured, duyurular, analytics, onboarding). Herkes kendi dosyasındaki modelleri değiştirir. Başka dosyadaki bir modele alan veya ilişki ekleyen PR'a o dosyanın sahibi reviewer olarak eklenir.
+2. **Prisma schema:** Schema, sahip başına ayrı dosyalara bölünür: `prisma/schema/schema.prisma`, `core.prisma` ve `trends.prisma` (Faruk), `media.prisma`, `community.prisma` ve `moderation.prisma` (Mert), `admin.prisma` (Utku: RBAC, yaptırımlar, audit, ayarlar, bildirimler), `growth.prisma` (Mehmet: bookmarks, featured, duyurular, analytics, onboarding). Herkes kendi dosyasındaki modelleri değiştirir. Başka dosyadaki bir modele alan veya ilişki ekleyen PR'a o dosyanın sahibi reviewer olarak eklenir. Tablo listesi, ilişkiler ve migration sözleşmesinin ayrıntısı: [`DATA_MODEL.md`](./DATA_MODEL.md).
 3. **Migration sırası:**
    - Her PR en fazla bir migration ekler.
    - Merge'den önce `main`'e rebase edilir ve `pnpm db:migrate` ile migration yeniden üretilir.
@@ -362,7 +362,7 @@ pnpm dev
 #   worker → arka planda (log'da job'lar görünür)
 ```
 
-> ⚠️ **Mevcut durum (KV-01):** Henüz `apps/*` ve `packages/*` yok. 6. ve 7. adımlar hata vermez ama hiçbir şey yapmaz. `pnpm db:migrate` ve `db:seed` komutları KV-02 ile (`packages/db`), `pnpm dev` ise api/web/worker iskeletleri eklenince çalışır hale gelir. Script'ler root `package.json`'da şimdiden tanımlı, yani bu kurulum adımları değişmeyecek.
+> ⚠️ **Mevcut durum (KV-02):** `pnpm db:migrate` çalışır; `packages/db` ilk migration'ı uygular (bkz. [`DATA_MODEL.md`](./DATA_MODEL.md)). `pnpm db:seed` henüz bir şey yapmaz, kategori seed'i gelince çalışacak. `pnpm dev` ise api/web/worker iskeletleri eklenince çalışır hale gelir. Script'ler root `package.json`'da şimdiden tanımlı, yani bu kurulum adımları değişmeyecek.
 
 ### 8.3 Sık kullanılan komutlar
 ```bash

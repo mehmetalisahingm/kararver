@@ -76,6 +76,13 @@
 # ── Ortak paketler: sahibi Faruk, tek kişi kilidi olmasın diye ikinci onaylayıcı var.
 # Başka modülü etkileyen değişiklikte o modülün sahibi de PR'a eklenir (belgeye bakın).
 /packages/db/                               @farukkemree @mehmetalisahingm
+# Sahip başına schema dosyaları (DATA_MODEL.md §1): sahip + Faruk, biri yeterli
+/packages/db/prisma/schema/media.prisma      @MertKAYAR @farukkemree
+/packages/db/prisma/schema/community.prisma  @MertKAYAR @farukkemree
+/packages/db/prisma/schema/moderation.prisma @MertKAYAR @farukkemree
+/packages/db/prisma/schema/admin.prisma      @Utkuuzun14 @farukkemree
+/packages/db/prisma/schema/growth.prisma     @mehmetalisahingm @farukkemree
+/docs/DATA_MODEL.md                         @farukkemree @mehmetalisahingm @Utkuuzun14
 /packages/contracts/                        @farukkemree @mehmetalisahingm @umitefe0
 
 # ── Altyapı / kritik ortak dosyalar ───────────────────────────

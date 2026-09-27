@@ -1,0 +1,93 @@
+// Sahip: Faruk (@farukkemree) — KV-02 (model), KV-28/KV-29 (hesaplama)
+// Günlük snapshot'lar ve 5 dakikalık trend çalıştırmaları.
+// Pencere ve gün tanımı (Europe/Istanbul): docs/DATA_MODEL.md → "Snapshot ve pencereler"
+
+enum TrendFormat {
+  DAILY_RISING
+  WEEKLY_RISING
+  WEEKLY_MOST_VOTED
+  WEEKLY_MOST_DISCUSSED
+  WEEKLY_MOVERS
+
+  @@map("trend_format")
+}
+
+enum TrendRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+
+  @@map("trend_run_status")
+}
+
+// Bir anketin bir İstanbul takvim günü sonundaki geçerli oy toplamı.
+// Satırın varlığı "o gün hesaplandı" demektir; eksik günler uydurulmaz.
+model PollDailySnapshot {
+  pollId             String   @map("poll_id") @db.Uuid
+  // Europe/Istanbul takvim günü
+  localDate          DateTime @map("local_date") @db.Date
+  // 0 = anketin açıldığı İstanbul günü
+  pollDay            Int      @map("poll_day") @db.SmallInt
+  // localDate + 1 gün, 00:00 Europe/Istanbul (UTC olarak saklanır)
+  cutoffAt           DateTime @map("cutoff_at") @db.Timestamptz(3)
+  totalValidVotes    Int      @map("total_valid_votes")
+  calculationVersion Int      @map("calculation_version") @db.SmallInt
+  computedAt         DateTime @default(now()) @map("computed_at") @db.Timestamptz(3)
+
+  poll    Poll                      @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  options PollOptionDailySnapshot[]
+
+  @@id([pollId, localDate])
+  @@unique([pollId, pollDay])
+  @@index([localDate])
+  @@map("poll_daily_snapshots")
+}
+
+model PollOptionDailySnapshot {
+  pollId         String   @map("poll_id") @db.Uuid
+  optionId       String   @map("option_id") @db.Uuid
+  localDate      DateTime @map("local_date") @db.Date
+  validVoteCount Int      @map("valid_vote_count")
+
+  day    PollDailySnapshot @relation(fields: [pollId, localDate], references: [pollId, localDate], onDelete: Cascade)
+  option PollOption        @relation(fields: [pollId, optionId], references: [pollId, id], onDelete: Cascade)
+
+  @@id([pollId, optionId, localDate])
+  @@map("poll_option_daily_snapshots")
+}
+
+// 5 dakikalık trend job'unun her format için bir çalıştırması.
+// Ekranlar her format için en son SUCCEEDED çalıştırmayı okur.
+model TrendRun {
+  id                 String         @id @default(uuid(7)) @db.Uuid
+  format             TrendFormat
+  calculationVersion Int            @map("calculation_version") @db.SmallInt
+  status             TrendRunStatus @default(RUNNING)
+  windowStart        DateTime       @map("window_start") @db.Timestamptz(3)
+  windowEnd          DateTime       @map("window_end") @db.Timestamptz(3)
+  startedAt          DateTime       @default(now()) @map("started_at") @db.Timestamptz(3)
+  finishedAt         DateTime?      @map("finished_at") @db.Timestamptz(3)
+  error              String?
+
+  scores TrendScore[]
+
+  @@index([format, status, finishedAt(sort: Desc)])
+  @@map("trend_runs")
+}
+
+model TrendScore {
+  runId      String @map("run_id") @db.Uuid
+  pollId     String @map("poll_id") @db.Uuid
+  rank       Int
+  score      Float
+  // Puanın bileşenleri (oy hızı, benzersiz katılım, yaş cezası...) — açıklanabilirlik için
+  components Json
+
+  run  TrendRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  poll Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@id([runId, pollId])
+  @@unique([runId, rank])
+  @@index([pollId])
+  @@map("trend_scores")
+}

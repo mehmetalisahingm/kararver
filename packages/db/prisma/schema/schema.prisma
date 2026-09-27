@@ -1,0 +1,13 @@
+// Sahip: Faruk (@farukkemree). Generator ve datasource tanımı.
+// Schema bu klasördeki bütün *.prisma dosyalarından oluşur; hangi dosyanın
+// kime ait olduğu ve kurallar: docs/DATA_MODEL.md
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../generated/prisma"
+}
+
+// Bağlantı adresi prisma.config.ts içinden gelir (DATABASE_URL).
+datasource db {
+  provider = "postgresql"
+}
