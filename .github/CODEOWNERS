@@ -39,7 +39,7 @@
 /apps/web/src/features/reports/             @MertKAYAR
 /apps/web/src/features/communities/         @MertKAYAR
 
-# ── Utku — admin / security / platform (KV-06, KV-21, KV-34) ──
+# ── Utku — admin / security / platform (CI: KV-06 #8 · bildirim: KV-21 #23, KV-34 #36) ──
 /apps/api/src/modules/rbac/                 @Utkuuzun14
 /apps/api/src/modules/rate-limit/           @Utkuuzun14
 /apps/api/src/modules/notifications/        @Utkuuzun14
@@ -76,6 +76,13 @@
 # ── Ortak paketler: sahibi Faruk, tek kişi kilidi olmasın diye ikinci onaylayıcı var.
 # Başka modülü etkileyen değişiklikte o modülün sahibi de PR'a eklenir (belgeye bakın).
 /packages/db/                               @farukkemree @mehmetalisahingm
+# Sahip başına schema dosyaları (DATA_MODEL.md §1): sahip + Faruk, biri yeterli
+/packages/db/prisma/schema/media.prisma      @MertKAYAR @farukkemree
+/packages/db/prisma/schema/community.prisma  @MertKAYAR @farukkemree
+/packages/db/prisma/schema/moderation.prisma @MertKAYAR @farukkemree
+/packages/db/prisma/schema/admin.prisma      @Utkuuzun14 @farukkemree
+/packages/db/prisma/schema/growth.prisma     @mehmetalisahingm @farukkemree
+/docs/DATA_MODEL.md                         @farukkemree @mehmetalisahingm @Utkuuzun14
 /packages/contracts/                        @farukkemree @mehmetalisahingm @umitefe0
 
 # ── Altyapı / kritik ortak dosyalar ───────────────────────────

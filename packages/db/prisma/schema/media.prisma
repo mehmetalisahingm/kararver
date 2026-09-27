@@ -1,0 +1,28 @@
+// ⚠️ İSKELET — Sahip: Mert (@MertKAYAR). KV-16'da genişletilecek.
+//
+// Bu dosya sadece core.prisma'daki FK'lerin (users.avatar_media_id,
+// poll_media.media_id) ilk migration'da çalışabilmesi için var.
+// Alanları, enum değerlerini ve indexleri Mert belirler. Değiştirirken:
+//   - id alanını ve aşağıdaki "core ilişkileri" bölümünü kaldırmayın,
+//   - core'u etkileyen değişikliklerde Faruk'u PR'a ekleyin (TECH_DECISIONS §6).
+
+enum MediaStatus {
+  PENDING
+  APPROVED
+  QUARANTINED
+  REJECTED
+
+  @@map("media_status")
+}
+
+model MediaAsset {
+  id        String      @id @default(uuid(7)) @db.Uuid
+  status    MediaStatus @default(PENDING)
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  // ── Core ilişkileri (Faruk) — kaldırmayın ──
+  avatarOfUsers User[]      @relation("UserAvatar")
+  pollMedia     PollMedia[]
+
+  @@map("media_assets")
+}

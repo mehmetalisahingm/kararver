@@ -259,7 +259,7 @@ Kaynak: issue #2 (görev haritası). Plandaki (`PRODUCT_TEAM_PLAN.md` §20) eski
 | **Faruk** `@farukkemree` | auth/users, polls, votes, comments + alternatifler, feed, search, categories (API), trends, snapshots, ortak DB ve sözleşmeler | `api/modules/{auth,users,polls,votes,comments,categories,feed,search,trends}` · `worker/jobs/{trends,snapshots}` · `packages/db` · `packages/contracts` |
 | **Ümit** `@umitefe0` | Frontend: tasarım sistemi, app shell, feed, anket kartı/detay, oy ve yorum UI | `apps/web` (aşağıdaki `features/*` hariç) · `ui/` |
 | **Mert** `@MertKAYAR` | media, moderation, reports, communities, görsel işleme job'u | `api/modules/{media,moderation,reports,communities}` · `worker/jobs/media` · `web/src/features/{media,moderation,reports,communities}` |
-| **Utku** `@Utkuuzun14` | rbac, rate-limit, notifications, admin kullanıcılar ve yaptırımlar, audit, sistem ayarları ve acil durum anahtarları, `packages/config`, CI (KV-06, KV-21, KV-34) | `api/modules/{rbac,rate-limit,notifications,admin-users,audit,settings}` · `worker/jobs/notifications` · `web/src/features/{notifications,admin-users,audit,settings}` · `packages/config` · `.github/workflows` |
+| **Utku** `@Utkuuzun14` | rbac, rate-limit, notifications, admin kullanıcılar ve yaptırımlar, audit, sistem ayarları ve acil durum anahtarları, `packages/config`, CI/staging. İşler: KV-06 (#8) CI/staging, KV-21 (#23) bildirim altyapısı, KV-34 (#36) bildirim tercihleri | `api/modules/{rbac,rate-limit,notifications,admin-users,audit,settings}` · `worker/jobs/notifications` · `web/src/features/{notifications,admin-users,audit,settings}` · `packages/config` · `.github/workflows` |
 | **Mehmet** `@mehmetalisahingm` | bookmarks ve profil, karar güncellemesi, paylaşım/SEO, analytics ve dashboard, öne çıkarma ve duyurular, kategori yönetim ekranı, onboarding ve ilgi seçimi | `api/modules/{bookmarks,profiles,decision-updates,share,analytics,featured,announcements,onboarding}` · `web/src/features/{bookmarks,profiles,decision-updates,share,analytics,featured,announcements,admin-categories,onboarding}` |
 
 **Sınır notları:**
@@ -274,7 +274,7 @@ Sahiplik `.github/CODEOWNERS` dosyasına birebir yansıtılır.
 Amaç: kimse kimseyi kilitlemesin, ama ortak dosyalar kimseye sürpriz olmasın.
 
 1. **CODEOWNERS'ta kilit yok:** Ortak dosyalara en az iki sahip atanır ve **birinin onayı yeterlidir**. Branch protection'da "code owner onayı zorunlu" ayarı ekip kararıyla açılır. Açılsa bile iki sahip olduğu için tek kişi bekleme yaratmaz.
-2. **Prisma schema:** Schema, sahip başına ayrı dosyalara bölünür: `prisma/schema/core.prisma` (Faruk), `media.prisma` ve `community.prisma` (Mert), `admin.prisma` (Utku: RBAC, yaptırımlar, audit, ayarlar, bildirimler), `growth.prisma` (Mehmet: bookmarks, featured, duyurular, analytics, onboarding). Herkes kendi dosyasındaki modelleri değiştirir. Başka dosyadaki bir modele alan veya ilişki ekleyen PR'a o dosyanın sahibi reviewer olarak eklenir.
+2. **Prisma schema:** Schema, sahip başına ayrı dosyalara bölünür: `prisma/schema/schema.prisma`, `core.prisma` ve `trends.prisma` (Faruk), `media.prisma`, `community.prisma` ve `moderation.prisma` (Mert), `admin.prisma` (Utku: RBAC, yaptırımlar, audit, ayarlar, bildirimler), `growth.prisma` (Mehmet: bookmarks, featured, duyurular, analytics, onboarding). Herkes kendi dosyasındaki modelleri değiştirir. Başka dosyadaki bir modele alan veya ilişki ekleyen PR'a o dosyanın sahibi reviewer olarak eklenir. Tablo listesi, ilişkiler ve migration sözleşmesinin ayrıntısı: [`DATA_MODEL.md`](./DATA_MODEL.md).
 3. **Migration sırası:**
    - Her PR en fazla bir migration ekler.
    - Merge'den önce `main`'e rebase edilir ve `pnpm db:migrate` ile migration yeniden üretilir.
@@ -362,7 +362,7 @@ pnpm dev
 #   worker → arka planda (log'da job'lar görünür)
 ```
 
-> ⚠️ **Mevcut durum (KV-01):** Henüz `apps/*` ve `packages/*` yok. 6. ve 7. adımlar hata vermez ama hiçbir şey yapmaz. `pnpm db:migrate` ve `db:seed` komutları KV-02 ile (`packages/db`), `pnpm dev` ise api/web/worker iskeletleri eklenince çalışır hale gelir. Script'ler root `package.json`'da şimdiden tanımlı, yani bu kurulum adımları değişmeyecek.
+> ⚠️ **Mevcut durum (KV-02):** `pnpm db:migrate` çalışır; `packages/db` ilk migration'ı uygular (bkz. [`DATA_MODEL.md`](./DATA_MODEL.md)). `pnpm db:seed` henüz bir şey yapmaz, kategori seed'i gelince çalışacak. `pnpm dev` ise api/web/worker iskeletleri eklenince çalışır hale gelir. Script'ler root `package.json`'da şimdiden tanımlı, yani bu kurulum adımları değişmeyecek.
 
 ### 8.3 Sık kullanılan komutlar
 ```bash
@@ -370,6 +370,7 @@ pnpm dev                    # tüm uygulamalar
 pnpm --filter @kararver/api dev     # sadece api
 pnpm test | lint | typecheck
 pnpm db:reset               # local DB'yi sıfırla + seed
+pnpm db:test                # DB testleri, ayrı <db>_test veritabanında (DATA_MODEL.md §11)
 docker compose down         # servisleri durdur (veri korunur)
 docker compose down -v      # servisleri ve VERİLERİ sil
 ```
