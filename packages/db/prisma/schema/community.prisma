@@ -1,0 +1,18 @@
+// ⚠️ İSKELET — Sahip: Mert (@MertKAYAR). KV-31'de genişletilecek.
+//
+// Bu dosya sadece core.prisma'daki FK'nin (polls.community_id) ilk
+// migration'da çalışabilmesi için var. Üyelik, moderatör, slug vb. alanları
+// Mert ekler; status için ContentStatus yerine kendi enum'unu da seçebilir.
+// Değiştirirken id alanını ve "core ilişkileri" bölümünü kaldırmayın;
+// core'u etkileyen değişikliklerde Faruk'u PR'a ekleyin.
+
+model Community {
+  id        String        @id @default(uuid(7)) @db.Uuid
+  status    ContentStatus @default(ACTIVE)
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  // ── Core ilişkileri (Faruk) — kaldırmayın ──
+  polls Poll[]
+
+  @@map("communities")
+}

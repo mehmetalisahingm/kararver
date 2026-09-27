@@ -1,0 +1,32 @@
+/* KV-05 — public design tokens; framework independent. */
+:root {
+  color-scheme: dark;
+  --kv-background: #090b10;
+  --kv-surface: #11151d;
+  --kv-surface-2: #171c26;
+  --kv-primary: #7c3aed;
+  --kv-primary-hover: #6d28d9;
+  --kv-primary-light: #a855f7;
+  --kv-text: #f8fafc;
+  --kv-muted: #94a3b8;
+  --kv-border: #303949;
+  --kv-control-border: #69768b;
+  --kv-focus: #c4b5fd;
+  --kv-success: #86efac;
+  --kv-danger: #fca5a5;
+  --kv-warning: #fde68a;
+  --kv-font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --kv-space-1: 4px;
+  --kv-space-2: 8px;
+  --kv-space-3: 12px;
+  --kv-space-4: 16px;
+  --kv-space-5: 24px;
+  --kv-space-6: 32px;
+  --kv-space-7: 48px;
+  --kv-radius-sm: 8px;
+  --kv-radius-md: 14px;
+  --kv-radius-lg: 20px;
+  --kv-radius-pill: 999px;
+  --kv-shadow: 0 16px 48px #0005;
+  --kv-duration: 160ms;
+}

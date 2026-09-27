@@ -1,0 +1,8 @@
+{
+  "fixtureOnly": true,
+  "empty": { "data": [], "page": { "nextCursor": null, "hasMore": false } },
+  "hidden": { "id": "01998b9a-0000-7000-8000-000000000001", "title": "Hangi ekipman?", "options": [{ "id": "01998b9a-0000-7000-8000-000000000002", "label": "A" }, { "id": "01998b9a-0000-7000-8000-000000000003", "label": "B" }], "results": { "visible": false } },
+  "closed": { "status": "ACTIVE", "closedAt": "2026-09-26T21:00:00Z", "results": { "visible": true, "total": 10, "options": [{ "id": "01998b9a-0000-7000-8000-000000000002", "votes": 6, "percent": 60 }, { "id": "01998b9a-0000-7000-8000-000000000003", "votes": 4, "percent": 40 }] } },
+  "forbidden": { "error": { "code": "FORBIDDEN", "message": "Bu işlem için yetkiniz yok.", "details": [] }, "requestId": "fixture-request-1" },
+  "trendInsufficient": { "data": [], "reason": "INSUFFICIENT_HISTORY", "page": { "nextCursor": null, "hasMore": false } }
+}

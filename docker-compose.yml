@@ -1,0 +1,63 @@
+# Sadece LOCAL geliştirme içindir. Staging/production bu dosyayı kullanmaz
+# (bkz. docs/TECH_DECISIONS.md → "Ortamlar"). Buradaki kullanıcı adı/şifreler
+# yalnızca bu makinede çalışan container'lar içindir, gizli değer değildir.
+name: kararver
+
+services:
+  postgres:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_USER: kararver
+      POSTGRES_PASSWORD: kararver_local
+      POSTGRES_DB: kararver
+      TZ: Europe/Istanbul
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kararver -d kararver"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # S3 uyumlu local object storage (production'da Cloudflare R2).
+  # MinIO community artık hazır imaj yayınlamadığı için SeaweedFS seçildi.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.47
+    command: >
+      server -dir=/data -ip=seaweedfs -ip.bind=0.0.0.0
+      -master.volumeSizeLimitMB=256 -volume.max=0
+      -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports:
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - seaweedfs-data:/data
+      - ./infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+
+  # Bucket'ları bir kez oluşturur ve çıkar (tekrar çalışması zararsızdır).
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:4.47
+    depends_on:
+      - seaweedfs
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        for b in kararver-uploads-private kararver-media-public; do
+          attempt=0
+          until echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 2>&1 | grep -q "$$b"; do
+            attempt=$$((attempt + 1))
+            if [ "$$attempt" -gt 30 ]; then
+              echo "Bucket initialization timed out: $$b" >&2
+              exit 1
+            fi
+            echo "s3.bucket.create -name $$b" | weed shell -master=seaweedfs:9333 || true
+            sleep 2
+          done
+        done
+
+volumes:
+  postgres-data:
+  seaweedfs-data:

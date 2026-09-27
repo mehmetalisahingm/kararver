@@ -1,5 +1,8 @@
 # KararVer — Güçlü V1 MVP Ürün Planı
 
+> **V1 kapsam güncellemesi:** [Kullanıcı akışı ve katılım kararları](docs/V1_USER_FLOW.md) — misafir keşfi, anketsiz gönderiler, beğeni/dislike, ilk girişte 20 puan ve yayın başına 10 puan, kullanıcı/admin logları, premium grafikler ve topluluk üyeleri V1 içindedir. Bu puan bakiyesi, gelecek sürüm itibar/rozet sisteminden ayrıdır.
+
+
 > Bu doküman klasik “en az özellikli MVP” değildir. Hedef; ilk günden gerçek kullanıcıya açılabilecek, güven veren, moderasyonu olan, büyümeye hazır ve veri toplayabileceğimiz güçlü bir V1 çıkarmaktır.
 
 ## 1. Ürün fikri

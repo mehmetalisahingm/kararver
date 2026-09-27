@@ -1,0 +1,25 @@
+# Bağımlılıklar ve build çıktıları
+node_modules/
+.next/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Ortam dosyaları: sadece *.example commit edilir
+.env
+.env.*
+!.env.example
+!.env.staging.example
+
+# Prisma
+packages/db/generated/
+
+# Python spike/araştırma sanal ortamları
+.venv/
+.spike-venv/
+
+# Loglar / işletim sistemi
+*.log
+.DS_Store
+Thumbs.db

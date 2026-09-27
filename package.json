@@ -1,0 +1,21 @@
+{
+  "name": "kararver",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24.14.0 <25",
+    "pnpm": "10.34.5"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --if-present run dev",
+    "build": "pnpm -r --if-present run build",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm contracts:test && pnpm db:test",
+    "contracts:test": "node --test packages/contracts/test/*.test.mjs",
+    "ui:test": "node scripts/test-ui.mjs",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "db:migrate": "pnpm --filter @kararver/db run db:migrate",
+    "db:reset": "pnpm --filter @kararver/db run db:reset",
+    "db:test": "pnpm --filter @kararver/db run test:db"
+  }
+}
