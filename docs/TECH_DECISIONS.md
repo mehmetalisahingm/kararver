@@ -134,6 +134,7 @@ pnpm db:reset                                                # local DB'yi sıf�
 | `trends.refresh` | `*/5 * * * *`, singleton (üst üste binmez) | Faruk |
 | `snapshots.daily` | `5 0 * * *` Europe/Istanbul | Faruk |
 | `media.process` (karantina → re-encode → moderasyon) | Upload olayıyla tetiklenir | Mert |
+| `notifications.deliver` | Olay tetiklemeli (yorum, cevap, oy eşiği, trend girişi…) | Utku |
 
 Trend yenilemesi her çalışmada `calculation_version` ve `computed_at` değerlerini yazar; hedef aralık 5 dakikadır. Redis şimdilik yok. Rate-limit için ihtiyaç doğarsa Hafta 4'te Utku ile yeniden değerlendirilir.
 
@@ -151,6 +152,22 @@ Trend yenilemesi her çalışmada `calculation_version` ve `computed_at` değerl
 3. Onaylanan kopya `*-media-public` bucket'ına yazılır ve CDN'den sunulur.
 
 DB'de sadece object key ve metadata tutulur, binary tutulmaz. Local'de aynı iki bucket SeaweedFS'te oluşturulur (`docker compose` → `seaweedfs-init`).
+
+#### Local S3: neden MinIO değil, SeaweedFS?
+
+İlk kararda local S3 için MinIO seçilmişti. Sürümleri pinlerken (2026-09-27) şunlar görüldü:
+
+- MinIO'nun kendi README'si: *"The MinIO community edition is now distributed as source code only. We will no longer provide pre-compiled binary releases."* Son community sürümü `RELEASE.2025-10-15T17-29-55Z`; bundan sonra güncelleme ve güvenlik düzeltmesi yayınlanmıyor.
+- `minio/minio` ve `minio/mc` imajlarına Docker Hub'da da Quay'de de anonim olarak erişilemiyor. Yani `docker compose up` yeni bir ekip üyesinde imajı çekemez.
+- Kalan yol MinIO'yu compose içinde kaynaktan derlemekti. Bu hem ilk kurulumu dakikalarca uzatır hem de donmuş, bakımı olmayan bir sürüme bağlar.
+
+| Seçenek | Artı | Eksi |
+|---|---|---|
+| MinIO'yu kaynaktan derle | İlk kararı korur | Yavaş ilk kurulum, donmuş sürüm |
+| **SeaweedFS** ✅ | Aktif bakılıyor (4.47, 2026-09-14), hazır imaj, tek container, S3 API ve presigned URL desteği | Bucket'ların `weed shell` ile oluşturulması gerekiyor (compose'ta otomatik) |
+| Garage | Aktif bakılıyor, S3 uyumlu | İlk kurulumda ekstra layout/key komutları gerekiyor |
+
+**Karar:** SeaweedFS (Faruk onayı, 2026-09-27). Uygulama sadece S3 API'siyle (`@aws-sdk/client-s3`) konuşur ve production'da zaten R2 kullanılır. Bu yüzden değişiklik sadece local ortamı etkiler; kodda veya env değişken adlarında fark yoktur.
 
 ### 3.7 Hosting — 🟡 öneri (kesin değil)
 
@@ -204,6 +221,7 @@ Kabul senaryosu: KV-07'deki "Türkçe karakter içeren arama" senaryosu (Mehmet)
 kararver/
 ├─ apps/
 │  ├─ web/                 Next.js arayüzü
+│  │  └─ src/features/<modül>/  bir özelliğin ekranları; sahibi API modülüyle aynı
 │  ├─ api/                 Fastify API
 │  │  └─ src/modules/<modül>/   her modül kendi route, servis ve testleriyle
 │  └─ worker/              pg-boss worker
@@ -219,8 +237,12 @@ kararver/
 ├─ docker-compose.yml      sadece local
 ├─ .env.example            local
 ├─ .env.staging.example    staging değişken listesi (değersiz)
-└─ .github/CODEOWNERS
+└─ .github/
+   ├─ CODEOWNERS
+   └─ workflows/           CI
 ```
+
+`apps/web` genel olarak Ümit'indir: app shell, tasarım sistemi, feed, anket kartı ve detay, oy ve yorum UI'ı. Başka bir sahibin özelliğine ait ekranlar ise `src/features/<modül>/` altında durur ve o modülün sahibine aittir (ör. `features/notifications` → Utku). Next.js route dosyaları (`src/app/...`) bu klasörlerdeki bileşenleri çağıran ince katmanlardır.
 
 Bir modül başka bir modülün iç koduna doğrudan erişmez. İletişim `packages/contracts` içindeki tipler, servis arayüzleri veya job'lar üzerinden olur.
 
@@ -230,29 +252,29 @@ Bir modül başka bir modülün iç koduna doğrudan erişmez. İletişim `packa
 
 Her modülün **tek bir sahibi** vardır. Sahip, o modüldeki değişikliği onaylayan ve hatasından sorumlu olan kişidir. Diğer ekip üyeleri de PR açabilir.
 
-| Modül / yol | Sahip | Kaynak |
-|---|---|---|
-| `api/modules/auth`, `users` | **Faruk** | #2 |
-| `api/modules/polls`, `votes` | **Faruk** | #2 |
-| `api/modules/comments` (yorum + alternatif öneri) | **Faruk** | #2 |
-| `api/modules/feed`, `search`, `categories` | **Faruk** | #2 |
-| `api/modules/trends`, `worker/jobs/trends`, `worker/jobs/snapshots` | **Faruk** | #2 |
-| `packages/db`, `packages/contracts` | **Faruk** (ortak paket, §6) | #2 |
-| `apps/web`, `ui/` | **Ümit** | #2 |
-| `api/modules/media`, `moderation`, `reports`, `communities`, `worker/jobs/media` | **Mert** | plan §20 · #2 ile doğrulanacak |
-| `api/modules/admin` (RBAC, yaptırımlar, öne çıkarma), `settings`, `audit` | **Utku** | plan §20 · #2 ile doğrulanacak |
-| `api/modules/analytics` (KV-07 ürün olayları) | **Mehmet** | KV-07 · #2 ile doğrulanacak |
-| `api/modules/notifications` | ❓ Plan Mert + Mehmet diyor, tek sahip seçilmeli | açık konu |
-| `packages/config`, CI | ❓ Utku önerilir | açık konu |
+Kaynak: issue #2 (görev haritası). Plandaki (`PRODUCT_TEAM_PLAN.md` §20) eski dağılımla çelişen yerlerde #2 esas alınır.
 
-Sahiplik `.github/CODEOWNERS` dosyasına yansıtılır. Mert ve Utku'nun GitHub kullanıcı adları henüz bilinmediği için satırları `TODO` olarak duruyor.
+| Sahip | Sorumluluk | Yollar |
+|---|---|---|
+| **Faruk** `@farukkemree` | auth/users, polls, votes, comments + alternatifler, feed, search, categories (API), trends, snapshots, ortak DB ve sözleşmeler | `api/modules/{auth,users,polls,votes,comments,categories,feed,search,trends}` · `worker/jobs/{trends,snapshots}` · `packages/db` · `packages/contracts` |
+| **Ümit** `@umitefe0` | Frontend: tasarım sistemi, app shell, feed, anket kartı/detay, oy ve yorum UI | `apps/web` (aşağıdaki `features/*` hariç) · `ui/` |
+| **Mert** `@MertKAYAR` | media, moderation, reports, communities, görsel işleme job'u | `api/modules/{media,moderation,reports,communities}` · `worker/jobs/media` · `web/src/features/{media,moderation,reports,communities}` |
+| **Utku** `@Utkuuzun14` | rbac, rate-limit, notifications, admin kullanıcılar ve yaptırımlar, audit, sistem ayarları ve acil durum anahtarları, `packages/config`, CI (KV-06, KV-21, KV-34) | `api/modules/{rbac,rate-limit,notifications,admin-users,audit,settings}` · `worker/jobs/notifications` · `web/src/features/{notifications,admin-users,audit,settings}` · `packages/config` · `.github/workflows` |
+| **Mehmet** `@mehmetalisahingm` | bookmarks ve profil, karar güncellemesi, paylaşım/SEO, analytics ve dashboard, öne çıkarma ve duyurular, kategori yönetim ekranı, onboarding ve ilgi seçimi | `api/modules/{bookmarks,profiles,decision-updates,share,analytics,featured,announcements,onboarding}` · `web/src/features/{bookmarks,profiles,decision-updates,share,analytics,featured,announcements,admin-categories,onboarding}` |
+
+**Sınır notları:**
+- **Kategoriler:** Kategori verisi ve API'si (`api/modules/categories`) Faruk'ta. Admin'deki kategori yönetim ekranı (`web/src/features/admin-categories`) Mehmet'te. Ekran, Faruk'un sözleşmesini kullanır.
+- **Kullanıcı / profil:** Hesap, kimlik ve oturum (`users`, `auth`) Faruk'ta. Herkese açık profil sayfası ve istatistikleri (`profiles`) Mehmet'te.
+- **Bildirimler:** Olayları çekirdek modüller üretir (ör. Faruk'un `comments` modülü "yorum geldi" olayını yayınlar). Bildirimin kime ve nasıl teslim edileceği (`notifications`) Utku'da.
+- **Öne çıkarma:** Plan bunu Utku'ya veriyordu; #2'ye göre Mehmet'te (`featured`, `announcements`).
+Sahiplik `.github/CODEOWNERS` dosyasına birebir yansıtılır.
 
 ## 6. Ortak dosyaları değiştirme yöntemi
 
 Amaç: kimse kimseyi kilitlemesin, ama ortak dosyalar kimseye sürpriz olmasın.
 
 1. **CODEOWNERS'ta kilit yok:** Ortak dosyalara en az iki sahip atanır ve **birinin onayı yeterlidir**. Branch protection'da "code owner onayı zorunlu" ayarı ekip kararıyla açılır. Açılsa bile iki sahip olduğu için tek kişi bekleme yaratmaz.
-2. **Prisma schema:** Schema, sahip başına ayrı dosyalara bölünür: `prisma/schema/core.prisma` (Faruk), `media.prisma` (Mert), `community.prisma` (Mert), `admin.prisma` (Utku), `analytics.prisma` (Mehmet). Herkes kendi dosyasındaki modelleri değiştirir. Başka dosyadaki bir modele alan veya ilişki ekleyen PR'a o dosyanın sahibi reviewer olarak eklenir.
+2. **Prisma schema:** Schema, sahip başına ayrı dosyalara bölünür: `prisma/schema/core.prisma` (Faruk), `media.prisma` ve `community.prisma` (Mert), `admin.prisma` (Utku: RBAC, yaptırımlar, audit, ayarlar, bildirimler), `growth.prisma` (Mehmet: bookmarks, featured, duyurular, analytics, onboarding). Herkes kendi dosyasındaki modelleri değiştirir. Başka dosyadaki bir modele alan veya ilişki ekleyen PR'a o dosyanın sahibi reviewer olarak eklenir.
 3. **Migration sırası:**
    - Her PR en fazla bir migration ekler.
    - Merge'den önce `main`'e rebase edilir ve `pnpm db:migrate` ile migration yeniden üretilir.
@@ -369,9 +391,6 @@ Bir kararı değiştirmek için bu dosyayı güncelleyen bir PR açılır. PR'da
 |---|---|---|---|
 | 1 | Hosting (Vercel + Railway) ekip onayı ve fiyat kontrolü | Ekip | Staging kurulumu |
 | 2 | Staging e-posta sağlayıcısı (SMTP) seçimi | Faruk | Staging'de e-posta doğrulama |
-| 3 | Mert ve Utku'nun GitHub kullanıcı adları | Mert, Utku | CODEOWNERS `TODO` satırları |
-| 4 | `notifications` ve `packages/config`/CI için tek sahip | Ekip (#2) | Bu modüllerin başlaması |
-| 5 | Mert, Utku ve Mehmet modül listelerinin #2 ile doğrulanması | İlgili kişiler | — |
-| 6 | Branch protection ("code owner onayı zorunlu" açık mı?) | Repo sahibi (Mehmet) | — |
-| 7 | `docker-compose.yml` bu PR'ı hazırlayan makinede çalıştırılamadı (Docker kurulu değil) | Docker'ı olan bir reviewer | Local kurulumun doğrulanması |
-| 8 | Görsel moderasyon modelinin çalışma ortamı (Node mu, Python servisi mi) | Mert | Hosting'in kesinleşmesi |
+| 3 | Branch protection ("code owner onayı zorunlu" açık mı?) | Repo sahibi (Mehmet) | — |
+| 4 | `docker-compose.yml` bu PR'ı hazırlayan makinede çalıştırılamadı (Docker kurulu değil) | Docker'ı olan bir reviewer | Local kurulumun doğrulanması |
+| 5 | Görsel moderasyon modelinin çalışma ortamı (Node mu, Python servisi mi) | Mert | Hosting'in kesinleşmesi |

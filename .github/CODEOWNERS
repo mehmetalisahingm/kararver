@@ -1,53 +1,90 @@
 # KararVer CODEOWNERS
-# Kurallar ve gerekçe: docs/TECH_DECISIONS.md → "Modül sahipliği".
+# Kurallar ve gerekçe: docs/TECH_DECISIONS.md → "Modül sahipliği" ve "Ortak dosyaları değiştirme".
 # - Bir dosyada birden fazla sahip varsa, sahiplerden BİRİNİN onayı yeterlidir.
 #   Ortak/kritik dosyalar bu yüzden en az iki kişiye atanır; kimse tek başına kilitlemez.
 # - Sonraki satır öncekini ezer; özel yollar en altta yazılır.
-# - Mert ve Utku'nun GitHub kullanıcı adları eklenince TODO satırları açılacak.
+# - Web tarafında bir özelliğin ekranları apps/web/src/features/<modül>/ altında durur
+#   ve API modülüyle aynı sahibe aittir.
+#
+# Ekip: Faruk @farukkemree · Ümit @umitefe0 · Mert @MertKAYAR · Utku @Utkuuzun14 · Mehmet @mehmetalisahingm
 
-# Varsayılan: kök dosyalar ve atanmamış her şey
-*                                   @farukkemree @mehmetalisahingm @umitefe0
+# Varsayılan: atanmamış her şey
+*                                           @farukkemree @mehmetalisahingm @umitefe0
 
-# Frontend (Ümit)
-/apps/web/                          @umitefe0
-/ui/                                @umitefe0
+# ── Ümit — frontend ───────────────────────────────────────────
+/apps/web/                                  @umitefe0
+/ui/                                        @umitefe0
 
-# Backend — Faruk modülleri (issue #2)
-/apps/api/src/modules/auth/         @farukkemree
-/apps/api/src/modules/users/        @farukkemree
-/apps/api/src/modules/polls/        @farukkemree
-/apps/api/src/modules/votes/        @farukkemree
-/apps/api/src/modules/comments/     @farukkemree
-/apps/api/src/modules/categories/   @farukkemree
-/apps/api/src/modules/feed/         @farukkemree
-/apps/api/src/modules/search/       @farukkemree
-/apps/api/src/modules/trends/       @farukkemree
-/apps/worker/src/jobs/trends/       @farukkemree
-/apps/worker/src/jobs/snapshots/    @farukkemree
+# ── Faruk — core backend / data (issue #2) ────────────────────
+/apps/api/src/modules/auth/                 @farukkemree
+/apps/api/src/modules/users/                @farukkemree
+/apps/api/src/modules/polls/                @farukkemree
+/apps/api/src/modules/votes/                @farukkemree
+/apps/api/src/modules/comments/             @farukkemree
+/apps/api/src/modules/categories/           @farukkemree
+/apps/api/src/modules/feed/                 @farukkemree
+/apps/api/src/modules/search/               @farukkemree
+/apps/api/src/modules/trends/               @farukkemree
+/apps/worker/src/jobs/trends/               @farukkemree
+/apps/worker/src/jobs/snapshots/            @farukkemree
 
-# Backend — Mert modülleri
-# TODO(@mert): /apps/api/src/modules/media/        @<mert>
-# TODO(@mert): /apps/api/src/modules/moderation/   @<mert>
-# TODO(@mert): /apps/api/src/modules/reports/      @<mert>
-# TODO(@mert): /apps/api/src/modules/communities/  @<mert>
-# TODO(@mert): /apps/worker/src/jobs/media/        @<mert>
+# ── Mert — media / moderation / community ─────────────────────
+/apps/api/src/modules/media/                @MertKAYAR
+/apps/api/src/modules/moderation/           @MertKAYAR
+/apps/api/src/modules/reports/              @MertKAYAR
+/apps/api/src/modules/communities/          @MertKAYAR
+/apps/worker/src/jobs/media/                @MertKAYAR
+/apps/web/src/features/media/               @MertKAYAR
+/apps/web/src/features/moderation/          @MertKAYAR
+/apps/web/src/features/reports/             @MertKAYAR
+/apps/web/src/features/communities/         @MertKAYAR
 
-# Backend — Utku modülleri
-# TODO(@utku): /apps/api/src/modules/admin/        @<utku>
-# TODO(@utku): /apps/api/src/modules/settings/     @<utku>
-# TODO(@utku): /apps/api/src/modules/audit/        @<utku>
+# ── Utku — admin / security / platform (KV-06, KV-21, KV-34) ──
+/apps/api/src/modules/rbac/                 @Utkuuzun14
+/apps/api/src/modules/rate-limit/           @Utkuuzun14
+/apps/api/src/modules/notifications/        @Utkuuzun14
+/apps/api/src/modules/admin-users/          @Utkuuzun14
+/apps/api/src/modules/audit/                @Utkuuzun14
+/apps/api/src/modules/settings/             @Utkuuzun14
+/apps/worker/src/jobs/notifications/        @Utkuuzun14
+/apps/web/src/features/notifications/       @Utkuuzun14
+/apps/web/src/features/admin-users/         @Utkuuzun14
+/apps/web/src/features/audit/               @Utkuuzun14
+/apps/web/src/features/settings/            @Utkuuzun14
+/packages/config/                           @Utkuuzun14
+/.github/workflows/                         @Utkuuzun14
 
-# Mehmet modülleri (KV-07 ürün olayları; #2 ile doğrulanacak)
-/apps/api/src/modules/analytics/    @mehmetalisahingm
+# ── Mehmet — ürün yüzeyleri / büyüme ──────────────────────────
+/apps/api/src/modules/bookmarks/            @mehmetalisahingm
+/apps/api/src/modules/profiles/             @mehmetalisahingm
+/apps/api/src/modules/decision-updates/     @mehmetalisahingm
+/apps/api/src/modules/share/                @mehmetalisahingm
+/apps/api/src/modules/analytics/            @mehmetalisahingm
+/apps/api/src/modules/featured/             @mehmetalisahingm
+/apps/api/src/modules/announcements/        @mehmetalisahingm
+/apps/api/src/modules/onboarding/           @mehmetalisahingm
+/apps/web/src/features/bookmarks/           @mehmetalisahingm
+/apps/web/src/features/profiles/            @mehmetalisahingm
+/apps/web/src/features/decision-updates/    @mehmetalisahingm
+/apps/web/src/features/share/               @mehmetalisahingm
+/apps/web/src/features/analytics/           @mehmetalisahingm
+/apps/web/src/features/featured/            @mehmetalisahingm
+/apps/web/src/features/announcements/       @mehmetalisahingm
+/apps/web/src/features/admin-categories/    @mehmetalisahingm
+/apps/web/src/features/onboarding/          @mehmetalisahingm
 
-# Ortak paketler: sahibi Faruk, ama tek kişi kilidi olmasın diye ikinci onaylayıcı var.
+# ── Ortak paketler: sahibi Faruk, tek kişi kilidi olmasın diye ikinci onaylayıcı var.
 # Başka modülü etkileyen değişiklikte o modülün sahibi de PR'a eklenir (belgeye bakın).
-/packages/db/                       @farukkemree @mehmetalisahingm
-/packages/contracts/                @farukkemree @mehmetalisahingm @umitefe0
+/packages/db/                               @farukkemree @mehmetalisahingm
+/packages/contracts/                        @farukkemree @mehmetalisahingm @umitefe0
 
-# Altyapı / kritik ortak dosyalar
-/docker-compose.yml                 @farukkemree @mehmetalisahingm
-/.env.example                       @farukkemree @mehmetalisahingm
-/.env.staging.example               @farukkemree @mehmetalisahingm
-/.github/                           @farukkemree @mehmetalisahingm
-/docs/TECH_DECISIONS.md             @farukkemree @mehmetalisahingm @umitefe0
+# ── Altyapı / kritik ortak dosyalar ───────────────────────────
+/docker-compose.yml                         @farukkemree @Utkuuzun14
+/infra/                                     @farukkemree @Utkuuzun14
+/.env.example                               @farukkemree @Utkuuzun14
+/.env.staging.example                       @farukkemree @Utkuuzun14
+/package.json                               @farukkemree @Utkuuzun14
+/pnpm-workspace.yaml                        @farukkemree @Utkuuzun14
+/pnpm-lock.yaml                             @farukkemree @Utkuuzun14
+/.github/CODEOWNERS                         @farukkemree @mehmetalisahingm @Utkuuzun14
+/docs/TECH_DECISIONS.md                     @farukkemree @mehmetalisahingm @Utkuuzun14
