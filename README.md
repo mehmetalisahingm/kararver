@@ -17,3 +17,13 @@ Ana ürün döngüsü:
 ## Teknik kararlar ve kurulum
 
 Stack, sürümler, modül sahipliği ve sıfırdan kurulum adımları için [`docs/TECH_DECISIONS.md`](./docs/TECH_DECISIONS.md) dosyasına bakın.
+
+## Ortak UI — KV-05
+
+Ümit'in framework bağımsız [tasarım sistemi önizlemesi](./ui/design-system/index.html), koyu/mor tema ve ortak bileşen örneklerini içerir. Çalıştırma, bileşen API'leri ve responsive/erişilebilirlik kuralları: [UI sözleşmesi](./docs/KV-05_UI_CONTRACT.md).
+
+```sh
+python -m http.server 4173 --bind 127.0.0.1 --directory ui/design-system
+```
+
+Tarayıcıda `http://127.0.0.1:4173` adresini açın. Bu bir tasarım önizlemesidir; gerçek hesap, oy veya yayın işlemi yapmaz.
