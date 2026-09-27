@@ -17,7 +17,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 | `schema.prisma` | Faruk | Generator ve datasource | ✅ |
 | `core.prisma` | Faruk | Hesap, kategori/etiket, anket, seçenek, oy, oy geçmişi, yorum | ✅ |
 | `trends.prisma` | Faruk | Günlük snapshot, trend çalıştırmaları ve skorları | ✅ |
-| `media.prisma` | **Mert** | `MediaAsset`, şimdilik **iskelet** | 🟡 KV-16'da genişletilecek |
+| `media.prisma` | **Mert** | `MediaAsset`: nesne anahtarları, işlenmiş kopya metadata'sı, moderasyon sonucu ([MEDIA_MODERATION.md](./MEDIA_MODERATION.md)) | ✅ KV-16 (şema) |
 | `community.prisma` | **Mert** | `Community`, şimdilik **iskelet** | 🟡 KV-31'de genişletilecek |
 | `moderation.prisma` | Mert | Report, moderasyon işlemleri, engelli görsel hash'leri | ⏳ KV-24 |
 | `admin.prisma` | Utku | Roller, yaptırımlar, audit, ayarlar, bildirimler | ⏳ KV-04 / KV-21 / KV-39 / KV-40 |
@@ -382,7 +382,7 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 
 | Sahip | Tablo (planlanan) | Çekirdeğe bağlantısı | Kural |
 |---|---|---|---|
-| Mert | `media_assets` (iskelet var) | `users.avatar_media_id`, `poll_media.media_id` ona bağlanır | Anket ve profilde sadece `status = APPROVED` görseller gösterilir (sorgu kuralı, KV-16) |
+| Mert | `media_assets` (KV-16) | `users.avatar_media_id`, `poll_media.media_id` ona bağlanır; `uploader_id`, `reviewed_by_id → users.id` | Anket ve profilde sadece `status = APPROVED` görseller gösterilir (sorgu kuralı). `public_object_key` sadece `APPROVED` iken dolu olabilir (`media_assets_public_key_check`) |
 | Mert | `communities` (iskelet var), `community_memberships` | `polls.community_id` ona bağlanır; üyelik `users`'a bağlanır | Topluluk kapatılsa bile anketler silinmez (`RESTRICT`) |
 | Mert | `reports`, `moderation_actions` | Hedef başına ayrı nullable FK: `poll_id`, `comment_id`, `media_id`, `reported_user_id`, ve "tam olarak biri dolu" CHECK'i | Tek `target_type`/`target_id` çifti FK bütünlüğünü kaybettirdiği için önerilmez |
 | Utku | `user_roles`, `sanctions` | `users.id` | Yaptırım `users.status`'u da günceller (§7.2) |
@@ -450,7 +450,7 @@ pnpm db:test
   ```
 - **Sunucu çalışmıyorsa:** Test `PostgreSQL'e bağlanılamadı (...). Sunucu çalışıyor mu?` mesajıyla durur.
 
-### 11.2 Test kapsamı (27 test)
+### 11.2 Test kapsamı (33 test)
 
 | Grup | Ne doğrulanır |
 |---|---|
@@ -460,6 +460,7 @@ pnpm db:test
 | Oy geçmişi | `vote_events` UPDATE/DELETE `KV_VOTE_EVENTS_APPEND_ONLY` ile reddedilir. Olay biçimi CHECK'i çalışır (aynı seçeneğe `CHANGE` olmaz) |
 | Yorum | Cevaba cevap `KV_COMMENT_DEPTH` verir. Cevabı olan yorum cevaba dönüştürülemez. `ALTERNATIVE` sadece üst seviyede olabilir. Cevap başka anketteki yoruma bağlanamaz |
 | `kv_normalize` | TECH_DECISIONS §3.9 tablosu ve ek örnekler: `Şişe→sise`, `IŞIK/ışık→isik`, `İstanbul→istanbul`, `ağaç→agac`, `Göz→goz`, `Üzüm→uzum`, `ÇİÇEK→cicek`, `Iğdır→igdir` |
+| `media_assets` (KV-16, +6 test) | Onaylanmamış görsel public anahtar alamaz; onaylı görsel public ve işlenmiş kopya olmadan var olamaz; onaydan sonra kaldırmada public anahtar aynı UPDATE'te boşaltılmalı; risk skoru 0–1; inceleme alanları birlikte dolar; yükleyen FK'si ve galerideki görselin silinememesi |
 
 ### 11.3 Bu PR'daki kanıt
 

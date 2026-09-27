@@ -80,6 +80,10 @@ model User {
   comments     Comment[]
   commentLikes CommentLike[]
 
+  // Mert — media.prisma (KV-16)
+  uploadedMedia MediaAsset[] @relation("MediaUploader")
+  reviewedMedia MediaAsset[] @relation("MediaReviewer")
+
   @@index([status])
   @@map("users")
 }
