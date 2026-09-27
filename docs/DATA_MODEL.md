@@ -19,7 +19,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 | `trends.prisma` | Faruk | Günlük snapshot, trend çalıştırmaları ve skorları | ✅ |
 | `media.prisma` | **Mert** | `MediaAsset`: nesne anahtarları, işlenmiş kopya metadata'sı, moderasyon sonucu ([MEDIA_MODERATION.md](./MEDIA_MODERATION.md)) | ✅ KV-16 (şema) |
 | `community.prisma` | **Mert** | `Community`, şimdilik **iskelet** | 🟡 KV-31'de genişletilecek |
-| `moderation.prisma` | Mert | Report, moderasyon işlemleri, engelli görsel hash'leri | ⏳ KV-24 |
+| `moderation.prisma` | Mert | `Report`, `ModerationAction` (append-only). Engelli görsel hash listesi KV-38'de eklenecek | ✅ KV-24 (şema) |
 | `admin.prisma` | Utku | Roller, yaptırımlar, audit, ayarlar, bildirimler | ⏳ KV-04 / KV-21 / KV-39 / KV-40 |
 | `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ⏳ KV-22 / KV-23 / KV-42 / KV-15 |
 
@@ -384,7 +384,7 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 |---|---|---|---|
 | Mert | `media_assets` (KV-16) | `users.avatar_media_id`, `poll_media.media_id` ona bağlanır; `uploader_id`, `reviewed_by_id → users.id` | Anket ve profilde sadece `status = APPROVED` görseller gösterilir (sorgu kuralı). `public_object_key` sadece `APPROVED` iken dolu olabilir (`media_assets_public_key_check`) |
 | Mert | `communities` (iskelet var), `community_memberships` | `polls.community_id` ona bağlanır; üyelik `users`'a bağlanır | Topluluk kapatılsa bile anketler silinmez (`RESTRICT`) |
-| Mert | `reports`, `moderation_actions` | Hedef başına ayrı nullable FK: `poll_id`, `comment_id`, `media_id`, `reported_user_id`, ve "tam olarak biri dolu" CHECK'i | Tek `target_type`/`target_id` çifti FK bütünlüğünü kaybettirdiği için önerilmez |
+| Mert | `reports`, `moderation_actions` (KV-24) | Hedef başına ayrı nullable FK: `poll_id`, `comment_id`, `media_id`, `reported_user_id` / `target_user_id`, ve "tam olarak biri dolu" CHECK'i | Tek `target_type`/`target_id` çifti FK bütünlüğünü kaybettirdiği için önerilmez. Kullanıcı aynı hedefi bir kez raporlar (unique). `moderation_actions` append-only (trigger), gerekçe zorunlu. Karar güncellemesi raporu için FK, KV-23 tablosu açılınca eklenir |
 | Utku | `user_roles`, `sanctions` | `users.id` | Yaptırım `users.status`'u da günceller (§7.2) |
 | Utku | `audit_logs` | `actor_id → users.id`; hedef `target_type` + `target_id` | Append-only (KV-39); polimorfik hedef burada kabul edilir |
 | Utku | `system_settings` | — | Oy değiştirme izni, trend katsayıları, snapshot eşikleri buradan okunur |
@@ -450,7 +450,7 @@ pnpm db:test
   ```
 - **Sunucu çalışmıyorsa:** Test `PostgreSQL'e bağlanılamadı (...). Sunucu çalışıyor mu?` mesajıyla durur.
 
-### 11.2 Test kapsamı (33 test)
+### 11.2 Test kapsamı (40 test)
 
 | Grup | Ne doğrulanır |
 |---|---|
@@ -461,6 +461,7 @@ pnpm db:test
 | Yorum | Cevaba cevap `KV_COMMENT_DEPTH` verir. Cevabı olan yorum cevaba dönüştürülemez. `ALTERNATIVE` sadece üst seviyede olabilir. Cevap başka anketteki yoruma bağlanamaz |
 | `kv_normalize` | TECH_DECISIONS §3.9 tablosu ve ek örnekler: `Şişe→sise`, `IŞIK/ışık→isik`, `İstanbul→istanbul`, `ağaç→agac`, `Göz→goz`, `Üzüm→uzum`, `ÇİÇEK→cicek`, `Iğdır→igdir` |
 | `media_assets` (KV-16, +6 test) | Onaylanmamış görsel public anahtar alamaz; onaylı görsel public ve işlenmiş kopya olmadan var olamaz; onaydan sonra kaldırmada public anahtar aynı UPDATE'te boşaltılmalı; risk skoru 0–1; inceleme alanları birlikte dolar; yükleyen FK'si ve galerideki görselin silinememesi |
+| `reports` / `moderation_actions` (KV-24, +7 test) | Rapor tam olarak bir hedefe bağlanır; aynı kullanıcı aynı hedefi iki kez raporlayamaz; kendini raporlayamaz; sonuçlanan rapor sonuçlandıranı taşır, açık rapor taşımaz; raporlanan anket hard delete edilemez; işlem gerekçesiz/hedefsiz yazılamaz; moderasyon geçmişi `KV_MODERATION_ACTIONS_APPEND_ONLY` ile korunur |
 
 ### 11.3 Bu PR'daki kanıt
 

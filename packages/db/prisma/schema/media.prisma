@@ -71,8 +71,10 @@ model MediaAsset {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  uploader   User  @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: Restrict)
-  reviewedBy User? @relation("MediaReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  uploader          User               @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: Restrict)
+  reviewedBy        User?              @relation("MediaReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  reports           Report[]
+  moderationActions ModerationAction[]
 
   // ── Core ilişkileri (Faruk) — kaldırmayın ──
   avatarOfUsers User[]      @relation("UserAvatar")

@@ -81,8 +81,14 @@ model User {
   commentLikes CommentLike[]
 
   // Mert — media.prisma (KV-16)
-  uploadedMedia MediaAsset[] @relation("MediaUploader")
-  reviewedMedia MediaAsset[] @relation("MediaReviewer")
+  uploadedMedia            MediaAsset[]       @relation("MediaUploader")
+  reviewedMedia            MediaAsset[]       @relation("MediaReviewer")
+  // Mert — moderation.prisma (KV-24)
+  reportsFiled             Report[]           @relation("ReportReporter")
+  reportsAgainst           Report[]           @relation("ReportTargetUser")
+  reportsResolved          Report[]           @relation("ReportResolver")
+  moderationActionsTaken   ModerationAction[] @relation("ModerationActor")
+  moderationActionsAgainst ModerationAction[] @relation("ModerationTargetUser")
 
   @@index([status])
   @@map("users")
@@ -198,18 +204,21 @@ model Poll {
   updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt         DateTime?         @map("deleted_at") @db.Timestamptz(3)
 
-  author         User                @relation(fields: [authorId], references: [id], onDelete: Restrict)
-  category       Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  community      Community?          @relation(fields: [communityId], references: [id], onDelete: Restrict)
-  options        PollOption[]
-  tags           PollTag[]
-  media          PollMedia[]
-  addenda        PollAddendum[]
-  votes          Vote[]
-  voteEvents     VoteEvent[]
-  comments       Comment[]
-  dailySnapshots PollDailySnapshot[]
-  trendScores    TrendScore[]
+  author            User                @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  category          Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  community         Community?          @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  options           PollOption[]
+  tags              PollTag[]
+  media             PollMedia[]
+  addenda           PollAddendum[]
+  votes             Vote[]
+  voteEvents        VoteEvent[]
+  comments          Comment[]
+  dailySnapshots    PollDailySnapshot[]
+  trendScores       TrendScore[]
+  // Mert — moderation.prisma (KV-24)
+  reports           Report[]
+  moderationActions ModerationAction[]
 
   @@index([status, createdAt(sort: Desc)])
   @@index([categoryId, status, createdAt(sort: Desc)])
@@ -343,12 +352,15 @@ model Comment {
   updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt  DateTime?     @map("deleted_at") @db.Timestamptz(3)
 
-  poll    Poll          @relation(fields: [pollId], references: [id], onDelete: Restrict)
-  author  User          @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  poll              Poll               @relation(fields: [pollId], references: [id], onDelete: Restrict)
+  author            User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
   // Bileşik FK: cevap, ebeveyniyle aynı ankette olmak zorunda.
-  parent  Comment?      @relation("CommentReplies", fields: [pollId, parentId], references: [pollId, id], onDelete: Restrict)
-  replies Comment[]     @relation("CommentReplies")
-  likes   CommentLike[]
+  parent            Comment?           @relation("CommentReplies", fields: [pollId, parentId], references: [pollId, id], onDelete: Restrict)
+  replies           Comment[]          @relation("CommentReplies")
+  likes             CommentLike[]
+  // Mert — moderation.prisma (KV-24)
+  reports           Report[]
+  moderationActions ModerationAction[]
 
   @@unique([pollId, id])
   @@index([pollId, parentId, createdAt])
