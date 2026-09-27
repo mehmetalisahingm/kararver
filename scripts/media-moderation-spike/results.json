@@ -1,0 +1,23 @@
+{
+  "model": "nudenet==3.4.2 (320n.onnx, ~11.6MB, bundled MIT model)",
+  "runtime": "onnxruntime==1.30.0 (CPUExecutionProvider)",
+  "init_latency_ms": 88.1,
+  "per_image_latency_ms": {
+    "avatar.jpg": 26.6,
+    "car_sketch.jpg": 22.9,
+    "gradient.jpg": 25.8,
+    "noise.jpg": 38.1,
+    "solid.jpg": 19.9
+  },
+  "avg_warm_latency_ms": 26.7,
+  "rss_before_mb": 49.6,
+  "rss_after_model_load_mb": 72.4,
+  "rss_after_inference_mb": 88.3,
+  "detections_by_image": {
+    "avatar.jpg": [],
+    "car_sketch.jpg": [],
+    "gradient.jpg": [],
+    "noise.jpg": [],
+    "solid.jpg": []
+  }
+}
