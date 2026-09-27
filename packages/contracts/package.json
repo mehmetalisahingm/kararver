@@ -1,8 +1,21 @@
 {
   "name": "@kararver/contracts",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "exports": "./src/index.mjs",
-  "scripts": { "test": "node --test test/*.test.mjs" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\" \"test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "docs": "node scripts/render-inventory.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "typescript": "6.0.3"
+  }
 }

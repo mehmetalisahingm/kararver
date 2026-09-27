@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { canModerate, errorResponse, pageResponse, pollResults, eventEnvelope } from '../src/index.mjs';
+import { canModerate, errorResponse, pageResponse, pollResults, eventEnvelope } from '../src/index.ts';
 
 test('hidden result projection cannot leak vote counts or nested internal data', () => {
   const response = pollResults({ visible: false, total: 123, options: [{ id: 'a', votes: 123, voterIds: ['secret'] }] });

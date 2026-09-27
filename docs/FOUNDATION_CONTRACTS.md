@@ -6,6 +6,10 @@ Teknik kararlar `TECH_DECISIONS.md`, DB alanları `DATA_MODEL.md` ile birlikte k
 Güncel sahiplik: Faruk core/backend, Ümit frontend, Mert medya/topluluk/moderasyon,
 Utku güvenlik/platform, Mehmet büyüme/ürün yüzeyleri.
 
+> **Endpoint bazlı tam sözleşme:** [`API_CONTRACTS.md`](./API_CONTRACTS.md) (KV-03, #5). Her endpoint'in
+> şeması, yetkisi, hata kodları, idempotency ve cache davranışı oradadır ve `@kararver/contracts`
+> 1.0.0'dan üretilir. Bu belgedeki kurallar orada da geçerlidir; ayrıntıda çelişki olursa API_CONTRACTS esas alınır.
+
 ## Wire formatı
 
 - API prefix `/v1`; JSON, camelCase; DB snake_case alanları doğrudan yayınlanmaz.
@@ -29,14 +33,15 @@ Utku güvenlik/platform, Mehmet büyüme/ürün yüzeyleri.
 
 | Sahip | Route grubu | Teslim |
 | --- | --- | --- |
-| Faruk | `/auth/register`, `/auth/login`, `/auth/logout`, `/auth/verify`, `/auth/forgot-password`, `/auth/reset-password`, `/me` | Auth ve session; POST mutation, GET/PATCH me |
-| Faruk | `/polls`, `/polls/:id`, `/polls/:id/vote`, `/polls/:id/comments`, `/comments/:id`, `/comments/:id/like` | Anket GET/POST/PATCH, vote PUT, yorum/alternatif GET/POST/PATCH/DELETE ve like PUT/DELETE |
-| Faruk | `/feed`, `/search`, `/categories`, `/trends/:format` | GET liste; admin kategori mutation ayrı yetkili route |
+| Faruk | `/auth/register`, `/auth/login`, `/auth/logout`, `/auth/email/verify`, `/auth/email/resend`, `/auth/password/forgot`, `/auth/password/reset`, `/me` | Auth ve session; POST mutation, GET/PATCH me |
+| Faruk | `/polls`, `/polls/lookup`, `/polls/:id`, `/polls/:id/vote`, `/polls/:id/reaction`, `/polls/:id/addenda`, `/polls/:id/comments`, `/comments/:id`, `/comments/:id/reaction` | Anket/tartışma GET/POST/PATCH/DELETE, vote PUT, like/dislike PUT/DELETE (#66, eski `/comments/:id/like`'ın yerine), yorum/alternatif GET/POST/PATCH/DELETE |
+| Faruk | `/feed`, `/search`, `/categories`, `/trends/:format`, `/polls/:id/history` | GET liste ve grafik verisi |
+| Faruk | `/admin/categories` | Kategori yönetimi API'si (KV-26); ekranı Mehmet (KV-41) |
 | Mert | `/media`, `/reports`, `/communities`, `/communities/:id/membership` | Upload/rapor POST; topluluk GET, üyelik PUT/DELETE |
 | Mert | `/admin/polls`, `/admin/comments`, `/admin/reports`, `/admin/media`, `/admin/communities` | Moderasyon komutları gerekçe/audit ile, scoped yetki |
-| Utku | `/notifications`, `/notifications/preferences`, `/admin/users`, `/admin/settings`, `/admin/audit` | Bildirim GET/PATCH; ayar/yaptırım mutation; audit read-only |
-| Mehmet | `/profiles/:username`, `/bookmarks`, `/polls/:id/follow`, `/polls/:id/decision` | Profil/kaydet GET; bookmark/follow PUT/DELETE; karar PUT |
-| Mehmet | `/me/interests`, `/admin/metrics`, `/admin/featured`, `/admin/announcements`, `/admin/categories` | İlgi GET/PUT, metrik GET, içerik yönetimi CRUD |
+| Utku | `/config`, `/notifications`, `/notifications/preferences`, `/notifications/mutes/:pollId`, `/admin/users`, `/admin/settings`, `/admin/emergency`, `/admin/audit` | Public config GET; bildirim GET/PATCH, sessize alma; ayar/yaptırım/rol mutation; audit read-only |
+| Mehmet | `/profiles/:username`, `/me/bookmarks`, `/polls/:id/bookmark`, `/polls/:id/follow`, `/polls/:id/decision`, `/polls/:id/shares`, `/announcements/active` | Profil/kaydet GET; bookmark/follow PUT/DELETE; karar PUT; paylaşım POST |
+| Mehmet | `/me/interests`, `/me/points`, `/admin/metrics`, `/admin/featured`, `/admin/announcements`, `/admin/users/:id/point-adjustments` | İlgi GET/PUT, puan (#67), metrik GET, içerik yönetimi CRUD. Kategori ekranı (KV-41) Faruk'un `/admin/categories` API'sini kullanır |
 
 Yukarıdaki tablo route sahipliğini sabitler. Her feature PR'ı alan bazlı request/response
 şeması, validation ve endpoint contract testini ekler. `/admin` prefix'i tek başına yetki değildir.
@@ -88,5 +93,6 @@ Storage: `python -m pip install boto3==1.42.0`, `python scripts/storage-smoke.py
 
 CI DB, statik UI ve S3 smoke işlerini ayrı raporlar. Henüz `apps/web`, `apps/api`,
 `apps/worker`, gerçek staging deployment veya auth→anket→oy E2E yoktur; bunların yerine
-mock başarısı kabul edilmez. Tam endpoint şemaları ve bağımsız çalışan uygulama/mock
-servisleri KV-03/04/06'nın kalan teslimleridir.
+mock başarısı kabul edilmez. Tam endpoint şemaları KV-03 ile [`API_CONTRACTS.md`](./API_CONTRACTS.md)
+ve `packages/contracts` içinde tamamlandı; bağımsız çalışan uygulama/mock servisleri KV-04/06'nın
+kalan teslimleridir.
