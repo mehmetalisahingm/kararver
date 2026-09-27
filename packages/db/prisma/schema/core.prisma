@@ -184,8 +184,8 @@ model Poll {
   closesAt          DateTime          @map("closes_at") @db.Timestamptz(3)
   // Sahip/admin erken kapatırsa dolar. Etkin kapanış = LEAST(closes_at, closed_at).
   closedAt          DateTime?         @map("closed_at") @db.Timestamptz(3)
-  // İlk geçerli oyda trigger doldurur; dolduktan sonra başlık, seçenekler ve
-  // sonuç görünürlüğü değiştirilemez ve bu alan geri alınamaz.
+  // İlk geçerli oyda trigger doldurur; dolduktan sonra başlık, açıklama, seçenekler
+  // ve sonuç görünürlüğü değiştirilemez (ek bilgi: PollAddendum) ve bu alan geri alınamaz.
   firstValidVoteAt  DateTime?         @map("first_valid_vote_at") @db.Timestamptz(3)
   voteCount         Int               @default(0) @map("vote_count")
   commentCount      Int               @default(0) @map("comment_count")

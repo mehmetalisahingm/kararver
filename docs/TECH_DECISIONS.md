@@ -370,6 +370,7 @@ pnpm dev                    # tüm uygulamalar
 pnpm --filter @kararver/api dev     # sadece api
 pnpm test | lint | typecheck
 pnpm db:reset               # local DB'yi sıfırla + seed
+pnpm db:test                # DB testleri, ayrı <db>_test veritabanında (DATA_MODEL.md §11)
 docker compose down         # servisleri durdur (veri korunur)
 docker compose down -v      # servisleri ve VERİLERİ sil
 ```

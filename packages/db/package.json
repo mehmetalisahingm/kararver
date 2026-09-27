@@ -11,7 +11,8 @@
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test:db": "node --test --test-concurrency=1 test/db.integration.test.ts"
   },
   "devDependencies": {
     "@types/node": "24.19.0",

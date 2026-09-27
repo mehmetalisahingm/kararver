@@ -598,7 +598,8 @@ CREATE TRIGGER "votes_mark_first_valid"
   AFTER INSERT ON "votes"
   FOR EACH ROW EXECUTE FUNCTION kv_votes_mark_first_valid();
 
--- (b) Kilitli ankette başlık ve sonuç görünürlüğü değişmez; kilit geri alınamaz.
+-- (b) Kilitli ankette başlık, açıklama ve sonuç görünürlüğü değişmez; kilit geri
+--     alınamaz. Sonradan bilgi eklemek için poll_addenda kullanılır.
 CREATE FUNCTION kv_polls_guard_locked() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -608,8 +609,9 @@ BEGIN
         USING ERRCODE = 'P0001';
     END IF;
     IF NEW."title" IS DISTINCT FROM OLD."title"
+       OR NEW."description" IS DISTINCT FROM OLD."description"
        OR NEW."results_visibility" IS DISTINCT FROM OLD."results_visibility" THEN
-      RAISE EXCEPTION 'KV_POLL_CONTENT_LOCKED: ilk geçerli oydan sonra başlık ve sonuç görünürlüğü değiştirilemez (poll %)', OLD."id"
+      RAISE EXCEPTION 'KV_POLL_CONTENT_LOCKED: ilk geçerli oydan sonra başlık, açıklama ve sonuç görünürlüğü değiştirilemez (poll %)', OLD."id"
         USING ERRCODE = 'P0001';
     END IF;
   END IF;

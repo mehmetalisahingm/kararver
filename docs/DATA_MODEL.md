@@ -275,17 +275,17 @@ Anket açık mı kontrolü (`opens_at <= now() < LEAST(closes_at, closed_at)` ve
 
 ## 6. İlk geçerli oydan sonra anket kilidi
 
-**Kural:** Anket ilk geçerli oyu aldıktan sonra **başlık (soru), seçenekler ve `results_visibility`** değiştirilemez (KV-10 kabul koşulu). Kural uygulama kontrolüne bırakılmaz, DB trigger'ı ile korunur.
+**Kural:** Anket ilk geçerli oyu aldıktan sonra **başlık (soru), açıklama (`description`), seçenekler ve `results_visibility`** değiştirilemez (KV-10 kabul koşulu; açıklama kararı Faruk, 2026-09-27). Kural uygulama kontrolüne bırakılmaz, DB trigger'ı ile korunur. Sonradan bilgi eklemenin tek yolu `poll_addenda`'dır (tarihli ek açıklama).
 
 | Parça | Ne yapar |
 |---|---|
 | `polls.first_valid_vote_at` | Kilit bayrağı. Geçerli (`invalidated_at IS NULL`) ilk oy eklenince `votes_mark_first_valid` trigger'ı bir kez doldurur. |
-| `polls_guard_locked` (BEFORE UPDATE ON polls) | Kilitli ankette `title` veya `results_visibility` değişirse, ya da `first_valid_vote_at` değiştirilmeye/boşaltılmaya çalışılırsa hata verir. |
+| `polls_guard_locked` (BEFORE UPDATE ON polls) | Kilitli ankette `title`, `description` veya `results_visibility` değişirse (boşaltmak dahil), ya da `first_valid_vote_at` değiştirilmeye/boşaltılmaya çalışılırsa hata verir. |
 | `poll_options_guard_locked` (BEFORE INSERT/UPDATE/DELETE ON poll_options) | Kilitli ankette seçenek eklenemez, silinemez; `label` ve `position` değişemez. Sadece `vote_count` güncellemesi serbesttir. |
 
 - **Hata biçimi:** `SQLSTATE P0001`, mesaj `KV_POLL_CONTENT_LOCKED: ...` ile başlar. API bunu `409 POLL_CONTENT_LOCKED` hatasına çevirir (KV-03).
 - **Kilit kalıcıdır:** Sonradan bütün oylar geçersiz sayılsa bile kilit açılmaz, çünkü insanlar o soruyu görüp oy vermiştir.
-- **Kilidin kapsamı dışında kalanlar:** `description`, fiyat, ek bilgi, kategori ve yorum ayarları kilitlenmez. Kilitli ankete bilgi eklemek için `poll_addenda` (tarihli açıklama) kullanılır. `description` alanının da kilitlenip kilitlenmeyeceği açık bir sorudur (§11).
+- **Kilidin kapsamı dışında kalanlar:** Fiyat, ek bilgi (`extra_info`), kategori, yorum ayarları, erken kapanış (`closed_at`) ve sayaçlar kilitlenmez. Kilitli ankete bilgi eklemek için `poll_addenda` kullanılır; ekler tarihle birlikte gösterilir, asıl metin değişmez.
 
 **Yarış durumu:** İlk oy ile seçenek düzenlemesi aynı anda gelebilir.
 - Oy tarafındaki trigger `polls` satırını `UPDATE` ile kilitler.
@@ -341,6 +341,8 @@ ACTIVE | RESTRICTED | SUSPENDED ──► BANNED ──► ACTIVE   (sadece admi
 ## 8. Snapshot ve pencereler (Europe/Istanbul)
 
 Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından itibaren, Europe/Istanbul takvim günleriyle** tanımlanır.
+
+> **Teyit bekliyor:** Bu tanım `main`'deki `PRODUCT_TEAM_PLAN.md` §8'de yazılı değil. Faruk'un kararıyla buraya yazıldı (açılış günü kısmi gün, pencere sonları İstanbul gece yarısı). Ürün tarafından onayı Mehmet'ten bekleniyor (KV-02 PR'ı).
 
 ### 8.1 Tanımlar
 - `open_local_date = (polls.opens_at AT TIME ZONE 'Europe/Istanbul')::date`: Anketin açıldığı İstanbul günü.
@@ -425,31 +427,55 @@ Oluşturma: `pnpm --filter @kararver/db exec prisma migrate dev --create-only --
 
 ---
 
-## 11. Kanıt ve açık konular
+## 11. Testler, kanıt ve açık konular
 
-### 11.1 Bu PR'daki kanıt
+### 11.1 DB testlerini çalıştırma
+
+Testler `packages/db/test/db.integration.test.ts` dosyasındadır. Node 24'ün yerleşik test runner'ını ve TypeScript desteğini kullanır; ek paket gerekmez. Herhangi bir PostgreSQL 17 sunucusunda çalışır (docker compose, Windows'a kurulu Postgres, uzak bir sunucu).
+
+```bash
+# 1) Bir PostgreSQL sunucusu hazır olsun, ör. local:
+docker compose up -d
+
+# 2) Repo kökünden:
+pnpm db:test
+```
+
+- **Bağlantı:** `TEST_DATABASE_URL` tanımlıysa o kullanılır. Değilse `DATABASE_URL` (ortamdan ya da kökteki `.env`) alınır ve aynı sunucuda **`<veritabanı>_test`** kullanılır. Örneğin `.env.example` ile `kararver_test`.
+- **Test veritabanı her çalıştırmada sıfırlanır:** Veritabanı yoksa test onu `CREATE DATABASE` ile oluşturur (kullanıcının CREATEDB yetkisi gerekir; docker compose kullanıcısında var). Sonra `prisma migrate reset --force` ile bütün migration'lar baştan uygulanır.
+- **Güvenlik:** Veritabanı adı `_test` ile bitmiyorsa test hiçbir şeye dokunmadan durur. Asıl `kararver` veritabanı etkilenmez.
+- **CREATEDB yetkisi yoksa:** Boş bir `..._test` veritabanını elle açıp `TEST_DATABASE_URL` ile verin:
+  ```bash
+  TEST_DATABASE_URL=postgresql://kullanici:sifre@host:5432/kararver_test pnpm db:test
+  ```
+- **Sunucu çalışmıyorsa:** Test `PostgreSQL'e bağlanılamadı (...). Sunucu çalışıyor mu?` mesajıyla durur.
+
+### 11.2 Test kapsamı (27 test)
+
+| Grup | Ne doğrulanır |
+|---|---|
+| Migration | İlk migration temiz veritabanına eksiksiz uygulanır ve 6 trigger oluşur. `prisma migrate diff --from-config-datasource --to-schema --exit-code` fark bulmaz |
+| Tek aktif oy | İkinci oy `23505` ile reddedilir. Başka anketin seçeneğine oy FK hatası verir. **Aynı hesaptan 20 eşzamanlı istek** tek oy satırı, tek `vote_events` satırı ve toplamları 1 olan sayaçlar üretir. Geçersiz saymada gerekçe zorunludur, ikinci geçersiz sayma çift düşüm yapmaz, kullanıcı yeniden oy veremez. Oyun anketi/kullanıcısı değiştirilemez |
+| Kilit | Oy yokken başlık, açıklama, sonuç görünürlüğü ve seçenekler düzenlenebilir. İlk geçerli oydan sonra şunlar `KV_POLL_CONTENT_LOCKED` ile reddedilir: başlık, **açıklama (boşaltmak dahil)**, `results_visibility`, kilidi geri alma, seçenek metni/sırası, seçenek ekleme ve silme. Sayaçlar, erken kapanış, yorum ayarı ve `poll_addenda` serbesttir. Sadece geçersiz sayılmış oy anketi kilitlemez |
+| Oy geçmişi | `vote_events` UPDATE/DELETE `KV_VOTE_EVENTS_APPEND_ONLY` ile reddedilir. Olay biçimi CHECK'i çalışır (aynı seçeneğe `CHANGE` olmaz) |
+| Yorum | Cevaba cevap `KV_COMMENT_DEPTH` verir. Cevabı olan yorum cevaba dönüştürülemez. `ALTERNATIVE` sadece üst seviyede olabilir. Cevap başka anketteki yoruma bağlanamaz |
+| `kv_normalize` | TECH_DECISIONS §3.9 tablosu ve ek örnekler: `Şişe→sise`, `IŞIK/ışık→isik`, `İstanbul→istanbul`, `ağaç→agac`, `Göz→goz`, `Üzüm→uzum`, `ÇİÇEK→cicek`, `Iğdır→igdir` |
+
+### 11.3 Bu PR'daki kanıt
+
 | Kontrol | Sonuç |
 |---|---|
 | `prisma validate` | ✅ Geçerli |
-| `prisma migrate diff --from-empty --to-schema prisma/schema --script` | ✅ 20 tablo, 9 enum; migration'ın 1. bölümü bu çıktı |
-| `prisma generate` ve `tsc` (`@kararver/db`) | ✅ Hatasız |
-| Migration'ın gerçek PostgreSQL'e uygulanması ve trigger/kısıt testleri | ⏳ Docker kurulunca (§11.2) |
+| `prisma migrate diff --from-empty --to-schema prisma/schema --script` | ✅ Migration'ın 1. bölümüyle birebir aynı (20 tablo, 9 enum) |
+| `prisma generate` ve `tsc` (`src` + `test`) | ✅ Hatasız |
+| Test dosyası DB olmadan çalıştırıldı | ✅ Yükleniyor, 27 testi kaydediyor, anlaşılır bağlantı hatasıyla duruyor. `_test` koruması çalışıyor |
+| **Testlerin gerçek PostgreSQL'de çalışması** | ⏳ **Henüz çalıştırılmadı.** Yazarın makinesinde Docker çalışmıyor (sanallaştırma hatası). Docker'ı olan bir reviewer'dan `docker compose up -d && pnpm db:test` sonucu bekleniyor |
 
-### 11.2 DB testleri (Docker hazır olunca)
-1. `docker compose up -d` → `pnpm db:migrate`: migration temiz bir veritabanına uygulanır.
-2. Aynı kullanıcı aynı ankete ikinci kez oy verir → `23505`.
-3. 20 eşzamanlı oy isteği → tek satır; `vote_count` 1 olur.
-4. Başka bir anketin seçeneğine oy → FK hatası.
-5. İlk oydan sonra başlık, `results_visibility` veya seçenek değişikliği → `KV_POLL_CONTENT_LOCKED`.
-6. `vote_events` UPDATE/DELETE → `KV_VOTE_EVENTS_APPEND_ONLY`.
-7. Cevaba cevap → `KV_COMMENT_DEPTH`.
-8. `kv_normalize` → TECH_DECISIONS §3.9'daki test tablosu.
-9. `prisma migrate diff --from-migrations … --to-schema …` → fark yok.
+### 11.4 Açık konular
 
-### 11.3 Açık konular
 | # | Konu | Kim |
 |---|---|---|
-| 1 | Kilitli ankette `description` da kilitlensin mi? Şu an serbest; bilgi ekleme `poll_addenda` ile | Faruk + Mehmet (ürün) |
+| 1 | Snapshot pencere tanımının (§8) ürün onayı; `main`'deki planda yok | Mehmet |
 | 2 | `LOCKED` durumundaki anket oy alabilir mi? | KV-11 |
 | 3 | Hesap silmede KVKK kapsamı: hangi alanlar anonimleşir, oylar ne olur | Faruk + Utku |
 | 4 | Kullanıcı adında izinli karakterler (Türkçe harf olacak mı?) | KV-09 |
