@@ -8,6 +8,8 @@ importers:
 
   .: {}
 
+  packages/contracts: {}
+
   packages/db:
     dependencies:
       '@prisma/adapter-pg':

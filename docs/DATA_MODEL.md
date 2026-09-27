@@ -342,7 +342,7 @@ ACTIVE | RESTRICTED | SUSPENDED ──► BANNED ──► ACTIVE   (sadece admi
 
 Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından itibaren, Europe/Istanbul takvim günleriyle** tanımlanır.
 
-> **Teyit bekliyor:** Bu tanım `main`'deki `PRODUCT_TEAM_PLAN.md` §8'de yazılı değil. Faruk'un kararıyla buraya yazıldı (açılış günü kısmi gün, pencere sonları İstanbul gece yarısı). Ürün tarafından onayı Mehmet'ten bekleniyor (KV-02 PR'ı).
+> **Onaylandı:** Mehmet, PR #63 incelemesinde 2026-09-27 tarihinde Europe/Istanbul takvim günü yaklaşımını kabul etti. Açılış günü kısmi gün, pencere sonları İstanbul gece yarısıdır; tam 168 saatlik kayan pencere kullanılmaz.
 
 ### 8.1 Tanımlar
 - `open_local_date = (polls.opens_at AT TIME ZONE 'Europe/Istanbul')::date`: Anketin açıldığı İstanbul günü.
@@ -469,13 +469,13 @@ pnpm db:test
 | `prisma migrate diff --from-empty --to-schema prisma/schema --script` | ✅ Migration'ın 1. bölümüyle birebir aynı (20 tablo, 9 enum) |
 | `prisma generate` ve `tsc` (`src` + `test`) | ✅ Hatasız |
 | Test dosyası DB olmadan çalıştırıldı | ✅ Yükleniyor, 27 testi kaydediyor, anlaşılır bağlantı hatasıyla duruyor. `_test` koruması çalışıyor |
-| **Testlerin gerçek PostgreSQL'de çalışması** | ⏳ **Henüz çalıştırılmadı.** Yazarın makinesinde Docker çalışmıyor (sanallaştırma hatası). Docker'ı olan bir reviewer'dan `docker compose up -d && pnpm db:test` sonucu bekleniyor |
+| **Gerçek PostgreSQL 17.11 testi** | ✅ 2026-09-27: GitHub Actions üzerinde 27/27 geçti; migrate reset/diff ve 20 eşzamanlı oy dahil. [Koşu](https://github.com/mehmetalisahingm/kararver/actions/runs/36335631011). Aynı koşuda storage geçti; UI hashchange bekleme hatası sonraki committe düzeltildi. |
 
 ### 11.4 Açık konular
 
 | # | Konu | Kim |
 |---|---|---|
-| 1 | Snapshot pencere tanımının (§8) ürün onayı; `main`'deki planda yok | Mehmet |
+| 1 | Snapshot pencere tanımı PR #63 incelemesinde onaylandı; §8 güncellendi | Tamamlandı |
 | 2 | `LOCKED` durumundaki anket oy alabilir mi? | KV-11 |
 | 3 | Hesap silmede KVKK kapsamı: hangi alanlar anonimleşir, oylar ne olur | Faruk + Utku |
 | 4 | Kullanıcı adında izinli karakterler (Türkçe harf olacak mı?) | KV-09 |
