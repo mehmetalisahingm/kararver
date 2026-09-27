@@ -39,7 +39,7 @@
 /apps/web/src/features/reports/             @MertKAYAR
 /apps/web/src/features/communities/         @MertKAYAR
 
-# ── Utku — admin / security / platform (KV-06, KV-21, KV-34) ──
+# ── Utku — admin / security / platform (CI: KV-06 #8 · bildirim: KV-21 #23, KV-34 #36) ──
 /apps/api/src/modules/rbac/                 @Utkuuzun14
 /apps/api/src/modules/rate-limit/           @Utkuuzun14
 /apps/api/src/modules/notifications/        @Utkuuzun14
