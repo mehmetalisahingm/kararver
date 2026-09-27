@@ -4,7 +4,7 @@
 >
 > Ekip: **Faruk, Ümit, Mert, Utku, Mehmet**
 >
-> Çalışma modeli: **Faruk + Ümit ana üretim yükünü taşır. Mert üçüncü aktif geliştiricidir. Mehmet + Utku ana olarak review/QA/ürün kontrolü yapar; ancak ihtiyaç olduğunda doğrudan kodlamaya girer.**
+> Çalışma modeli: **5 kişinin toplam yükü mümkün olduğunca dengeli tutulur. Faruk, Ümit ve Mert ana geliştirme hatlarında sürekli üretim yapar. Utku ve Mehmet review/QA/ürün kontrolünü sahiplenir; ancak bunun yanında belirli teknik modüllerin doğrudan geliştiricisidir. Review rolü onların kod yazmasını engellemez.**
 
 ---
 
@@ -53,9 +53,7 @@ Görsel hedef, hazırlanan demo görsellerindeki premium koyu temadır.
 - Orta: ana feed
 - Sağ: Günün Yükselenleri + Popüler Kategoriler
 
-## Mobil
-
-Alt navigation:
+## Mobil alt navigation
 
 - Ana Sayfa
 - Keşfet
@@ -94,7 +92,7 @@ Kullanıcı gerçek kimliğini göstermek zorunda değildir. Platformda kullanı
 - Kendi yorumları
 - Kaydedilenler (yalnızca kullanıcıya özel)
 
-V1'de takipçi sistemi zorunlu değildir. Veri modeli ileride eklenebilir şekilde tasarlanabilir.
+V1'de takipçi sistemi zorunlu değildir; veri modeli ileride eklenebilir şekilde tasarlanır.
 
 ---
 
@@ -118,11 +116,7 @@ Kullanıcı şu içerikleri oluşturabilir:
 
 Fotoğraf KararVer için çekirdek özelliktir.
 
-Örnek:
-
-> “Bu araba bu fiyata alınır mı?”
->
-> Kullanıcı hasarlı/boyalı bölgenin fotoğraflarını yükleyebilir ve topluluktan görüş alabilir.
+Örnek: Kullanıcı ikinci el bir aracın hasarlı/boyalı bölgelerinin fotoğraflarını yükleyip “Bu araba bu fiyata alınır mı?” diye sorabilir.
 
 Kurallar:
 
@@ -131,19 +125,20 @@ Kurallar:
 - EXIF/metaveri mümkün olduğunca temizlenir.
 - Maksimum dosya boyutu admin panelinden değiştirilebilir.
 - Desteklenen MIME türleri backend tarafından doğrulanır.
+- Dosya binary verisi ana DB'de tutulmaz; storage URL'si saklanır.
 
 ---
 
 # 5. Oy sistemi
 
 - Bir kullanıcı aynı ankete yalnızca bir aktif oy verebilir.
-- Çift istek çift oy üretmemelidir.
-- Oy işlemi transaction-safe olmalıdır.
+- Aynı isteğin iki kez gelmesi çift oy üretmemelidir.
+- Oy işlemi transaction-safe ve idempotent olmalıdır.
 - Anket kapandıktan sonra oy kabul edilmez.
 - Admin sistem ayarından izin verirse kullanıcı anket kapanmadan oyunu değiştirebilir.
 - Sonuçlar yüzde + oy sayısı olarak gösterilir.
 
-Her seçenek için günlük snapshot tutulmalıdır. Böylece ileride “geçen haftaya göre görüş nasıl değişti?” gösterilebilir.
+Her seçenek için günlük snapshot tutulur. Böylece geçen haftaya göre görüş değişimi ölçülebilir.
 
 ---
 
@@ -166,15 +161,9 @@ Normal yorumdan ayrı bir aksiyon bulunabilir:
 
 **“Bunun yerine ne önerirsin?”**
 
-Kullanıcı alternatif ürün/karar yazabilir.
+Örnek: “3 milyon TL'ye Tesla alınır mı?” sorusunda kullanıcı “Bu bütçede BMW i4’e de bakılabilir.” şeklinde alternatif önerebilir.
 
-Örneğin:
-
-> “3 milyon TL'ye Tesla alınır mı?”
->
-> Alternatif: “Bu bütçede BMW i4’e de bakılabilir.”
-
-Bu cevaplar ayrıca sıralanabilir ve topluluk tarafından beğenilebilir.
+Alternatifler topluluk tarafından beğenilebilir ve sıralanabilir.
 
 ---
 
@@ -195,13 +184,12 @@ Sıralama sinyalleri:
 - Yeni içerikler
 - Son dönemde hızlı oy alan içerikler
 - Yorum aktivitesi
+- Kaydetme aktivitesi
 - İçerik yaşı
 
 ---
 
 # 8. KararVer'e özel trend formatları
-
-Bu alan ürünün en ayırt edici kısımlarından biri olacaktır.
 
 ## Günün Yükselenleri
 
@@ -225,15 +213,11 @@ KararVer'in farklılaşabileceği özel özellik.
 
 Örnek:
 
-> Geçen hafta: %82 “Alınır”
->
-> Bu hafta: %46 “Alınır”
->
+> Geçen hafta: %82 “Alınır”  
+> Bu hafta: %46 “Alınır”  
 > Değişim: `-36 puan`
 
-Sistem günlük oy oranı snapshot'ları tutar ve yeterli örneklem bulunan anketleri karşılaştırır.
-
-Bir içerik “Haftanın Değişkenleri”ne girmek için minimum oy eşiğini geçmelidir. Bu eşik admin panelinden değiştirilebilir.
+Sistem günlük oy oranı snapshot'ları tutar ve yeterli örneklem bulunan anketleri karşılaştırır. Minimum oy eşiği admin panelinden değiştirilebilir.
 
 ## Trend puanı
 
@@ -263,38 +247,17 @@ Katsayılar admin/config üzerinden değiştirilebilir olmalıdır.
 - Kariyer
 - Diğer
 
-Kategori yönetimi tamamen admin panelinden yapılır.
-
-Admin:
-
-- kategori oluşturabilir
-- düzenleyebilir
-- pasife alabilir
-- sırasını değiştirebilir
-- ikon/görsel belirleyebilir
+Admin kategori oluşturabilir, düzenleyebilir, pasife alabilir, sırasını değiştirebilir ve ikon/görsel belirleyebilir.
 
 ---
 
 # 10. Topluluk sistemi
 
-KararVer'in uzun vadeli büyüme motorlarından biri.
+KararVer'in uzun vadeli büyüme motorlarından biridir.
 
-V1'de temel topluluk sistemi bulunmalıdır.
+Örnek: **Samsun Üniversitesi Topluluğu**
 
-Örnek:
-
-**Samsun Üniversitesi Topluluğu**
-
-Öğrenciler topluluk içerisinde:
-
-- kampüs sorunları
-- yemekhane
-- ulaşım
-- etkinlikler
-- dersler
-- öğrenci hizmetleri
-
-hakkında anket açabilir.
+Öğrenciler topluluk içerisinde kampüs, yemekhane, ulaşım, etkinlikler, dersler ve öğrenci hizmetleri hakkında anket açabilir.
 
 ## V1 topluluk özellikleri
 
@@ -304,27 +267,21 @@ hakkında anket açabilir.
 - Topluluk içerisindeki anketler ayrı filtrelenebilir.
 - Admin topluluk moderatorü atayabilir.
 
-İlk public sürümde herkesin istediği topluluğu anında açması zorunlu değildir. Spam riskini azaltmak için topluluk oluşturma önce admin kontrollü olabilir.
+İlk public sürümde topluluk oluşturma admin kontrollü olabilir.
 
 ---
 
-# 11. Kaydetme
+# 11. Kaydetme ve bildirimler
 
-Kullanıcı bir anketi kaydedebilir.
+## Kaydetme
 
-- Kaydet
+- Anketi kaydet
 - Kaydı kaldır
 - Profil → Kaydedilenler
 
-Bu liste private olmalıdır.
+Kaydedilenler private olur.
 
----
-
-# 12. Bildirimler
-
-V1'de uygulama içi bildirim yeterlidir.
-
-Bildirimler:
+## Uygulama içi bildirimler
 
 - Anketine yorum geldi
 - Yorumuna cevap geldi
@@ -332,13 +289,13 @@ Bildirimler:
 - Anketin belirli oy sayısına ulaştı
 - Anketin Günün/Haftanın Yükselenleri'ne girdi
 - Moderasyon işlemi uygulandı
-- Takip ettiği toplulukta öne çıkan bir konu oluştu
+- Takip ettiği toplulukta öne çıkan konu oluştu
 
-Bildirimler read/unread durumuna sahip olmalıdır.
+Read/unread durumu tutulur.
 
 ---
 
-# 13. Search / SEO / paylaşım
+# 12. Search / SEO / paylaşım
 
 ## Search
 
@@ -369,9 +326,9 @@ Gerekli:
 
 ## Sosyal paylaşım
 
-Paylaşım kartları X, WhatsApp, Instagram link preview vb. alanlarda düzgün görünmelidir.
+X, WhatsApp ve diğer platformlarda paylaşım kartı düzgün görünmelidir.
 
-Paylaşım kartında:
+Kartta:
 
 - soru
 - güncel oy yüzdesi
@@ -382,42 +339,38 @@ bulunabilir.
 
 ---
 
-# 14. Anti-spam ve kullanım limitleri
+# 13. Anti-spam ve kullanım limitleri
 
 Bu limitlerin tamamı admin panelinden değiştirilebilir olmalıdır.
 
 ## Önerilen varsayılan değerler
 
-Yeni hesap — ilk 7 gün:
+### Yeni hesap — ilk 7 gün
 
 - maksimum 3 anket / 24 saat
 - iki anket arasında minimum 30 dakika
 
-Normal hesap:
+### Normal hesap
 
 - maksimum 10 anket / 24 saat
 - iki anket arasında minimum 10 dakika
 
-Yorum:
+### Ek kontroller
 
-- kısa aralıkta burst rate-limit
-- günlük makul üst sınır
-
-Ek kontroller:
-
+- yorum burst rate-limit
 - aynı başlığı tekrar tekrar gönderme koruması
 - duplicate görsel hash kontrolü
-- silinen/engellenen görseller için perceptual hash listesi
-- aşırı isteklerde geçici throttle
-- login brute force koruması
+- engellenen görseller için perceptual hash listesi
+- aşırı isteklerde throttle
+- login brute-force koruması
 
-Bütün limitler deploy yapmadan Admin → Sistem Ayarları üzerinden değiştirilebilir.
+Bütün limitler deploy yapmadan **Admin → Sistem Ayarları** üzerinden değiştirilebilir.
 
 ---
 
-# 15. Görsel moderasyon
+# 14. Görsel moderasyon
 
-Dışarıdan ücretli API kullanmadan, kendi sunucumuzda çalıştırabileceğimiz küçük bir görsel moderasyon modeli hedeflenir.
+Dışarıdan ücretli API kullanmadan, kendi sunucumuzda çalıştırılabilecek küçük bir görsel moderasyon modeli hedeflenir.
 
 Akış:
 
@@ -425,23 +378,15 @@ Akış:
 
 ## Risk seviyeleri
 
-### Düşük risk
+- **Düşük:** normal yayın
+- **Orta:** `UNDER_REVIEW` veya işaretli yayın
+- **Yüksek:** otomatik karantina / engel
 
-Normal yayın.
-
-### Orta risk
-
-`UNDER_REVIEW` durumuna alınabilir veya yayınlanıp admin kuyruğuna işaretlenebilir. Sistem ayarı ile davranış değiştirilebilir.
-
-### Yüksek risk
-
-Otomatik engelle veya karantinaya al.
-
-Modelin kararı nihai otorite olmamalıdır. Admin her zaman sonucu override edebilmelidir.
+Model nihai otorite değildir. Admin sonucu override edebilir.
 
 ---
 
-# 16. Kullanıcı raporlama
+# 15. Kullanıcı raporlama
 
 Raporlanabilir öğeler:
 
@@ -465,40 +410,32 @@ Rapor direkt hard delete üretmez; moderasyon kuyruğuna düşer.
 
 ---
 
-# 17. GELİŞMİŞ ADMIN PANELİ
+# 16. GELİŞMİŞ ADMIN PANELİ
 
-Admin paneli bu projenin en önemli modüllerinden biridir.
+Admin paneli V1'in çekirdeğidir.
 
-Admin sistemi sonradan eklenen küçük bir panel değil, V1'in çekirdeğidir.
-
-## 17.1 Roller
+## Roller
 
 - Moderator
 - Admin
 - Super Admin
 
-Yetkiler backend tarafından doğrulanmalıdır.
+Yetkiler backend tarafından doğrulanır.
 
-## 17.2 Genel Bakış Dashboard
-
-Metrikler:
+## Dashboard metrikleri
 
 - toplam kullanıcı
-- günlük aktif kullanıcı
-- haftalık aktif kullanıcı
+- günlük/haftalık aktif kullanıcı
 - yeni kayıt
-- toplam anket
-- bugün oluşturulan anket
-- toplam oy
-- bugün verilen oy
+- toplam ve günlük anket
+- toplam ve günlük oy
 - toplam yorum
 - bekleyen rapor
 - moderasyon kuyruğu
-- yüklenen görsel sayısı
-- engellenen görsel sayısı
-- son 7/30 gün büyüme grafikleri
+- yüklenen / engellenen görsel sayısı
+- 7/30 günlük büyüme grafikleri
 
-## 17.3 İçerik yönetimi
+## İçerik yönetimi
 
 Admin bütün anketlerde:
 
@@ -509,17 +446,15 @@ Admin bütün anketlerde:
 - geri yükle
 - kilitle
 - yorumları kapat
-- kategori değiştir
-- etiketi değiştir
-- topluluk değiştir
+- kategori / etiket / topluluk değiştir
 - trending'den çıkar
 - rapor geçmişini gör
 
 uygulayabilir.
 
-## 17.4 Admin tarafından içerik öne çıkarma
+## Admin tarafından içerik öne çıkarma
 
-Admin istediği içeriği öne çıkarabilmelidir.
+Admin istediği içeriği öne çıkarabilir.
 
 Öne çıkarma türleri:
 
@@ -540,18 +475,18 @@ Admin şunları belirleyebilir:
 
 Admin ayrıca bir içeriğin algoritmik yükselen sıralamasına girmesini engelleyebilir.
 
-**Sponsorlu içerik ileride eklenirse mutlaka “Sponsorlu” olarak açıkça etiketlenmelidir.**
+Sponsorlu içerik ileride eklenirse mutlaka açıkça **Sponsorlu** olarak etiketlenir.
 
-## 17.5 Duyuru sistemi
+## Duyuru sistemi
 
 Admin:
 
 - site duyurusu oluşturabilir
 - banner gösterebilir
 - belirli kullanıcı gruplarına bildirim gönderebilir
-- duyuruyu başlangıç/bitiş tarihi ile planlayabilir
+- başlangıç/bitiş tarihi planlayabilir
 
-## 17.6 Kullanıcı yönetimi
+## Kullanıcı yönetimi
 
 Admin:
 
@@ -560,12 +495,11 @@ Admin:
 - uyarı verebilir
 - yorum yetkisini geçici kapatabilir
 - anket açma yetkisini geçici kapatabilir
-- suspend edebilir
-- banlayabilir
-- banı kaldırabilir
-- kullanıcının rapor geçmişini görebilir
+- suspend / ban uygulayabilir
+- yaptırımı kaldırabilir
+- rapor geçmişini görebilir
 
-## 17.7 Moderasyon kuyruğu
+## Moderasyon kuyruğu
 
 Filtreler:
 
@@ -584,18 +518,14 @@ Filtreler:
 - kullanıcıyı uyar
 - kullanıcıya yaptırım uygula
 
-## 17.8 Kategori / topluluk yönetimi
+## Kategori / topluluk yönetimi
 
-Admin:
+- kategori oluştur / sırala / pasife al
+- topluluk oluştur / kapat
+- topluluk moderatorü ata
+- topluluk açıklaması ve görselini düzenle
 
-- kategori oluşturur
-- kategori sıralar
-- topluluk oluşturur
-- topluluk moderatorü atar
-- topluluk kapatır
-- topluluk açıklaması/görseli düzenler
-
-## 17.9 Sistem ayarları
+## Sistem ayarları
 
 Admin deploy gerektirmeden değiştirebilir:
 
@@ -608,14 +538,14 @@ Admin deploy gerektirmeden değiştirebilir:
 - görsel boyut limiti
 - moderasyon risk eşikleri
 - trend katsayıları
-- haftanın değişkenleri minimum oy eşiği
+- Haftanın Değişkenleri minimum oy eşiği
 - yeni kayıt aç/kapat
 - anket oluşturmayı aç/kapat
 - yorumları global aç/kapat
 - görsel upload aç/kapat
 - bakım modu
 
-## 17.10 Acil durum kontrolleri
+## Acil durum kontrolleri
 
 Super Admin tek işlemle:
 
@@ -625,13 +555,9 @@ Super Admin tek işlemle:
 - upload'ı kapatabilir
 - siteyi bakım moduna alabilir
 
-Bu özellik kriz anında çok değerlidir.
+## Audit log
 
-## 17.11 Audit log
-
-Kritik admin işlemleri değiştirilemez şekilde kayıt altına alınmalıdır.
-
-Kayıt:
+Kritik admin işlemleri kayıt altına alınır:
 
 - kim yaptı
 - ne yaptı
@@ -640,13 +566,13 @@ Kayıt:
 - sonraki durum
 - zaman
 
-Admin kendi işlem geçmişini silememelidir.
+Admin kendi işlem geçmişini silemez.
 
 ---
 
-# 18. Admin içerik durumları
+# 17. İçerik ve kullanıcı durumları
 
-İçerik durumları:
+İçerik:
 
 - `ACTIVE`
 - `HIDDEN`
@@ -654,7 +580,7 @@ Admin kendi işlem geçmişini silememelidir.
 - `LOCKED`
 - `REMOVED`
 
-Kullanıcı durumları:
+Kullanıcı:
 
 - `ACTIVE`
 - `RESTRICTED`
@@ -665,174 +591,206 @@ Hard delete yerine mümkün olduğunca soft delete tercih edilir.
 
 ---
 
-# 19. Gelecek özellikleri — mimari hazır olacak
+# 18. Gelecek özellikleri — mimari hazır olacak
 
-İlk public V1'de zorunlu olmayabilir ancak mimari bunları engellememelidir.
+İlk public V1'de zorunlu olmayabilir:
 
-## Kullanıcı puanı
-
-Örnek:
-
-- oy ver → puan
-- faydalı yorum → puan
-- yorumu faydalı bulundu → bonus
-- günlük katkı → streak
-
-## Sponsorlu kararlar
-
-Markalar ileride gerçek kullanıcılardan görüş almak için sponsorlu anket açabilir.
-
-Sponsorlu içerik normal içerikten açıkça ayrılır.
-
-## Kurumsal topluluklar
-
-Üniversite / kurum doğrulanmış topluluğu.
-
-## Topluluk içgörüleri
-
-Yeterli ve anonimleştirilmiş veri varsa genel eğilimler gösterilebilir.
+- kullanıcı güven puanı
+- rozet / streak
+- katkı puanı
+- sponsorlu kararlar
+- markaların araştırma anketleri
+- doğrulanmış üniversite/kurum toplulukları
+- üniversite e-posta doğrulama
+- topluluk içgörüleri
+- gelişmiş kişiselleştirilmiş feed
 
 ---
 
-# 20. Teknik prensipler
+# 19. Teknik prensipler
 
-- Frontend ve backend sözleşmeleri baştan tanımlanır.
+- Frontend/backend sözleşmeleri baştan tanımlanır.
 - Validation backend tarafında zorunludur.
 - Kritik işlemler idempotent tasarlanır.
 - DB migration sistemi kullanılır.
 - Liste endpoint'lerinde pagination vardır.
-- Görseller ayrı object storage mantığına hazır tasarlanır.
+- Görseller object storage mantığına hazır tasarlanır.
 - Dosya URL'leri DB'ye yazılır; binary DB'ye yazılmaz.
 - Audit log ve moderasyon logları baştan düşünülür.
 - Admin yetkisi yalnızca frontend kontrolüne bırakılmaz.
+- Kritik sorgular index'lenir.
+- N+1 sorgular önlenir.
+- Production error logging bulunur.
 
 ---
 
-# 21. Ekip dağılımı
+# 20. DENGELİ EKİP DAĞILIMI
 
-## FARUK — Ana Frontend / Product UI geliştiricisi
+## Temel kural
 
-**Yük: Çok yüksek**
+**Toplam iş yükü yaklaşık %20 / %20 / %20 / %20 / %20 hedeflenir.**
 
-Ana sorumluluk:
+Bu eşit sayıda issue anlamına gelmez; işlerin zorluğu ve review sorumluluğu da hesaba katılır. Utku ve Mehmet'in review/QA yükü teknik iş yüklerinin bir parçasıdır.
 
-- Tasarım sisteminin kodlanması
-- Premium mor dark UI
-- Responsive layout
-- Ana feed
-- Anket kartları
-- Anket detay
-- Anket oluşturma
-- Oy animasyonları / sonuç görünümü
-- Yorum UI
-- Profil
-- Search / keşfet
-- Yükselenler
-- Haftanın formatları
-- Topluluk ekranları
-- Admin panelinin frontend'i
-- UI polishing
-
-Faruk mümkün olduğunca mock data ile backend'i beklemeden ilerler.
+Hiçbir kişi tüm kritik altyapıyı tek başına taşımamalıdır. Özellikle eski plandaki Ümit yoğunluğu dağıtılmıştır.
 
 ---
 
-## ÜMİT — Ana Backend / Veri / Sistem geliştiricisi
+## FARUK — Product UI / Frontend
 
-**Yük: Çok yüksek**
+**Toplam hedef yük: ~%20**
 
-Ana sorumluluk:
+Ana sahiplik:
 
-- DB schema
-- migration
-- auth
-- kullanıcı sistemi
-- anket CRUD
-- vote integrity
-- yorum sistemi
-- alternatif öneri
-- rate limiting
-- feed API
-- search API
-- trend engine
-- günlük snapshot sistemi
-- Haftanın Değişkenleri hesaplaması
-- notification backend
-- admin backend
-- system settings
-- audit log
-- authorization
-- performance / DB index
+- design system ve premium mor/dark tema
+- app shell / navigation
+- ana feed
+- anket kartları
+- anket detay ekranı
+- anket oluşturma UI
+- oy verme ve sonuç UI
+- yorum / alternatif öneri UI
+- profil / kaydedilenler UI
+- responsive/mobile polish
+- loading / empty / error states
 
-Ümit'in API kontratlarını erken çıkarması Faruk'un hızını doğrudan artırır.
+Paylaşılan işler:
+
+- Mehmet ile keşfet/trend ekranları
+- Utku ile admin frontend'in kritik ekranları
+- Mert ile topluluk/media UI
+
+Faruk artık bütün admin + trend + community frontend'ini tek başına taşımayacaktır.
 
 ---
 
-## MERT — Moderasyon / Media / Community + Support Full-stack
+## ÜMİT — Core Backend / Data
 
-**Yük: Orta-yüksek**
+**Toplam hedef yük: ~%20**
 
-Ana sorumluluk:
+Ana sahiplik:
 
-- görsel upload pipeline
+- DB schema ve migration çekirdeği
+- auth backend
+- user/session modeli
+- poll/options modeli
+- poll CRUD
+- vote integrity + idempotency
+- comments/replies çekirdeği
+- bookmark/save backend
+- temel API contracts
+- core DB indexleri
+
+Paylaşılan / devredilen işler:
+
+- trend engine → **Mehmet** ana sahip
+- search/feed ranking → **Mehmet** ana sahip
+- admin backend/RBAC/settings → **Utku** ana sahip
+- community backend → **Mert** ana sahip
+- media/moderation backend → **Mert** ana sahip
+- notifications → **Mert + Mehmet**
+
+Ümit'in görevi çekirdek veri ve karar bütünlüğüdür; bütün backend'i tek başına taşımaz.
+
+---
+
+## MERT — Media / Community / Moderation Full-stack
+
+**Toplam hedef yük: ~%20**
+
+Ana sahiplik:
+
+- image upload pipeline
 - image resize/compress
-- görsel moderasyon servis entegrasyonu
+- EXIF cleanup
+- storage entegrasyonu
+- lokal image moderation entegrasyonu
+- risk seviyeleri
+- rejected image hash / perceptual hash
 - report sistemi
-- moderation queue
-- topluluk backend/UI entegrasyon desteği
-- admin moderation araçları
-- bildirim desteği
-- bug fix
-- gerektiğinde Faruk/Ümit'in modüllerine destek
+- moderation queue backend
+- community backend
+- community membership / permissions
+- community moderation
+- topluluk yönetimi entegrasyonu
 
-Mert gerektiğinde üçüncü ana geliştirici gibi kritik modüllere kaydırılır.
+Ek sorumluluk:
 
----
+- notification delivery altyapısına destek
+- admin moderation araçlarının entegrasyonu
+- media/community UI'da Faruk'a destek
 
-## UTKU — Review / QA / Güvenlik + Destek Geliştirici
-
-**Ana rol: Review fakat yalnızca reviewer değil**
-
-Sorumluluk:
-
-- tamamlanan akışları kullanıcı gibi uçtan uca test etmek
-- edge case bulmak
-- auth / voting / rate-limit güvenlik kontrolü
-- API contract kontrolü
-- responsive test
-- admin yetki kontrolü
-- moderasyon bypass testleri
-- bug issue açmak
-- kritik bug'ları doğrudan düzeltmek
-- gerektiğinde backend veya frontend görev almak
-
-Utku'nun görevi geliştirmeyi durdurmak değil, geliştiricilerin arkasındaki kalite katmanı olmaktır.
+Mert artık sadece destek geliştirici değildir; bağımsız iki büyük alanın sahibidir: **Media/Moderation + Community**.
 
 ---
 
-## MEHMET — Product Owner / Review / Integration + Destek Geliştirici
+## UTKU — Admin / Security / QA + Full-stack
 
-**Ana rol: Ürün yönü + review; fakat aktif kod katkısı serbest**
+**Toplam hedef yük: ~%20 (kod + review birlikte)**
 
-Sorumluluk:
+Ana teknik sahiplik:
 
-- ürün kararları
-- issue öncelikleri
-- tasarım kabulü
-- feature kabul kriterleri
-- kullanıcı akışlarının kontrolü
-- Faruk/Ümit/Mert'in birleşen modüllerinin entegrasyon kontrolü
-- admin panelinin gerçek kullanım testleri
-- feed kalitesi / ranking değerlendirmesi
-- kapanmamış kritik bug'ların takibi
-- gerektiğinde frontend/backend bug fix
-- release kararı
+- admin RBAC / permissions
+- user sanctions
+- ban / suspend / restrict
+- content hide / restore / lock
+- system settings backend
+- emergency switches
+- featured content backend
+- scheduled feature start/end
+- audit log backend
+- rate-limit/security ayarları
+- admin frontend'in users/reports/settings bölümlerinde Faruk'a destek
 
-Mehmet ve Utku yalnızca kenardan yorum yapan reviewer değildir. Gerektiğinde istedikleri modülde kod yazabilirler.
+Review/QA sahipliği:
+
+- auth bypass
+- vote integrity
+- privilege escalation
+- rate-limit bypass
+- moderation bypass
+- file upload abuse
+- security checklist
+- regression testleri
+
+Utku yalnızca reviewer değildir. **Admin + security hattının doğrudan geliştiricisidir.**
 
 ---
 
-# 22. Hızlı workflow
+## MEHMET — Trends / Search / Integration / Product + Review
+
+**Toplam hedef yük: ~%20 (kod + ürün/review birlikte)**
+
+Ana teknik sahiplik:
+
+- trend score motoru
+- vote velocity hesapları
+- günlük snapshot işleri
+- week-over-week delta
+- Haftanın Değişkenleri backend mantığı
+- minimum sample threshold
+- search API / search entegrasyonu
+- feed ranking / sorting
+- Günün/Haftanın Yükselenleri veri akışı
+- analytics event şeması
+- trend/keşfet frontend'inde Faruk'a destek
+- notification kurallarında Mert'e destek
+
+Product/review sahipliği:
+
+- acceptance criteria
+- UI/UX kabulü
+- ranking kalitesi
+- entegrasyon kontrolü
+- issue önceliği
+- release checklist
+- final release kararı
+
+Mehmet yalnızca kenardan review yapmaz. **Trend/Search/Ranking hattının doğrudan geliştiricisidir.**
+
+---
+
+# 21. Hızlı workflow
 
 Amaç ağır kurumsal süreç değil, hızlı ama kontrollü geliştirmedir.
 
@@ -844,18 +802,16 @@ Amaç ağır kurumsal süreç değil, hızlı ama kontrollü geliştirmedir.
 
 ## Review politikası
 
-Her küçük değişiklik için uzun review beklenmez.
+Her küçük değişiklik uzun review beklemez.
 
 ### Düşük risk
-
-Örnek:
 
 - metin
 - spacing
 - UI düzeni
 - küçük bug
 
-Geliştirici test edip merge edebilir; Mehmet/Utku sonradan review edebilir.
+Geliştirici test edip merge edebilir; Mehmet/Utku sonradan kontrol edebilir.
 
 ### Yüksek risk
 
@@ -870,13 +826,13 @@ En az bir Mehmet/Utku hızlı review önerilir:
 - rate limit
 - production config
 
-Review'ın amacı bloklamak değil, kritik hata yakalamaktır.
+Review'ın amacı bloklamak değil kritik hata yakalamaktır.
 
 ---
 
-# 23. 5 haftalık paralel geliştirme planı
+# 22. 5 HAFTALIK DENGELİ PARALEL GELİŞTİRME PLANI
 
-# HAFTA 1 — Temel sistem + UI iskeleti
+# HAFTA 1 — Temel sistem + paralel iskelet
 
 ## Faruk
 
@@ -887,46 +843,42 @@ Review'ın amacı bloklamak değil, kritik hata yakalamaktır.
 - login/register UI
 - feed mock
 - poll card component
-- poll create UI
 
 ## Ümit
 
 - DB schema v1
 - migrations
 - auth backend
-- session/token yapısı
-- user model
-- poll model
-- options model
-- vote model
-- ilk API contracts
+- user/session
+- poll/options/vote modelleri
+- ilk core API contracts
 
 ## Mert
 
-- upload mimarisi
-- image metadata/model tasarımı
-- report schema
-- moderation schema
-- admin panel route/layout başlangıcı
+- upload/storage mimarisi
+- image metadata modeli
+- report/moderation schema
+- community schema + membership modeli
 
 ## Utku
 
-- auth threat/edge case listesi
-- API contracts review
+- admin route/layout başlangıcı
+- RBAC modeli
+- admin user/role endpoint başlangıcı
+- auth threat/edge-case checklist
 - test skeleton
-- kritik akış checklist
 
 ## Mehmet
 
-- UI/UX review
+- trend/snapshot veri modeli
+- search/ranking contract
 - acceptance criteria
-- issue prioritization
 - seed içerik örnekleri
-- entegrasyon kontrolü
+- entegrasyon checklist
 
 ### Hafta 1 çıkışı
 
-Kullanıcı kayıt olabilir, login olabilir, temel feed'i görebilir ve anket oluşturma ekranını kullanabilir.
+Kullanıcı kayıt olabilir, login olabilir, temel feed'i görebilir; anket modeli ve beş paralel çalışma hattı hazırdır.
 
 ---
 
@@ -934,51 +886,49 @@ Kullanıcı kayıt olabilir, login olabilir, temel feed'i görebilir ve anket ol
 
 ## Faruk
 
+- poll create UI tamamlama
 - poll detail
 - oy verme UI
 - sonuç animasyonu
 - comments UI
 - alternative suggestion UI
-- profile
-- saved polls
 
 ## Ümit
 
-- poll CRUD tamamlama
+- poll CRUD
 - vote idempotency
 - vote change policy
-- comments
-- comment replies
-- alternative suggestions
+- comments/replies
 - save/bookmark
-- notification event temeli
-- poll cooldown
+- cooldown çekirdeği
 
 ## Mert
 
 - gerçek image upload
-- resize/compress
+- resize/compress/EXIF cleanup
 - report endpoints
 - moderation queue temeli
+- community create/read altyapısı
 
 ## Utku
 
-- duplicate vote test
-- spam/cooldown test
-- auth bypass test
-- mobile UI test
-- bug fix desteği
+- admin users temel ekran/API
+- sanction altyapısı
+- rate-limit config altyapısı
+- duplicate vote / auth bypass testleri
+- kritik bug fix
 
 ## Mehmet
 
-- create → vote → comment → result uçtan uca test
-- UI kabulü
-- admin ihtiyaçlarını doğrulama
-- destek kodlama
+- daily snapshot job
+- basic trend score v1
+- search endpoint v1
+- create→vote→comment entegrasyon testi
+- UI/product kabulü
 
 ### Hafta 2 çıkışı
 
-KararVer'in temel döngüsü uçtan uca çalışır.
+KararVer'in temel döngüsü fotoğraf dahil uçtan uca çalışır.
 
 ---
 
@@ -986,52 +936,48 @@ KararVer'in temel döngüsü uçtan uca çalışır.
 
 ## Faruk
 
-- Yükselenler ekranı
-- Günün Yükselenleri
-- Haftanın Yükselenleri
-- En Çok Oy Verilenler
-- En Çok Konuşulanlar
-- Haftanın Değişkenleri UI
-- search UI
-- category pages
-- community page UI
+- profil / saved UI
+- search/keşfet UI
+- kategori ekranları
+- trend kart componentleri
+- community UI temel ekranları
 
 ## Ümit
 
-- trend score
-- vote velocity
-- daily snapshots
-- week-over-week delta
-- minimum sample threshold
-- search API
-- feed sorting
+- core API stabilizasyonu
+- notification event hooks
 - category APIs
-- community backend
+- query/index optimizasyonu
+- pagination
 
 ## Mert
 
 - community membership
+- community feed backend
+- community permissions
 - community moderation
-- notifications
-- admin community management desteği
+- notification delivery desteği
 
 ## Utku
 
-- trend hesaplama edge-case testleri
-- query/performance review
-- community permission testleri
-- gerektiğinde implementation desteği
+- featured content backend v1
+- admin categories/communities management
+- permissions testleri
+- admin content actions başlangıcı
 
 ## Mehmet
 
-- ranking sonuçlarını ürün gözüyle değerlendirme
-- yanlış yükselen örneklerini bulma
-- kategori/topluluk UX review
-- bug/feature prioritization
+- vote velocity
+- week-over-week delta
+- Haftanın Değişkenleri
+- Günün/Haftanın Yükselenleri
+- En Çok Oy / En Çok Konuşulanlar
+- feed sorting
+- ranking kalite testi
 
 ### Hafta 3 çıkışı
 
-Platform sadece anket sitesi değil, keşfedilebilir sosyal ürün haline gelir.
+Platform artık yalnızca anket sitesi değil; keşfedilebilir, trendleri ve toplulukları olan sosyal ürün haline gelir.
 
 ---
 
@@ -1039,61 +985,50 @@ Platform sadece anket sitesi değil, keşfedilebilir sosyal ürün haline gelir.
 
 ## Faruk
 
-Admin frontend:
-
-- dashboard
-- users
-- polls
-- comments
-- reports
-- moderation queue
-- categories
-- communities
-- featured content
-- system settings
-- audit log UI
+- admin dashboard UI
+- polls/comments UI
+- featured content UI
+- responsive/admin polish
 
 ## Ümit
 
-Admin backend:
-
-- RBAC
-- user sanctions
-- content hide/restore/lock
-- featured placement
-- scheduled feature start/end
-- system config
-- emergency switches
-- audit log
-- metrics endpoints
+- core backend hardening
+- transaction/data integrity test fixes
+- admin metrics için core aggregate sorgular
+- DB performans düzeltmeleri
 
 ## Mert
 
-- lokal image moderation entegrasyonu
+- lokal image moderation
 - risk levels
 - moderation actions
-- rejected image hash list
 - report workflow
-- admin queue entegrasyonu
+- rejected image hash list
+- moderation queue entegrasyonu
 
 ## Utku
 
-- admin privilege escalation testleri
-- moderation bypass
-- file upload abuse testleri
-- ban/restriction testleri
-- kritik açıkları doğrudan fix
+- RBAC tamamlama
+- user sanctions
+- content hide/restore/lock
+- system config
+- emergency switches
+- featured scheduling
+- audit log
+- security abuse testleri
 
 ## Mehmet
 
-- admin paneli gerçek operasyon senaryosu testi
-- “10 saniye içinde kötü içeriği bulup kaldırabilir miyiz?” testi
+- admin trend controls
+- trending'den çıkarma/override entegrasyonu
+- admin panel operasyon testleri
+- “10 saniyede kötü içeriği bulup kaldır” senaryosu
 - featured post akışı testi
-- acil durum switch testi
+- ranking/admin entegrasyon bug fix
 
 ### Hafta 4 çıkışı
 
-Gerçek kullanıcı trafiğini yönetebilecek admin/moderasyon sistemi hazır olur.
+Gerçek kullanıcı trafiğini yönetebilecek admin, moderasyon ve güvenlik sistemi hazır olur.
 
 ---
 
@@ -1101,46 +1036,43 @@ Gerçek kullanıcı trafiğini yönetebilecek admin/moderasyon sistemi hazır ol
 
 ## Faruk
 
-- mobile polish
-- desktop polish
-- loading/skeleton
-- empty states
-- error states
+- mobile/desktop polish
+- skeleton/empty/error states
 - paylaşım kartları
 - SEO UI detayları
+- frontend performans
 
 ## Ümit
 
-- DB index
-- pagination
-- performance
-- analytics events
-- production config
-- backup plan
-- error logging
+- DB index final
+- pagination/performance final
+- production DB/config
+- backup planı
+- core error handling
 
 ## Mert
 
-- image/storage production test
+- storage production testi
 - moderation tuning
-- admin queue polish
 - community bug fix
+- media performans ve fallback senaryoları
 
 ## Utku
 
 - regression suite
 - security checklist
-- mobile/browser matrix
-- load/abuse senaryoları
-- bug fixing
+- browser/mobile matrix
+- load/abuse testleri
+- admin/security bug fixes
 
 ## Mehmet
 
+- analytics eventleri
+- ranking final tuning
 - release checklist
-- UX acceptance
-- content seeding
+- seed content
 - closed beta review
-- final priorities
+- final integration bug fixes
 - public release kararı
 
 ### Hafta 5 çıkışı
@@ -1149,7 +1081,7 @@ Gerçek kullanıcı trafiğini yönetebilecek admin/moderasyon sistemi hazır ol
 
 ---
 
-# 24. Public V1 release checklist
+# 23. Public V1 release checklist
 
 - [ ] Register/login çalışıyor
 - [ ] E-posta doğrulama çalışıyor
@@ -1172,7 +1104,7 @@ Gerçek kullanıcı trafiğini yönetebilecek admin/moderasyon sistemi hazır ol
 - [ ] Rate limit/cooldown aktif
 - [ ] Report sistemi aktif
 - [ ] Admin içerik kaldırabiliyor
-- [ ] Admin kullanıcı ban/suspend edebiliyor
+- [ ] Admin kullanıcı ban/suspend/restrict uygulayabiliyor
 - [ ] Admin istediği anketi öne çıkarabiliyor
 - [ ] Öne çıkarma başlangıç/bitiş tarihi çalışıyor
 - [ ] Admin trend'den içerik çıkarabiliyor
@@ -1189,9 +1121,7 @@ Gerçek kullanıcı trafiğini yönetebilecek admin/moderasyon sistemi hazır ol
 
 ---
 
-# 25. İlk yayın sonrası — V1.1 / V1.2
-
-İlk kullanıcı verisine göre aşağıdaki özellikler açılır:
+# 24. İlk yayın sonrası — V1.1 / V1.2
 
 ## V1.1
 
@@ -1213,14 +1143,14 @@ Gerçek kullanıcı trafiğini yönetebilecek admin/moderasyon sistemi hazır ol
 
 ---
 
-# 26. Ekip için temel kural
+# 25. Ekip için temel kural
 
-Faruk ve Ümit'in akışı bekletilmemelidir.
+- Herkesin toplam yükü haftalık kontrol edilir.
+- Bir kişinin açık işi diğerlerinin belirgin biçimde üstüne çıkarsa yeni işler en az yüklü kişiye kaydırılır.
+- Ümit artık tüm backend'in varsayılan sahibi değildir.
+- Faruk tüm frontend'in varsayılan sahibi değildir; Mert, Utku ve Mehmet kendi alanlarının UI/entegrasyonlarına girer.
+- Mehmet ve Utku review kuyruğu oluşturmaz; review ile birlikte kendi teknik modüllerini geliştirir.
+- Bir iş başka kişiyi 1 günden fazla bloke edecekse görev bölünür.
+- Bir kişinin haftalık yükü yaklaşık **%25'ten fazla** büyürse görev yeniden dağıtılır.
 
-- Faruk backend'i bekliyorsa mock contract ile UI'a devam eder.
-- Ümit frontend'i bekliyorsa API + test + contract üretir.
-- Mert blokaj olan yere kaydırılır.
-- Utku ve Mehmet review kuyruğu oluşturmaz; kritik noktaları hızlı kontrol eder ve gerekirse kendileri düzeltir.
-- Bir iş başka kişiyi 1 günden fazla bloke edecekse görev bölünür veya reviewer'lardan biri implementasyona girer.
-
-Hedef: **5 kişinin aynı dosyaya saldırması değil, 3 paralel üretim hattı + 2 hareketli kalite/destek hattı oluşturmak.**
+Hedef: **5 kişinin aynı dosyaya saldırması değil; 5 paralel sahiplik alanı ve gerektiğinde birbirine destek olan tek ekip oluşturmak.**
