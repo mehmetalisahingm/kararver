@@ -412,7 +412,92 @@ describe("yorumlar tek seviye", () => {
   });
 });
 
-// ─── 6. Türkçe normalizasyon ──────────────────────────────────
+// ─── 6. Medya (KV-16) ─────────────────────────────────────────
+
+describe("media_assets (KV-16)", () => {
+  async function createMedia(
+    uploaderId: string,
+    fields: { status?: string; processed?: boolean; public?: boolean } = {},
+  ): Promise<string> {
+    const id = randomUUID();
+    const key = `test/${id}`;
+    await db.$executeRaw`
+      INSERT INTO media_assets (id, uploader_id, purpose, status, original_object_key, processed_object_key, public_object_key, updated_at)
+      VALUES (${id}::uuid, ${uploaderId}::uuid, 'POLL_IMAGE', ${fields.status ?? "PENDING"}::media_status,
+              ${key + "/original"}, ${fields.processed ? key + "/processed.webp" : null},
+              ${fields.public ? key + ".webp" : null}, now())`;
+    return id;
+  }
+
+  test("migration uygulanmış ve yeni görsel PENDING başlar", async () => {
+    const migration = await one(db.$queryRaw<{ finished: boolean }[]>`
+      SELECT finished_at IS NOT NULL AS finished
+      FROM _prisma_migrations WHERE migration_name = '20260927201000_mert_kv16_media_assets'`);
+    assert.equal(migration.finished, true);
+
+    const id = await createMedia(await createUser());
+    const row = await one(db.$queryRaw<{ status: string; processing_attempts: number }[]>`
+      SELECT status::text, processing_attempts FROM media_assets WHERE id = ${id}::uuid`);
+    assert.deepEqual(row, { status: "PENDING", processing_attempts: 0 });
+  });
+
+  test("onaylanmamış görsel public anahtar alamaz", async () => {
+    const uploader = await createUser();
+    for (const status of ["PENDING", "QUARANTINED", "REJECTED"]) {
+      await expectDbError(createMedia(uploader, { status, processed: true, public: true }), CHECK_VIOLATION);
+    }
+  });
+
+  test("onaylı görsel public ve işlenmiş kopya olmadan var olamaz", async () => {
+    const uploader = await createUser();
+    await expectDbError(createMedia(uploader, { status: "APPROVED", processed: true }), CHECK_VIOLATION);
+    await expectDbError(createMedia(uploader, { status: "APPROVED", public: true }), CHECK_VIOLATION);
+    await createMedia(uploader, { status: "APPROVED", processed: true, public: true });
+  });
+
+  test("onaydan sonra kaldırmada public anahtar aynı işlemde boşaltılmalı", async () => {
+    const uploader = await createUser();
+    const reviewer = await createUser();
+    const id = await createMedia(uploader, { status: "APPROVED", processed: true, public: true });
+
+    await expectDbError(
+      db.$executeRaw`UPDATE media_assets SET status = 'REJECTED' WHERE id = ${id}::uuid`,
+      CHECK_VIOLATION,
+    );
+    await db.$executeRaw`
+      UPDATE media_assets
+      SET status = 'REJECTED', public_object_key = NULL, reviewed_by_id = ${reviewer}::uuid, reviewed_at = now(),
+          review_note = 'test: kaldırıldı', updated_at = now()
+      WHERE id = ${id}::uuid`;
+  });
+
+  test("risk skoru 0-1 aralığında, inceleme alanları birlikte dolar", async () => {
+    const uploader = await createUser();
+    const id = await createMedia(uploader);
+    await expectDbError(db.$executeRaw`UPDATE media_assets SET risk_score = 1.5 WHERE id = ${id}::uuid`, CHECK_VIOLATION);
+    await expectDbError(db.$executeRaw`UPDATE media_assets SET reviewed_at = now() WHERE id = ${id}::uuid`, CHECK_VIOLATION);
+    await expectDbError(
+      db.$executeRaw`UPDATE media_assets SET content_sha256 = 'not-a-hash' WHERE id = ${id}::uuid`,
+      CHECK_VIOLATION,
+    );
+    await db.$executeRaw`
+      UPDATE media_assets SET status = 'QUARANTINED', risk_level = 'HIGH', risk_score = 0.91,
+        moderation_labels = '[{"class":"FEMALE_BREAST_EXPOSED","score":0.91}]'::jsonb, moderated_at = now()
+      WHERE id = ${id}::uuid`;
+  });
+
+  test("var olmayan kullanıcı adına görsel kaydedilemez ve galerideki görsel silinemez", async () => {
+    await expectDbError(createMedia(randomUUID()), FK_VIOLATION);
+
+    const author = await createUser();
+    const { pollId } = await createPoll(author);
+    const id = await createMedia(author, { status: "APPROVED", processed: true, public: true });
+    await db.$executeRaw`INSERT INTO poll_media (poll_id, media_id, position) VALUES (${pollId}::uuid, ${id}::uuid, 0)`;
+    await expectDbError(db.$executeRaw`DELETE FROM media_assets WHERE id = ${id}::uuid`, FK_VIOLATION);
+  });
+});
+
+// ─── 7. Türkçe normalizasyon ──────────────────────────────────
 
 describe("kv_normalize", () => {
   const cases: [string, string][] = [
