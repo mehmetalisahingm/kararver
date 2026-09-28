@@ -12,6 +12,8 @@ import type { PasswordHasher } from "./modules/auth/crypto.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { createAuthenticator, type SessionSettings } from "./modules/auth/session.ts";
 import type { AuthStore } from "./modules/auth/store.ts";
+import { registerPollRoutes } from "./modules/polls/routes.ts";
+import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
 import { registerUserRoutes } from "./modules/users/routes.ts";
 
 export type AppDeps = {
@@ -21,6 +23,10 @@ export type AppDeps = {
   mailer: Mailer;
   now?: () => Date;
   isRegistrationEnabled?: () => Promise<boolean>;
+  /** Verilmezse anket route'ları kaydedilmez (ör. sadece auth'u test eden düzenek). */
+  pollStore?: PollStore;
+  /** Sistem ayarları (KV-40, #42); ayar servisi gelene kadar DEFAULT_POLL_SETTINGS. */
+  pollSettings?: () => Promise<PollSettings>;
   /** Log seviyesi/hedefi; verilmezse config.logLevel ile stdout. Testler log akışını yakalar. */
   logger?: false | { level: string; stream: NodeJS.WritableStream };
 };
@@ -85,6 +91,14 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     isRegistrationEnabled: deps.isRegistrationEnabled ?? (async () => true),
   });
   registerUserRoutes(route, { store: deps.authStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  if (deps.pollStore) {
+    registerPollRoutes(route, {
+      store: deps.pollStore,
+      now,
+      mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+      settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+    });
+  }
 
   app.get("/health", async (_request, reply) => reply.header("Cache-Control", "no-store").send({ status: "ok" }));
 

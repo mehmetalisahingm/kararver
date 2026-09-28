@@ -71,14 +71,15 @@ model User {
   updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz(3)
 
-  avatarMedia  MediaAsset?   @relation("UserAvatar", fields: [avatarMediaId], references: [id], onDelete: SetNull)
-  sessions     Session[]
-  authTokens   AuthToken[]
-  polls        Poll[]
-  votes        Vote[]
-  voteEvents   VoteEvent[]
-  comments     Comment[]
-  commentLikes CommentLike[]
+  avatarMedia     MediaAsset?      @relation("UserAvatar", fields: [avatarMediaId], references: [id], onDelete: SetNull)
+  sessions        Session[]
+  authTokens      AuthToken[]
+  idempotencyKeys IdempotencyKey[]
+  polls           Poll[]
+  votes           Vote[]
+  voteEvents      VoteEvent[]
+  comments        Comment[]
+  commentLikes    CommentLike[]
 
   // Mert — media.prisma (KV-16)
   uploadedMedia            MediaAsset[]          @relation("MediaUploader")
@@ -383,4 +384,29 @@ model CommentLike {
   @@id([commentId, userId])
   @@index([userId])
   @@map("comment_likes")
+}
+
+// ─── Idempotency ──────────────────────────────────────────────
+// Idempotency-Key kayıtları (API_CONTRACTS.md §4.5). Kapsam: kullanıcı + route + anahtar.
+// Satır, işlemle aynı transaction'da ilk adım olarak eklenir: aynı anahtarla gelen eşzamanlı
+// istek unique index'te bekler, ilki commit edince çakışma alır ve kaydedilen sonucu döner.
+// Süresi dolan satır yok sayılır; temizliği bir worker job'u yapar.
+model IdempotencyKey {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  route          String   @db.VarChar(80)
+  key            String   @db.VarChar(128)
+  // sha256(doğrulanmış istek gövdesi), hex. Aynı anahtar + farklı gövde → 409.
+  requestHash    String   @map("request_hash") @db.Char(64)
+  responseStatus Int      @map("response_status") @db.SmallInt
+  // Oluşturulan kaynağın id'si; tekrar isteğinde cevap bu kaynaktan yeniden üretilir.
+  resourceId     String   @map("resource_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, route, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
 }
