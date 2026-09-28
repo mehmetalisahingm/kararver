@@ -1,10 +1,10 @@
 // Anket endpoint'leri — KV-10 (#12). Sözleşme: packages/contracts/src/domains/polls.ts
 // Kapsam dışı (kalan işler: docs/KV-10_POLLS.md): tartışma gönderisi (#66), yayın puanı (#67),
 // cooldown / günlük limit / aynı başlık (KV-20, #22), domain olayları (KV-04, #6).
-import { createHash } from "node:crypto";
-import { dbErrorMap, headers, IdempotencyKey, type ErrorCode } from "@kararver/contracts";
+import { dbErrorMap, headers, type ErrorCode } from "@kararver/contracts";
 import type { FastifyRequest } from "fastify";
 import { ApiError } from "../../http/errors.ts";
+import { idempotencyKeyReused, readIdempotencyScope } from "../../http/idempotency.ts";
 import type { Route, RouteContext } from "../../http/route.ts";
 import { newPublicId, slugify } from "./slug.ts";
 import { PollLimitError, PollReferenceError, type IdempotencyScope, type IdempotentResult, type PollPatch, type PollSettings, type PollStore } from "./store.ts";
@@ -19,7 +19,6 @@ export type PollDeps = {
 };
 
 const HOUR_MS = 60 * 60 * 1000;
-const IDEMPOTENCY_TTL_MS = 24 * HOUR_MS;
 const LOCKED_FIELDS = ["title", "description", "options", "resultsVisibility"] as const;
 
 /** DB trigger'ının ürettiği hata (ör. KV_POLL_CONTENT_LOCKED) → sözleşme kodu; tanınmıyorsa null. */
@@ -29,24 +28,6 @@ export function mapDbError(err: unknown): ErrorCode | null {
     if (text.includes(dbCode)) return apiCode;
   }
   return null;
-}
-
-function idempotencyScope(request: FastifyRequest, userId: string, route: string, body: unknown, now: Date, required: boolean): IdempotencyScope | null {
-  const raw = request.headers[headers.idempotencyKey.toLowerCase()];
-  if (raw === undefined) {
-    if (required) throw new ApiError("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key başlığı gerekli.");
-    return null;
-  }
-  const key = IdempotencyKey.safeParse(raw);
-  if (!key.success) {
-    throw new ApiError("VALIDATION_ERROR", "Idempotency-Key geçersiz.", [{ field: headers.idempotencyKey, code: "invalid_format" }]);
-  }
-  const requestHash = createHash("sha256").update(JSON.stringify(body ?? null)).digest("hex");
-  return { userId, route, key: key.data, requestHash, now, ttlMs: IDEMPOTENCY_TTL_MS };
-}
-
-function keyReused(): ApiError {
-  return new ApiError("IDEMPOTENCY_KEY_REUSED", "Bu Idempotency-Key farklı bir istekle kullanılmış.");
 }
 
 export function registerPollRoutes(route: Route, deps: PollDeps): void {
@@ -134,13 +115,13 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
   }
 
   function created(result: IdempotentResult): { resourceId: string } {
-    if (result.kind === "key_reused") throw keyReused();
+    if (result.kind === "key_reused") throw idempotencyKeyReused();
     return { resourceId: result.resourceId };
   }
 
   route("polls.create", async (ctx) => {
     const { body, viewer, request } = ctx;
-    const scope = idempotencyScope(request, viewer!.id, "polls.create", body, now(), true)!;
+    const scope = readIdempotencyScope(request, { userId: viewer!.id, route: "polls.create", body, now: now(), required: true })!;
     if (body.kind !== "POLL") {
       throw new ApiError("VALIDATION_ERROR", "Tartışma gönderileri henüz açık değil.", [{ field: "kind", code: "not_supported_yet" }]);
     }
@@ -251,7 +232,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
   });
 
   route("polls.addenda.create", async ({ params, body, viewer, request }) => {
-    const scope = idempotencyScope(request, viewer!.id, `polls.addenda.create:${params.id}`, body, now(), false);
+    const scope = readIdempotencyScope(request, { userId: viewer!.id, route: `polls.addenda.create:${params.id}`, body, now: now(), required: false });
     const prior = scope ? await store.findIdempotentResult(scope) : null;
     if (prior) {
       const addendum = (await store.findAddendum(created(prior).resourceId))!;

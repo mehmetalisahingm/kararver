@@ -34,7 +34,9 @@ export type CommentRejection =
   | "COMMENTS_DISABLED"
   | "PARENT_NOT_FOUND"
   | "DEPTH_EXCEEDED"
-  | "NOT_OWNER";
+  | "NOT_OWNER"
+  /** Aynı Idempotency-Key farklı gövdeyle kullanıldı (409). */
+  | "KEY_REUSED";
 
 export type Outcome<T> = { ok: true; value: T } | { ok: false; reason: CommentRejection };
 

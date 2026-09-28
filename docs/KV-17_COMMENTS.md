@@ -45,4 +45,4 @@
 | Anket tepkileri (`reactions.poll.*`) | Planlı | #66 |
 | Yorum spam / hız sınırı | Yok | KV-19 #21 (Utku) |
 | Sahibin kendi `UNDER_REVIEW` yorumunu görmesi | Gösterilmiyor | Moderasyon (KV-24/KV-37, Mert) |
-| Idempotency yardımcısı iki kopya (`http/idempotency.ts` ve `polls/prisma-store.ts`) | Ayrı bir refactor PR'ında tek yere taşınacak | Faruk |
+| ~~Idempotency yardımcısı iki kopya~~ | ✅ Tek uygulama: `apps/api/src/http/idempotency.ts` (KV-26 PR'ı, #91) | Faruk |

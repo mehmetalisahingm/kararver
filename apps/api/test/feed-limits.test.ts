@@ -203,7 +203,7 @@ describe("yayın limitleri ve feed (postgres)", { skip: backend ? false : "TEST_
       closesAt: new Date(now.getTime() + DAY),
       options: ["A", "B"],
     });
-    const scope = { userId: user.id, route: "polls.create", key: key(), requestHash: "a".repeat(64), now, ttlMs: DAY };
+    const scope = { userId: user.id, route: "polls.create", key: key(), requestHash: "a".repeat(64), now };
 
     // Yazar satırını tutan işlem: iki istek de erken tekrar kontrolünü geçip bu kilitte bekler.
     let release!: () => void;

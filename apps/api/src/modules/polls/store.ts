@@ -1,5 +1,6 @@
 // Anket modülünün veri erişim arayüzü — KV-10 (#12). Üretim uygulaması: prisma-store.ts.
 // Çok adımlı yazmalar (anket + seçenekler + etiket + galeri + idempotency kaydı) tek metotta, tek transaction'dadır.
+import type { IdempotencyScope, IdempotentResult } from "../../http/idempotency.ts";
 
 export type ContentStatus = "ACTIVE" | "HIDDEN" | "UNDER_REVIEW" | "LOCKED" | "REMOVED";
 
@@ -120,13 +121,8 @@ export type PollPatch = {
   options?: { id?: string; label: string }[];
 };
 
-/** Idempotency-Key kapsamı (API_CONTRACTS.md §4.5). */
-export type IdempotencyScope = { userId: string; route: string; key: string; requestHash: string; now: Date; ttlMs: number };
-
-export type IdempotentResult =
-  | { kind: "created"; resourceId: string }
-  | { kind: "replayed"; resourceId: string; status: number }
-  | { kind: "key_reused" };
+/** Idempotency-Key kapsamı ve sonucu: ortak uygulama http/idempotency.ts (API_CONTRACTS.md §4.5). */
+export type { IdempotencyScope, IdempotentResult };
 
 export type CommunityAccess = "ok" | "not_found" | "not_member";
 

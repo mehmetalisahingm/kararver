@@ -1,6 +1,7 @@
 // PollStore'un PostgreSQL/Prisma uygulaması. Tablolar: polls, poll_options, tags, poll_tags,
 // poll_media, poll_addenda, votes, idempotency_keys (DATA_MODEL.md, API_CONTRACTS.md §6).
 import type { PrismaClient } from "@kararver/db";
+import { assertNoCommittedKey, findIdempotentResult, runIdempotent } from "../../http/idempotency.ts";
 import {
   PollLimitError,
   PollReferenceError,
@@ -13,12 +14,6 @@ import {
 } from "./store.ts";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
-
-function isUniqueViolation(err: unknown, field?: string): boolean {
-  if (typeof err !== "object" || err === null || (err as { code?: unknown }).code !== "P2002") return false;
-  if (!field) return true;
-  return JSON.stringify((err as { meta?: unknown }).meta ?? {}).includes(field);
-}
 
 const pollInclude = (viewerId: string | null) =>
   ({
@@ -126,9 +121,6 @@ function toRecord(poll: PollRow): PollRecord {
   return record;
 }
 
-/** Aynı anahtarla eşzamanlı gelen istek, yazar kilidini bekledikten sonra kayıtlı sonucu almalı. */
-class ReplayRace extends Error {}
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
@@ -171,54 +163,6 @@ async function enforcePublishLimits(tx: Tx, poll: NewPoll, userCreatedAt: Date, 
 }
 
 export function createPrismaPollStore(prisma: PrismaClient): PollStore {
-  async function findIdempotentResult(scope: IdempotencyScope): Promise<IdempotentResult | null> {
-    const row = await prisma.idempotencyKey.findUnique({
-      where: { userId_route_key: { userId: scope.userId, route: scope.route, key: scope.key } },
-    });
-    if (!row || row.expiresAt <= scope.now) return null;
-    if (row.requestHash !== scope.requestHash) return { kind: "key_reused" };
-    return { kind: "replayed", resourceId: row.resourceId, status: row.responseStatus };
-  }
-
-  /**
-   * İşlem ve idempotency kaydı aynı transaction'dadır; kayıt en sonda eklenir. Aynı anahtarla gelen
-   * eşzamanlı istek unique index'te bekler, ilki commit edince çakışma alır ve bütün işi geri alınır;
-   * sonra kaydedilen sonuç okunur. Böylece aynı anahtar en fazla bir kaynak üretir.
-   */
-  async function idempotent(scope: IdempotencyScope | null, status: number, work: (tx: Tx) => Promise<string>): Promise<IdempotentResult> {
-    if (!scope) return { kind: "created", resourceId: await prisma.$transaction((tx) => work(tx)) };
-    const where = { userId: scope.userId, route: scope.route, key: scope.key };
-
-    const replay = () => findIdempotentResult(scope);
-
-    const earlier = await replay();
-    if (earlier) return earlier;
-    await prisma.idempotencyKey.deleteMany({ where: { ...where, expiresAt: { lte: scope.now } } });
-
-    try {
-      const resourceId = await prisma.$transaction(async (tx) => {
-        const id = await work(tx);
-        await tx.idempotencyKey.create({
-          data: {
-            ...where,
-            requestHash: scope.requestHash,
-            responseStatus: status,
-            resourceId: id,
-            createdAt: scope.now,
-            expiresAt: new Date(scope.now.getTime() + scope.ttlMs),
-          },
-        });
-        return id;
-      });
-      return { kind: "created", resourceId };
-    } catch (err) {
-      if (!(err instanceof ReplayRace) && !isUniqueViolation(err, "key")) throw err;
-      const later = await replay();
-      if (!later) throw err;
-      return later;
-    }
-  }
-
   async function replaceTags(tx: Tx, pollId: string, slugs: string[]): Promise<void> {
     await tx.pollTag.deleteMany({ where: { pollId } });
     for (const slug of [...new Set(slugs)]) {
@@ -227,8 +171,15 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
     }
   }
 
+  /** runIdempotent'in "rejected" sonucu anket işlerinde oluşmaz: ret istisna olarak fırlatılır. */
+  async function idempotent(scope: IdempotencyScope | null, work: (tx: Tx) => Promise<string>): Promise<IdempotentResult> {
+    const result = await runIdempotent(prisma, scope, 201, async (tx) => ({ ok: true as const, value: await work(tx) }));
+    if (result.kind === "rejected") throw new Error("beklenmeyen rejected sonucu");
+    return result;
+  }
+
   return {
-    findIdempotentResult,
+    findIdempotentResult: (scope) => findIdempotentResult(prisma, scope),
 
     async findPoll(by, viewerId) {
       const poll = await prisma.poll.findUnique({ where: by, include: pollInclude(viewerId) });
@@ -308,15 +259,11 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
     },
 
     createPoll: (poll, scope, limits) =>
-      idempotent(scope, 201, async (tx) => {
+      idempotent(scope, async (tx) => {
         const [author] = await tx.$queryRaw<{ created_at: Date }[]>`
           SELECT created_at FROM users WHERE id = ${poll.authorId}::uuid FOR UPDATE`;
         // Kilidi beklerken aynı anahtarlı istek tamamlandıysa limit değil kayıtlı sonuç döner.
-        const committed = await tx.idempotencyKey.findUnique({
-          where: { userId_route_key: { userId: scope.userId, route: scope.route, key: scope.key } },
-          select: { expiresAt: true },
-        });
-        if (committed && committed.expiresAt > scope.now) throw new ReplayRace();
+        await assertNoCommittedKey(tx, scope);
         await enforcePublishLimits(tx, poll, author!.created_at, limits);
         await lockReferences(tx, poll);
         const created = await tx.poll.create({
@@ -370,7 +317,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
     },
 
     createAddendum: (pollId, body, scope) =>
-      idempotent(scope, 201, async (tx) => {
+      idempotent(scope, async (tx) => {
         const addendum = await tx.pollAddendum.create({ data: { pollId, body }, select: { id: true } });
         return addendum.id;
       }),

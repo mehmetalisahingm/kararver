@@ -519,7 +519,7 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
       closesAt: new Date(Date.now() + HOUR),
       options: ["A", "B"],
     });
-    const scope = () => ({ userId: owner.id, route: "polls.create", key: key(), requestHash: "0".repeat(64), now: new Date(), ttlMs: HOUR });
+    const scope = () => ({ userId: owner.id, route: "polls.create", key: key(), requestHash: "0".repeat(64), now: new Date() });
 
     // Ön kontrolden sonra görseli reddeden eşzamanlı işlem: satır kilidini tutarken oluşturma başlar,
     // oluşturma kilidi bekler, commit'ten sonra güncel durumu görür ve reddeder.
