@@ -10,7 +10,7 @@ enum ReportReason {
   SPAM
   HARASSMENT
   INAPPROPRIATE
-  HATE_SPEECH
+  HATE
   PERSONAL_INFO
   MISLEADING
   COPYRIGHT
@@ -28,13 +28,17 @@ enum ReportStatus {
   @@map("report_status")
 }
 
+// API'deki ModerationAction (KV-03) + medya kararı (APPROVE/REJECT) + DB'ye özel kayıtlar.
 enum ModerationActionType {
   APPROVE
+  REJECT
   HIDE
   REMOVE
   RESTORE
   LOCK
   UNLOCK
+  EXCLUDE_FROM_TRENDS
+  INCLUDE_IN_TRENDS
   WARN_USER
   DISMISS_REPORT
 
@@ -42,7 +46,9 @@ enum ModerationActionType {
 }
 
 // Rapor içeriği doğrudan silmez; kuyruğa düşer (MVP_PLAN §13).
-// Aynı kullanıcı aynı hedefi bir kez raporlayabilir (unique'ler).
+// Kullanıcı başına hedef başına tek satır (unique'ler). Açık rapor varken tekrar istek
+// aynı satırı döndürür; kapanmış raporun sahibi yeniden raporlarsa aynı satır OPEN'a
+// döner (önceki karar moderation_actions'ta kalır). Kural: reports.create sözleşmesi.
 model Report {
   id             String       @id @default(uuid(7)) @db.Uuid
   reporterId     String       @map("reporter_id") @db.Uuid

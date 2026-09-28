@@ -3,6 +3,19 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.1.0 — 2026-09-28 (Mert: medya / moderasyon / topluluk)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5).
+
+- **Eklendi (minor):** `MediaPurpose`'a `COMMUNITY` değeri. `admin.communities.create/update`
+  içindeki `imageMediaId` için yüklenen görselin amacı; önceden karşılığı yoktu.
+- **Değişti (metadata):** `communities.members`, `communities.join`, `communities.leave`,
+  `admin.communities.moderators.put/delete` → `planned` yerine `ready`. Tablolar #73 ile açıldı.
+- **Not:** `reports.create` — kapanmış raporun sahibi aynı hedefi yeniden raporlarsa aynı
+  `reportId` `OPEN`'a döner (DB'de kullanıcı + hedef başına tek satır).
+- DB enum'ları sözleşmeye hizalandı (`media_purpose`, `report_reason`, `moderation_action_type`);
+  wire adları değişmedi.
+
 ## 1.0.0 — 2026-09-28 (KV-03, #5)
 
 İlk tam v1 sözleşmesi.

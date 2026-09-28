@@ -424,7 +424,7 @@ describe("media_assets (KV-16)", () => {
     const key = `test/${id}`;
     await db.$executeRaw`
       INSERT INTO media_assets (id, uploader_id, purpose, status, original_object_key, processed_object_key, public_object_key, updated_at)
-      VALUES (${id}::uuid, ${uploaderId}::uuid, 'POLL_IMAGE', ${fields.status ?? "PENDING"}::media_status,
+      VALUES (${id}::uuid, ${uploaderId}::uuid, 'POLL', ${fields.status ?? "PENDING"}::media_status,
               ${key + "/original"}, ${fields.processed ? key + "/processed.webp" : null},
               ${fields.public ? key + ".webp" : null}, now())`;
     return id;
@@ -587,6 +587,27 @@ describe("reports ve moderation_actions (KV-24)", () => {
       db.$executeRaw`DELETE FROM moderation_actions WHERE id = ${id}::uuid`,
       /KV_MODERATION_ACTIONS_APPEND_ONLY/,
     );
+  });
+
+  test("DB enum değerleri API sözleşmesindeki adlarla aynı (KV-03)", async () => {
+    async function labels(type: string): Promise<string[]> {
+      const rows = await db.$queryRaw<{ label: string }[]>`
+        SELECT e.enumlabel AS label FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = ${type} ORDER BY e.enumsortorder`;
+      return rows.map((r) => r.label);
+    }
+    // packages/contracts/src/domains/media.ts → MediaPurpose
+    assert.deepEqual(await labels("media_purpose"), ["POLL", "AVATAR", "COMMUNITY"]);
+    // packages/contracts/src/domains/moderation.ts → ReportReason (sıra farklı olabilir)
+    assert.deepEqual(
+      (await labels("report_reason")).sort(),
+      ["COPYRIGHT", "HARASSMENT", "HATE", "INAPPROPRIATE", "MISLEADING", "OTHER", "PERSONAL_INFO", "SPAM"],
+    );
+    // ModerationAction'ın her değeri DB'de kaydedilebilmeli.
+    const actions = await labels("moderation_action_type");
+    for (const a of ["HIDE", "RESTORE", "LOCK", "UNLOCK", "REMOVE", "EXCLUDE_FROM_TRENDS", "INCLUDE_IN_TRENDS", "APPROVE", "REJECT"]) {
+      assert.ok(actions.includes(a), a);
+    }
   });
 });
 

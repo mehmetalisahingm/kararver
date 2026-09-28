@@ -384,7 +384,7 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 |---|---|---|---|
 | Mert | `media_assets` (KV-16) | `users.avatar_media_id`, `poll_media.media_id` ona bağlanır; `uploader_id`, `reviewed_by_id → users.id` | Anket ve profilde sadece `status = APPROVED` görseller gösterilir (sorgu kuralı). `public_object_key` sadece `APPROVED` iken dolu olabilir (`media_assets_public_key_check`) |
 | Mert | `communities`, `community_memberships` (KV-31) | `polls.community_id` ona bağlanır; üyelik PK'si `(community_id, user_id)`; `created_by_id → users.id`, `image_media_id → media_assets.id` | Topluluk kapatılsa (`status = HIDDEN`, `admin.communities.update` sözleşmesi) bile anketler silinmez (`RESTRICT`). Topluluk moderatörlüğü `community_memberships.role = MODERATOR`'dır; yetki istemciden değil bu satırdan okunur. `member_count` üyelikle aynı transaction'da güncellenir |
-| Mert | `reports`, `moderation_actions` (KV-24) | Hedef başına ayrı nullable FK: `poll_id`, `comment_id`, `media_id`, `reported_user_id` / `target_user_id`, ve "tam olarak biri dolu" CHECK'i | Tek `target_type`/`target_id` çifti FK bütünlüğünü kaybettirdiği için önerilmez. Kullanıcı aynı hedefi bir kez raporlar (unique). `moderation_actions` append-only (trigger), gerekçe zorunlu. Karar güncellemesi raporu için FK, KV-23 tablosu açılınca eklenir |
+| Mert | `reports`, `moderation_actions` (KV-24) | Hedef başına ayrı nullable FK: `poll_id`, `comment_id`, `media_id`, `reported_user_id` / `target_user_id`, ve "tam olarak biri dolu" CHECK'i | Tek `target_type`/`target_id` çifti FK bütünlüğünü kaybettirdiği için önerilmez. Kullanıcı + hedef başına tek satır (unique); kapanmış raporun sahibi yeniden raporlarsa aynı satır `OPEN`'a döner (`reports.create` sözleşmesi). `moderation_actions` append-only (trigger), gerekçe zorunlu. Karar güncellemesi raporu için FK, KV-23 tablosu açılınca eklenir |
 | Utku | `user_roles`, `sanctions` | `users.id` | Yaptırım `users.status`'u da günceller (§7.2) |
 | Utku | `audit_logs` | `actor_id → users.id`; hedef `target_type` + `target_id` | Append-only (KV-39); polimorfik hedef burada kabul edilir |
 | Utku | `system_settings` | — | Oy değiştirme izni, trend katsayıları, snapshot eşikleri buradan okunur |
@@ -450,7 +450,7 @@ pnpm db:test
   ```
 - **Sunucu çalışmıyorsa:** Test `PostgreSQL'e bağlanılamadı (...). Sunucu çalışıyor mu?` mesajıyla durur.
 
-### 11.2 Test kapsamı (45 test)
+### 11.2 Test kapsamı (46 test)
 
 | Grup | Ne doğrulanır |
 |---|---|
@@ -463,6 +463,7 @@ pnpm db:test
 | `media_assets` (KV-16, +6 test) | Onaylanmamış görsel public anahtar alamaz; onaylı görsel public ve işlenmiş kopya olmadan var olamaz; onaydan sonra kaldırmada public anahtar aynı UPDATE'te boşaltılmalı; risk skoru 0–1; inceleme alanları birlikte dolar; yükleyen FK'si ve galerideki görselin silinememesi |
 | `reports` / `moderation_actions` (KV-24, +7 test) | Rapor tam olarak bir hedefe bağlanır; aynı kullanıcı aynı hedefi iki kez raporlayamaz; kendini raporlayamaz; sonuçlanan rapor sonuçlandıranı taşır, açık rapor taşımaz; raporlanan anket hard delete edilemez; işlem gerekçesiz/hedefsiz yazılamaz; moderasyon geçmişi `KV_MODERATION_ACTIONS_APPEND_ONLY` ile korunur |
 | `communities` / `community_memberships` (KV-31, +5 test) | Aynı kullanıcı ikinci kez katılamaz, ayrılıp yeniden katılabilir; slug benzersiz ve URL biçiminde, ad boş olamaz; üye sayısı negatif olamaz; moderatör rolü üyelikte tutulur ve kaldırılabilir; anketi olan topluluk silinemez, kapatmak anketleri etkilemez |
+| Enum hizalaması (+1 test) | `media_purpose`, `report_reason` ve `moderation_action_type` değerleri API sözleşmesindeki (KV-03) adlarla aynı |
 
 ### 11.3 Bu PR'daki kanıt
 

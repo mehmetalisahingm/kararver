@@ -17,9 +17,9 @@ enum MediaStatus {
 }
 
 enum MediaPurpose {
-  POLL_IMAGE
+  POLL
   AVATAR
-  COMMUNITY_IMAGE
+  COMMUNITY
 
   @@map("media_purpose")
 }
