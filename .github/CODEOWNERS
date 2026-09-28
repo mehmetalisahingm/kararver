@@ -52,6 +52,7 @@
 /apps/web/src/features/audit/               @Utkuuzun14
 /apps/web/src/features/settings/            @Utkuuzun14
 /packages/config/                           @Utkuuzun14
+/apps/mock-api/                             @Utkuuzun14
 /.github/workflows/                         @Utkuuzun14
 
 # ── Mehmet — ürün yüzeyleri / büyüme ──────────────────────────

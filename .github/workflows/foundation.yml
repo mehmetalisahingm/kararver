@@ -37,6 +37,7 @@ jobs:
       - run: pnpm --filter @kararver/db run db:validate
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm mock:test
   ui:
     runs-on: ubuntu-latest
     timeout-minutes: 15
