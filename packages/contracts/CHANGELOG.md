@@ -3,6 +3,13 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.5.0 — 2026-09-28 (Faruk, KV-11 oy sistemi)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5).
+
+- **Eklendi:** `dbErrorMap`'e `KV_SELF_VOTE` → `SELF_VOTE_FORBIDDEN`. DB, anket sahibinin kendi
+  anketine yazılan oyu trigger ile reddeder (migration `20260928200000_faruk_kv11_self_vote_guard`).
+
 ## 1.4.0 — 2026-09-28 (Mert, KV-16 medya API'si)
 
 Kırıcı değişiklik yok (API_CONTRACTS §5: yeni hata kodu minor).

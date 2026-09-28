@@ -17,6 +17,7 @@ import { createPrismaMediaStore } from "../../src/modules/media/prisma-store.ts"
 import { DEFAULT_MEDIA_SETTINGS, type MediaSettings } from "../../src/modules/media/store.ts";
 import { createPrismaPollStore } from "../../src/modules/polls/prisma-store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings } from "../../src/modules/polls/store.ts";
+import { createPrismaVoteStore } from "../../src/modules/votes/prisma-store.ts";
 import { createFakeQueue, createFakeStorage, type FakeStorage } from "./fake-storage.ts";
 import { createMemoryAuthStore } from "./memory-store.ts";
 
@@ -158,6 +159,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     now: () => clock.now,
     isRegistrationEnabled: async () => registrationEnabled.value,
     pollStore: backend.prisma ? createPrismaPollStore(backend.prisma) : undefined,
+    voteStore: backend.prisma ? createPrismaVoteStore(backend.prisma) : undefined,
     pollSettings: async () => pollSettings,
     media: backend.prisma
       ? { store: createPrismaMediaStore(backend.prisma), storage, queue, settings: async () => mediaSettings }
