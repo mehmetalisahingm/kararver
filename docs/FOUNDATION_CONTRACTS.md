@@ -67,6 +67,8 @@ RESTRICTED işlem bazlı kısıtlanır. Public okuma ve itiraz kanalı yaptırı
 LOCKED anket yeni oy/yorum kabul etmez; mevcut sonucu görme görünürlük politikasına bağlıdır.
 İlk oy sonrası içerik kilidi (`first_valid_vote_at`) ile moderasyon LOCKED durumu farklıdır.
 
+> Bağlayıcı kural koddadır: `packages/contracts/src/permissions.ts`. Ayrıntı: [`KV-04_ROLES_EVENTS.md`](./KV-04_ROLES_EVENTS.md).
+
 ## Olay ve ayar sözleşmesi
 
 Domain olayları `{version:1,id,type,occurredAt,actorId,subject:{type,id},payload}`.
@@ -76,9 +78,12 @@ ayrıca recipient kontrol edilir. Teslim en az bir kezdir; exactly-once iddiası
 Oy seçimi/kişisel veri notification payloadına gereksiz kopyalanmaz. Analytics sözlüğü
 KV-07 PR #60'taki ürün metrikleriyle eşlenir; domain ve analytics isimleri adapterla ayrılır.
 
-Settings namespace'leri: `polls.*`, `comments.*`, `media.*`, `trends.*`, `feed.*`,
-`registration.enabled`, `maintenance.enabled`. Tip, alt/üst sınır, varsayılan ve sürüm
+Settings namespace'leri: `polls.*`, `comments.*`, `media.*`, `points.*`, `trends.*`, `feed.*`,
+`features.*` (`features.registration`, `features.pollCreation`, `features.comments`,
+`features.uploads`) ve `maintenance.enabled`. Tip, alt/üst sınır, varsayılan ve sürüm
 KV-40'da saklanır. Bilinmeyen anahtar reddedilir; değişiklik auditli ve cache invalidationlıdır.
+
+> Bağlayıcı kural koddadır: `packages/contracts/src/events.ts` ve `packages/contracts/src/settings.ts`. Ayrıntı: [`KV-04_ROLES_EVENTS.md`](./KV-04_ROLES_EVENTS.md).
 
 ## Bağımsız çalışma ve doğrulama
 
