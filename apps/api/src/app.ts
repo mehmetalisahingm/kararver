@@ -19,6 +19,8 @@ import type { AuthStore } from "./modules/auth/store.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
 import { registerUserRoutes } from "./modules/users/routes.ts";
+import { registerVoteRoutes } from "./modules/votes/routes.ts";
+import type { VoteStore } from "./modules/votes/store.ts";
 
 export type AppDeps = {
   config: Config;
@@ -31,6 +33,8 @@ export type AppDeps = {
   pollStore?: PollStore;
   /** Sistem ayarları (KV-40, #42); ayar servisi gelene kadar DEFAULT_POLL_SETTINGS. */
   pollSettings?: () => Promise<PollSettings>;
+  /** Verilmezse oy route'u kaydedilmez. */
+  voteStore?: VoteStore;
   /** Üçü birlikte verilirse medya route'ları kaydedilir (config.storage yoksa server vermez). */
   media?: { store: MediaStore; storage: MediaStorage; queue: MediaQueue; settings?: () => Promise<MediaSettings> };
   /** Log seviyesi/hedefi; verilmezse config.logLevel ile stdout. Testler log akışını yakalar. */
@@ -104,6 +108,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       mediaPublicBaseUrl: config.mediaPublicBaseUrl,
       settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
     });
+  }
+  if (deps.voteStore) {
+    registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
   }
   if (deps.media) {
     registerMediaRoutes(route, {

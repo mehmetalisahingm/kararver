@@ -412,7 +412,7 @@ Cookie session ve CSRF kuralları FOUNDATION_CONTRACTS ve TECH_DECISIONS §3.4't
 
 | İş | Ayrıntı | Ekleneceği iş |
 |---|---|---|
-| **Sahip oy yasağı** | `PUT /vote`'ta sunucu, oturum kullanıcısını anketin DB'deki `author_id`'siyle karşılaştırır ve eşitse 403 `SELF_VOTE_FORBIDDEN` döner. Bu kontrol ilk oy, tekrar ve değişimde uygulanır; hiçbir oy, olay veya sayaç yazılmaz. `viewer.canVote` / `voteBlockedReason` aynı `voteAvailability` kuralından üretilir. **DB seviyesinde de** korunması değerlendirilecek: `votes` üzerinde BEFORE INSERT/UPDATE trigger'ı (`user_id = polls.author_id` ise `KV_SELF_VOTE`), API'de 403'e eşlenir. | **KV-11 (#13)** |
+| **Sahip oy yasağı** | `PUT /vote`'ta sunucu, oturum kullanıcısını anketin DB'deki `author_id`'siyle karşılaştırır ve eşitse 403 `SELF_VOTE_FORBIDDEN` döner. Bu kontrol ilk oy, tekrar ve değişimde uygulanır; hiçbir oy, olay veya sayaç yazılmaz. `viewer.canVote` / `voteBlockedReason` aynı `voteAvailability` kuralından üretilir. **DB seviyesinde de** korunuyor: `votes` üzerinde BEFORE INSERT/UPDATE trigger'ı (`user_id = polls.author_id` ise `KV_SELF_VOTE`), API'de 403'e eşlenir (migration `20260928200000_faruk_kv11_self_vote_guard`). | ✅ **KV-11 (#13)** |
 | Sahibin sonuçları görmesi | Sonuç projeksiyonu `resultsVisibleTo({ …, viewerIsAuthor })` ile kurulur; sahip bilgisi DB'den gelir | KV-10 (#12), KV-11 (#13) |
 
 ---

@@ -10,6 +10,7 @@ import { createPrismaMediaStore } from "./modules/media/prisma-store.ts";
 import { startPgBossMediaQueue } from "./modules/media/queue.ts";
 import { createS3MediaStorage } from "./modules/media/storage.ts";
 import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
+import { createPrismaVoteStore } from "./modules/votes/prisma-store.ts";
 
 // Local'de repo kökündeki .env okunur; staging/production'da değerler ortamdan gelir.
 if (!process.env.APP_ENV) {
@@ -29,6 +30,7 @@ const app = buildApp({
   config,
   authStore: createPrismaAuthStore(prisma),
   pollStore: createPrismaPollStore(prisma),
+  voteStore: createPrismaVoteStore(prisma),
   hasher: createArgon2Hasher(),
   mailer: createMailer(config.mail.transport, config.mail.from),
   media:
