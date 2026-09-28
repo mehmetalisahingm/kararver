@@ -83,6 +83,7 @@ historyBody.data.days = [0, 1, 2, 4, 5, 6].map((pollDay) => ({
 const pendingMedia = find("media.complete", "ok");
 pendingMedia.endpoint = "media.get";
 pendingMedia.name = "pending";
+pendingMedia.status = 200;
 
 const quarantinedMedia = clone(pendingMedia);
 quarantinedMedia.name = "quarantined";
