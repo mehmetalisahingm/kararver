@@ -22,6 +22,8 @@
   - Kategori aktif olmalı.
   - Topluluk açık olmalı ve kullanıcı üyesi olmalı; üye değilse 403.
   - Görseller kullanıcının kendi, `POLL` amaçlı ve `REJECTED` olmayan görselleri olmalı; aksi 409 `MEDIA_NOT_USABLE`. Cevapta sadece `APPROVED` görseller gösterilir; ilki `coverImage` olur.
+- **Tekrar önce, doğrulama sonra:** Kayıtlı bir `Idempotency-Key` sonucu, sonradan değişebilecek kontrollerden (süre ayarı, kategori, üyelik, görsel durumu, moderasyon kilidi) önce döner. Başarılı isteğin tekrarı aradaki değişikliğe takılmaz (PR #80 Codex review).
+- **Kilitli referans kontrolü:** Kategori, topluluk üyeliği ve görseller anket yazılan transaction içinde `FOR SHARE` ile kilitlenip yeniden kontrol edilir. Kontrol ile yazma arasında görsel reddedilemez ve üyelik silinemez; bu işlemler bekler. Route'taki ön kontrol sadece hızlı ve net hata mesajı içindir.
 - **Sahiplik:**
   - Sahip olmayan kullanıcının düzenleme, kapatma, silme ve ek açıklama isteği 403 alır.
   - Görünmeyen içerik (HIDDEN, UNDER_REVIEW, REMOVED) 404.

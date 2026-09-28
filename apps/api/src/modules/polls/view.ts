@@ -55,8 +55,10 @@ export function toPollDetail(poll: PollRecord, viewer: SessionUser | null, now: 
           viewerIsAuthor: isAuthor,
           closed,
           contentStatus: poll.status,
-          // BANNED/SUSPENDED oturumu router'da reddedilir; RESTRICTED ayrıntısı yaptırımlarla gelir (KV-33).
-          accountRestricted: false,
+          // Public GET'lerde router hesap durumuna bakmaz; askıya alınmış/banlı oturum buraya gelebilir.
+          // Oy isteği ACCOUNT_RESTRICTED ile reddedileceği için buton da kapalı gösterilir.
+          // İşlem bazlı kısıtlar (RESTRICTED + yaptırım türü) yaptırım tablosuyla gelir (KV-33).
+          accountRestricted: viewer.status === "SUSPENDED" || viewer.status === "BANNED",
           emailVerified: viewer.emailVerified,
           voteInvalidated: vote?.invalidated ?? false,
           hasVote: vote !== null,

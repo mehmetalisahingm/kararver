@@ -87,6 +87,21 @@ export type IdempotentResult =
 
 export type CommunityAccess = "ok" | "not_found" | "not_member";
 
+/**
+ * Anketin başvurduğu kategori/topluluk/görsel, oluşturma transaction'ı içinde artık kullanılamıyor.
+ * createPoll bunu satırları kilitleyerek (FOR SHARE) kontrol eder; route sözleşme hatasına çevirir.
+ */
+export class PollReferenceError extends Error {
+  readonly field: "categoryId" | "communityId" | "mediaIds";
+  readonly reason: "not_found" | "not_member" | "not_usable";
+
+  constructor(field: PollReferenceError["field"], reason: PollReferenceError["reason"]) {
+    super(`${field}: ${reason}`);
+    this.field = field;
+    this.reason = reason;
+  }
+}
+
 export interface PollStore {
   findPoll(by: { id: string } | { publicId: string }, viewerId: string | null): Promise<PollRecord | null>;
   /** Sadece sahiplik ve durum kontrolü için hafif okuma. */
@@ -97,6 +112,16 @@ export interface PollStore {
   areUsablePollMedia(userId: string, mediaIds: string[]): Promise<boolean>;
   publicIdExists(publicId: string): Promise<boolean>;
 
+  /**
+   * Bu kapsam için kaydedilmiş sonuç (süresi dolmamış). Route, sonucu değişebilen doğrulamalardan
+   * önce bunu sorar: başarılı bir isteğin tekrarı, aradaki ayar/kategori/üyelik değişikliğine
+   * takılmadan aynı sonucu alır (API_CONTRACTS §4.5).
+   */
+  findIdempotentResult(scope: IdempotencyScope): Promise<IdempotentResult | null>;
+  /**
+   * Kategori aktifliği, topluluk üyeliği ve görsel uygunluğu transaction içinde, satırlar
+   * kilitlenerek yeniden kontrol edilir; uygun değilse PollReferenceError fırlatır.
+   */
   createPoll(poll: NewPoll, scope: IdempotencyScope): Promise<IdempotentResult>;
   updatePoll(id: string, patch: PollPatch): Promise<void>;
   /** Etkin kapanış zaten geçmişse değişiklik yapmaz. */
