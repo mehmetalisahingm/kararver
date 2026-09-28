@@ -156,17 +156,63 @@ export function canModerate(
 }
 
 /**
- * AFTER_VOTE gizli sonuç kuralı (docs/API_CONTRACTS.md §4.4). Anket sahibi de bu kurala tabidir.
+ * AFTER_VOTE gizli sonuç kuralı (docs/API_CONTRACTS.md §4.4).
+ * Anket sahibi oy veremediği için (SELF_VOTE_FORBIDDEN) sonuçları her zaman görür.
  * Geçersiz sayılmış oy "oy yok" kabul edilir.
+ * viewerIsAuthor sunucuda oturum kullanıcısı ile DB'deki authorId karşılaştırılarak hesaplanır.
  */
 export function resultsVisibleTo({
   resultsVisibility,
   closed,
   viewerHasValidVote,
+  viewerIsAuthor,
 }: {
   resultsVisibility: "ALWAYS" | "AFTER_VOTE";
   closed: boolean;
   viewerHasValidVote: boolean;
+  viewerIsAuthor: boolean;
 }): boolean {
-  return resultsVisibility === "ALWAYS" || closed || viewerHasValidVote;
+  return resultsVisibility === "ALWAYS" || closed || viewerIsAuthor || viewerHasValidVote;
+}
+
+/** İzleyicinin oy verememe sebebi; öncelik sırası bu dizinin sırasıdır (ilk uyan döner). */
+export const voteBlockedReasons = Object.freeze([
+  "NOT_A_POLL",
+  "OWN_POLL",
+  "POLL_CLOSED",
+  "CONTENT_LOCKED",
+  "ACCOUNT_RESTRICTED",
+  "EMAIL_NOT_VERIFIED",
+  "VOTE_INVALIDATED",
+  "VOTE_CHANGE_DISABLED",
+] as const);
+export type VoteBlockedReason = (typeof voteBlockedReasons)[number];
+
+/**
+ * Oturumlu izleyici için oy durumu (misafirde viewer null'dır; UI giriş ister).
+ * Sağlayıcı (KV-11) ve contract testleri aynı kuralı kullanır; PUT /vote'un hata sırası da budur.
+ */
+export function voteAvailability(input: {
+  kind: "POLL" | "DISCUSSION";
+  viewerIsAuthor: boolean;
+  closed: boolean;
+  contentStatus: "ACTIVE" | "LOCKED";
+  accountRestricted: boolean;
+  emailVerified: boolean;
+  voteInvalidated: boolean;
+  hasVote: boolean;
+  voteChangeAllowed: boolean;
+}): { canVote: boolean; voteBlockedReason: VoteBlockedReason | null } {
+  const blocked: Record<VoteBlockedReason, boolean> = {
+    NOT_A_POLL: input.kind !== "POLL",
+    OWN_POLL: input.viewerIsAuthor,
+    POLL_CLOSED: input.closed,
+    CONTENT_LOCKED: input.contentStatus === "LOCKED",
+    ACCOUNT_RESTRICTED: input.accountRestricted,
+    EMAIL_NOT_VERIFIED: !input.emailVerified,
+    VOTE_INVALIDATED: input.voteInvalidated,
+    VOTE_CHANGE_DISABLED: input.hasVote && !input.voteChangeAllowed,
+  };
+  const reason = voteBlockedReasons.find((r) => blocked[r]) ?? null;
+  return { canVote: reason === null, voteBlockedReason: reason };
 }

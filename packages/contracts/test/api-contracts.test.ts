@@ -21,7 +21,11 @@ import {
   PollDetail,
   pollResults,
   Results,
+  PollViewer,
   resultsVisibleTo,
+  voteAvailability,
+  VoteBlockedReason,
+  voteBlockedReasons,
 } from "../src/index.ts";
 import { renderInventory, renderUnblocks, replaceBlock } from "../src/inventory.ts";
 
@@ -160,10 +164,30 @@ describe("fixture örnekleri", () => {
 
 describe("gizli sonuç (AFTER_VOTE)", () => {
   test("görünürlük kuralı", () => {
-    assert.equal(resultsVisibleTo({ resultsVisibility: "AFTER_VOTE", closed: false, viewerHasValidVote: false }), false);
-    assert.equal(resultsVisibleTo({ resultsVisibility: "AFTER_VOTE", closed: false, viewerHasValidVote: true }), true);
-    assert.equal(resultsVisibleTo({ resultsVisibility: "AFTER_VOTE", closed: true, viewerHasValidVote: false }), true);
-    assert.equal(resultsVisibleTo({ resultsVisibility: "ALWAYS", closed: false, viewerHasValidVote: false }), true);
+    const base = { resultsVisibility: "AFTER_VOTE", closed: false, viewerHasValidVote: false, viewerIsAuthor: false } as const;
+    assert.equal(resultsVisibleTo(base), false);
+    assert.equal(resultsVisibleTo({ ...base, viewerHasValidVote: true }), true);
+    assert.equal(resultsVisibleTo({ ...base, closed: true }), true);
+    assert.equal(resultsVisibleTo({ ...base, resultsVisibility: "ALWAYS" }), true);
+  });
+
+  test("anket sahibi oy veremediği için sonuçları kapanmadan da görür (Mehmet kararı, 2026-09-28)", () => {
+    assert.equal(
+      resultsVisibleTo({ resultsVisibility: "AFTER_VOTE", closed: false, viewerHasValidVote: false, viewerIsAuthor: true }),
+      true,
+    );
+  });
+
+  test("fixture'larda sahip her zaman görünür sonuç alır", () => {
+    const walk = (value: unknown): void => {
+      if (Array.isArray(value)) return value.forEach(walk);
+      if (!value || typeof value !== "object") return;
+      const obj = value as Record<string, unknown>;
+      const v = obj.viewer as { isAuthor?: boolean } | null | undefined;
+      if (v?.isAuthor && obj.results) assert.deepEqual((obj.results as { visible: boolean }).visible, true, "sahibe gizli sonuç");
+      Object.values(obj).forEach(walk);
+    };
+    examples.forEach((x) => walk(x.body));
   });
 
   test("gizli projeksiyona sayı sızdırmak şema ihlalidir", () => {
@@ -190,6 +214,85 @@ describe("gizli sonuç (AFTER_VOTE)", () => {
       Object.values(obj).forEach(walk);
     };
     examples.forEach((x) => walk(x.body));
+  });
+});
+
+// ─── Oy durumu (viewer.canVote) ───────────────────────────────
+
+describe("izleyici oy durumu", () => {
+  const ok = {
+    kind: "POLL",
+    viewerIsAuthor: false,
+    closed: false,
+    contentStatus: "ACTIVE",
+    accountRestricted: false,
+    emailVerified: true,
+    voteInvalidated: false,
+    hasVote: false,
+    voteChangeAllowed: true,
+  } as const;
+
+  test("engel yoksa oy verebilir", () => {
+    assert.deepEqual(voteAvailability(ok), { canVote: true, voteBlockedReason: null });
+    assert.deepEqual(voteAvailability({ ...ok, hasVote: true }), { canVote: true, voteBlockedReason: null });
+  });
+
+  test("her sebep tek başına doğru kodu verir", () => {
+    const cases: [Partial<Parameters<typeof voteAvailability>[0]>, string][] = [
+      [{ kind: "DISCUSSION" }, "NOT_A_POLL"],
+      [{ viewerIsAuthor: true }, "OWN_POLL"],
+      [{ closed: true }, "POLL_CLOSED"],
+      [{ contentStatus: "LOCKED" }, "CONTENT_LOCKED"],
+      [{ accountRestricted: true }, "ACCOUNT_RESTRICTED"],
+      [{ emailVerified: false }, "EMAIL_NOT_VERIFIED"],
+      [{ voteInvalidated: true }, "VOTE_INVALIDATED"],
+      [{ hasVote: true, voteChangeAllowed: false }, "VOTE_CHANGE_DISABLED"],
+    ];
+    for (const [patch, reason] of cases) {
+      assert.deepEqual(voteAvailability({ ...ok, ...patch }), { canVote: false, voteBlockedReason: reason }, reason);
+    }
+  });
+
+  test("sahip, e-postası doğrulanmamış olsa da OWN_POLL alır (öncelik sırası)", () => {
+    assert.equal(voteAvailability({ ...ok, viewerIsAuthor: true, emailVerified: false }).voteBlockedReason, "OWN_POLL");
+  });
+
+  test("şema ile helper aynı sebep listesini kullanır", () => {
+    assert.deepEqual(VoteBlockedReason.options, [...voteBlockedReasons]);
+  });
+
+  test("şema tutarsız viewer'ı reddeder", () => {
+    const viewer = {
+      vote: null,
+      voteInvalidated: false,
+      reaction: null,
+      bookmarked: false,
+      following: false,
+      isAuthor: false,
+      canVote: true,
+      voteBlockedReason: null,
+    };
+    mustParse(PollViewer, viewer, "geçerli viewer");
+    assert.equal(PollViewer.safeParse({ ...viewer, voteBlockedReason: "POLL_CLOSED" }).success, false, "canVote true + sebep");
+    assert.equal(PollViewer.safeParse({ ...viewer, canVote: false }).success, false, "canVote false + sebep yok");
+    assert.equal(PollViewer.safeParse({ ...viewer, isAuthor: true }).success, false, "sahip oy verebilir görünüyor");
+  });
+
+  test("oy hata kodları ile engel sebepleri eşleşir", () => {
+    const errors = allErrors(getEndpoint("votes.put"));
+    const reasonToError: Record<string, string> = {
+      NOT_A_POLL: "NOT_A_POLL",
+      OWN_POLL: "SELF_VOTE_FORBIDDEN",
+      POLL_CLOSED: "POLL_CLOSED",
+      CONTENT_LOCKED: "CONTENT_LOCKED",
+      ACCOUNT_RESTRICTED: "ACCOUNT_RESTRICTED",
+      EMAIL_NOT_VERIFIED: "EMAIL_NOT_VERIFIED",
+      VOTE_INVALIDATED: "VOTE_INVALIDATED",
+      VOTE_CHANGE_DISABLED: "VOTE_CHANGE_DISABLED",
+    };
+    for (const reason of voteBlockedReasons) {
+      assert.ok(errors.includes(reasonToError[reason] as never), `${reason} → ${reasonToError[reason]} votes.put hata listesinde`);
+    }
   });
 });
 

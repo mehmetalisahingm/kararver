@@ -24,6 +24,8 @@ export {
   pollResults,
   resultsVisibleTo,
   roles,
+  voteAvailability,
+  voteBlockedReasons,
 } from "./helpers.ts";
 export type { ErrorResponseBody, EventEnvelope, PageBody, ResultsProjection } from "./helpers.ts";
 

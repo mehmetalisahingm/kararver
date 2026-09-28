@@ -23,6 +23,11 @@ Kırıcı değişiklik yok (API_CONTRACTS §5).
 - **Ürün düzeltmesi:** Anket sahibi kendi anketine oy veremez; `votes.put` için
   403 `SELF_VOTE_FORBIDDEN`, hata fixture'ı ve sözleşme testi eklendi. KV-11
   gerçek serviste bu kontrolü ilk oy, tekrar ve değişim için uygulamalıdır.
+- **Sahip sonuçları görür:** `resultsVisibleTo` artık `viewerIsAuthor` alır; anket
+  sahibi AFTER_VOTE anketinde de sonuçları her zaman görür (oy veremediği için).
+- **Oy butonu durumu:** `PollViewer`'a `canVote` ve `voteBlockedReason` eklendi
+  (`OWN_POLL`, `EMAIL_NOT_VERIFIED`, `POLL_CLOSED`, `NOT_A_POLL`, …); kural
+  `voteAvailability` yardımcısında, `PUT /vote` hata sırasıyla aynı.
 
 - **Geçiş:** Paket bağımlılıksız `.mjs`'ten TypeScript + zod 4.6.5'e taşındı (TECH_DECISIONS §2). #64'teki export adları (`contractVersion`, `errorStatuses`, `errorResponse`, `pageResponse`, `pollResults`, `eventEnvelope`, `roles`, `canModerate`), davranışları ve 5 testi aynen korundu. Giriş dosyası `src/index.mjs` → `src/index.ts`.
 - **Eklendi:**
