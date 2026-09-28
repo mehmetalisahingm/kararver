@@ -164,7 +164,7 @@ async function enforcePublishLimits(tx: Tx, poll: NewPoll, userCreatedAt: Date, 
   const duplicate = await tx.$queryRaw<{ one: number }[]>`
     SELECT 1 AS one FROM polls
     WHERE author_id = ${poll.authorId}::uuid AND status <> 'REMOVED'
-      AND closed_at IS NULL AND closes_at > ${now}
+      AND closed_at IS NULL AND closes_at > ${now.toISOString()}::timestamptz
       AND kv_normalize(title) = kv_normalize(${poll.title})
     LIMIT 1`;
   if (duplicate.length > 0) throw new PollLimitError("DUPLICATE_TITLE", null);
