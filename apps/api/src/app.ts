@@ -1,0 +1,92 @@
+// Fastify uygulaması. Bağımlılıklar dışarıdan verilir; server.ts gerçeklerini, testler kendi
+// store/mailer/saatini bağlar. Yeni modül: src/modules/<modül>/routes.ts + aşağıya bir satır.
+import { randomUUID } from "node:crypto";
+import { headers } from "@kararver/contracts";
+import Fastify, { type FastifyInstance } from "fastify";
+import type { Config } from "./config.ts";
+import { registerErrorHandling } from "./http/errors.ts";
+import { createRouter } from "./http/route.ts";
+import { registerSecurity } from "./http/security.ts";
+import type { Mailer } from "./mail/mailer.ts";
+import type { PasswordHasher } from "./modules/auth/crypto.ts";
+import { registerAuthRoutes } from "./modules/auth/routes.ts";
+import { createAuthenticator, type SessionSettings } from "./modules/auth/session.ts";
+import type { AuthStore } from "./modules/auth/store.ts";
+import { registerUserRoutes } from "./modules/users/routes.ts";
+
+export type AppDeps = {
+  config: Config;
+  authStore: AuthStore;
+  hasher: PasswordHasher;
+  mailer: Mailer;
+  now?: () => Date;
+  isRegistrationEnabled?: () => Promise<boolean>;
+  /** Log seviyesi/hedefi; verilmezse config.logLevel ile stdout. Testler log akışını yakalar. */
+  logger?: false | { level: string; stream: NodeJS.WritableStream };
+};
+
+const REQUEST_ID = /^[A-Za-z0-9._-]{8,128}$/;
+
+export function buildApp(deps: AppDeps): FastifyInstance {
+  const { config } = deps;
+  const now = deps.now ?? (() => new Date());
+
+  const app = Fastify({
+    logger:
+      deps.logger === false
+        ? false
+        : {
+            level: deps.logger?.level ?? config.logLevel,
+            ...(deps.logger?.stream ? { stream: deps.logger.stream } : {}),
+            // Varsayılan serializer header/gövde loglamaz; yine de cookie ve parola alanları maskelenir.
+            redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]', "*.password", "*.token"],
+          },
+    bodyLimit: 64 * 1024,
+    trustProxy: config.appEnv === "staging" || config.appEnv === "production",
+    requestIdHeader: false,
+    genReqId: (req) => {
+      const incoming = req.headers[headers.requestId.toLowerCase()];
+      return typeof incoming === "string" && REQUEST_ID.test(incoming) ? incoming : randomUUID();
+    },
+  });
+
+  // Gövdesiz POST (logout, resend) Content-Type: application/json ile gelse de geçerli sayılır.
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+    if (body === "") return done(null, undefined);
+    try {
+      done(null, JSON.parse(body as string));
+    } catch {
+      const err = Object.assign(new Error("Geçersiz JSON"), { statusCode: 400, code: "invalid_json" });
+      done(err, undefined);
+    }
+  });
+
+  app.addHook("onRequest", async (request, reply) => {
+    reply.header(headers.requestId, request.id);
+  });
+
+  registerErrorHandling(app);
+  registerSecurity(app, config.allowedOrigins);
+
+  const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper };
+  const route = createRouter(app, {
+    validateResponses: config.appEnv !== "production",
+    authenticator: createAuthenticator(deps.authStore, session, now),
+  });
+
+  registerAuthRoutes(route, {
+    store: deps.authStore,
+    hasher: deps.hasher,
+    mailer: deps.mailer,
+    now,
+    session,
+    webUrl: config.webUrl,
+    mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+    isRegistrationEnabled: deps.isRegistrationEnabled ?? (async () => true),
+  });
+  registerUserRoutes(route, { store: deps.authStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+
+  app.get("/health", async (_request, reply) => reply.header("Cache-Control", "no-store").send({ status: "ok" }));
+
+  return app;
+}
