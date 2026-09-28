@@ -18,6 +18,8 @@
     "typecheck": "pnpm -r --if-present run typecheck",
     "db:migrate": "pnpm --filter @kararver/db run db:migrate",
     "db:reset": "pnpm --filter @kararver/db run db:reset",
-    "db:test": "pnpm --filter @kararver/db run test:db"
+    "db:test": "pnpm --filter @kararver/db run test:db",
+    "mock:dev": "pnpm --filter @kararver/mock-api run serve",
+    "mock:test": "pnpm --filter @kararver/mock-api run test"
   }
 }

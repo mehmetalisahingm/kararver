@@ -1,0 +1,20 @@
+{
+  "name": "@kararver/mock-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "node --watch src/server.ts",
+    "start": "node src/server.ts",
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kararver/contracts": "workspace:*",
+    "fastify": "5.12.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "typescript": "6.0.3"
+  }
+}
