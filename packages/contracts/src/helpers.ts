@@ -92,6 +92,14 @@ export const eventTypes: ReadonlySet<string> = new Set([
   "points.granted",
   "points.debited",
   "points.adjusted",
+  // KV-04 eklemeleri (katalog: events.ts)
+  "vote.invalidated",
+  "report.resolved",
+  "sanction.applied",
+  "sanction.lifted",
+  "role.changed",
+  "settings.changed",
+  "featured.applied",
 ]);
 
 export type EventEnvelope = {
@@ -104,6 +112,11 @@ export type EventEnvelope = {
   payload: Record<string, unknown>;
 };
 
+/**
+ * #64 zarf kurucusu; yalnız zarfı doğrular (payload serbest, id/subject biçimi gevşek).
+ * Geriye uyumluluk için korunur. **Yeni kod `createEvent` kullanır** (events.ts): payload
+ * şeması, UUIDv7 ve konu tipi outbox'a yazma anında doğrulanır.
+ */
 export function eventEnvelope({
   id,
   type,
