@@ -136,6 +136,11 @@ Payload şemaları `events.ts` içindedir (strict zod). Kabul koşulundaki alanl
 | `polls.maxDurationHours` | integer | 1 – 720 | 720 | `polls.maxDurationHours` | `polls.ts` durationHours yorumu "varsayılan 1–720" |
 | `polls.titleMaxLength` | integer | 10 – 200 | 200 | `polls.titleMaxLength` | `polls.ts` Title `.min(10).max(200)` |
 | `polls.descriptionMaxLength` | integer | 0 – 5000 | 5000 | `polls.descriptionMaxLength` | `polls.ts` Description `.max(5000)` |
+| `polls.newAccountPeriodDays` | integer | 0 – 90 | 7 | hayır | PRODUCT_TEAM_PLAN §13 "ilk 7 gün" (KV-20) |
+| `polls.newAccountDailyLimit` | integer | 1 – 100 | 3 | hayır | PRODUCT_TEAM_PLAN §13 "maksimum 3 anket / 24 saat" (KV-20) |
+| `polls.newAccountCooldownMinutes` | integer | 0 – 1440 | 30 | hayır | PRODUCT_TEAM_PLAN §13 "minimum 30 dakika" (KV-20) |
+| `polls.dailyLimit` | integer | 1 – 1000 | 10 | hayır | PRODUCT_TEAM_PLAN §13 "maksimum 10 anket / 24 saat" (KV-20) |
+| `polls.cooldownMinutes` | integer | 0 – 1440 | 10 | hayır | PRODUCT_TEAM_PLAN §13 "minimum 10 dakika" (KV-20) |
 | `polls.voteChangeAllowed` | boolean | — | **yok** | `polls.voteChangeAllowed` | PRODUCT_TEAM_PLAN §5, DATA_MODEL §5.1 ayar olduğunu söyler, değer vermez |
 | `comments.bodyMaxLength` | integer | 1 – 2000 | 2000 | `comments.bodyMaxLength` | `comments.ts` Body `.min(1).max(2000)` |
 | `media.maxBytes` | integer | 1 B – 50 MB | 8 MB | `media.maxBytes` | MEDIA_MODERATION §5 madde 2; `media.ts` sizeBytes yorumu, `.max(50 MB)` |
@@ -151,7 +156,7 @@ Payload şemaları `events.ts` içindedir (strict zod). Kabul koşulundaki alanl
 | `trends.moversMinVotes` | integer | 0 – sınırsız | 30 | hayır | DATA_MODEL §8.3 "Eşikler" |
 | `trends.moversMinActiveAccounts` | integer | 0 – sınırsız | 10 | hayır | DATA_MODEL §8.3 "Eşikler" |
 
-Kaynaklardaki dosyalar `packages/contracts/src/domains/` altındadır. Kayıtta **olmayanlar**: cooldown, günlük anket limiti, trend katsayıları, `feed.*` (§5).
+Kaynaklardaki dosyalar `packages/contracts/src/domains/` altındadır. Kayıtta **olmayanlar**: trend katsayıları, `feed.*` (§5). Cooldown ve günlük anket limiti KV-20 (#22) ile eklendi.
 
 ---
 
@@ -194,4 +199,4 @@ Issue numaraları mevcut eşlemeye göredir (KV-N → #N+2).
 | 6 | **`media.maxPerPoll` ürün varsayılanı**: varsayılan şu an tavana eşit (10); ürün varsayılanı Mehmet'e sorulacak. Tavan `polls.ts` mediaIds şemasıyla sabit; config ile API çelişmesin diye kayıtta `max = 10`. | Mehmet | KV-40 (#42) |
 | 7 | **Puan tavanı**: `points.initialGrant` ve `points.publishCost` için üst sınır kaynakta yok (kayıtta sınırsız). | Mehmet | #67 |
 | 8 | **Eksik 6 varsayılan**: `polls.voteChangeAllowed`, `features.registration`, `features.pollCreation`, `features.comments`, `features.uploads`, `maintenance.enabled`. Değer belgeye yazılınca `settings.test.ts`'teki `todo` kaldırılır. **PR bu yüzden taslaktır.** | Utku (kayıt), Mehmet (ürün), Faruk (`voteChangeAllowed`, KV-11 #13) | KV-40 (#42) |
-| 9 | **Kayıtta olmayan ayarlar**: anket cooldown ve günlük anket limiti (`PUBLISH_COOLDOWN`, `DAILY_PUBLISH_LIMIT`), trend katsayıları, `feed.*`. Değerleri belirlenince kaynağıyla kayda eklenir (minor). | Faruk (polls, trends, feed), Utku (rate-limit) | KV-10 (#12), KV-28 (#30), #22 |
+| 9 | **Kayıtta olmayan ayarlar**: ~~anket cooldown ve günlük anket limiti~~ (KV-20 ile eklendi: `polls.newAccount*`, `polls.dailyLimit`, `polls.cooldownMinutes`), trend katsayıları, `feed.*`. Değerleri belirlenince kaynağıyla kayda eklenir (minor). | Faruk (polls, trends, feed), Utku (rate-limit) | KV-10 (#12), KV-28 (#30), #22 |

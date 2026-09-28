@@ -91,11 +91,13 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
   }
 
   const key = () => `test-${randomUUID()}`;
+  let titleSeq = 0;
 
   function pollBody(overrides: Record<string, unknown> = {}) {
     return {
       kind: "POLL",
-      title: "Bu araba bu fiyata alınır mı?",
+      // Aynı başlık kuralı (KV-20): her çağrı benzersiz başlık üretir.
+      title: `Bu araba bu fiyata alınır mı? ${++titleSeq}`,
       description: "2019 model, 85 bin km. Sağ çamurluk boyalı.",
       categoryId,
       durationHours: 72,
@@ -124,7 +126,7 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
 
   test("anket oluşturma 201; sahip sonucu görür ama oy veremez", async () => {
     const owner = await signUp();
-    const res = await send("POST", "/polls", pollBody({ tagSlugs: ["ikinci-el"], price: { amount: "1250000.00", currency: "TRY" } }), owner.cookie, key());
+    const res = await send("POST", "/polls", pollBody({ title: "Bu araba bu fiyata alınır mı?", tagSlugs: ["ikinci-el"], price: { amount: "1250000.00", currency: "TRY" } }), owner.cookie, key());
     assert.equal(res.statusCode, 201, res.body);
     assert.equal(res.headers["cache-control"], "private, no-store");
     const poll = PollDetail.parse(res.json().data);
@@ -152,8 +154,9 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
   test("aynı anahtar + aynı gövde aynı anketi döner; farklı gövde 409", async () => {
     const owner = await signUp();
     const k = key();
-    const first = await send("POST", "/polls", pollBody(), owner.cookie, k);
-    const again = await send("POST", "/polls", pollBody(), owner.cookie, k);
+    const body = pollBody();
+    const first = await send("POST", "/polls", body, owner.cookie, k);
+    const again = await send("POST", "/polls", body, owner.cookie, k);
     assert.equal(first.statusCode, 201);
     assert.equal(again.statusCode, 201);
     assert.equal(again.json().data.id, first.json().data.id);
@@ -164,7 +167,8 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
   test("aynı anahtarla 5 eşzamanlı istek tek anket üretir", async () => {
     const owner = await signUp();
     const k = key();
-    const results = await Promise.all(Array.from({ length: 5 }, () => send("POST", "/polls", pollBody(), owner.cookie, k)));
+    const body = pollBody();
+    const results = await Promise.all(Array.from({ length: 5 }, () => send("POST", "/polls", body, owner.cookie, k)));
     assert.deepEqual(results.map((r) => r.statusCode), [201, 201, 201, 201, 201], results.map((r) => r.body).join("\n"));
     assert.equal(new Set(results.map((r) => r.json().data.id)).size, 1);
     assert.equal(await db.poll.count({ where: { authorId: owner.id } }), 1);
@@ -174,8 +178,9 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     const a = await signUp();
     const b = await signUp();
     const k = key();
-    const first = await send("POST", "/polls", pollBody(), a.cookie, k);
-    const second = await send("POST", "/polls", pollBody(), b.cookie, k);
+    const body = pollBody();
+    const first = await send("POST", "/polls", body, a.cookie, k);
+    const second = await send("POST", "/polls", body, b.cookie, k);
     assert.equal(first.statusCode, 201);
     assert.equal(second.statusCode, 201);
     assert.notEqual(first.json().data.id, second.json().data.id);
@@ -528,7 +533,9 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
       await gate;
     });
     await lockTaken;
-    const creation = store.createPoll(newPoll([media.id]), scope());
+    // Limitler bu testin konusu değil: izin verici değerler.
+    const noLimits = { ...h.pollSettings, cooldownMinutes: 0, newAccountCooldownMinutes: 0, dailyLimit: 1000, newAccountDailyLimit: 100 };
+    const creation = store.createPoll(newPoll([media.id]), scope(), noLimits);
     await new Promise((resolve) => setTimeout(resolve, 200));
     release();
     await moderator;
@@ -538,7 +545,7 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     // Topluluktan ayrılan kullanıcı (ön kontrolden sonra) da transaction'da yakalanır.
     const community = await db.community.create({ data: { slug: `yaris-${randomUUID().slice(0, 8)}`, name: "Yarış", createdById: owner.id } });
     await assert.rejects(
-      store.createPoll({ ...newPoll([]), communityId: community.id }, scope()),
+      store.createPoll({ ...newPoll([]), communityId: community.id }, scope(), noLimits),
       (err) => err instanceof PollReferenceError && err.reason === "not_member",
     );
   });

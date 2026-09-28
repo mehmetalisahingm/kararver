@@ -68,7 +68,8 @@ describe("oylar (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok (C
   async function createPoll(cookie: string, overrides: Record<string, unknown> = {}) {
     const body = {
       kind: "POLL",
-      title: "Hangi telefonu almalıyım bu ay?",
+      // Aynı başlık kuralı (KV-20): her çağrı benzersiz başlık üretir.
+      title: `Hangi telefonu almalıyım bu ay? ${randomUUID().slice(0, 8)}`,
       categoryId,
       durationHours: 24,
       resultsVisibility: "AFTER_VOTE",

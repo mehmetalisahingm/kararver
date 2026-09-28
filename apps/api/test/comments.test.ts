@@ -59,7 +59,8 @@ describe("yorumlar (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
   async function createPoll(overrides: Record<string, unknown> = {}) {
     const body = {
       kind: "POLL",
-      title: "Bu bilgisayar bu fiyata alınır mı?",
+      // Aynı başlık kuralı (KV-20): her çağrı benzersiz başlık üretir.
+      title: `Bu bilgisayar bu fiyata alınır mı? ${randomUUID().slice(0, 8)}`,
       categoryId,
       durationHours: 24,
       resultsVisibility: "ALWAYS",

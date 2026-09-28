@@ -18,6 +18,7 @@ import { createAuthenticator, type SessionSettings } from "./modules/auth/sessio
 import type { AuthStore } from "./modules/auth/store.ts";
 import { registerCommentRoutes } from "./modules/comments/routes.ts";
 import type { CommentStore } from "./modules/comments/store.ts";
+import { registerFeedRoutes } from "./modules/feed/routes.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
 import { registerUserRoutes } from "./modules/users/routes.ts";
@@ -109,6 +110,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerUserRoutes(route, { store: deps.authStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.pollStore) {
     registerPollRoutes(route, {
+      store: deps.pollStore,
+      now,
+      mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+      settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+    });
+    registerFeedRoutes(route, {
       store: deps.pollStore,
       now,
       mediaPublicBaseUrl: config.mediaPublicBaseUrl,
