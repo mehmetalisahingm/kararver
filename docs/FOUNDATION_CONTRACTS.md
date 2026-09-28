@@ -91,8 +91,9 @@ Arayüz: `npm ci --prefix ui/design-system`, `npx --prefix ui/design-system play
 `pnpm ui:test`. Test komutu kendi geçici localhost sunucusunu açar/kapatır.
 Storage: `python -m pip install boto3==1.42.0`, `python scripts/storage-smoke.py`.
 
-CI DB, statik UI ve S3 smoke işlerini ayrı raporlar. Henüz `apps/web`, `apps/api`,
-`apps/worker`, gerçek staging deployment veya auth→anket→oy E2E yoktur; bunların yerine
+CI DB, statik UI ve S3 smoke işlerini ayrı raporlar. `apps/api` iskeleti ve auth/`/me`
+endpointleri KV-09 ile geldi ([`KV-09_AUTH_BACKEND.md`](./KV-09_AUTH_BACKEND.md)). Henüz `apps/worker`,
+gerçek staging deployment veya auth→anket→oy E2E yoktur; bunların yerine
 mock başarısı kabul edilmez. Tam endpoint şemaları KV-03 ile [`API_CONTRACTS.md`](./API_CONTRACTS.md)
 ve `packages/contracts` içinde tamamlandı; bağımsız çalışan uygulama/mock servisleri KV-04/06'nın
 kalan teslimleridir.

@@ -1,0 +1,23 @@
+{
+  "name": "@kararver/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.ts",
+    "start": "node src/server.ts",
+    "test": "node --test --test-concurrency=1 \"test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kararver/contracts": "workspace:*",
+    "@kararver/db": "workspace:*",
+    "@node-rs/argon2": "2.2.1",
+    "fastify": "5.12.5",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "typescript": "6.0.3"
+  }
+}

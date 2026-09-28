@@ -362,7 +362,7 @@ pnpm dev
 #   worker → arka planda (log'da job'lar görünür)
 ```
 
-> ⚠️ **Mevcut durum (KV-02):** `pnpm db:migrate` çalışır; `packages/db` ilk migration'ı uygular (bkz. [`DATA_MODEL.md`](./DATA_MODEL.md)). `pnpm db:seed` henüz bir şey yapmaz, kategori seed'i gelince çalışacak. `pnpm dev` ise api/web/worker iskeletleri eklenince çalışır hale gelir. Script'ler root `package.json`'da şimdiden tanımlı, yani bu kurulum adımları değişmeyecek.
+> ⚠️ **Mevcut durum (KV-02):** `pnpm db:migrate` çalışır; `packages/db` ilk migration'ı uygular (bkz. [`DATA_MODEL.md`](./DATA_MODEL.md)). `pnpm db:seed` henüz bir şey yapmaz, kategori seed'i gelince çalışacak. `apps/api` KV-09 ile eklendi (`pnpm --filter @kararver/api dev`, bkz. [`KV-09_AUTH_BACKEND.md`](./KV-09_AUTH_BACKEND.md)); web/worker iskeletleri eklenince `pnpm dev` hepsini açar. Script'ler root `package.json`'da şimdiden tanımlı, yani bu kurulum adımları değişmeyecek.
 
 ### 8.3 Sık kullanılan komutlar
 ```bash
