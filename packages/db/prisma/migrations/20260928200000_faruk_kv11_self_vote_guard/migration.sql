@@ -13,8 +13,9 @@ BEGIN
   RETURN NEW;
 END $$;
 
--- votes_guard_identity poll_id/user_id değişimini zaten engeller; INSERT yeterli olurdu, ama
--- UPDATE de kapsanır ki kimlik trigger'ı kaldırılırsa bu kural açılmasın.
+-- Sadece INSERT: oyun poll_id/user_id'sinin sonradan değişmesini votes_guard_identity zaten
+-- reddeder (KV_VOTE_IDENTITY_IMMUTABLE). UPDATE'e de bağlanırsa, alfabetik trigger sırası yüzünden
+-- kimlik değişimi yanlış hata koduyla (KV_SELF_VOTE) reddedilir.
 CREATE TRIGGER "votes_forbid_self_vote"
-  BEFORE INSERT OR UPDATE OF "poll_id", "user_id" ON "votes"
+  BEFORE INSERT ON "votes"
   FOR EACH ROW EXECUTE FUNCTION kv_votes_forbid_self_vote();
