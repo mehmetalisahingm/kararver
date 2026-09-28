@@ -423,5 +423,5 @@ Cookie session ve CSRF kuralları FOUNDATION_CONTRACTS ve TECH_DECISIONS §3.4't
 | 1 | `LOCKED` anket sonucu gösterir mi? Sözleşme görünürlük kuralını uygular; `LOCKED` sadece yeni oy ve yorumu engeller (FOUNDATION) | KV-11 |
 | 2 | İçerik sürüm geçmişi tablosunun kesin issue'su (şimdilik #66) | Faruk + Mehmet |
 | 3 | `for_you` sıralama sinyallerinin ayrıntısı; sözleşme sadece cursor davranışını sabitler | KV-27 |
-| 4 | Olay adlarının nihai listesi ve payload'ları | KV-04 (Utku) |
+| 4 | Olay adlarının nihai listesi ve payload'ları — **çözüldü**, bkz. [`docs/KV-04_ROLES_EVENTS.md`](./KV-04_ROLES_EVENTS.md) | KV-04 (Utku) |
 | 5 | Mock sunucu: `examples` üzerinden MSW veya küçük bir Fastify mock'u | KV-06 (Utku) |
