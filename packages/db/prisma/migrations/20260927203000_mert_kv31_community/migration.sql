@@ -11,11 +11,15 @@
 -- CreateEnum
 CREATE TYPE "community_role" AS ENUM ('MEMBER', 'MODERATOR');
 
+-- CreateEnum
+CREATE TYPE "community_members_visibility" AS ENUM ('PUBLIC', 'MEMBERS', 'MODERATORS');
+
 -- AlterTable
 ALTER TABLE "communities" ADD COLUMN     "created_by_id" UUID NOT NULL,
 ADD COLUMN     "description" VARCHAR(1000),
 ADD COLUMN     "image_media_id" UUID,
 ADD COLUMN     "member_count" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "members_visibility" "community_members_visibility" NOT NULL DEFAULT 'MEMBERS',
 ADD COLUMN     "name" VARCHAR(80) NOT NULL,
 ADD COLUMN     "slug" VARCHAR(60) NOT NULL,
 ADD COLUMN     "updated_at" TIMESTAMPTZ(3) NOT NULL;
