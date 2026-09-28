@@ -140,7 +140,15 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     },
   };
   const registrationEnabled = { value: true };
-  const pollSettings: PollSettings = { ...DEFAULT_POLL_SETTINGS };
+  // Yayın limitleri (KV-20) varsayılan olarak gevşek: aynı kullanıcıyla peş peşe anket açan senaryolar
+  // cooldown'a takılmasın. Limit testleri (feed-limits.test.ts) resmî değerleri açıkça kurar.
+  const pollSettings: PollSettings = {
+    ...DEFAULT_POLL_SETTINGS,
+    cooldownMinutes: 0,
+    newAccountCooldownMinutes: 0,
+    dailyLimit: 1000,
+    newAccountDailyLimit: 100,
+  };
   const commentsEnabled = { value: true };
   const mediaSettings: MediaSettings = { ...DEFAULT_MEDIA_SETTINGS };
   const storage = createFakeStorage();

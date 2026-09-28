@@ -1,7 +1,16 @@
 // PollStore'un PostgreSQL/Prisma uygulaması. Tablolar: polls, poll_options, tags, poll_tags,
 // poll_media, poll_addenda, votes, idempotency_keys (DATA_MODEL.md, API_CONTRACTS.md §6).
 import type { PrismaClient } from "@kararver/db";
-import { PollReferenceError, type IdempotencyScope, type IdempotentResult, type NewPoll, type PollRecord, type PollStore } from "./store.ts";
+import {
+  PollLimitError,
+  PollReferenceError,
+  type IdempotencyScope,
+  type IdempotentResult,
+  type NewPoll,
+  type PollRecord,
+  type PollSettings,
+  type PollStore,
+} from "./store.ts";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
@@ -66,6 +75,101 @@ async function lockReferences(tx: Tx, poll: NewPoll): Promise<void> {
   }
 }
 
+type PollRow = NonNullable<Awaited<ReturnType<PrismaClient["poll"]["findUnique"]>>> & {
+  author: { id: string; username: string; displayName: string; avatarMedia: { status: string; publicObjectKey: string | null } | null };
+  category: { id: string; slug: string; name: string };
+  community: { id: string; slug: string; name: string } | null;
+  options: { id: string; label: string; position: number; voteCount: number }[];
+  tags: { tag: { slug: string } }[];
+  media: { media: { id: string; publicObjectKey: string | null; width: number | null; height: number | null } }[];
+  addenda: { id: string; body: string; createdAt: Date }[];
+  votes: { optionId: string; invalidatedAt: Date | null }[];
+};
+
+function toRecord(poll: PollRow): PollRecord {
+  const vote = poll.votes[0];
+  const avatar = poll.author.avatarMedia;
+  const record: PollRecord = {
+    id: poll.id,
+    publicId: poll.publicId,
+    slug: poll.slug,
+    title: poll.title,
+    description: poll.description,
+    extraInfo: poll.extraInfo,
+    priceAmount: poll.priceAmount === null ? null : poll.priceAmount.toFixed(2),
+    priceCurrency: poll.priceCurrency,
+    status: poll.status,
+    resultsVisibility: poll.resultsVisibility,
+    allowComments: poll.allowComments,
+    opensAt: poll.opensAt,
+    closesAt: poll.closesAt,
+    closedAt: poll.closedAt,
+    firstValidVoteAt: poll.firstValidVoteAt,
+    commentCount: poll.commentCount,
+    createdAt: poll.createdAt,
+    author: {
+      id: poll.author.id,
+      username: poll.author.username,
+      displayName: poll.author.displayName,
+      avatarPublicKey: avatar?.status === "APPROVED" ? avatar.publicObjectKey : null,
+    },
+    category: poll.category,
+    community: poll.community,
+    options: poll.options,
+    tags: poll.tags.map((t) => t.tag.slug),
+    media: poll.media
+      .filter((m) => m.media.publicObjectKey !== null)
+      .map((m) => ({ id: m.media.id, publicKey: m.media.publicObjectKey!, width: m.media.width, height: m.media.height })),
+    addenda: poll.addenda,
+    viewerVote: vote ? { optionId: vote.optionId, invalidated: vote.invalidatedAt !== null } : null,
+  };
+  return record;
+}
+
+/** Aynı anahtarla eşzamanlı gelen istek, yazar kilidini bekledikten sonra kayıtlı sonucu almalı. */
+class ReplayRace extends Error {}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+
+/**
+ * Yayın limitleri (KV-20). Yazarın satırı kilitli olduğu için aynı yazarın eşzamanlı istekleri sıraya
+ * girer ve sayım güvenilirdir. Kaldırılmış anketler de sayılır: sil-yeniden-aç limiti aşamaz.
+ */
+async function enforcePublishLimits(tx: Tx, poll: NewPoll, userCreatedAt: Date, limits: PollSettings): Promise<void> {
+  const now = poll.opensAt;
+  const isNewAccount = now.getTime() - userCreatedAt.getTime() < limits.newAccountPeriodDays * DAY_MS;
+  const dailyLimit = isNewAccount ? limits.newAccountDailyLimit : limits.dailyLimit;
+  const cooldownMs = (isNewAccount ? limits.newAccountCooldownMinutes : limits.cooldownMinutes) * MINUTE_MS;
+  const windowStart = new Date(now.getTime() - DAY_MS);
+
+  const recent = await tx.poll.findMany({
+    where: { authorId: poll.authorId, opensAt: { gt: windowStart } },
+    select: { opensAt: true },
+    orderBy: { opensAt: "asc" },
+  });
+  const seconds = (ms: number) => Math.max(1, Math.ceil(ms / 1000));
+  if (recent.length >= dailyLimit) {
+    // Pencerede limit - 1 anket kalınca yeni yayın açılır: en eski (count - limit + 1). anket düşmeli.
+    const expiring = recent[recent.length - dailyLimit]!.opensAt;
+    throw new PollLimitError("DAILY_PUBLISH_LIMIT", seconds(expiring.getTime() + DAY_MS - now.getTime()));
+  }
+  const last = recent[recent.length - 1]?.opensAt;
+  if (last && now.getTime() - last.getTime() < cooldownMs) {
+    throw new PollLimitError("PUBLISH_COOLDOWN", seconds(last.getTime() + cooldownMs - now.getTime()));
+  }
+
+  // Aynı başlık: yazarın hâlâ açık (kapanmamış, kaldırılmamış) bir anketiyle aynı başlık, Türkçe
+  // karakter ve büyük/küçük harf farkı gözetmeden (kv_normalize).
+  const duplicate = await tx.$queryRaw<{ one: number }[]>`
+    SELECT 1 AS one FROM polls
+    WHERE author_id = ${poll.authorId}::uuid AND status <> 'REMOVED'
+      AND closed_at IS NULL AND closes_at > ${now}
+      AND kv_normalize(title) = kv_normalize(${poll.title})
+    LIMIT 1`;
+  if (duplicate.length > 0) throw new PollLimitError("DUPLICATE_TITLE", null);
+}
+
 export function createPrismaPollStore(prisma: PrismaClient): PollStore {
   async function findIdempotentResult(scope: IdempotencyScope): Promise<IdempotentResult | null> {
     const row = await prisma.idempotencyKey.findUnique({
@@ -108,7 +212,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
       });
       return { kind: "created", resourceId };
     } catch (err) {
-      if (!isUniqueViolation(err, "key")) throw err;
+      if (!(err instanceof ReplayRace) && !isUniqueViolation(err, "key")) throw err;
       const later = await replay();
       if (!later) throw err;
       return later;
@@ -128,44 +232,37 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
 
     async findPoll(by, viewerId) {
       const poll = await prisma.poll.findUnique({ where: by, include: pollInclude(viewerId) });
-      if (!poll) return null;
-      const vote = poll.votes[0];
-      const avatar = poll.author.avatarMedia;
-      const record: PollRecord = {
-        id: poll.id,
-        publicId: poll.publicId,
-        slug: poll.slug,
-        title: poll.title,
-        description: poll.description,
-        extraInfo: poll.extraInfo,
-        priceAmount: poll.priceAmount === null ? null : poll.priceAmount.toFixed(2),
-        priceCurrency: poll.priceCurrency,
-        status: poll.status,
-        resultsVisibility: poll.resultsVisibility,
-        allowComments: poll.allowComments,
-        opensAt: poll.opensAt,
-        closesAt: poll.closesAt,
-        closedAt: poll.closedAt,
-        firstValidVoteAt: poll.firstValidVoteAt,
-        commentCount: poll.commentCount,
-        createdAt: poll.createdAt,
-        author: {
-          id: poll.author.id,
-          username: poll.author.username,
-          displayName: poll.author.displayName,
-          avatarPublicKey: avatar?.status === "APPROVED" ? avatar.publicObjectKey : null,
+      return poll ? toRecord(poll as PollRow) : null;
+    },
+
+    async listFeed({ tab, categoryId, communityId, after, limit, viewerId }) {
+      // Sıralama: new → opensAt ↓, id ↓ · top → voteCount ↓, opensAt ↓, id ↓ (deterministik).
+      const fields = tab === "top" ? (["voteCount", "opensAt"] as const) : (["opensAt"] as const);
+      const value = (name: string, k: string | number) => (name === "opensAt" ? new Date(k as string) : Number(k));
+      const keyset = after
+        ? {
+            OR: [...fields, "id" as const].map((_, i) => {
+              const clause: Record<string, unknown> = {};
+              for (let j = 0; j < i; j++) clause[fields[j]!] = value(fields[j]!, after.keys[j]!);
+              if (i < fields.length) clause[fields[i]!] = { lt: value(fields[i]!, after.keys[i]!) };
+              else clause.id = { lt: after.id };
+              return clause;
+            }),
+          }
+        : {};
+      const rows = await prisma.poll.findMany({
+        where: {
+          // Gizli, incelemede ve kaldırılmış içerik feed'e girmez.
+          status: { in: ["ACTIVE", "LOCKED"] },
+          ...(categoryId ? { categoryId } : {}),
+          ...(communityId ? { communityId } : {}),
+          ...keyset,
         },
-        category: poll.category,
-        community: poll.community,
-        options: poll.options,
-        tags: poll.tags.map((t) => t.tag.slug),
-        media: poll.media
-          .filter((m) => m.media.publicObjectKey !== null)
-          .map((m) => ({ id: m.media.id, publicKey: m.media.publicObjectKey!, width: m.media.width, height: m.media.height })),
-        addenda: poll.addenda,
-        viewerVote: vote ? { optionId: vote.optionId, invalidated: vote.invalidatedAt !== null } : null,
-      };
-      return record;
+        include: pollInclude(viewerId),
+        orderBy: [...fields.map((f) => ({ [f]: "desc" as const })), { id: "desc" as const }],
+        take: limit,
+      });
+      return rows.map((row) => ({ ...toRecord(row as PollRow), voteCount: row.voteCount }));
     },
 
     findPollMeta: (id) =>
@@ -200,8 +297,17 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
       return (await prisma.poll.count({ where: { publicId } })) > 0;
     },
 
-    createPoll: (poll, scope) =>
+    createPoll: (poll, scope, limits) =>
       idempotent(scope, 201, async (tx) => {
+        const [author] = await tx.$queryRaw<{ created_at: Date }[]>`
+          SELECT created_at FROM users WHERE id = ${poll.authorId}::uuid FOR UPDATE`;
+        // Kilidi beklerken aynı anahtarlı istek tamamlandıysa limit değil kayıtlı sonuç döner.
+        const committed = await tx.idempotencyKey.findUnique({
+          where: { userId_route_key: { userId: scope.userId, route: scope.route, key: scope.key } },
+          select: { expiresAt: true },
+        });
+        if (committed && committed.expiresAt > scope.now) throw new ReplayRace();
+        await enforcePublishLimits(tx, poll, author!.created_at, limits);
         await lockReferences(tx, poll);
         const created = await tx.poll.create({
           data: {

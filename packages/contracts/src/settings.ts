@@ -100,6 +100,19 @@ export const settingsRegistry = Object.freeze({
     `${POLLS} → Description .max(5000)`,
     ["polls", "descriptionMaxLength"],
   ),
+  // KV-20 (#22): yayın limitleri. Aşımda 429 PUBLISH_COOLDOWN / DAILY_PUBLISH_LIMIT + Retry-After.
+  "polls.newAccountPeriodDays": int("Yeni hesap sayılma süresi (gün)", 0, 90, 7, `PRODUCT_TEAM_PLAN §13 "Önerilen varsayılan değerler" "ilk 7 gün"`, null),
+  "polls.newAccountDailyLimit": int("Yeni hesap: 24 saatte en fazla anket", 1, 100, 3, `PRODUCT_TEAM_PLAN §13 "Önerilen varsayılan değerler" "maksimum 3 anket / 24 saat"`, null),
+  "polls.newAccountCooldownMinutes": int(
+    "Yeni hesap: iki anket arası en az süre (dakika)",
+    0,
+    1440,
+    30,
+    `PRODUCT_TEAM_PLAN §13 "Önerilen varsayılan değerler" "iki anket arasında minimum 30 dakika"`,
+    null,
+  ),
+  "polls.dailyLimit": int("Normal hesap: 24 saatte en fazla anket", 1, 1000, 10, `PRODUCT_TEAM_PLAN §13 "Önerilen varsayılan değerler" "maksimum 10 anket / 24 saat"`, null),
+  "polls.cooldownMinutes": int("Normal hesap: iki anket arası en az süre (dakika)", 0, 1440, 10, `PRODUCT_TEAM_PLAN §13 "Önerilen varsayılan değerler" "iki anket arasında minimum 10 dakika"`, null),
   "polls.voteChangeAllowed": {
     type: "boolean",
     description: "Kullanıcı anket kapanmadan oyunu değiştirebilir",

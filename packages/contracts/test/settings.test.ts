@@ -119,8 +119,34 @@ describe("anahtar ve kaynak kuralları", () => {
     assert.ok(!section.includes("registration.enabled"), "eski ad registration.enabled kaldırılmalı");
   });
 
-  test("cooldown, günlük limit, trend katsayısı ve feed.* kayıtta yok", () => {
-    assert.deepEqual(settingKeys.filter((k) => /^feed\.|cooldown|daily|coefficient|weight/i.test(k)), []);
+  test("trend katsayısı ve feed.* kayıtta yok (açık konu 9)", () => {
+    assert.deepEqual(settingKeys.filter((k) => /^feed\.|coefficient|weight/i.test(k)), []);
+  });
+
+  test("yayın limitleri (KV-20) kaynağıyla kayıtlı: PRODUCT_TEAM_PLAN §13", () => {
+    const limits = settingKeys.filter((k) => /cooldown|daily|newAccount/i.test(k));
+    assert.deepEqual([...limits].sort(), [
+      "polls.cooldownMinutes",
+      "polls.dailyLimit",
+      "polls.newAccountCooldownMinutes",
+      "polls.newAccountDailyLimit",
+      "polls.newAccountPeriodDays",
+    ]);
+    const values = defaultSettings().values as Record<string, unknown>;
+    for (const k of limits) {
+      assert.match(def(k).default!.source, /PRODUCT_TEAM_PLAN §13/, k);
+      assert.equal(def(k).publicPath, null, `${k} public değil`);
+    }
+    assert.deepEqual(
+      limits.map((k) => [k, values[k]]),
+      [
+        ["polls.newAccountPeriodDays", 7],
+        ["polls.newAccountDailyLimit", 3],
+        ["polls.newAccountCooldownMinutes", 30],
+        ["polls.dailyLimit", 10],
+        ["polls.cooldownMinutes", 10],
+      ],
+    );
   });
 });
 
