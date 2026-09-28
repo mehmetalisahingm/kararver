@@ -1,0 +1,62 @@
+// Worker'ın object storage erişimi (TECH_DECISIONS §3.6). Private: orijinal ve işlenmiş kopya;
+// public: sadece onaylanmış görsel. Local: SeaweedFS, staging/prod: R2 (S3 API).
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import type { StorageConfig } from "../../config.ts";
+
+export interface WorkerStorage {
+  /** Nesne yoksa null. `maxBytes`'tan büyük nesne indirilmez (Error). */
+  readPrivate(key: string, maxBytes: number): Promise<Buffer | null>;
+  writePrivate(key: string, data: Buffer, contentType: string): Promise<void>;
+  writePublic(key: string, data: Buffer, contentType: string): Promise<void>;
+  deletePublic(key: string): Promise<void>;
+}
+
+export class ObjectTooLargeError extends Error {}
+
+function isNotFound(err: unknown): boolean {
+  const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return e?.name === "NoSuchKey" || e?.name === "NotFound" || e?.$metadata?.httpStatusCode === 404;
+}
+
+export function createS3WorkerStorage(config: StorageConfig): WorkerStorage {
+  const client = new S3Client({
+    endpoint: config.endpoint,
+    region: config.region,
+    forcePathStyle: config.forcePathStyle,
+    credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+  });
+
+  return {
+    async readPrivate(key, maxBytes) {
+      try {
+        const res = await client.send(new GetObjectCommand({ Bucket: config.privateBucket, Key: key }));
+        if ((res.ContentLength ?? 0) > maxBytes) {
+          res.Body?.transformToWebStream().cancel();
+          throw new ObjectTooLargeError(`${res.ContentLength} bayt > ${maxBytes}`);
+        }
+        return Buffer.from(await res.Body!.transformToByteArray());
+      } catch (err) {
+        if (isNotFound(err)) return null;
+        throw err;
+      }
+    },
+    async writePrivate(key, data, contentType) {
+      await client.send(new PutObjectCommand({ Bucket: config.privateBucket, Key: key, Body: data, ContentType: contentType }));
+    },
+    async writePublic(key, data, contentType) {
+      // Anahtar görsel id'sinden türediği ve içerik değişmediği için CDN'de uzun süre önbelleklenebilir.
+      await client.send(
+        new PutObjectCommand({
+          Bucket: config.publicBucket,
+          Key: key,
+          Body: data,
+          ContentType: contentType,
+          CacheControl: "public, max-age=31536000, immutable",
+        }),
+      );
+    },
+    async deletePublic(key) {
+      await client.send(new DeleteObjectCommand({ Bucket: config.publicBucket, Key: key }));
+    },
+  };
+}

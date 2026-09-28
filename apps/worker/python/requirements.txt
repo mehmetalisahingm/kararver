@@ -1,0 +1,4 @@
+nudenet==3.4.2
+onnxruntime==1.30.0
+numpy==2.4.6
+opencv-python-headless==5.0.0.93

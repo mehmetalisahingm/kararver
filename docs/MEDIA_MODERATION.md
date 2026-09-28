@@ -153,10 +153,20 @@ TECH_DECISIONS §3.6'daki iki-bucket akışı (presigned upload → private buck
 | `POST /media/:id/complete`: nesne yoklanır (yoksa 400 `not_uploaded`), boyut/tür tekrar kontrol edilir (uymazsa `REJECTED`), `media.process` kuyruğa alınır | aynı | ✅ |
 | `GET /media/:id`: sahibine durum; public URL sadece `APPROVED`, önizleme sadece işlenmiş kopya | aynı | ✅ |
 | Kuyruk: pg-boss `media.process`, `stately` politika + `singletonKey = mediaId` (aynı görsel için en fazla 1 bekleyen + 1 çalışan iş), 3 deneme, üstel bekleme | `apps/api/src/modules/media/queue.ts` | ✅ |
-| Worker: imza (magic bytes) kontrolü → resize/re-encode (webp) + EXIF temizleme → moderasyon → karantina / public bucket | `apps/worker/src/jobs/media` | Ayrı PR |
+| Worker: imza (magic bytes) kontrolü → resize (uzun kenar 2048 px) / re-encode (webp q82) + EXIF temizleme → moderasyon → karantina / public bucket | `apps/worker/src/jobs/media` | ✅ |
+| Sıkıştırma bombası koruması: 40 MP üstü girdi çözülmez (`INVALID_IMAGE`) | `image.ts` | ✅ |
+| Python moderasyon alt-süreci (NudeNet, satır başına JSON), 8 sn zaman aşımı, takılan süreç öldürülür ve yeniden başlar | `python/moderate.py`, `moderator.ts` | ✅ |
+| Geçici hata: pg-boss 3 kez yeniden dener; son denemede de olursa `QUARANTINED` / `PROCESSING_FAILED` (görsel beklemede kalmaz) | `job.ts` | ✅ |
 | `admin.media.list` / `admin.media.decide` | — | Router'da moderator yetki seviyesi gelince (KV-12, #14) |
 
 Nesne anahtarları: orijinal `uploads/<uuid>/original` (private, API belirler, DB'de saklanır); işlenmiş ve public anahtarları worker belirler ve DB'ye yazar. Böylece API ve worker anahtar biçimini paylaşmak zorunda kalmaz.
+
+Worker sonuç kodları (`media_assets.processing_error`): `INVALID_IMAGE`, `MISSING_ORIGINAL`, `TOO_LARGE` → `REJECTED`; `MODERATION_TIMEOUT`, `MODEL_ERROR`, `PROCESSING_FAILED` → `QUARANTINED`. Orta/yüksek risk hatasız `QUARANTINED`'dır (`risk_level` dolu).
+
+**Deploy için açık konular:**
+- Worker imajında Python 3 ve `apps/worker/python/requirements.txt` kurulu olmalı (`MODERATION_PYTHON`). Hosting kararı (TECH_DECISIONS §3.7) kesinleşince Dockerfile/Railway ayarı eklenmeli.
+- Public bucket'ın anonim okunması: R2'de custom domain/public erişim, local SeaweedFS'te anonim `Read` kimliği (`infra/seaweedfs/s3.json`). Bu PR'da değiştirilmedi; `MEDIA_PUBLIC_BASE_URL` bu erişime göre ayarlanır.
+- Moderasyon eşikleri ve `media.maxBytes` şimdilik sözleşme varsayılanlarından okunuyor; sistem ayarları servisi (KV-40) gelince oradan okunacak.
 
 ## 10. Referanslar
 
