@@ -3,7 +3,7 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
-## 1.3.0 — 2026-09-28 (Mert, KV-16 medya API'si)
+## 1.4.0 — 2026-09-28 (Mert, KV-16 medya API'si)
 
 Kırıcı değişiklik yok (API_CONTRACTS §5: yeni hata kodu minor).
 
@@ -11,6 +11,18 @@ Kırıcı değişiklik yok (API_CONTRACTS §5: yeni hata kodu minor).
   başlamış bir yükleme için tekrar gelirse yeni upload URL'i verilmez (orijinalin üzerine yazılmaz).
 - **Not:** `media.uploads.create` URL süresi ve imzalı başlıklar; `media.complete` için
   `not_uploaded` doğrulama hatası ve tekrar çağrı davranışı.
+
+## 1.3.0 — 2026-09-28 (KV-06, #8 — Utku: mock sunucu fixture'ları)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5). Şema, endpoint ve hata kodu değişmedi; wire sürümü
+`contractVersion = "1.0"` aynı.
+
+- **Eklendi (minor):** `exports`'a `"./fixtures"` girişi. Fixture export'u güncel temel
+  örnekleri koruyup mock ekran durumlarını ekleyen `fixtures/index.ts` üzerinden sunulur.
+- **Eklendi (fixture):** tarihli trendler, boş liste durumları, içerik kilidi, gizli sonuç/
+  geçersiz oy, medya pending/quarantined/rejected ve guest/unverified oy senaryoları.
+- **Test:** paket dışı fixture import'u, endpoint içi benzersiz senaryo adları ve tüm
+  genişletilmiş örneklerin request/response/error sözleşmelerine uyumu doğrulanır.
 
 ## 1.2.0 — 2026-09-28 (KV-04 + KV-03 devamı)
 
