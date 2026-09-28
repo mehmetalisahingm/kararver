@@ -26,7 +26,9 @@ export type Authenticator = {
 
 type RouteOptions = { validateResponses: boolean; authenticator: Authenticator };
 
-const SUPPORTED_AUTH = new Set(["public", "user", "verified"]);
+// owner: router oturumu ve hesap durumunu kontrol eder (user ile aynı); kaynağın sahibi olup
+// olmadığını handler DB'deki sahip bilgisiyle kontrol eder, çünkü kaynak sadece orada bilinir.
+const SUPPORTED_AUTH = new Set(["public", "user", "verified", "owner"]);
 const RESTRICTED = new Set(["BANNED", "SUSPENDED"]);
 
 function toFastifyPath(path: string): string {
@@ -55,7 +57,7 @@ export function createRouter(app: FastifyInstance, options: RouteOptions) {
   return function route(id: string, handler: (ctx: RouteContext) => Promise<RouteResult>): void {
     const endpoint = getEndpoint(id);
     if (!SUPPORTED_AUTH.has(endpoint.auth)) {
-      // owner/moderator/admin kontrolleri ortak RBAC katmanıyla gelir (KV-12, #14).
+      // moderator/admin kontrolleri ortak RBAC katmanıyla gelir (KV-12, #14).
       throw new Error(`${id}: '${endpoint.auth}' yetki seviyesi henüz desteklenmiyor (KV-12)`);
     }
 

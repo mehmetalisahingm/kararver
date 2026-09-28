@@ -6,6 +6,7 @@ import { loadConfig } from "./config.ts";
 import { createMailer } from "./mail/mailer.ts";
 import { createArgon2Hasher } from "./modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "./modules/auth/prisma-store.ts";
+import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
 
 // Local'de repo kökündeki .env okunur; staging/production'da değerler ortamdan gelir.
 if (!process.env.APP_ENV) {
@@ -21,6 +22,7 @@ const prisma = createPrismaClient();
 const app = buildApp({
   config,
   authStore: createPrismaAuthStore(prisma),
+  pollStore: createPrismaPollStore(prisma),
   hasher: createArgon2Hasher(),
   mailer: createMailer(config.mail.transport, config.mail.from),
 });

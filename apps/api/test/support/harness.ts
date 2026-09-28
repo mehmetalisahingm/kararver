@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { Writable } from "node:stream";
-import { createPrismaClient } from "@kararver/db";
+import { createPrismaClient, type PrismaClient } from "@kararver/db";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../../src/app.ts";
 import { loadConfig } from "../../src/config.ts";
@@ -13,6 +13,8 @@ import type { Mail } from "../../src/mail/mailer.ts";
 import { createArgon2Hasher } from "../../src/modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "../../src/modules/auth/prisma-store.ts";
 import type { AuthStore, UserStatus } from "../../src/modules/auth/store.ts";
+import { createPrismaPollStore } from "../../src/modules/polls/prisma-store.ts";
+import { DEFAULT_POLL_SETTINGS, type PollSettings } from "../../src/modules/polls/store.ts";
 import { createMemoryAuthStore } from "./memory-store.ts";
 
 export const WEB_ORIGIN = "http://localhost:3000";
@@ -26,6 +28,8 @@ type Backend = {
   addMedia(uploaderId: string, seed: MediaSeed): Promise<{ id: string; publicKey: string | null }>;
   activeSessions(userId: string): Promise<number>;
   close(): Promise<void>;
+  /** Sadece PostgreSQL backend'inde; anket testleri seed ve doğrulama için kullanır. */
+  prisma?: PrismaClient;
 };
 
 export type Harness = Backend & {
@@ -34,6 +38,8 @@ export type Harness = Backend & {
   logs: string[];
   clock: { now: Date; advance(ms: number): void };
   registrationEnabled: { value: boolean };
+  /** Testin değiştirebileceği sistem ayarları (KV-40 gelene kadar). */
+  pollSettings: PollSettings;
 };
 
 export type BackendFactory = { name: string; create(): Promise<Backend> };
@@ -106,6 +112,7 @@ export function prismaBackend(): BackendFactory | null {
           return prisma.session.count({ where: { userId, revokedAt: null } });
         },
         close: () => prisma.$disconnect(),
+        prisma,
       };
     },
   };
@@ -122,6 +129,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     },
   };
   const registrationEnabled = { value: true };
+  const pollSettings: PollSettings = { ...DEFAULT_POLL_SETTINGS };
   const config = loadConfig({
     APP_ENV: "test",
     LOG_LEVEL: "info",
@@ -139,6 +147,8 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     mailer: { send: async (mail) => void mails.push(mail) },
     now: () => clock.now,
     isRegistrationEnabled: async () => registrationEnabled.value,
+    pollStore: backend.prisma ? createPrismaPollStore(backend.prisma) : undefined,
+    pollSettings: async () => pollSettings,
     logger: {
       level: "info",
       stream: new Writable({
@@ -157,6 +167,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     logs,
     clock,
     registrationEnabled,
+    pollSettings,
     async close() {
       await app.close();
       await backend.close();
