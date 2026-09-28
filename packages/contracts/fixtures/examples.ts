@@ -73,7 +73,19 @@ const viewer = (vote: string | null) => ({
   bookmarked: false,
   following: false,
   isAuthor: false,
+  canVote: true,
+  voteBlockedReason: null,
 });
+/** Anket sahibi: oy veremez, sonuçları her zaman görür. */
+const authorViewer = { ...viewer(null), isAuthor: true, canVote: false, voteBlockedReason: "OWN_POLL" };
+const emptyResults = {
+  visible: true,
+  total: 0,
+  options: [
+    { id: OPT_A, votes: 0, percent: 0 },
+    { id: OPT_B, votes: 0, percent: 0 },
+  ],
+};
 
 const card = (results: unknown, v: unknown = guestViewer) => ({
   id: POLL,
@@ -215,21 +227,23 @@ export const examples: Example[] = [
   { endpoint: "me.update", name: "ok", request: { body: { bio: "Araba meraklısı" } }, status: 200, body: data({ ...me, bio: "Araba meraklısı" }) },
 
   // ── polls ──
-  { endpoint: "polls.create", name: "poll", request: { body: createPoll }, status: 201, body: data(detail(hidden, { ...viewer(null), isAuthor: true }, { contentLocked: false, commentCount: 0 })) },
+  { endpoint: "polls.create", name: "poll", request: { body: createPoll }, status: 201, body: data(detail(emptyResults, authorViewer, { contentLocked: false, commentCount: 0 })) },
   { endpoint: "polls.create", name: "discussion", request: { body: { kind: "DISCUSSION", title: "Bu bütçeyle hangi arabayı almalıyım?", categoryId: CAT } }, status: 201, body: data(discussion) },
   { endpoint: "polls.create", name: "insufficient-points", request: { body: createPoll }, status: 409, body: error("INSUFFICIENT_POINTS", "Yayın için yeterli puanınız yok.", [{ code: "balance", message: "0/10" }]) },
   { endpoint: "polls.create", name: "cooldown", request: { body: createPoll }, status: 429, body: error("PUBLISH_COOLDOWN", "Yeni gönderi için biraz beklemelisiniz.") },
   { endpoint: "polls.create", name: "missing-key", request: { body: createPoll }, status: 400, body: error("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key başlığı gerekli.") },
   { endpoint: "polls.create", name: "unverified", request: { body: createPoll }, status: 403, body: error("EMAIL_NOT_VERIFIED", "Önce e-postanızı doğrulayın.") },
   { endpoint: "polls.get", name: "guest-hidden", request: { params: pollParams }, status: 200, body: data(detail(hidden)) },
+  { endpoint: "polls.get", name: "author-sees-results", request: { params: pollParams }, status: 200, body: data(detail(visible, authorViewer)) },
+  { endpoint: "polls.get", name: "unverified-cannot-vote", request: { params: pollParams }, status: 200, body: data(detail(hidden, { ...viewer(null), canVote: false, voteBlockedReason: "EMAIL_NOT_VERIFIED" })) },
   { endpoint: "polls.get", name: "voter-visible", request: { params: pollParams }, status: 200, body: data(detail(visible, viewer(OPT_A))) },
   { endpoint: "polls.get", name: "closed-visible-to-guest", request: { params: pollParams }, status: 200, body: data(detail(visible, guestViewer, { closed: true, closedAt: T1 })) },
   { endpoint: "polls.get", name: "discussion", request: { params: { id: DISC } }, status: 200, body: data(discussion) },
   { endpoint: "polls.get", name: "not-found", request: { params: pollParams }, status: 404, body: error("NOT_FOUND", "İçerik bulunamadı.") },
   { endpoint: "polls.lookup", name: "ok", request: { query: { publicId: "ab12cd34" } }, status: 200, body: data(detail(hidden)) },
-  { endpoint: "polls.update", name: "ok", request: { params: pollParams, body: { extraInfo: "Ekspertiz raporu var." } }, status: 200, body: data(detail(hidden, { ...viewer(null), isAuthor: true }, { extraInfo: "Ekspertiz raporu var." })) },
+  { endpoint: "polls.update", name: "ok", request: { params: pollParams, body: { extraInfo: "Ekspertiz raporu var." } }, status: 200, body: data(detail(visible, authorViewer, { extraInfo: "Ekspertiz raporu var." })) },
   { endpoint: "polls.update", name: "locked", request: { params: pollParams, body: { title: "Başlığı sonradan değiştirmek istiyorum" } }, status: 409, body: error("POLL_CONTENT_LOCKED", "İlk oydan sonra soru, açıklama ve seçenekler değiştirilemez.") },
-  { endpoint: "polls.close", name: "ok", request: { params: pollParams }, status: 200, body: data(detail(visible, { ...viewer(null), isAuthor: true }, { closed: true, closedAt: T1 })) },
+  { endpoint: "polls.close", name: "ok", request: { params: pollParams }, status: 200, body: data(detail(visible, authorViewer, { closed: true, closedAt: T1 })) },
   { endpoint: "polls.delete", name: "ok", request: { params: pollParams }, status: 204, body: null },
   { endpoint: "polls.addenda.create", name: "ok", request: { params: pollParams, body: { body: "Satıcı 1.200.000'e indi." } }, status: 201, body: data({ id: id(22), body: "Satıcı 1.200.000'e indi.", createdAt: T1 }) },
   { endpoint: "votes.put", name: "self-vote-forbidden", request: { params: pollParams, body: { optionId: OPT_A } }, status: 403, body: error("SELF_VOTE_FORBIDDEN", "Kendi anketinize oy veremezsiniz.") },
