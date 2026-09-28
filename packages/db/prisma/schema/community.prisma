@@ -13,18 +13,29 @@ enum CommunityRole {
   @@map("community_role")
 }
 
+// Üye listesinin kimler tarafından görülebileceği. Yetki sunucuda uygulanır;
+// istemci bu alanı yalnızca görünüm için kullanır (V1_USER_FLOW / API contract).
+enum CommunityMembersVisibility {
+  PUBLIC
+  MEMBERS
+  MODERATORS
+
+  @@map("community_members_visibility")
+}
+
 model Community {
-  id           String        @id @default(uuid(7)) @db.Uuid
-  slug         String        @unique @db.VarChar(60)
-  name         String        @db.VarChar(80)
-  description  String?       @db.VarChar(1000)
-  imageMediaId String?       @map("image_media_id") @db.Uuid
-  status       ContentStatus @default(ACTIVE)
+  id                String                     @id @default(uuid(7)) @db.Uuid
+  slug              String                     @unique @db.VarChar(60)
+  name              String                     @db.VarChar(80)
+  description       String?                    @db.VarChar(1000)
+  imageMediaId      String?                    @map("image_media_id") @db.Uuid
+  status            ContentStatus              @default(ACTIVE)
+  membersVisibility CommunityMembersVisibility @default(MEMBERS) @map("members_visibility")
   // Denormalize sayaç; üyelikle aynı transaction'da güncellenir (DATA_MODEL §2.5).
-  memberCount  Int           @default(0) @map("member_count")
-  createdById  String        @map("created_by_id") @db.Uuid
-  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberCount       Int                        @default(0) @map("member_count")
+  createdById       String                     @map("created_by_id") @db.Uuid
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   imageMedia  MediaAsset?           @relation(fields: [imageMediaId], references: [id], onDelete: Restrict)
   createdBy   User                  @relation("CommunityCreator", fields: [createdById], references: [id], onDelete: Restrict)
