@@ -52,7 +52,7 @@ describe("topluluklar (postgres)", { skip: backend ? false : "TEST_DATABASE_URL 
   }
   const get = (url: string, cookie?: string) => h.app.inject({ method: "GET", url: `/v1${url}`, headers: cookie ? { cookie } : {} });
 
-  function assertError(res: { statusCode: number; json(): any }, status: number, code: string) {
+  function assertError(res: { statusCode: number; body: string; json(): any }, status: number, code: string) {
     assert.equal(res.statusCode, status, res.body);
     ErrorBody.parse(res.json());
     assert.equal(res.json().error.code, code);
