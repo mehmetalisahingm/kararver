@@ -165,12 +165,13 @@ export function resultsVisibleTo({
   resultsVisibility,
   closed,
   viewerHasValidVote,
-  viewerIsAuthor,
+  viewerIsAuthor = false,
 }: {
   resultsVisibility: "ALWAYS" | "AFTER_VOTE";
   closed: boolean;
   viewerHasValidVote: boolean;
-  viewerIsAuthor: boolean;
+  /** 1.2.0'da eklendi; verilmezse #64'teki davranış aynen korunur. */
+  viewerIsAuthor?: boolean;
 }): boolean {
   return resultsVisibility === "ALWAYS" || closed || viewerIsAuthor || viewerHasValidVote;
 }

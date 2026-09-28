@@ -178,6 +178,11 @@ describe("gizli sonuç (AFTER_VOTE)", () => {
     );
   });
 
+  test("viewerIsAuthor verilmezse #64 davranışı korunur (sahip değil sayılır)", () => {
+    assert.equal(resultsVisibleTo({ resultsVisibility: "AFTER_VOTE", closed: false, viewerHasValidVote: false }), false);
+    assert.equal(resultsVisibleTo({ resultsVisibility: "AFTER_VOTE", closed: false, viewerHasValidVote: true }), true);
+  });
+
   test("fixture'larda sahip her zaman görünür sonuç alır", () => {
     const walk = (value: unknown): void => {
       if (Array.isArray(value)) return value.forEach(walk);

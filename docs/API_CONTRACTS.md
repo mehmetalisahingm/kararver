@@ -2,7 +2,7 @@
 
 > Issue: **KV-03 / #5** · Sahip: **Faruk** · Review: **Mehmet**
 > Temel: [`FOUNDATION_CONTRACTS.md`](./FOUNDATION_CONTRACTS.md) (#64) · Veri: [`DATA_MODEL.md`](./DATA_MODEL.md) · Kararlar: [`TECH_DECISIONS.md`](./TECH_DECISIONS.md)
-> Kaynak kod: `packages/contracts` (`@kararver/contracts` 1.0.0) · Son güncelleme: 2026-09-28
+> Kaynak kod: `packages/contracts` (`@kararver/contracts` 1.2.0) · Son güncelleme: 2026-09-28
 
 Bu belge ekibin bağlanacağı **sözleşmedir, endpoint implementasyonu değildir**. Her endpoint'in request/response şeması, validation kuralları, yetki seviyesi, başarı/hata kodları, idempotency davranışı, sağlayıcısı ve tüketicisi `packages/contracts/src/domains/*.ts` dosyalarında zod şeması olarak tanımlıdır. Bu belgedeki envanter tabloları o tanımlardan **otomatik üretilir** (§2–3); elle düzenlenmez.
 

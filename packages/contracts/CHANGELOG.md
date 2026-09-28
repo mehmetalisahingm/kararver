@@ -3,6 +3,16 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.2.0 — 2026-09-28 (Faruk: anket izleyici durumu, #5 devamı)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5): cevaba yeni alan eklendi, yardımcıya opsiyonel parametre eklendi.
+
+- **Eklendi (minor):** `PollViewer`'a `canVote` ve `voteBlockedReason` (`NOT_A_POLL`, `OWN_POLL`,
+  `POLL_CLOSED`, `CONTENT_LOCKED`, `ACCOUNT_RESTRICTED`, `EMAIL_NOT_VERIFIED`, `VOTE_INVALIDATED`,
+  `VOTE_CHANGE_DISABLED`). Kural `voteAvailability` yardımcısında ve `PUT /vote` hata sırasıyla aynı.
+- **Değişti (ürün kararı, Mehmet 2026-09-28):** Anket sahibi oy veremediği için AFTER_VOTE anketinde de
+  sonuçları her zaman görür. `resultsVisibleTo` opsiyonel `viewerIsAuthor` alır; verilmezse #64 davranışı aynen korunur.
+
 ## 1.1.0 — 2026-09-28 (Mert: medya / moderasyon / topluluk)
 
 Kırıcı değişiklik yok (API_CONTRACTS §5).
@@ -23,11 +33,6 @@ Kırıcı değişiklik yok (API_CONTRACTS §5).
 - **Ürün düzeltmesi:** Anket sahibi kendi anketine oy veremez; `votes.put` için
   403 `SELF_VOTE_FORBIDDEN`, hata fixture'ı ve sözleşme testi eklendi. KV-11
   gerçek serviste bu kontrolü ilk oy, tekrar ve değişim için uygulamalıdır.
-- **Sahip sonuçları görür:** `resultsVisibleTo` artık `viewerIsAuthor` alır; anket
-  sahibi AFTER_VOTE anketinde de sonuçları her zaman görür (oy veremediği için).
-- **Oy butonu durumu:** `PollViewer`'a `canVote` ve `voteBlockedReason` eklendi
-  (`OWN_POLL`, `EMAIL_NOT_VERIFIED`, `POLL_CLOSED`, `NOT_A_POLL`, …); kural
-  `voteAvailability` yardımcısında, `PUT /vote` hata sırasıyla aynı.
 
 - **Geçiş:** Paket bağımlılıksız `.mjs`'ten TypeScript + zod 4.6.5'e taşındı (TECH_DECISIONS §2). #64'teki export adları (`contractVersion`, `errorStatuses`, `errorResponse`, `pageResponse`, `pollResults`, `eventEnvelope`, `roles`, `canModerate`), davranışları ve 5 testi aynen korundu. Giriş dosyası `src/index.mjs` → `src/index.ts`.
 - **Eklendi:**
