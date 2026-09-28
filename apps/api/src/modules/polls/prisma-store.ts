@@ -1,7 +1,7 @@
 // PollStore'un PostgreSQL/Prisma uygulaması. Tablolar: polls, poll_options, tags, poll_tags,
 // poll_media, poll_addenda, votes, idempotency_keys (DATA_MODEL.md, API_CONTRACTS.md §6).
 import type { PrismaClient } from "@kararver/db";
-import type { IdempotencyScope, IdempotentResult, PollRecord, PollStore } from "./store.ts";
+import { PollReferenceError, type IdempotencyScope, type IdempotentResult, type NewPoll, type PollRecord, type PollStore } from "./store.ts";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
@@ -35,7 +35,47 @@ const pollInclude = (viewerId: string | null) =>
     votes: { where: { userId: viewerId ?? undefined }, select: { optionId: true, invalidatedAt: true }, take: viewerId ? 1 : 0 },
   }) as const;
 
+/**
+ * Anketin başvurduğu satırları FOR SHARE ile kilitleyip yeniden kontrol eder. Kilit commit'e kadar
+ * sürer: arada kategori pasife alınamaz, üyelik silinemez, görsel REJECTED yapılamaz; bu işlemler
+ * anket yazılana kadar bekler. Kontrol ile yazma arasında değişiklik kalmaz.
+ */
+async function lockReferences(tx: Tx, poll: NewPoll): Promise<void> {
+  const category = await tx.$queryRaw<{ ok: boolean }[]>`
+    SELECT is_active AS ok FROM categories WHERE id = ${poll.categoryId}::uuid FOR SHARE`;
+  if (!category[0]?.ok) throw new PollReferenceError("categoryId", "not_found");
+
+  if (poll.communityId) {
+    const community = await tx.$queryRaw<{ active: boolean }[]>`
+      SELECT status = 'ACTIVE' AS active FROM communities WHERE id = ${poll.communityId}::uuid FOR SHARE`;
+    if (!community[0]?.active) throw new PollReferenceError("communityId", "not_found");
+    const membership = await tx.$queryRaw<{ one: number }[]>`
+      SELECT 1 AS one FROM community_memberships
+      WHERE community_id = ${poll.communityId}::uuid AND user_id = ${poll.authorId}::uuid FOR SHARE`;
+    if (membership.length === 0) throw new PollReferenceError("communityId", "not_member");
+  }
+
+  const mediaIds = [...new Set(poll.mediaIds)];
+  if (mediaIds.length > 0) {
+    const usable = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id::text FROM media_assets
+      WHERE id = ANY(${mediaIds}::uuid[]) AND uploader_id = ${poll.authorId}::uuid
+        AND purpose = 'POLL' AND status <> 'REJECTED'
+      FOR SHARE`;
+    if (usable.length !== mediaIds.length) throw new PollReferenceError("mediaIds", "not_usable");
+  }
+}
+
 export function createPrismaPollStore(prisma: PrismaClient): PollStore {
+  async function findIdempotentResult(scope: IdempotencyScope): Promise<IdempotentResult | null> {
+    const row = await prisma.idempotencyKey.findUnique({
+      where: { userId_route_key: { userId: scope.userId, route: scope.route, key: scope.key } },
+    });
+    if (!row || row.expiresAt <= scope.now) return null;
+    if (row.requestHash !== scope.requestHash) return { kind: "key_reused" };
+    return { kind: "replayed", resourceId: row.resourceId, status: row.responseStatus };
+  }
+
   /**
    * İşlem ve idempotency kaydı aynı transaction'dadır; kayıt en sonda eklenir. Aynı anahtarla gelen
    * eşzamanlı istek unique index'te bekler, ilki commit edince çakışma alır ve bütün işi geri alınır;
@@ -45,12 +85,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
     if (!scope) return { kind: "created", resourceId: await prisma.$transaction((tx) => work(tx)) };
     const where = { userId: scope.userId, route: scope.route, key: scope.key };
 
-    const replay = async (): Promise<IdempotentResult | null> => {
-      const row = await prisma.idempotencyKey.findUnique({ where: { userId_route_key: where } });
-      if (!row || row.expiresAt <= scope.now) return null;
-      if (row.requestHash !== scope.requestHash) return { kind: "key_reused" };
-      return { kind: "replayed", resourceId: row.resourceId, status: row.responseStatus };
-    };
+    const replay = () => findIdempotentResult(scope);
 
     const earlier = await replay();
     if (earlier) return earlier;
@@ -89,6 +124,8 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
   }
 
   return {
+    findIdempotentResult,
+
     async findPoll(by, viewerId) {
       const poll = await prisma.poll.findUnique({ where: by, include: pollInclude(viewerId) });
       if (!poll) return null;
@@ -165,6 +202,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
 
     createPoll: (poll, scope) =>
       idempotent(scope, 201, async (tx) => {
+        await lockReferences(tx, poll);
         const created = await tx.poll.create({
           data: {
             publicId: poll.publicId,

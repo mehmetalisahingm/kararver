@@ -8,7 +8,9 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { ErrorBody, PollDetail } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
+import { createPrismaPollStore } from "../src/modules/polls/prisma-store.ts";
 import { mapDbError } from "../src/modules/polls/routes.ts";
+import { PollReferenceError } from "../src/modules/polls/store.ts";
 import { slugify } from "../src/modules/polls/slug.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
@@ -450,6 +452,111 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     const detail = PollDetail.parse((await get(`/polls/${poll.id}`)).json().data);
     assert.deepEqual(detail.addenda.map((a) => a.body), ["Satıcı 1.200.000'e indi."]);
     assertError(await send("POST", `/polls/${poll.id}/addenda`, { body: "x" }, voter.cookie), 403, "FORBIDDEN");
+  });
+
+  // ─── Codex review düzeltmeleri (#80) ───────────────────────
+
+  test("başarılı isteğin tekrarı, arada kategori pasife alınsa ve süre ayarı düşse de aynı anketi döner", async () => {
+    const owner = await signUp();
+    const slug = `gecici-${randomUUID().slice(0, 8)}`;
+    const category = await db.category.create({ data: { slug, name: "Geçici" }, select: { id: true } });
+    const k = key();
+    const body = pollBody({ categoryId: category.id, durationHours: 72 });
+    const first = await send("POST", "/polls", body, owner.cookie, k);
+    assert.equal(first.statusCode, 201, first.body);
+
+    await db.category.update({ where: { id: category.id }, data: { isActive: false } });
+    h.pollSettings.maxDurationHours = 24;
+    try {
+      const retry = await send("POST", "/polls", body, owner.cookie, k);
+      assert.equal(retry.statusCode, 201, retry.body);
+      assert.equal(retry.json().data.id, first.json().data.id);
+      // Yeni anahtarla aynı istek artık doğrulamaya takılır.
+      assertError(await send("POST", "/polls", body, owner.cookie, key()), 400, "VALIDATION_ERROR");
+    } finally {
+      h.pollSettings.maxDurationHours = 720;
+    }
+  });
+
+  test("ek açıklama tekrarı, anket sonradan kilitlense de aynı kaydı döner", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie);
+    const k = key();
+    const first = await send("POST", `/polls/${poll.id}/addenda`, { body: "Ek bilgi" }, owner.cookie, k);
+    assert.equal(first.statusCode, 201, first.body);
+    await db.poll.update({ where: { id: poll.id }, data: { status: "LOCKED" } });
+    const retry = await send("POST", `/polls/${poll.id}/addenda`, { body: "Ek bilgi" }, owner.cookie, k);
+    assert.equal(retry.statusCode, 201, retry.body);
+    assert.equal(retry.json().data.id, first.json().data.id);
+    assertError(await send("POST", `/polls/${poll.id}/addenda`, { body: "Ek bilgi" }, owner.cookie, key()), 403, "FORBIDDEN");
+  });
+
+  test("referanslar oluşturma transaction'ında kilitlenip yeniden kontrol edilir", async () => {
+    const owner = await signUp();
+    const store = createPrismaPollStore(db);
+    const media = await h.addMedia(owner.id, { purpose: "POLL", status: "APPROVED" });
+    const newPoll = (mediaIds: string[]) => ({
+      authorId: owner.id,
+      publicId: randomUUID().replaceAll("-", "").slice(0, 8),
+      slug: "yaris-testi",
+      title: "Yarış durumunda görsel reddedilirse ne olur?",
+      description: null,
+      categoryId,
+      communityId: null,
+      tagSlugs: [],
+      mediaIds,
+      priceAmount: null,
+      priceCurrency: null,
+      extraInfo: null,
+      allowComments: true,
+      resultsVisibility: "ALWAYS" as const,
+      opensAt: new Date(),
+      closesAt: new Date(Date.now() + HOUR),
+      options: ["A", "B"],
+    });
+    const scope = () => ({ userId: owner.id, route: "polls.create", key: key(), requestHash: "0".repeat(64), now: new Date(), ttlMs: HOUR });
+
+    // Ön kontrolden sonra görseli reddeden eşzamanlı işlem: satır kilidini tutarken oluşturma başlar,
+    // oluşturma kilidi bekler, commit'ten sonra güncel durumu görür ve reddeder.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let locked!: () => void;
+    const lockTaken = new Promise<void>((resolve) => (locked = resolve));
+    const moderator = db.$transaction(async (tx) => {
+      await tx.mediaAsset.update({ where: { id: media.id }, data: { status: "REJECTED", publicObjectKey: null } });
+      locked();
+      await gate;
+    });
+    await lockTaken;
+    const creation = store.createPoll(newPoll([media.id]), scope());
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    release();
+    await moderator;
+    await assert.rejects(creation, (err) => err instanceof PollReferenceError && err.field === "mediaIds");
+    assert.equal(await db.poll.count({ where: { authorId: owner.id } }), 0, "anket yazılmadı");
+
+    // Topluluktan ayrılan kullanıcı (ön kontrolden sonra) da transaction'da yakalanır.
+    const community = await db.community.create({ data: { slug: `yaris-${randomUUID().slice(0, 8)}`, name: "Yarış", createdById: owner.id } });
+    await assert.rejects(
+      store.createPoll({ ...newPoll([]), communityId: community.id }, scope()),
+      (err) => err instanceof PollReferenceError && err.reason === "not_member",
+    );
+  });
+
+  test("askıya alınmış veya banlı oturum oy verebilir görünmez", async () => {
+    const owner = await signUp();
+    const viewer = await signUp();
+    const poll = await createPoll(owner.cookie);
+    for (const status of ["SUSPENDED", "BANNED"] as const) {
+      await h.setStatus(viewer.id, status);
+      const res = await get(`/polls/${poll.id}`, viewer.cookie);
+      assert.equal(res.statusCode, 200);
+      const detail = PollDetail.parse(res.json().data);
+      assert.equal(detail.viewer?.canVote, false, status);
+      assert.equal(detail.viewer?.voteBlockedReason, "ACCOUNT_RESTRICTED", status);
+    }
+    await h.setStatus(viewer.id, "ACTIVE");
+    assert.equal(PollDetail.parse((await get(`/polls/${poll.id}`, viewer.cookie)).json().data).viewer?.canVote, true);
   });
 
   test("anket rotaları sadece yetkili kaynaktan gelen mutation'ı kabul eder (CSRF)", async () => {

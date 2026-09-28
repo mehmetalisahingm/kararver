@@ -7,7 +7,7 @@ import type { FastifyRequest } from "fastify";
 import { ApiError } from "../../http/errors.ts";
 import type { Route, RouteContext } from "../../http/route.ts";
 import { newPublicId, slugify } from "./slug.ts";
-import type { IdempotencyScope, IdempotentResult, PollPatch, PollSettings, PollStore } from "./store.ts";
+import { PollReferenceError, type IdempotencyScope, type IdempotentResult, type PollPatch, type PollSettings, type PollStore } from "./store.ts";
 import { isClosed, isPubliclyVisible, toPollDetail } from "./view.ts";
 
 export type PollDeps = {
@@ -66,21 +66,28 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     return meta;
   }
 
-  async function validateReferences(ctx: RouteContext, refs: { categoryId?: string; communityId?: string; mediaIds?: string[] }) {
-    if (refs.categoryId && !(await store.isActiveCategory(refs.categoryId))) {
-      throw new ApiError("VALIDATION_ERROR", "Kategori bulunamadı.", [{ field: "categoryId", code: "not_found" }]);
+  /** Referans sorunları → sözleşme hatası. Hem ön kontrol hem transaction içi kontrol aynı mesajı verir. */
+  function referenceError(err: PollReferenceError): ApiError {
+    if (err.field === "categoryId") return new ApiError("VALIDATION_ERROR", "Kategori bulunamadı.", [{ field: "categoryId", code: "not_found" }]);
+    if (err.field === "communityId" && err.reason === "not_member") {
+      return new ApiError("FORBIDDEN", "Bu toplulukta paylaşım için üye olmalısınız.", [{ field: "communityId", code: "not_member" }]);
     }
+    if (err.field === "communityId") return new ApiError("VALIDATION_ERROR", "Topluluk bulunamadı.", [{ field: "communityId", code: "not_found" }]);
+    return new ApiError("MEDIA_NOT_USABLE", "Görsellerden biri bu gönderide kullanılamaz.", [{ field: "mediaIds", code: "not_usable" }]);
+  }
+
+  /**
+   * Hızlı ön kontrol (net hata mesajı için). Yetkili kontrol, anket oluşturma transaction'ı içinde
+   * satırlar kilitlenerek tekrarlanır (prisma-store.ts → lockReferences).
+   */
+  async function validateReferences(ctx: RouteContext, refs: { categoryId?: string; communityId?: string; mediaIds?: string[] }) {
+    if (refs.categoryId && !(await store.isActiveCategory(refs.categoryId))) throw referenceError(new PollReferenceError("categoryId", "not_found"));
     if (refs.communityId) {
       const access = await store.communityAccess(refs.communityId, ctx.viewer!.id);
-      if (access === "not_found") {
-        throw new ApiError("VALIDATION_ERROR", "Topluluk bulunamadı.", [{ field: "communityId", code: "not_found" }]);
-      }
-      if (access === "not_member") {
-        throw new ApiError("FORBIDDEN", "Bu toplulukta paylaşım için üye olmalısınız.", [{ field: "communityId", code: "not_member" }]);
-      }
+      if (access !== "ok") throw referenceError(new PollReferenceError("communityId", access));
     }
     if (refs.mediaIds && !(await store.areUsablePollMedia(ctx.viewer!.id, refs.mediaIds))) {
-      throw new ApiError("MEDIA_NOT_USABLE", "Görsellerden biri bu gönderide kullanılamaz.", [{ field: "mediaIds", code: "not_usable" }]);
+      throw referenceError(new PollReferenceError("mediaIds", "not_usable"));
     }
   }
 
@@ -104,6 +111,15 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     }
   }
 
+  async function withReferenceErrors<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (err) {
+      if (err instanceof PollReferenceError) throw referenceError(err);
+      throw err;
+    }
+  }
+
   function created(result: IdempotentResult): { resourceId: string } {
     if (result.kind === "key_reused") throw keyReused();
     return { resourceId: result.resourceId };
@@ -115,6 +131,13 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     if (body.kind !== "POLL") {
       throw new ApiError("VALIDATION_ERROR", "Tartışma gönderileri henüz açık değil.", [{ field: "kind", code: "not_supported_yet" }]);
     }
+    // Başarılı bir isteğin tekrarı, sonucu sonradan değişebilecek kontrollerden (süre ayarı, kategori,
+    // üyelik, görsel durumu) önce kayıtlı sonucu alır.
+    const prior = await store.findIdempotentResult(scope);
+    if (prior) {
+      const { resourceId } = created(prior);
+      return { status: 201, body: { data: await detail({ id: resourceId }, viewer) } };
+    }
     const settings = await deps.settings();
     if (body.durationHours < settings.minDurationHours || body.durationHours > settings.maxDurationHours) {
       throw new ApiError("VALIDATION_ERROR", `Süre ${settings.minDurationHours}–${settings.maxDurationHours} saat arasında olmalı.`, [
@@ -124,10 +147,11 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     await validateReferences(ctx, { categoryId: body.categoryId, communityId: body.communityId, mediaIds: body.mediaIds });
 
     const opensAt = now();
-    const result = await store.createPoll(
+    const publicId = await uniquePublicId();
+    const result = await withReferenceErrors(() => store.createPoll(
       {
         authorId: viewer!.id,
-        publicId: await uniquePublicId(),
+        publicId,
         slug: slugify(body.title),
         title: body.title,
         description: body.description || null,
@@ -145,7 +169,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
         options: body.options.map((o: { label: string }) => o.label),
       },
       scope,
-    );
+    ));
     const { resourceId } = created(result);
     return { status: 201, body: { data: await detail({ id: resourceId }, viewer) } };
   });
@@ -213,12 +237,17 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
   });
 
   route("polls.addenda.create", async ({ params, body, viewer, request }) => {
+    const scope = idempotencyScope(request, viewer!.id, `polls.addenda.create:${params.id}`, body, now(), false);
+    const prior = scope ? await store.findIdempotentResult(scope) : null;
+    if (prior) {
+      const addendum = (await store.findAddendum(created(prior).resourceId))!;
+      return { status: 201, body: { data: { id: addendum.id, body: addendum.body, createdAt: addendum.createdAt.toISOString() } } };
+    }
     const meta = await ownedPoll(params.id, viewer!.id);
     if (meta.status === "LOCKED") {
       throw new ApiError("FORBIDDEN", "Bu gönderi moderasyon nedeniyle kilitli.", [{ code: "content_locked" }]);
     }
     if (!isPubliclyVisible(meta)) throw new ApiError("NOT_FOUND", "İçerik bulunamadı.");
-    const scope = idempotencyScope(request, viewer!.id, `polls.addenda.create:${params.id}`, body, now(), false);
     const { resourceId } = created(await store.createAddendum(params.id, body.body, scope));
     const addendum = (await store.findAddendum(resourceId))!;
     return { status: 201, body: { data: { id: addendum.id, body: addendum.body, createdAt: addendum.createdAt.toISOString() } } };
