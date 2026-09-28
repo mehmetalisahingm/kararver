@@ -167,8 +167,9 @@ before(async () => {
   db = new PrismaClient({ adapter: new PrismaPg({ connectionString: testUrl, max: 25 }) });
 
   categoryId = randomUUID();
+  // Slug başlangıç kategorileriyle (KV-26 migration'ı: 'otomobil' vb.) çakışmasın.
   await db.$executeRaw`
-    INSERT INTO categories (id, slug, name, updated_at) VALUES (${categoryId}::uuid, 'otomobil', 'Otomobil', now())`;
+    INSERT INTO categories (id, slug, name, updated_at) VALUES (${categoryId}::uuid, 'test-otomobil', 'Test Otomobil', now())`;
 });
 
 after(async () => {
