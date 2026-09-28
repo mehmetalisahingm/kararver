@@ -410,7 +410,7 @@ Cookie session ve CSRF kuralları FOUNDATION_CONTRACTS ve TECH_DECISIONS §3.4't
 
 ## 7. Mehmet'e teyit soruları (ürün)
 
-1. **Anket sahibi kendi anketine oy verebilir.** Sözleşme buna izin veriyor.
+1. **Onaylanan karar: anket sahibi kendi anketine oy veremez.** Sunucu 403 `SELF_VOTE_FORBIDDEN` döndürür; tekrar ve oy değişimi dahil hiçbir oy/olay/sayaç yazılmaz. Rol istisnası yoktur. KV-11 servis implementasyonunda bu kontrol zorunludur.
 2. **Yayın, yorum ve oy için e-posta doğrulaması şart.** Gerekçe: Oylar trendlere giriyor ve doğrulanmamış hesaplar manipülasyon yolu olur. Tepki (like/dislike) için giriş yeterli.
    Sonuç: Misafir oy verince giriş ekranına, doğrulanmamış hesap oy verince 403 `EMAIL_NOT_VERIFIED` ile "e-postanı doğrula" ekranına gider. Bu, V1_USER_FLOW'daki "etkileşimden login'e ve aynı içeriğe dönüş" akışına bir doğrulama adımı ekler.
 3. **Tartışma gönderisinin süresi yok.** Tartışma kapanmaz; `closesAt: null`.

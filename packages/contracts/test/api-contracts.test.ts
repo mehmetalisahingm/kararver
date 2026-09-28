@@ -253,3 +253,15 @@ test("docs/API_CONTRACTS.md envanteri registry ile aynı (değiştiyse: pnpm --f
   const expected = replaceBlock(replaceBlock(doc, "inventory", renderInventory(endpoints)), "unblocks", renderUnblocks(endpoints));
   assert.equal(doc, expected);
 });
+
+
+test("anket sahibinin oy reddi endpoint ve hata fixture sözleşmesinde zorunlu", () => {
+  const endpoint = getEndpoint("votes.put");
+  assert.ok(allErrors(endpoint).includes("SELF_VOTE_FORBIDDEN"));
+  assert.equal(errorStatuses.SELF_VOTE_FORBIDDEN, 403);
+  const fixture = examples.find(e => e.endpoint === "votes.put" && e.name === "self-vote-forbidden");
+  assert.ok(fixture);
+  assert.equal(fixture.status, 403);
+  mustParse(ErrorBody, fixture.body, "self vote rejection");
+  assert.equal((fixture.body as {error: {code: string}}).error.code, "SELF_VOTE_FORBIDDEN");
+});

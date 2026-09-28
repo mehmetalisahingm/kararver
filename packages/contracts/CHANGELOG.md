@@ -7,6 +7,10 @@ Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahi
 
 İlk tam v1 sözleşmesi.
 
+- **Ürün düzeltmesi:** Anket sahibi kendi anketine oy veremez; `votes.put` için
+  403 `SELF_VOTE_FORBIDDEN`, hata fixture'ı ve sözleşme testi eklendi. KV-11
+  gerçek serviste bu kontrolü ilk oy, tekrar ve değişim için uygulamalıdır.
+
 - **Geçiş:** Paket bağımlılıksız `.mjs`'ten TypeScript + zod 4.6.5'e taşındı (TECH_DECISIONS §2). #64'teki export adları (`contractVersion`, `errorStatuses`, `errorResponse`, `pageResponse`, `pollResults`, `eventEnvelope`, `roles`, `canModerate`), davranışları ve 5 testi aynen korundu. Giriş dosyası `src/index.mjs` → `src/index.ts`.
 - **Eklendi:**
   - 10 domain için 97 endpoint tanımı: request/response şeması, yetki seviyesi, hata kodları, idempotency, cache, sağlayıcı ve tüketici.

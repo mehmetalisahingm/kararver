@@ -232,6 +232,7 @@ export const examples: Example[] = [
   { endpoint: "polls.close", name: "ok", request: { params: pollParams }, status: 200, body: data(detail(visible, { ...viewer(null), isAuthor: true }, { closed: true, closedAt: T1 })) },
   { endpoint: "polls.delete", name: "ok", request: { params: pollParams }, status: 204, body: null },
   { endpoint: "polls.addenda.create", name: "ok", request: { params: pollParams, body: { body: "Satıcı 1.200.000'e indi." } }, status: 201, body: data({ id: id(22), body: "Satıcı 1.200.000'e indi.", createdAt: T1 }) },
+  { endpoint: "votes.put", name: "self-vote-forbidden", request: { params: pollParams, body: { optionId: OPT_A } }, status: 403, body: error("SELF_VOTE_FORBIDDEN", "Kendi anketinize oy veremezsiniz.") },
   { endpoint: "votes.put", name: "first-vote", request: { params: pollParams, body: { optionId: OPT_A } }, status: 201, body: data({ vote: { optionId: OPT_A, changeCount: 0, updatedAt: T1 }, results: visible }) },
   { endpoint: "votes.put", name: "same-option-retry", request: { params: pollParams, body: { optionId: OPT_A } }, status: 200, body: data({ vote: { optionId: OPT_A, changeCount: 0, updatedAt: T1 }, results: visible }) },
   { endpoint: "votes.put", name: "change", request: { params: pollParams, body: { optionId: OPT_B } }, status: 200, body: data({ vote: { optionId: OPT_B, changeCount: 1, updatedAt: T1 }, results: visible }) },
