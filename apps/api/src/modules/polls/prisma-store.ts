@@ -235,6 +235,16 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
       return poll ? toRecord(poll as PollRow) : null;
     },
 
+    async listByIds(ids, viewerId) {
+      if (ids.length === 0) return [];
+      const rows = await prisma.poll.findMany({
+        where: { id: { in: ids }, status: { in: ["ACTIVE", "LOCKED"] } },
+        include: pollInclude(viewerId),
+      });
+      const byId = new Map(rows.map((row) => [row.id, toRecord(row as PollRow)]));
+      return ids.flatMap((id) => byId.get(id) ?? []);
+    },
+
     async listFeed({ tab, categoryId, communityId, after, limit, viewerId }) {
       // Sıralama: new → opensAt ↓, id ↓ · top → voteCount ↓, opensAt ↓, id ↓ (deterministik).
       const fields = tab === "top" ? (["voteCount", "opensAt"] as const) : (["opensAt"] as const);

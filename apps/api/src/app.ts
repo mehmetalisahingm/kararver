@@ -25,6 +25,8 @@ import { registerPollRoutes } from "./modules/polls/routes.ts";
 import { registerReportRoutes } from "./modules/reports/routes.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
+import { registerSearchRoutes } from "./modules/search/routes.ts";
+import type { SearchStore } from "./modules/search/store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
 import { registerUserRoutes } from "./modules/users/routes.ts";
 import { registerVoteRoutes } from "./modules/votes/routes.ts";
@@ -43,6 +45,8 @@ export type AppDeps = {
   pollStore?: PollStore;
   /** Sistem ayarları (KV-40, #42); ayar servisi gelene kadar DEFAULT_POLL_SETTINGS. */
   pollSettings?: () => Promise<PollSettings>;
+  /** pollStore ile birlikte verilirse kategori ve arama route'ları kaydedilir. */
+  searchStore?: SearchStore;
   /** Verilmezse oy route'u kaydedilmez. */
   voteStore?: VoteStore;
   /** Verilmezse topluluk route'ları kaydedilmez. */
@@ -135,6 +139,15 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       mediaPublicBaseUrl: config.mediaPublicBaseUrl,
       settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
     });
+    if (deps.searchStore) {
+      registerSearchRoutes(route, {
+        store: deps.searchStore,
+        polls: deps.pollStore,
+        now,
+        mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+        settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+      });
+    }
   }
   if (deps.voteStore) {
     registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });

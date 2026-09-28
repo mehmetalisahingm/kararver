@@ -168,6 +168,8 @@ export interface PollStore {
   createPoll(poll: NewPoll, scope: IdempotencyScope, limits: PollSettings): Promise<IdempotentResult>;
   /** Herkese görünen (ACTIVE/LOCKED) anketler; deterministik sıra, id eşitlik kırıcı. */
   listFeed(query: FeedQuery): Promise<(PollRecord & { voteCount: number })[]>;
+  /** Verilen id'lerdeki herkese görünen anketler, verilen sırayla (arama sonuçları). */
+  listByIds(ids: string[], viewerId: string | null): Promise<PollRecord[]>;
   updatePoll(id: string, patch: PollPatch): Promise<void>;
   /** Etkin kapanış zaten geçmişse değişiklik yapmaz. */
   closePoll(id: string, now: Date): Promise<void>;

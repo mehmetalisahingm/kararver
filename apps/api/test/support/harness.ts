@@ -18,6 +18,7 @@ import { createPrismaMediaStore } from "../../src/modules/media/prisma-store.ts"
 import { DEFAULT_MEDIA_SETTINGS, type MediaSettings } from "../../src/modules/media/store.ts";
 import { createPrismaCommentStore } from "../../src/modules/comments/prisma-store.ts";
 import { createPrismaPollStore } from "../../src/modules/polls/prisma-store.ts";
+import { createPrismaSearchStore } from "../../src/modules/search/prisma-store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings } from "../../src/modules/polls/store.ts";
 import { createPrismaRbacStore } from "../../src/modules/rbac/prisma-store.ts";
 import type { RbacStore } from "../../src/modules/rbac/store.ts";
@@ -181,6 +182,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     now: () => clock.now,
     isRegistrationEnabled: async () => registrationEnabled.value,
     pollStore: backend.prisma ? createPrismaPollStore(backend.prisma) : undefined,
+    searchStore: backend.prisma ? createPrismaSearchStore(backend.prisma) : undefined,
     voteStore: backend.prisma ? createPrismaVoteStore(backend.prisma) : undefined,
     communityStore: backend.prisma ? createPrismaCommunityStore(backend.prisma) : undefined,
     reportStore: backend.prisma ? createPrismaReportStore(backend.prisma) : undefined,
