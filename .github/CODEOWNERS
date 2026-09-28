@@ -84,6 +84,7 @@
 /packages/db/prisma/schema/growth.prisma     @mehmetalisahingm @farukkemree
 /docs/DATA_MODEL.md                         @farukkemree @mehmetalisahingm @Utkuuzun14
 /packages/contracts/                        @farukkemree @mehmetalisahingm @umitefe0
+/docs/API_CONTRACTS.md                      @farukkemree @mehmetalisahingm @umitefe0
 
 # ── Altyapı / kritik ortak dosyalar ───────────────────────────
 /docker-compose.yml                         @farukkemree @Utkuuzun14
