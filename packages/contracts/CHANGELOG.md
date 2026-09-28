@@ -3,6 +3,15 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.3.0 — 2026-09-28 (Mert, KV-16 medya API'si)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5: yeni hata kodu minor).
+
+- **Eklendi:** `media.uploads.create` hata listesine `CONFLICT`: aynı `Idempotency-Key` işlenmeye
+  başlamış bir yükleme için tekrar gelirse yeni upload URL'i verilmez (orijinalin üzerine yazılmaz).
+- **Not:** `media.uploads.create` URL süresi ve imzalı başlıklar; `media.complete` için
+  `not_uploaded` doğrulama hatası ve tekrar çağrı davranışı.
+
 ## 1.2.0 — 2026-09-28 (KV-04 + KV-03 devamı)
 
 Kırıcı değişiklik yok (API_CONTRACTS §5). Wire sürümü `contractVersion = "1.0"` değişmedi.

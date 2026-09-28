@@ -13,8 +13,11 @@ import type { Mail } from "../../src/mail/mailer.ts";
 import { createArgon2Hasher } from "../../src/modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "../../src/modules/auth/prisma-store.ts";
 import type { AuthStore, UserStatus } from "../../src/modules/auth/store.ts";
+import { createPrismaMediaStore } from "../../src/modules/media/prisma-store.ts";
+import { DEFAULT_MEDIA_SETTINGS, type MediaSettings } from "../../src/modules/media/store.ts";
 import { createPrismaPollStore } from "../../src/modules/polls/prisma-store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings } from "../../src/modules/polls/store.ts";
+import { createFakeQueue, createFakeStorage, type FakeStorage } from "./fake-storage.ts";
 import { createMemoryAuthStore } from "./memory-store.ts";
 
 export const WEB_ORIGIN = "http://localhost:3000";
@@ -40,6 +43,10 @@ export type Harness = Backend & {
   registrationEnabled: { value: boolean };
   /** Testin değiştirebileceği sistem ayarları (KV-40 gelene kadar). */
   pollSettings: PollSettings;
+  mediaSettings: MediaSettings;
+  /** Medya route'ları sadece PostgreSQL backend'inde kayıtlıdır. */
+  storage: FakeStorage;
+  queue: { enqueued: string[] };
 };
 
 export type BackendFactory = { name: string; create(): Promise<Backend> };
@@ -130,6 +137,9 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
   };
   const registrationEnabled = { value: true };
   const pollSettings: PollSettings = { ...DEFAULT_POLL_SETTINGS };
+  const mediaSettings: MediaSettings = { ...DEFAULT_MEDIA_SETTINGS };
+  const storage = createFakeStorage();
+  const queue = createFakeQueue();
   const config = loadConfig({
     APP_ENV: "test",
     LOG_LEVEL: "info",
@@ -149,6 +159,9 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     isRegistrationEnabled: async () => registrationEnabled.value,
     pollStore: backend.prisma ? createPrismaPollStore(backend.prisma) : undefined,
     pollSettings: async () => pollSettings,
+    media: backend.prisma
+      ? { store: createPrismaMediaStore(backend.prisma), storage, queue, settings: async () => mediaSettings }
+      : undefined,
     logger: {
       level: "info",
       stream: new Writable({
@@ -168,6 +181,9 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     clock,
     registrationEnabled,
     pollSettings,
+    mediaSettings,
+    storage,
+    queue,
     async close() {
       await app.close();
       await backend.close();

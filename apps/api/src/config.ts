@@ -18,7 +18,23 @@ const Env = z.object({
   MAIL_TRANSPORT: z.enum(["console", "smtp"]).default("console"),
   MAIL_FROM: z.string().min(3),
   MEDIA_PUBLIC_BASE_URL: z.url(),
+  // Object storage (TECH_DECISIONS §3.6). Local'de verilmezse medya endpoint'leri kapalıdır.
+  S3_ENDPOINT: z.url().optional(),
+  S3_REGION: z.string().min(1).default("us-east-1"),
+  S3_FORCE_PATH_STYLE: bool.default(false),
+  S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+  S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  S3_BUCKET_PRIVATE: z.string().min(3).optional(),
 });
+
+export type StorageConfig = {
+  endpoint: string;
+  region: string;
+  forcePathStyle: boolean;
+  accessKeyId: string;
+  secretAccessKey: string;
+  privateBucket: string;
+};
 
 export type Config = {
   appEnv: "local" | "test" | "staging" | "production";
@@ -31,7 +47,11 @@ export type Config = {
   authTokenPepper: string;
   mail: { transport: "console" | "smtp"; from: string };
   mediaPublicBaseUrl: string;
+  /** null: S3 değişkenleri yok (sadece local/test); medya endpoint'leri kaydedilmez. */
+  storage: StorageConfig | null;
 };
+
+const STORAGE_KEYS = ["S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_BUCKET_PRIVATE"] as const;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = Env.safeParse(env);
@@ -48,6 +68,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // Console mailer doğrulama/sıfırlama bağlantısını loga yazar; sadece local ve test içindir.
     throw new Error("API yapılandırması geçersiz → MAIL_TRANSPORT=console sadece local/test ortamında kullanılabilir");
   }
+  const missingStorage = STORAGE_KEYS.filter((k) => !e[k]);
+  if (missingStorage.length > 0 && (deployed || missingStorage.length < STORAGE_KEYS.length)) {
+    // Yarım S3 ayarı her ortamda hatadır; staging/production'da hiç olmaması da hatadır.
+    throw new Error(`API yapılandırması geçersiz → eksik: ${missingStorage.join(", ")}`);
+  }
   return {
     appEnv: e.APP_ENV,
     logLevel: e.LOG_LEVEL,
@@ -63,5 +88,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     authTokenPepper: e.AUTH_TOKEN_PEPPER,
     mail: { transport: e.MAIL_TRANSPORT, from: e.MAIL_FROM },
     mediaPublicBaseUrl: e.MEDIA_PUBLIC_BASE_URL.replace(/\/$/, ""),
+    storage:
+      missingStorage.length > 0
+        ? null
+        : {
+            endpoint: e.S3_ENDPOINT!,
+            region: e.S3_REGION,
+            forcePathStyle: e.S3_FORCE_PATH_STYLE,
+            accessKeyId: e.S3_ACCESS_KEY_ID!,
+            secretAccessKey: e.S3_SECRET_ACCESS_KEY!,
+            privateBucket: e.S3_BUCKET_PRIVATE!,
+          },
   };
 }
