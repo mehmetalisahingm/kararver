@@ -101,7 +101,6 @@ describe("endpoint registry", () => {
       "points.ledger",
       "admin.points.adjust",
       "admin.revisions.polls",
-      "communities.members",
     ]) {
       assert.ok(planned.includes(id), `${id} planlı olmalı`);
     }

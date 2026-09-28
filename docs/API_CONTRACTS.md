@@ -140,13 +140,13 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 |---|---|---|---|---|---|---|---|
 | `GET /communities`<br>Açık topluluklar · `communities.list` | G | 200 | — | Mert `communities` | Ümit (web), Mert (topluluk UI, KV-31) | #33 | hazır |
 | `GET /communities/:slug`<br>Topluluk sayfası (akışı: GET /feed?communityId=) · `communities.get` | G | 200 | — | Mert `communities` | Ümit (web), Mert (topluluk UI, KV-31) | #33 | hazır |
-| `GET /communities/:id/members`<br>Sayfalı üye listesi · `communities.members` | G | 200 | — | Mert `communities` | Ümit (web), Mert (topluluk UI, KV-31) | #33 | planlı — tablo #33 migration'ı ile gelecek |
-| `PUT /communities/:id/membership`<br>Topluluğa katıl · `communities.join` | U | 200 | doğal | Mert `communities` | Ümit (web), Mert (topluluk UI, KV-31) | #33 | planlı — tablo #33 migration'ı ile gelecek |
-| `DELETE /communities/:id/membership`<br>Topluluktan ayrıl · `communities.leave` | U | 204 | doğal | Mert `communities` | Ümit (web), Mert (topluluk UI, KV-31) | #33 | planlı — tablo #33 migration'ı ile gelecek |
+| `GET /communities/:id/members`<br>Sayfalı üye listesi · `communities.members` | G | 200 | — | Mert `communities` | Ümit (web), Mert (topluluk UI, KV-31) | #33 | hazır |
+| `PUT /communities/:id/membership`<br>Topluluğa katıl · `communities.join` | U | 200 | doğal | Mert `communities` | Ümit (web), Mert (topluluk UI, KV-31) | #33 | hazır |
+| `DELETE /communities/:id/membership`<br>Topluluktan ayrıl · `communities.leave` | U | 204 | doğal | Mert `communities` | Ümit (web), Mert (topluluk UI, KV-31) | #33 | hazır |
 | `POST /admin/communities`<br>Topluluk aç · `admin.communities.create` | A | 201 | key (ops.) | Mert `communities` | Mert (admin UI, KV-32) | #34 | hazır |
 | `PATCH /admin/communities/:id`<br>Topluluğu düzenle / kapat · `admin.communities.update` | A | 200 | doğal | Mert `communities` | Mert (admin UI, KV-32) | #34 | hazır |
-| `PUT /admin/communities/:id/moderators/:userId`<br>Topluluk moderatörü ata · `admin.communities.moderators.put` | A | 200 | doğal | Mert `communities` | Mert (admin UI, KV-32) | #34 | planlı — tablo #33 migration'ı ile gelecek |
-| `DELETE /admin/communities/:id/moderators/:userId`<br>Topluluk moderatörlüğünü kaldır · `admin.communities.moderators.delete` | A | 204 | doğal | Mert `communities` | Mert (admin UI, KV-32) | #34 | planlı — tablo #33 migration'ı ile gelecek |
+| `PUT /admin/communities/:id/moderators/:userId`<br>Topluluk moderatörü ata · `admin.communities.moderators.put` | A | 200 | doğal | Mert `communities` | Mert (admin UI, KV-32) | #34 | hazır |
+| `DELETE /admin/communities/:id/moderators/:userId`<br>Topluluk moderatörlüğünü kaldır · `admin.communities.moderators.delete` | A | 204 | doğal | Mert `communities` | Mert (admin UI, KV-32) | #34 | hazır |
 
 ### Bildirimler
 

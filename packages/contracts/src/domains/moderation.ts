@@ -124,7 +124,10 @@ export const moderationEndpoints = [
     errors: [],
     idempotency: "natural",
     cache: "private",
-    notes: ["Aynı kullanıcının aynı hedefe açık raporu varsa aynı reportId ile 202 (çift rapor sayılmaz). Rapor içeriği silmez."],
+    notes: [
+      "Aynı kullanıcının aynı hedefe açık raporu varsa aynı reportId ile 202 (çift rapor sayılmaz). Rapor içeriği silmez.",
+      "Kapanmış (ACTIONED/DISMISSED) raporun sahibi aynı hedefi yeniden raporlarsa aynı reportId OPEN'a döner; önceki karar moderasyon geçmişinde kalır (DB: kullanıcı+hedef başına tek satır).",
+    ],
   }),
   defineEndpoint({
     id: "admin.reports.list",

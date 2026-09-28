@@ -6,7 +6,8 @@ import { defineEndpoint } from "../endpoint.ts";
 /** KV-08: sadece bu türler; dosya imzası (magic bytes) sunucuda ayrıca kontrol edilir. */
 export const AllowedMimeType = z.enum(["image/jpeg", "image/png", "image/webp"]);
 export const MediaStatus = z.enum(["PENDING", "APPROVED", "QUARANTINED", "REJECTED"]);
-export const MediaPurpose = z.enum(["POLL", "AVATAR"]);
+/** COMMUNITY: admin.communities.create/update → imageMediaId için yüklenen görsel. */
+export const MediaPurpose = z.enum(["POLL", "AVATAR", "COMMUNITY"]);
 
 /** Sahibine görünen durum. Public URL sadece APPROVED'da; bekleyen görsel 5 dk'lık signed URL ile önizlenir. */
 export const MediaView = z.strictObject({
