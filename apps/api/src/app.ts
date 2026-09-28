@@ -16,6 +16,8 @@ import type { MediaStorage } from "./modules/media/storage.ts";
 import { DEFAULT_MEDIA_SETTINGS, type MediaSettings, type MediaStore } from "./modules/media/store.ts";
 import { createAuthenticator, type SessionSettings } from "./modules/auth/session.ts";
 import type { AuthStore } from "./modules/auth/store.ts";
+import { registerCommentRoutes } from "./modules/comments/routes.ts";
+import type { CommentStore } from "./modules/comments/store.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
 import { registerUserRoutes } from "./modules/users/routes.ts";
@@ -35,6 +37,10 @@ export type AppDeps = {
   pollSettings?: () => Promise<PollSettings>;
   /** Verilmezse oy route'u kaydedilmez. */
   voteStore?: VoteStore;
+  /** Verilmezse yorum route'ları kaydedilmez. */
+  commentStore?: CommentStore;
+  /** Acil durum anahtarı features.comments (KV-40, #42); verilmezse açık. */
+  isCommentsEnabled?: () => Promise<boolean>;
   /** Üçü birlikte verilirse medya route'ları kaydedilir (config.storage yoksa server vermez). */
   media?: { store: MediaStore; storage: MediaStorage; queue: MediaQueue; settings?: () => Promise<MediaSettings> };
   /** Log seviyesi/hedefi; verilmezse config.logLevel ile stdout. Testler log akışını yakalar. */
@@ -111,6 +117,14 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   }
   if (deps.voteStore) {
     registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
+  }
+  if (deps.commentStore) {
+    registerCommentRoutes(route, {
+      store: deps.commentStore,
+      now,
+      mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+      commentsEnabled: deps.isCommentsEnabled ?? (async () => true),
+    });
   }
   if (deps.media) {
     registerMediaRoutes(route, {
