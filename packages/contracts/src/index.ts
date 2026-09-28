@@ -24,12 +24,17 @@ export {
   pollResults,
   resultsVisibleTo,
   roles,
+  voteAvailability,
+  voteBlockedReasons,
 } from "./helpers.ts";
 export type { ErrorResponseBody, EventEnvelope, PageBody, ResultsProjection } from "./helpers.ts";
 
 export * from "./common.ts";
 export * from "./errors.ts";
 export * from "./endpoint.ts";
+export * from "./events.ts";
+export * from "./permissions.ts";
+export * from "./settings.ts";
 export * from "./domains/admin.ts";
 export * from "./domains/auth.ts";
 export * from "./domains/comments.ts";

@@ -2,7 +2,7 @@
 
 > Issue: **KV-03 / #5** · Sahip: **Faruk** · Review: **Mehmet**
 > Temel: [`FOUNDATION_CONTRACTS.md`](./FOUNDATION_CONTRACTS.md) (#64) · Veri: [`DATA_MODEL.md`](./DATA_MODEL.md) · Kararlar: [`TECH_DECISIONS.md`](./TECH_DECISIONS.md)
-> Kaynak kod: `packages/contracts` (`@kararver/contracts` 1.0.0) · Son güncelleme: 2026-09-28
+> Kaynak kod: `packages/contracts` (`@kararver/contracts` 1.2.0) · Son güncelleme: 2026-09-28
 
 Bu belge ekibin bağlanacağı **sözleşmedir, endpoint implementasyonu değildir**. Her endpoint'in request/response şeması, validation kuralları, yetki seviyesi, başarı/hata kodları, idempotency davranışı, sağlayıcısı ve tüketicisi `packages/contracts/src/domains/*.ts` dosyalarında zod şeması olarak tanımlıdır. Bu belgedeki envanter tabloları o tanımlardan **otomatik üretilir** (§2–3); elle düzenlenmez.
 
@@ -271,7 +271,9 @@ Sonuç projeksiyonu `Results` iki biçimden biridir:
 { "visible": true, "total": 10, "options": [{ "id": "…", "votes": 6, "percent": 60 }] }
 ```
 
-- **Görünürlük kuralı** (`resultsVisibleTo`): `ALWAYS`, **veya** anketin etkin kapanış zamanı geçmiş, **veya** izleyicinin *geçerli* bir oyu var. Anket sahibi de bu kurala tabidir. Oyu geçersiz sayılmış kullanıcı (`viewer.voteInvalidated`) oy vermemiş kabul edilir.
+- **Görünürlük kuralı** (`resultsVisibleTo`): `ALWAYS`, **veya** anketin etkin kapanış zamanı geçmiş, **veya** izleyici anketin **sahibi**, **veya** izleyicinin *geçerli* bir oyu var. Oyu geçersiz sayılmış kullanıcı (`viewer.voteInvalidated`) oy vermemiş kabul edilir.
+- **Anket sahibi sonuçları her zaman görür.** Sahip kendi anketine oy veremediği için (`SELF_VOTE_FORBIDDEN`), AFTER_VOTE kuralı ona da uygulansaydı sonucu kapanışa kadar hiç göremezdi. "Sahip" sunucuda oturum kullanıcısı ile DB'deki `author_id` karşılaştırılarak belirlenir; istemcinin gönderdiği bir değere güvenilmez. Sahibe giden cevap zaten `private, no-store`'dur.
+- **Oy butonu durumu:** Oturumlu izleyicide `viewer.canVote` ve `viewer.voteBlockedReason` döner. Sebepler öncelik sırasıyla: `NOT_A_POLL`, `OWN_POLL`, `POLL_CLOSED`, `CONTENT_LOCKED`, `ACCOUNT_RESTRICTED`, `EMAIL_NOT_VERIFIED`, `VOTE_INVALIDATED`, `VOTE_CHANGE_DISABLED` (`voteAvailability`). `canVote: true` ancak sebep `null` iken olabilir; sahip için `canVote` hiçbir zaman `true` olamaz (şema reddeder). `PUT /vote` aynı sırayla aynı hataları döner (`OWN_POLL` → 403 `SELF_VOTE_FORBIDDEN`). Misafirde `viewer: null`; UI oy için giriş ister.
 - **Gizliyken hiçbir yerde sayı yok:** Feed kartı, detay, arama, profil listeleri, trend listeleri, `polls.history` grafiği ve paylaşım kartı toplam oy dahil hiçbir sayı içermez. Kartta ayrıca bir `voteCount` alanı yoktur; şema bunu reddeder.
 - **`WEEKLY_MOVERS`** yüzde değişimi gösterdiği için sadece sonucu herkese açık anketleri (ALWAYS veya kapanmış) içerir.
 - **Cache:** `cache: viewer` endpointlerinde misafire giden cevap izleyiciden bağımsız bir projeksiyondur ve paylaşılan cache'e konabilir. Oturumlu kullanıcıya giden cevap `Cache-Control: private, no-store` taşır. Gizli sonuçlu içeriğin SSR HTML'i de aynı kurala uyar (KV-11 kabul koşulu).
@@ -304,7 +306,7 @@ Liste `packages/contracts/src/errors.ts` → `errorStatuses` içinde. #64'teki 9
 |---|---|
 | 400 | `VALIDATION_ERROR`, `INVALID_CURSOR`, `IDEMPOTENCY_KEY_REQUIRED`, `TOKEN_INVALID_OR_EXPIRED`, `COMMENT_DEPTH_EXCEEDED` |
 | 401 | `UNAUTHENTICATED`, `INVALID_CREDENTIALS` |
-| 403 | `FORBIDDEN`, `EMAIL_NOT_VERIFIED`, `ACCOUNT_RESTRICTED` (`details[0].code` = kısıtlanan işlem) |
+| 403 | `FORBIDDEN`, `EMAIL_NOT_VERIFIED`, `SELF_VOTE_FORBIDDEN` (sahip kendi anketine oy veremez), `ACCOUNT_RESTRICTED` (`details[0].code` = kısıtlanan işlem) |
 | 404 | `NOT_FOUND` (yetkisiz izleyici için gizli veya kaldırılmış içerik de 404; varlık sızmaz) |
 | 409 | `CONFLICT`, `POLL_CLOSED`, `CONTENT_LOCKED`, `POLL_CONTENT_LOCKED`, `NOT_A_POLL`, `VOTE_CHANGE_DISABLED`, `VOTE_INVALIDATED`, `COMMENTS_DISABLED`, `USERNAME_TAKEN`, `DUPLICATE_TITLE`, `INSUFFICIENT_POINTS`, `IDEMPOTENCY_KEY_REUSED`, `VERSION_CONFLICT`, `MEDIA_NOT_USABLE` |
 | 413 / 415 | `MEDIA_TOO_LARGE` / `MEDIA_TYPE_NOT_ALLOWED` |
@@ -406,15 +408,24 @@ Cookie session ve CSRF kuralları FOUNDATION_CONTRACTS ve TECH_DECISIONS §3.4't
 | `community_memberships`, `communities` alanları | Üyelik ve üye listesi | KV-31 (#33) |
 | `media_assets` alanları, `reports`, admin/growth tabloları | İlgili modüller | Sahiplerinin işleri (DATA_MODEL §9) |
 
+**Migration dışında gereken işler:**
+
+| İş | Ayrıntı | Ekleneceği iş |
+|---|---|---|
+| **Sahip oy yasağı** | `PUT /vote`'ta sunucu, oturum kullanıcısını anketin DB'deki `author_id`'siyle karşılaştırır ve eşitse 403 `SELF_VOTE_FORBIDDEN` döner. Bu kontrol ilk oy, tekrar ve değişimde uygulanır; hiçbir oy, olay veya sayaç yazılmaz. `viewer.canVote` / `voteBlockedReason` aynı `voteAvailability` kuralından üretilir. **DB seviyesinde de** korunması değerlendirilecek: `votes` üzerinde BEFORE INSERT/UPDATE trigger'ı (`user_id = polls.author_id` ise `KV_SELF_VOTE`), API'de 403'e eşlenir. | **KV-11 (#13)** |
+| Sahibin sonuçları görmesi | Sonuç projeksiyonu `resultsVisibleTo({ …, viewerIsAuthor })` ile kurulur; sahip bilgisi DB'den gelir | KV-10 (#12), KV-11 (#13) |
+
 ---
 
-## 7. Mehmet'e teyit soruları (ürün)
+## 7. Ürün kararları
 
-1. **Onaylanan karar: anket sahibi kendi anketine oy veremez.** Sunucu 403 `SELF_VOTE_FORBIDDEN` döndürür; tekrar ve oy değişimi dahil hiçbir oy/olay/sayaç yazılmaz. Rol istisnası yoktur. KV-11 servis implementasyonunda bu kontrol zorunludur.
-2. **Yayın, yorum ve oy için e-posta doğrulaması şart.** Gerekçe: Oylar trendlere giriyor ve doğrulanmamış hesaplar manipülasyon yolu olur. Tepki (like/dislike) için giriş yeterli.
-   Sonuç: Misafir oy verince giriş ekranına, doğrulanmamış hesap oy verince 403 `EMAIL_NOT_VERIFIED` ile "e-postanı doğrula" ekranına gider. Bu, V1_USER_FLOW'daki "etkileşimden login'e ve aynı içeriğe dönüş" akışına bir doğrulama adımı ekler.
-3. **Tartışma gönderisinin süresi yok.** Tartışma kapanmaz; `closesAt: null`.
-4. **Kayıtta e-posta çakışması.** Hesap varlığı sızmasın diye her zaman 202 dönüyor; mevcut hesaba "zaten hesabın var" e-postası gidiyor.
+1. **Karara bağlandı (Mehmet, 2026-09-28): Anket sahibi kendi anketine oy veremez.** Sunucu 403 `SELF_VOTE_FORBIDDEN` döner; tekrar ve oy değişimi dahil hiçbir oy, olay veya sayaç yazılmaz. Rol istisnası yoktur. KV-11 servis implementasyonunda bu kontrol zorunludur (§6).
+2. **Karara bağlandı (Mehmet, 2026-09-28): Yayın, yorum ve oy için e-posta doğrulaması şart; tepki (like/dislike) için giriş yeterli.** Gerekçe: Oylar trendlere giriyor ve doğrulanmamış hesaplar manipülasyon yolu olur.
+   Akış: Misafir oy verince giriş ekranına gider. Doğrulanmamış hesap `viewer.voteBlockedReason = EMAIL_NOT_VERIFIED` alır (oy denerse 403) ve "e-postanı doğrula" ekranına yönlenir. Bu, V1_USER_FLOW'daki "etkileşimden login'e ve aynı içeriğe dönüş" akışına bir doğrulama adımı ekler.
+3. **Karara bağlandı (Mehmet, 2026-09-28): `@kararver/contracts` TypeScript + zod'a taşındı.** #64'teki export adları ve testleri korundu.
+4. **Yeni karar, Mehmet'in teyidi bekleniyor (Faruk, 2026-09-28): Anket sahibi sonuçları her zaman görür.** 1. kararın yan etkisi: Sahip oy veremiyorsa ve AFTER_VOTE kuralı ona da uygulanırsa, kendi anketinin sonucunu kapanana kadar hiç göremez. Bu yüzden görünürlük kuralına "izleyici sahipse görünür" eklendi (§4.4).
+5. **Teyit bekliyor:** Tartışma gönderisinin süresi yok; tartışma kapanmaz (`closesAt: null`).
+6. **Teyit bekliyor:** Kayıtta e-posta çakışması hesap varlığı sızmasın diye her zaman 202 dönüyor; mevcut hesaba "zaten hesabın var" e-postası gidiyor.
 
 ## 8. Açık konular
 

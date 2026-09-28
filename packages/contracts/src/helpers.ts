@@ -69,8 +69,7 @@ export function pollResults({
   };
 }
 
-// Domain olay tipleri. #64'teki ilk 12 tip korunur; sonrakiler KV-03'te eklendi.
-// Olay listesinin nihai sahibi KV-04'tür (Utku); ekleme kırıcı değildir.
+// Domain olay tipleri. #64'teki ilk 12 tip korunur; sonrakiler KV-03/KV-04'te eklendi.
 export const eventTypes: ReadonlySet<string> = new Set([
   "user.registered",
   "poll.created",
@@ -92,6 +91,14 @@ export const eventTypes: ReadonlySet<string> = new Set([
   "points.granted",
   "points.debited",
   "points.adjusted",
+  // KV-04 eklemeleri (katalog: events.ts)
+  "vote.invalidated",
+  "report.resolved",
+  "sanction.applied",
+  "sanction.lifted",
+  "role.changed",
+  "settings.changed",
+  "featured.applied",
 ]);
 
 export type EventEnvelope = {
@@ -104,6 +111,11 @@ export type EventEnvelope = {
   payload: Record<string, unknown>;
 };
 
+/**
+ * #64 zarf kurucusu; yalnız zarfı doğrular (payload serbest, id/subject biçimi gevşek).
+ * Geriye uyumluluk için korunur. **Yeni kod `createEvent` kullanır** (events.ts): payload
+ * şeması, UUIDv7 ve konu tipi outbox'a yazma anında doğrulanır.
+ */
 export function eventEnvelope({
   id,
   type,
@@ -156,17 +168,64 @@ export function canModerate(
 }
 
 /**
- * AFTER_VOTE gizli sonuç kuralı (docs/API_CONTRACTS.md §4.4). Anket sahibi de bu kurala tabidir.
+ * AFTER_VOTE gizli sonuç kuralı (docs/API_CONTRACTS.md §4.4).
+ * Anket sahibi oy veremediği için (SELF_VOTE_FORBIDDEN) sonuçları her zaman görür.
  * Geçersiz sayılmış oy "oy yok" kabul edilir.
+ * viewerIsAuthor sunucuda oturum kullanıcısı ile DB'deki authorId karşılaştırılarak hesaplanır.
  */
 export function resultsVisibleTo({
   resultsVisibility,
   closed,
   viewerHasValidVote,
+  viewerIsAuthor = false,
 }: {
   resultsVisibility: "ALWAYS" | "AFTER_VOTE";
   closed: boolean;
   viewerHasValidVote: boolean;
+  /** 1.2.0'da eklendi; verilmezse #64'teki davranış aynen korunur. */
+  viewerIsAuthor?: boolean;
 }): boolean {
-  return resultsVisibility === "ALWAYS" || closed || viewerHasValidVote;
+  return resultsVisibility === "ALWAYS" || closed || viewerIsAuthor || viewerHasValidVote;
+}
+
+/** İzleyicinin oy verememe sebebi; öncelik sırası bu dizinin sırasıdır (ilk uyan döner). */
+export const voteBlockedReasons = Object.freeze([
+  "NOT_A_POLL",
+  "OWN_POLL",
+  "POLL_CLOSED",
+  "CONTENT_LOCKED",
+  "ACCOUNT_RESTRICTED",
+  "EMAIL_NOT_VERIFIED",
+  "VOTE_INVALIDATED",
+  "VOTE_CHANGE_DISABLED",
+] as const);
+export type VoteBlockedReason = (typeof voteBlockedReasons)[number];
+
+/**
+ * Oturumlu izleyici için oy durumu (misafirde viewer null'dır; UI giriş ister).
+ * Sağlayıcı (KV-11) ve contract testleri aynı kuralı kullanır; PUT /vote'un hata sırası da budur.
+ */
+export function voteAvailability(input: {
+  kind: "POLL" | "DISCUSSION";
+  viewerIsAuthor: boolean;
+  closed: boolean;
+  contentStatus: "ACTIVE" | "LOCKED";
+  accountRestricted: boolean;
+  emailVerified: boolean;
+  voteInvalidated: boolean;
+  hasVote: boolean;
+  voteChangeAllowed: boolean;
+}): { canVote: boolean; voteBlockedReason: VoteBlockedReason | null } {
+  const blocked: Record<VoteBlockedReason, boolean> = {
+    NOT_A_POLL: input.kind !== "POLL",
+    OWN_POLL: input.viewerIsAuthor,
+    POLL_CLOSED: input.closed,
+    CONTENT_LOCKED: input.contentStatus === "LOCKED",
+    ACCOUNT_RESTRICTED: input.accountRestricted,
+    EMAIL_NOT_VERIFIED: !input.emailVerified,
+    VOTE_INVALIDATED: input.voteInvalidated,
+    VOTE_CHANGE_DISABLED: input.hasVote && !input.voteChangeAllowed,
+  };
+  const reason = voteBlockedReasons.find((r) => blocked[r]) ?? null;
+  return { canVote: reason === null, voteBlockedReason: reason };
 }

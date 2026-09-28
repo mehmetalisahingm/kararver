@@ -3,6 +3,38 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.2.0 — 2026-09-28 (KV-04 + KV-03 devamı)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5). Wire sürümü `contractVersion = "1.0"` değişmedi.
+KV-04 ayrıntısı: [`docs/KV-04_ROLES_EVENTS.md`](../../docs/KV-04_ROLES_EVENTS.md).
+
+- **Eklendi (Utku, KV-04):**
+  - `permissions.ts`: işlem kataloğu (`actions`), 97 endpoint'in her biri için yetki kuralı
+    (`endpointPermissions`, `permissionForEndpoint`), saf `authorize(actor, action, resource, now)`,
+    `restrictionsFromSanctions`, `highestRole`, `accountMediaPurposes`.
+  - `events.ts`: olay kataloğu (`eventCatalog`: üretici, konu, aktör, strict payload, tüketiciler,
+    KV-07 eşlemesi, bildirim tipi, hassas alanlar, doğal anahtar), `createEvent`, `parseEvent`,
+    `dedupeKey`, `naturalKey`, `eventDelivery`, `isEventType`.
+  - `settings.ts`: ayar kayıt defteri (`settingsRegistry`: tip, min/max, kaynaklı varsayılan,
+    `PublicConfig` yolu), `parseSettingValue`, `validateSettings`, `defaultSettings`,
+    `buildPublicConfig`, `emergencySwitchSettings`.
+  - `eventTypes`'a 7 yeni tip: `vote.invalidated`, `report.resolved`, `sanction.applied`,
+    `sanction.lifted`, `role.changed`, `settings.changed`, `featured.applied`.
+  - `fixtures/events.ts`: her olay tipi için bir geçerli örnek.
+- **Eklendi (Faruk, KV-03 devamı):** `PollViewer`'a `canVote` ve `voteBlockedReason`
+  (`NOT_A_POLL`, `OWN_POLL`, `POLL_CLOSED`, `CONTENT_LOCKED`, `ACCOUNT_RESTRICTED`,
+  `EMAIL_NOT_VERIFIED`, `VOTE_INVALIDATED`, `VOTE_CHANGE_DISABLED`). Kural `voteAvailability`
+  yardımcısında ve `PUT /vote` hata sırasıyla aynı.
+- **Değişti (ürün kararı, Mehmet 2026-09-28):** Anket sahibi oy veremediği için AFTER_VOTE
+  anketinde de sonuçları her zaman görür. `resultsVisibleTo` opsiyonel `viewerIsAuthor` alır;
+  verilmezse #64 davranışı aynen korunur.
+- **Değişmedi:** `eventEnvelope` ve `canModerate` davranışı aynen korundu (#64 testleri geçiyor).
+  `eventEnvelope`'a "yeni kod `createEvent` kullanır" notu eklendi.
+- **Not:** KV-07 `featured_content_applied` artık `featured.applied`'a eşlenir; `community.featured`
+  yalnız topluluk yüzeyi anlamında kalır.
+- **Taslak:** 6 ayarın resmî varsayılanı yok (`polls.voteChangeAllowed`, `features.*`,
+  `maintenance.enabled`); ilgili test `todo`. Bkz. KV-04 belgesi §5.
+
 ## 1.1.0 — 2026-09-28 (Mert: medya / moderasyon / topluluk)
 
 Kırıcı değişiklik yok (API_CONTRACTS §5).

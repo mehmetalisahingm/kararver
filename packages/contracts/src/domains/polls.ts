@@ -37,15 +37,39 @@ export const Results = z.discriminatedUnion("visible", [
 
 export const PollOption = z.strictObject({ id: Id, label: z.string(), position: z.number().int().min(0).max(5) });
 
-/** İzleyiciye özel alanlar; misafirde `viewer: null`. */
-export const PollViewer = z.strictObject({
-  vote: Id.nullable(),
-  voteInvalidated: z.boolean(),
-  reaction: ReactionValue.nullable(),
-  bookmarked: z.boolean(),
-  following: z.boolean(),
-  isAuthor: z.boolean(),
-});
+/**
+ * Oy verememe sebebi (öncelik sırası helpers.ts → voteBlockedReasons).
+ * UI oy butonunu buna göre gösterir: OWN_POLL → gizle, EMAIL_NOT_VERIFIED → doğrulama ekranı,
+ * POLL_CLOSED/CONTENT_LOCKED → sonuç, VOTE_CHANGE_DISABLED → mevcut oy seçili ve kilitli.
+ */
+export const VoteBlockedReason = z.enum([
+  "NOT_A_POLL",
+  "OWN_POLL",
+  "POLL_CLOSED",
+  "CONTENT_LOCKED",
+  "ACCOUNT_RESTRICTED",
+  "EMAIL_NOT_VERIFIED",
+  "VOTE_INVALIDATED",
+  "VOTE_CHANGE_DISABLED",
+]);
+
+/** İzleyiciye özel alanlar; misafirde `viewer: null` (UI oy için giriş ister). */
+export const PollViewer = z
+  .strictObject({
+    vote: Id.nullable(),
+    voteInvalidated: z.boolean(),
+    reaction: ReactionValue.nullable(),
+    bookmarked: z.boolean(),
+    following: z.boolean(),
+    isAuthor: z.boolean(),
+    canVote: z.boolean(),
+    voteBlockedReason: VoteBlockedReason.nullable(),
+  })
+  .refine((v) => v.canVote === (v.voteBlockedReason === null), {
+    message: "canVote ancak voteBlockedReason null iken true olabilir",
+    path: ["voteBlockedReason"],
+  })
+  .refine((v) => !(v.isAuthor && v.canVote), { message: "Anket sahibi oy veremez", path: ["canVote"] });
 
 /** Feed, arama, trend ve profil listelerindeki kart. */
 export const PollCard = z.strictObject({
@@ -205,7 +229,11 @@ export const pollEndpoints = [
     errors: [],
     idempotency: "none",
     cache: "viewer",
-    notes: ["HIDDEN/UNDER_REVIEW/REMOVED içerik yetkisiz izleyiciye 404 döner; sahibi kendi UNDER_REVIEW içeriğini görür."],
+    notes: [
+      "HIDDEN/UNDER_REVIEW/REMOVED içerik yetkisiz izleyiciye 404 döner; sahibi kendi UNDER_REVIEW içeriğini görür.",
+      "Anket sahibi AFTER_VOTE anketinde de sonuçları her zaman görür (oy veremediği için); diğer izleyicilere kural aynen uygulanır.",
+      "viewer.canVote / viewer.voteBlockedReason oy butonunun durumunu verir; misafirde viewer null.",
+    ],
   }),
   defineEndpoint({
     id: "polls.lookup",
@@ -324,6 +352,7 @@ export const pollEndpoints = [
       "Başka anketin seçeneği → 400 VALIDATION_ERROR (field: optionId).",
       "Anket sahibi kendi anketine oy veremez: 403 SELF_VOTE_FORBIDDEN. Sunucu oturum kullanıcısını DB authorId ile karşılaştırır; ilk oy, tekrar ve değişimde rol istisnası yoktur. Reddedilen istek oy/olay/sayaç değiştirmez.",
       "Cevaptaki results oy sonrası izleyiciye göre hesaplanır (AFTER_VOTE ise artık görünür).",
+      "Hata sırası viewer.voteBlockedReason ile aynıdır: NOT_A_POLL, SELF_VOTE_FORBIDDEN, POLL_CLOSED, CONTENT_LOCKED, ACCOUNT_RESTRICTED, EMAIL_NOT_VERIFIED, VOTE_INVALIDATED, VOTE_CHANGE_DISABLED (helpers.ts → voteAvailability).",
     ],
   }),
   defineEndpoint({
