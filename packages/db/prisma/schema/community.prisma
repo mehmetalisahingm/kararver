@@ -3,8 +3,9 @@
 // bu tablodaki üyelikten okunur (FOUNDATION_CONTRACTS yetki matrisi).
 // Kurallar: docs/DATA_MODEL.md §9
 //
-// Durum content_status'tur: ACTIVE normal, LOCKED kapatılmış (görünür ama yeni üyelik
-// ve içerik yok), HIDDEN / REMOVED moderasyon. Kapatılan topluluğun anketleri silinmez.
+// Durum content_status'tur: ACTIVE normal, HIDDEN kapatılmış (admin.communities.update
+// sözleşmesi), REMOVED moderasyonla kaldırılmış. Kapatılan topluluğun anketleri silinmez.
+// Slug kuralı API sözleşmesiyle aynıdır: ^[a-z0-9-]{2,60}$ (CHECK).
 
 enum CommunityRole {
   MEMBER

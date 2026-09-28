@@ -67,8 +67,8 @@ ALTER TABLE "community_memberships" ADD CONSTRAINT "community_memberships_user_i
 -- Bu dosya merge edildikten sonra değiştirilmez.
 -- ═══════════════════════════════════════════════════════════════════════
 
--- URL'de kullanılan slug: küçük harf ASCII, rakam ve tek tire (ör. samsun-universitesi).
+-- URL'de kullanılan slug; kural API sözleşmesindeki (KV-03, communities.ts) ile aynı.
 ALTER TABLE "communities"
-  ADD CONSTRAINT "communities_slug_check" CHECK ("slug" ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
+  ADD CONSTRAINT "communities_slug_check" CHECK ("slug" ~ '^[a-z0-9-]{2,60}$'),
   ADD CONSTRAINT "communities_name_check" CHECK (length(btrim("name")) > 0),
   ADD CONSTRAINT "communities_member_count_check" CHECK ("member_count" >= 0);

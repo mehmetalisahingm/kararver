@@ -617,13 +617,14 @@ describe("communities ve community_memberships (KV-31)", () => {
     await join(community, user);
   });
 
-  test("slug benzersiz ve URL biçiminde, ad boş olamaz", async () => {
+  test("slug benzersiz ve sözleşmedeki biçimde, ad boş olamaz", async () => {
     const admin = await createUser();
     const slug = `topluluk-${shortId()}`;
     await createCommunity(admin, slug);
     await expectDbError(createCommunity(admin, slug), UNIQUE_VIOLATION);
     await expectDbError(createCommunity(admin, "Samsun Üni"), CHECK_VIOLATION);
-    await expectDbError(createCommunity(admin, "cift--tire"), CHECK_VIOLATION);
+    await expectDbError(createCommunity(admin, "a"), CHECK_VIOLATION);
+    await expectDbError(createCommunity(admin, `A${shortId()}`), CHECK_VIOLATION);
     await expectDbError(
       db.$executeRaw`
         INSERT INTO communities (id, slug, name, created_by_id, updated_at)
@@ -660,7 +661,7 @@ describe("communities ve community_memberships (KV-31)", () => {
     await db.$executeRaw`UPDATE polls SET community_id = ${community}::uuid WHERE id = ${pollId}::uuid`;
 
     await expectDbError(db.$executeRaw`DELETE FROM communities WHERE id = ${community}::uuid`, FK_VIOLATION);
-    await db.$executeRaw`UPDATE communities SET status = 'LOCKED', updated_at = now() WHERE id = ${community}::uuid`;
+    await db.$executeRaw`UPDATE communities SET status = 'HIDDEN', updated_at = now() WHERE id = ${community}::uuid`;
     const poll = await one(db.$queryRaw<{ status: string }[]>`SELECT status::text FROM polls WHERE id = ${pollId}::uuid`);
     assert.equal(poll.status, "ACTIVE");
   });
