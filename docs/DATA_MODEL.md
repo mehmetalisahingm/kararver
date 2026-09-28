@@ -35,7 +35,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 - Her tablonun birincil anahtarı **UUIDv7**'dir: Postgres `uuid` tipi, Prisma'da `@default(uuid(7))`. Zamana göre sıralanabildiği için cursor pagination'da `ORDER BY id` kullanılabilir. Tahmin edilemez olduğu için URL'de sıra numarası sızmaz.
 - ID'yi uygulama üretir (Prisma client). Elle yazılan SQL'de `id` değeri açıkça verilir. PostgreSQL 17'de yerleşik `uuidv7()` fonksiyonu yok.
 - Anket URL'i: `/karar/<slug>-<publicId>`. `publicId` 8 karakterlik, URL güvenli, unique bir koddur (üretimi KV-10'da). `slug` sadece okunabilirlik içindir, unique değildir.
-- Join tablolarında birincil anahtar bileşiktir, ayrı bir `id` alanı yoktur: `poll_tags`, `poll_media`, `comment_likes`, snapshot tabloları.
+- Join tablolarında birincil anahtar bileşiktir, ayrı bir `id` alanı yoktur: `poll_tags`, `poll_media`, `comment_reactions`, snapshot tabloları.
 
 ### 2.2 Zaman
 - Her zaman kolonu **`timestamptz(3)`** tipindedir ve UTC saklanır. Sunucu, veritabanı ve job'lar UTC ile çalışır.
@@ -83,7 +83,7 @@ erDiagram
   users ||--o{ votes : "user_id"
   users ||--o{ vote_events : "user_id"
   users ||--o{ comments : "author_id"
-  users ||--o{ comment_likes : "user_id"
+  users ||--o{ comment_reactions : "user_id"
   media_assets |o--o{ users : "avatar_media_id"
 
   categories ||--o{ polls : "category_id"
@@ -102,7 +102,7 @@ erDiagram
 
   polls ||--o{ comments : ""
   comments |o--o{ comments : "(poll_id, parent_id) tek seviye"
-  comments ||--o{ comment_likes : ""
+  comments ||--o{ comment_reactions : "LIKE / DISLIKE"
 
   polls ||--o{ poll_daily_snapshots : "İstanbul günü"
   poll_daily_snapshots ||--|{ poll_option_daily_snapshots : ""
@@ -221,7 +221,7 @@ erDiagram
 | `votes` | **`(poll_id, user_id)`** | `(poll_id, option_id)`, `(user_id, created_at)` | Bileşik FK `(poll_id, option_id) → poll_options(poll_id, id)` |
 | `vote_events` | | `(poll_id, occurred_at)`, `(vote_id, occurred_at)`, `(user_id, occurred_at)` | Append-only; tür başına biçim CHECK'i |
 | `comments` | `(poll_id, id)` | `(poll_id, parent_id, created_at)`, `(poll_id, kind, like_count)`, `(author_id, created_at)` | Bileşik FK ile cevap aynı ankette; trigger ile tek seviye |
-| `comment_likes` | PK `(comment_id, user_id)` | `user_id` | |
+| `comment_reactions` | PK `(comment_id, user_id)` | `user_id` | `value` LIKE/DISLIKE; `comment_likes`'ın yerine (KV-17). Sayaçlar `comments.like_count` / `dislike_count` |
 
 ---
 

@@ -43,6 +43,13 @@ enum CommentKind {
   @@map("comment_kind")
 }
 
+enum ReactionValue {
+  LIKE
+  DISLIKE
+
+  @@map("reaction_value")
+}
+
 enum VoteEventType {
   CAST
   CHANGE
@@ -71,15 +78,15 @@ model User {
   updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz(3)
 
-  avatarMedia     MediaAsset?      @relation("UserAvatar", fields: [avatarMediaId], references: [id], onDelete: SetNull)
-  sessions        Session[]
-  authTokens      AuthToken[]
-  idempotencyKeys IdempotencyKey[]
-  polls           Poll[]
-  votes           Vote[]
-  voteEvents      VoteEvent[]
-  comments        Comment[]
-  commentLikes    CommentLike[]
+  avatarMedia      MediaAsset?       @relation("UserAvatar", fields: [avatarMediaId], references: [id], onDelete: SetNull)
+  sessions         Session[]
+  authTokens       AuthToken[]
+  idempotencyKeys  IdempotencyKey[]
+  polls            Poll[]
+  votes            Vote[]
+  voteEvents       VoteEvent[]
+  comments         Comment[]
+  commentReactions CommentReaction[]
 
   // Mert — media.prisma (KV-16)
   uploadedMedia            MediaAsset[]          @relation("MediaUploader")
@@ -342,26 +349,28 @@ model VoteEvent {
 // Tek seviye cevap: cevabın cevabı trigger ile engellenir.
 // ALTERNATIVE sadece üst seviyede olabilir (CHECK).
 model Comment {
-  id         String        @id @default(uuid(7)) @db.Uuid
-  pollId     String        @map("poll_id") @db.Uuid
-  authorId   String        @map("author_id") @db.Uuid
-  parentId   String?       @map("parent_id") @db.Uuid
-  kind       CommentKind   @default(COMMENT)
-  body       String
-  status     ContentStatus @default(ACTIVE)
-  likeCount  Int           @default(0) @map("like_count")
-  replyCount Int           @default(0) @map("reply_count")
-  editedAt   DateTime?     @map("edited_at") @db.Timestamptz(3)
-  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt  DateTime?     @map("deleted_at") @db.Timestamptz(3)
+  id           String        @id @default(uuid(7)) @db.Uuid
+  pollId       String        @map("poll_id") @db.Uuid
+  authorId     String        @map("author_id") @db.Uuid
+  parentId     String?       @map("parent_id") @db.Uuid
+  kind         CommentKind   @default(COMMENT)
+  body         String
+  status       ContentStatus @default(ACTIVE)
+  likeCount    Int           @default(0) @map("like_count")
+  // Tepki sayaçları comment_reactions ile aynı transaction'da güncellenir (KV-17).
+  dislikeCount Int           @default(0) @map("dislike_count")
+  replyCount   Int           @default(0) @map("reply_count")
+  editedAt     DateTime?     @map("edited_at") @db.Timestamptz(3)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt    DateTime?     @map("deleted_at") @db.Timestamptz(3)
 
   poll              Poll               @relation(fields: [pollId], references: [id], onDelete: Restrict)
   author            User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
   // Bileşik FK: cevap, ebeveyniyle aynı ankette olmak zorunda.
   parent            Comment?           @relation("CommentReplies", fields: [pollId, parentId], references: [pollId, id], onDelete: Restrict)
   replies           Comment[]          @relation("CommentReplies")
-  likes             CommentLike[]
+  reactions         CommentReaction[]
   // Mert — moderation.prisma (KV-24)
   reports           Report[]
   moderationActions ModerationAction[]
@@ -373,17 +382,22 @@ model Comment {
   @@map("comments")
 }
 
-model CommentLike {
-  commentId String   @map("comment_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+// Yorum tepkisi (beğeni/dislike) — KV-17 (#19). comment_likes'ın yerine geçer (API_CONTRACTS §6).
+// Kullanıcı + yorum başına tek aktif tepki; değiştirme satırı günceller, kaldırma siler.
+// Anket tepkileri (#66) aynı ReactionValue enum'unu kullanır.
+model CommentReaction {
+  commentId String        @map("comment_id") @db.Uuid
+  userId    String        @map("user_id") @db.Uuid
+  value     ReactionValue
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([commentId, userId])
   @@index([userId])
-  @@map("comment_likes")
+  @@map("comment_reactions")
 }
 
 // ─── Idempotency ──────────────────────────────────────────────
