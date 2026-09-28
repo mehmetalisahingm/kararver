@@ -57,10 +57,14 @@ export const mediaEndpoints = [
         }),
       ),
     },
-    errors: ["MEDIA_TYPE_NOT_ALLOWED", "MEDIA_TOO_LARGE", "FEATURE_DISABLED"],
+    errors: ["MEDIA_TYPE_NOT_ALLOWED", "MEDIA_TOO_LARGE", "FEATURE_DISABLED", "CONFLICT"],
     idempotency: "key-optional",
     cache: "private",
-    notes: ["image/gif ve image/svg+xml V1'de 415 MEDIA_TYPE_NOT_ALLOWED (KV-08 §5)."],
+    notes: [
+      "image/gif ve image/svg+xml V1'de 415 MEDIA_TYPE_NOT_ALLOWED (KV-08 §5).",
+      "Aynı Idempotency-Key ile tekrar: yükleme hâlâ bekleniyorsa aynı mediaId için yeni URL; işlenmeye başlamışsa 409 CONFLICT (orijinalin üzerine yazılmaz).",
+      "Upload URL'i 10 dk geçerlidir; Content-Type ve Content-Length imzaya dahildir, istemci upload.headers'ı aynen gönderir.",
+    ],
   }),
   defineEndpoint({
     id: "media.complete",
@@ -78,7 +82,11 @@ export const mediaEndpoints = [
     errors: ["MEDIA_TYPE_NOT_ALLOWED", "MEDIA_TOO_LARGE"],
     idempotency: "natural",
     cache: "private",
-    notes: ["Moderasyon hatası/zaman aşımı QUARANTINED sayılır (fail-closed, KV-08 §6.2)."],
+    notes: [
+      "Moderasyon hatası/zaman aşımı QUARANTINED sayılır (fail-closed, KV-08 §6.2).",
+      "Dosya henüz yüklenmediyse 400 VALIDATION_ERROR (details.code='not_uploaded'); istemci yükleyip tekrar çağırır.",
+      "Tekrar çağrı zararsızdır: işlem kuyruğa bir kez alınır, cevap güncel durumdur.",
+    ],
   }),
   defineEndpoint({
     id: "media.get",

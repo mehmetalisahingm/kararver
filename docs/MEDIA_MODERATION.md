@@ -126,7 +126,7 @@ TECH_DECISIONS §3.6'daki iki-bucket akışı (presigned upload → private buck
 |---|---|---|
 | `PENDING` | Private bucket (`kararver-uploads-private`) | Sadece yükleyen kullanıcı, kısa ömürlü (ör. 5 dk) signed GET URL ile kendi bekleyen görselini görebilir |
 | `APPROVED` | Public bucket (`kararver-media-public`) — private'daki orijinal **silinmez**, kopyalanır | Herkes, `MEDIA_PUBLIC_BASE_URL` + CDN üzerinden, doğrudan public URL |
-| `QUARANTINED` / `UNDER_REVIEW` benzeri ara durum | Private bucket | Sadece moderatör/admin rolü (KV-04/KV-12 RBAC), kısa ömürlü signed URL; her erişim KV-39 audit log'una yazılır |
+| `QUARANTINED` | Private bucket | Moderatör/admin rolü (KV-04/KV-12 RBAC) kısa ömürlü signed URL ile; her erişim KV-39 audit log'una yazılır. Yükleyen kullanıcı da kendi görselinin **işlenmiş (EXIF'siz) kopyasını** 5 dk'lık signed URL ile önizler ("incelemede" durumu); orijinal dosya hiçbir zaman URL almaz |
 | `REJECTED` | Private bucket, **kalıcı olarak saklanır** (silinmez) | Sadece admin, itiraz/hukuki talep durumunda signed URL ile; erişim audit'e yazılır. Amaç: KV-38'in yasaklı-görsel hash listesi ve olası itiraz süreci için kanıt |
 
 **İlke:** Private bucket'taki hiçbir nesne asla herkese açık/tahmin edilebilir bir URL almaz; `APPROVED` olmayan hiçbir görsel CDN'e çıkmaz. Bu, DATA_MODEL.md §9'daki "sadece `status = APPROVED` görseller gösterilir" sorgu kuralıyla birebir uyumludur ve o kuralın storage katmanındaki karşılığıdır.
@@ -145,7 +145,20 @@ TECH_DECISIONS §3.6'daki iki-bucket akışı (presigned upload → private buck
 
 ---
 
-## 9. Referanslar
+## 9. Uygulama durumu (KV-16, #18)
+
+| Parça | Yer | Durum |
+|---|---|---|
+| `POST /media/uploads`: ayar kontrolü (tür, boyut, yükleme anahtarı), `PENDING` kayıt, private bucket'a 10 dk'lık presigned PUT (`Content-Type` ve `Content-Length` imzada) | `apps/api/src/modules/media` | ✅ |
+| `POST /media/:id/complete`: nesne yoklanır (yoksa 400 `not_uploaded`), boyut/tür tekrar kontrol edilir (uymazsa `REJECTED`), `media.process` kuyruğa alınır | aynı | ✅ |
+| `GET /media/:id`: sahibine durum; public URL sadece `APPROVED`, önizleme sadece işlenmiş kopya | aynı | ✅ |
+| Kuyruk: pg-boss `media.process`, `stately` politika + `singletonKey = mediaId` (aynı görsel için en fazla 1 bekleyen + 1 çalışan iş), 3 deneme, üstel bekleme | `apps/api/src/modules/media/queue.ts` | ✅ |
+| Worker: imza (magic bytes) kontrolü → resize/re-encode (webp) + EXIF temizleme → moderasyon → karantina / public bucket | `apps/worker/src/jobs/media` | Ayrı PR |
+| `admin.media.list` / `admin.media.decide` | — | Router'da moderator yetki seviyesi gelince (KV-12, #14) |
+
+Nesne anahtarları: orijinal `uploads/<uuid>/original` (private, API belirler, DB'de saklanır); işlenmiş ve public anahtarları worker belirler ve DB'ye yazar. Böylece API ve worker anahtar biçimini paylaşmak zorunda kalmaz.
+
+## 10. Referanslar
 
 - [`scripts/media-moderation-spike/`](../scripts/media-moderation-spike/) — çalıştırılabilir kanıt (README, `requirements.txt`, `generate_samples.py`, `benchmark.py`, `results.json`)
 - [`docs/TECH_DECISIONS.md`](./TECH_DECISIONS.md) §3.6 (object storage), §3.7 (hosting), §10 açık konu 5

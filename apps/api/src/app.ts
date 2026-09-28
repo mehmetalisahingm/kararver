@@ -10,6 +10,10 @@ import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import type { PasswordHasher } from "./modules/auth/crypto.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
+import type { MediaQueue } from "./modules/media/queue.ts";
+import { registerMediaRoutes } from "./modules/media/routes.ts";
+import type { MediaStorage } from "./modules/media/storage.ts";
+import { DEFAULT_MEDIA_SETTINGS, type MediaSettings, type MediaStore } from "./modules/media/store.ts";
 import { createAuthenticator, type SessionSettings } from "./modules/auth/session.ts";
 import type { AuthStore } from "./modules/auth/store.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
@@ -27,6 +31,8 @@ export type AppDeps = {
   pollStore?: PollStore;
   /** Sistem ayarları (KV-40, #42); ayar servisi gelene kadar DEFAULT_POLL_SETTINGS. */
   pollSettings?: () => Promise<PollSettings>;
+  /** Üçü birlikte verilirse medya route'ları kaydedilir (config.storage yoksa server vermez). */
+  media?: { store: MediaStore; storage: MediaStorage; queue: MediaQueue; settings?: () => Promise<MediaSettings> };
   /** Log seviyesi/hedefi; verilmezse config.logLevel ile stdout. Testler log akışını yakalar. */
   logger?: false | { level: string; stream: NodeJS.WritableStream };
 };
@@ -97,6 +103,16 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       now,
       mediaPublicBaseUrl: config.mediaPublicBaseUrl,
       settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+    });
+  }
+  if (deps.media) {
+    registerMediaRoutes(route, {
+      store: deps.media.store,
+      storage: deps.media.storage,
+      queue: deps.media.queue,
+      now,
+      mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+      settings: deps.media.settings ?? (async () => DEFAULT_MEDIA_SETTINGS),
     });
   }
 
