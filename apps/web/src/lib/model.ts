@@ -1,4 +1,8 @@
 // Frontend view models, NOT the unfinished KV-03 wire contract.
+import type { EngagementClient } from "../features/social/model.ts";
+export type GalleryItem =
+  | { id: string; status: "ready"; src: string; alt: string }
+  | { id: string; status: "pending" | "removed"; alt: string };
 export type User = {
   id: string;
   name: string;
@@ -28,6 +32,10 @@ export type Poll = {
   ownVote: string | null;
   commentsEnabled: boolean;
   comments: { id: string; author: string; text: string }[];
+  commentCount?: number;
+  gallery?: GalleryItem[];
+  details?: { label: string; value: string }[];
+  price?: { amount: string; currency: "TRY"; note: string };
 };
 export type Draft = {
   kind: "poll" | "discussion";
@@ -108,7 +116,7 @@ export function safeReturnTo(value: string | null): string {
     ? value
     : "/";
 }
-export interface ProductClient {
+export interface ProductClient extends EngagementClient {
   list(): Promise<Poll[]>;
   get(id: string): Promise<Poll>;
   login(email: string, password: string): Promise<User>;
