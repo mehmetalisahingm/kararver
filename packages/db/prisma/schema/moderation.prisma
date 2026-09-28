@@ -1,0 +1,117 @@
+// Sahip: Mert (@MertKAYAR) — KV-24
+// Kullanıcı raporları ve moderasyon işlem geçmişi.
+// Kurallar: docs/DATA_MODEL.md §9 · Yetki matrisi: docs/FOUNDATION_CONTRACTS.md
+//
+// Hedef, tek bir target_type/target_id çifti yerine hedef başına ayrı nullable FK ile
+// tutulur; "tam olarak biri dolu" CHECK'i migration'da elle yazılıdır. Karar güncellemesi
+// (Mehmet, KV-23) tablosu açılınca aynı yöntemle yeni bir FK eklenir.
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  INAPPROPRIATE
+  HATE_SPEECH
+  PERSONAL_INFO
+  MISLEADING
+  COPYRIGHT
+  OTHER
+
+  @@map("report_reason")
+}
+
+// OPEN → ACTIONED (içeriğe işlem uygulandı) | DISMISSED (işlem gerekmedi)
+enum ReportStatus {
+  OPEN
+  ACTIONED
+  DISMISSED
+
+  @@map("report_status")
+}
+
+enum ModerationActionType {
+  APPROVE
+  HIDE
+  REMOVE
+  RESTORE
+  LOCK
+  UNLOCK
+  WARN_USER
+  DISMISS_REPORT
+
+  @@map("moderation_action_type")
+}
+
+// Rapor içeriği doğrudan silmez; kuyruğa düşer (MVP_PLAN §13).
+// Aynı kullanıcı aynı hedefi bir kez raporlayabilir (unique'ler).
+model Report {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  reporterId     String       @map("reporter_id") @db.Uuid
+  pollId         String?      @map("poll_id") @db.Uuid
+  commentId      String?      @map("comment_id") @db.Uuid
+  mediaId        String?      @map("media_id") @db.Uuid
+  reportedUserId String?      @map("reported_user_id") @db.Uuid
+  reason         ReportReason
+  details        String?      @db.VarChar(1000)
+  status         ReportStatus @default(OPEN)
+  // Sonuçlandıran moderatör; üçü birlikte dolar (CHECK).
+  resolvedById   String?      @map("resolved_by_id") @db.Uuid
+  resolvedAt     DateTime?    @map("resolved_at") @db.Timestamptz(3)
+  resolutionNote String?      @map("resolution_note") @db.VarChar(1000)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  reporter     User               @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  poll         Poll?              @relation(fields: [pollId], references: [id], onDelete: Restrict)
+  comment      Comment?           @relation(fields: [commentId], references: [id], onDelete: Restrict)
+  media        MediaAsset?        @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+  reportedUser User?              @relation("ReportTargetUser", fields: [reportedUserId], references: [id], onDelete: Restrict)
+  resolvedBy   User?              @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: Restrict)
+  actions      ModerationAction[]
+
+  @@unique([reporterId, pollId])
+  @@unique([reporterId, commentId])
+  @@unique([reporterId, mediaId])
+  @@unique([reporterId, reportedUserId])
+  // Kuyruk ve "rapor sayısı" filtreleri.
+  @@index([status, createdAt])
+  @@index([pollId])
+  @@index([commentId])
+  @@index([mediaId])
+  @@index([reportedUserId])
+  @@map("reports")
+}
+
+// Append-only moderasyon geçmişi (UPDATE/DELETE trigger ile engellenir).
+// Yaptırımlar (ban/suspend) Utku'nun sanctions tablosundadır; burada sadece içerik işlemleri
+// ve kullanıcı uyarısı tutulur. Kritik işlemler ayrıca audit_logs'a yazılır (KV-39).
+model ModerationAction {
+  id           String               @id @default(uuid(7)) @db.Uuid
+  actorId      String               @map("actor_id") @db.Uuid
+  action       ModerationActionType
+  pollId       String?              @map("poll_id") @db.Uuid
+  commentId    String?              @map("comment_id") @db.Uuid
+  mediaId      String?              @map("media_id") @db.Uuid
+  targetUserId String?              @map("target_user_id") @db.Uuid
+  // Rapora yanıt olarak yapıldıysa.
+  reportId     String?              @map("report_id") @db.Uuid
+  // content_status veya media_status değeri; iki enum farklı olduğu için metin.
+  fromStatus   String?              @map("from_status") @db.VarChar(20)
+  toStatus     String?              @map("to_status") @db.VarChar(20)
+  reason       String               @db.VarChar(1000)
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  actor      User        @relation("ModerationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  poll       Poll?       @relation(fields: [pollId], references: [id], onDelete: Restrict)
+  comment    Comment?    @relation(fields: [commentId], references: [id], onDelete: Restrict)
+  media      MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+  targetUser User?       @relation("ModerationTargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
+  report     Report?     @relation(fields: [reportId], references: [id], onDelete: Restrict)
+
+  @@index([pollId, createdAt])
+  @@index([commentId, createdAt])
+  @@index([mediaId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([reportId])
+  @@map("moderation_actions")
+}

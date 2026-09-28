@@ -188,6 +188,7 @@ describe("migration", () => {
       triggers.map((t) => t.tgname),
       [
         "comments_single_level",
+        "moderation_actions_append_only",
         "poll_options_guard_locked",
         "polls_guard_locked",
         "vote_events_append_only",
@@ -497,7 +498,99 @@ describe("media_assets (KV-16)", () => {
   });
 });
 
-// ─── 7. Türkçe normalizasyon ──────────────────────────────────
+// ─── 7. Rapor ve moderasyon (KV-24) ───────────────────────────
+
+describe("reports ve moderation_actions (KV-24)", () => {
+  type Target = { pollId?: string; commentId?: string; mediaId?: string; userId?: string };
+
+  async function report(reporterId: string, t: Target, reason = "SPAM"): Promise<string> {
+    const id = randomUUID();
+    await db.$executeRaw`
+      INSERT INTO reports (id, reporter_id, poll_id, comment_id, media_id, reported_user_id, reason, updated_at)
+      VALUES (${id}::uuid, ${reporterId}::uuid, ${t.pollId ?? null}::uuid, ${t.commentId ?? null}::uuid,
+              ${t.mediaId ?? null}::uuid, ${t.userId ?? null}::uuid, ${reason}::report_reason, now())`;
+    return id;
+  }
+
+  async function action(actorId: string, t: Target, reason: string, reportId: string | null = null): Promise<string> {
+    const id = randomUUID();
+    await db.$executeRaw`
+      INSERT INTO moderation_actions (id, actor_id, action, poll_id, comment_id, media_id, target_user_id, report_id,
+                                      from_status, to_status, reason)
+      VALUES (${id}::uuid, ${actorId}::uuid, 'HIDE', ${t.pollId ?? null}::uuid, ${t.commentId ?? null}::uuid,
+              ${t.mediaId ?? null}::uuid, ${t.userId ?? null}::uuid, ${reportId}::uuid, 'ACTIVE', 'HIDDEN', ${reason})`;
+    return id;
+  }
+
+  test("rapor tam olarak bir hedefe bağlanır", async () => {
+    const reporter = await createUser();
+    const author = await createUser();
+    const { pollId } = await createPoll(author);
+    await expectDbError(report(reporter, {}), CHECK_VIOLATION);
+    await expectDbError(report(reporter, { pollId, userId: author }), CHECK_VIOLATION);
+    await report(reporter, { pollId });
+  });
+
+  test("aynı kullanıcı aynı hedefi ikinci kez raporlayamaz, başka kullanıcı raporlayabilir", async () => {
+    const { pollId } = await createPoll(await createUser());
+    const reporter = await createUser();
+    await report(reporter, { pollId });
+    await expectDbError(report(reporter, { pollId }, "HARASSMENT"), UNIQUE_VIOLATION);
+    await report(await createUser(), { pollId });
+  });
+
+  test("kullanıcı kendini raporlayamaz", async () => {
+    const user = await createUser();
+    await expectDbError(report(user, { userId: user }), CHECK_VIOLATION);
+  });
+
+  test("sonuçlanan rapor sonuçlandıranı ve zamanı taşır; açık rapor taşımaz", async () => {
+    const moderator = await createUser();
+    const { pollId } = await createPoll(await createUser());
+    const id = await report(await createUser(), { pollId });
+
+    await expectDbError(db.$executeRaw`UPDATE reports SET status = 'ACTIONED' WHERE id = ${id}::uuid`, CHECK_VIOLATION);
+    await expectDbError(
+      db.$executeRaw`UPDATE reports SET resolved_by_id = ${moderator}::uuid, resolved_at = now() WHERE id = ${id}::uuid`,
+      CHECK_VIOLATION,
+    );
+    await db.$executeRaw`
+      UPDATE reports SET status = 'ACTIONED', resolved_by_id = ${moderator}::uuid, resolved_at = now(),
+        resolution_note = 'test: gizlendi', updated_at = now()
+      WHERE id = ${id}::uuid`;
+  });
+
+  test("raporlanan anket hard delete edilemez", async () => {
+    const { pollId } = await createPoll(await createUser());
+    await report(await createUser(), { pollId });
+    await expectDbError(db.$executeRaw`DELETE FROM polls WHERE id = ${pollId}::uuid`, FK_VIOLATION);
+  });
+
+  test("moderasyon işlemi gerekçesiz ve hedefsiz yazılamaz", async () => {
+    const moderator = await createUser();
+    const { pollId } = await createPoll(await createUser());
+    await expectDbError(action(moderator, { pollId }, "   "), CHECK_VIOLATION);
+    await expectDbError(action(moderator, {}, "test: gerekçe"), CHECK_VIOLATION);
+    const reportId = await report(await createUser(), { pollId });
+    await action(moderator, { pollId }, "test: spam", reportId);
+  });
+
+  test("moderasyon geçmişi güncellenemez ve silinemez", async () => {
+    const moderator = await createUser();
+    const { pollId } = await createPoll(await createUser());
+    const id = await action(moderator, { pollId }, "test: gizlendi");
+    await expectDbError(
+      db.$executeRaw`UPDATE moderation_actions SET reason = 'değişti' WHERE id = ${id}::uuid`,
+      /KV_MODERATION_ACTIONS_APPEND_ONLY/,
+    );
+    await expectDbError(
+      db.$executeRaw`DELETE FROM moderation_actions WHERE id = ${id}::uuid`,
+      /KV_MODERATION_ACTIONS_APPEND_ONLY/,
+    );
+  });
+});
+
+// ─── 8. Türkçe normalizasyon ──────────────────────────────────
 
 describe("kv_normalize", () => {
   const cases: [string, string][] = [
