@@ -1,5 +1,6 @@
 // Frontend view models, NOT the unfinished KV-03 wire contract.
 import type { EngagementClient } from "../features/social/model.ts";
+import type { DiscoveryClient } from "../features/discovery/model.ts";
 export type GalleryItem =
   | { id: string; status: "ready"; src: string; alt: string }
   | { id: string; status: "pending" | "removed"; alt: string };
@@ -26,6 +27,7 @@ export type Poll = {
   category: string;
   status: "ACTIVE" | "LOCKED" | "CLOSED";
   closesAt: string;
+  createdAt?: string;
   options: { id: string; label: string; image?: string }[];
   visibility: "always" | "after_vote";
   results: Results;
@@ -116,7 +118,7 @@ export function safeReturnTo(value: string | null): string {
     ? value
     : "/";
 }
-export interface ProductClient extends EngagementClient {
+export interface ProductClient extends EngagementClient, DiscoveryClient {
   list(): Promise<Poll[]>;
   get(id: string): Promise<Poll>;
   login(email: string, password: string): Promise<User>;

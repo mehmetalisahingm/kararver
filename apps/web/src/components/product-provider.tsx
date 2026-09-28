@@ -241,6 +241,11 @@ export function ProductProvider({
                   ["comment", "Yorum gönderme"],
                   ["editComment", "Yorum düzenleme"],
                   ["deleteComment", "Yorum silme"],
+                  ["discovery", "Keşfet"],
+                  ["categories", "Kategori"],
+                  ["search", "Arama"],
+                  ["trends", "Trend"],
+                  ["discoveryMore", "Liste devamı"],
                 ].map(([operation, label]) => (
                   <button
                     key={operation}
@@ -255,6 +260,17 @@ export function ProductProvider({
                     {label} hatası
                   </button>
                 ))}
+                <button
+                  className="kv-button kv-button--ghost"
+                  onClick={() => {
+                    client.expireDiscoveryPages();
+                    notify(
+                      "Demo liste imleçleri sıfırlandı. Devamını yüklerken yenileme istenecek.",
+                    );
+                  }}
+                >
+                  Liste süresini doldur
+                </button>
               </details>
             )}
           </aside>

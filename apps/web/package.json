@@ -9,7 +9,7 @@
     "build": "node scripts/sync-assets.mjs && next build",
     "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/adapter.test.ts",
+    "test": "node --test test/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

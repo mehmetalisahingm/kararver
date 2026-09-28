@@ -2,6 +2,13 @@ import { UiError, validateDraft } from "./model.ts";
 import type { Draft, Poll, ProductClient, User } from "./model.ts";
 import { DemoEngagement } from "../features/social/demo-engagement.ts";
 import type { CommentDraft, Reaction } from "../features/social/model.ts";
+import { DemoDiscovery } from "../features/discovery/demo-discovery.ts";
+import { discoverySeeds } from "../features/discovery/fixtures.ts";
+import type {
+  FeedTab,
+  SearchType,
+  TrendFormat,
+} from "../features/discovery/model.ts";
 type RecordPoll = Omit<Poll, "results" | "ownVote"> & {
   counts: number[];
   votes: Map<string, string>;
@@ -18,6 +25,7 @@ export class DemoClient implements ProductClient {
   private userId: string | null = null;
   private failure: string | null = null;
   private engagement = new DemoEngagement();
+  private discovery = new DemoDiscovery();
   private requests = new Map<string, { fingerprint: string; pollId: string }>();
   private delay: number;
   constructor(delay = 180) {
@@ -168,6 +176,62 @@ export class DemoClient implements ProductClient {
         visibility: "after_vote",
       },
     ];
+    this.polls.push(...discoverySeeds());
+    this.polls.forEach((poll, index) => {
+      poll.createdAt = new Date(Date.UTC(2026, 8, 22, index)).toISOString();
+    });
+  }
+  expireDiscoveryPages() {
+    this.discovery.expirePages();
+  }
+  async getCategories(signal?: AbortSignal) {
+    await this.wait("categories", signal);
+    return this.discovery.categories();
+  }
+  async getFeed(
+    tab: FeedTab,
+    categoryId?: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ) {
+    await this.wait(cursor ? "discoveryMore" : "discovery", signal);
+    return this.discovery.feed(
+      this.polls.map((p) => this.project(p)),
+      this.userId || "guest",
+      tab,
+      categoryId,
+      cursor,
+    );
+  }
+  async search(
+    query: string,
+    type: SearchType,
+    cursor?: string,
+    signal?: AbortSignal,
+  ) {
+    await this.wait(cursor ? "discoveryMore" : "search", signal);
+    return this.discovery.search(
+      this.polls.map((p) => this.project(p)),
+      this.userId || "guest",
+      query,
+      type,
+      cursor,
+    );
+  }
+  async getTrends(
+    format: TrendFormat,
+    categoryId?: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ) {
+    await this.wait(cursor ? "discoveryMore" : "trends", signal);
+    return this.discovery.trends(
+      this.polls.map((p) => this.project(p)),
+      this.userId || "guest",
+      format,
+      categoryId,
+      cursor,
+    );
   }
   failNext(operation: string) {
     this.failure = operation;
@@ -344,6 +408,7 @@ export class DemoClient implements ProductClient {
       description: draft.description.trim(),
       kind: draft.kind,
       category: draft.category,
+      createdAt: new Date().toISOString(),
       author: account.name,
       status: "ACTIVE",
       closesAt: new Date(Date.now() + draft.hours * 3600000).toISOString(),
