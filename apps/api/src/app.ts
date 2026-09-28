@@ -10,6 +10,8 @@ import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import type { PasswordHasher } from "./modules/auth/crypto.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
+import { registerCommunityRoutes } from "./modules/communities/routes.ts";
+import type { CommunityStore } from "./modules/communities/store.ts";
 import type { MediaQueue } from "./modules/media/queue.ts";
 import { registerMediaRoutes } from "./modules/media/routes.ts";
 import type { MediaStorage } from "./modules/media/storage.ts";
@@ -35,6 +37,8 @@ export type AppDeps = {
   pollSettings?: () => Promise<PollSettings>;
   /** Verilmezse oy route'u kaydedilmez. */
   voteStore?: VoteStore;
+  /** Verilmezse topluluk route'ları kaydedilmez. */
+  communityStore?: CommunityStore;
   /** Üçü birlikte verilirse medya route'ları kaydedilir (config.storage yoksa server vermez). */
   media?: { store: MediaStore; storage: MediaStorage; queue: MediaQueue; settings?: () => Promise<MediaSettings> };
   /** Log seviyesi/hedefi; verilmezse config.logLevel ile stdout. Testler log akışını yakalar. */
@@ -111,6 +115,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   }
   if (deps.voteStore) {
     registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
+  }
+  if (deps.communityStore) {
+    registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
   if (deps.media) {
     registerMediaRoutes(route, {
