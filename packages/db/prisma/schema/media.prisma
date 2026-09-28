@@ -75,6 +75,7 @@ model MediaAsset {
   reviewedBy        User?              @relation("MediaReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
   reports           Report[]
   moderationActions ModerationAction[]
+  communityImages   Community[]
 
   // ── Core ilişkileri (Faruk) — kaldırmayın ──
   avatarOfUsers User[]      @relation("UserAvatar")
