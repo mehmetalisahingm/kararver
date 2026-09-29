@@ -6,6 +6,7 @@ import { loadConfig } from "./config.ts";
 import { createMailer } from "./mail/mailer.ts";
 import { createArgon2Hasher } from "./modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "./modules/auth/prisma-store.ts";
+import { createPrismaCommunityStore } from "./modules/communities/prisma-store.ts";
 import { createPrismaMediaStore } from "./modules/media/prisma-store.ts";
 import { startPgBossMediaQueue } from "./modules/media/queue.ts";
 import { createS3MediaStorage } from "./modules/media/storage.ts";
@@ -34,6 +35,7 @@ const app = buildApp({
   rbacStore: createPrismaRbacStore(prisma),
   pollStore: createPrismaPollStore(prisma),
   voteStore: createPrismaVoteStore(prisma),
+  communityStore: createPrismaCommunityStore(prisma),
   commentStore: createPrismaCommentStore(prisma),
   hasher: createArgon2Hasher(),
   mailer: createMailer(config.mail.transport, config.mail.from),
