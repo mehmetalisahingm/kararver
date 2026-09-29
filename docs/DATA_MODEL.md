@@ -21,7 +21,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 | `community.prisma` | **Mert** | `Community` (slug, ad, görsel, üye sayısı, oluşturan), `CommunityMembership` (üyelik + topluluk rolü) | ✅ KV-31 (şema) |
 | `moderation.prisma` | Mert | `Report`, `ModerationAction` (append-only). Engelli görsel hash listesi KV-38'de eklenecek | ✅ KV-24 (şema) |
 | `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi). Audit, ayarlar, bildirimler sonra | ✅ KV-12 (şema) · ⏳ KV-21 / KV-39 / KV-40 |
-| `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ⏳ KV-22 / KV-23 / KV-42 / KV-15 |
+| `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ✅ `UserInterest` (KV-15) · ⏳ KV-22 / KV-23 / KV-42 |
 
 **İskelet tablolar neden var:** Çekirdek tablolar Mert'in iki tablosuna FK veriyor: `polls.community_id → communities` ve `users.avatar_media_id`, `poll_media.media_id → media_assets`. FK'nin hedefi olmadan ilk migration çalışmaz. Bu yüzden iki tablo sadece `id`, `status` ve `created_at` alanlarıyla açıldı. Geri kalan alanları, enum değerlerini ve indexleri sahibi belirler. İskeletteki `id` alanı ve "core ilişkileri" bölümü kaldırılmamalıdır.
 
@@ -215,11 +215,11 @@ erDiagram
 | `auth_tokens` | `token_hash` | `(user_id, purpose)` | Tek kullanımlık: `used_at` |
 | `categories` | `slug` | `(is_active, sort_order)` | Admin ekranı Mehmet'te, API Faruk'ta |
 | `tags`, `poll_tags` | `slug` · PK `(poll_id, tag_id)` | `tag_id` | |
-| `polls` | `public_id` | `(status, created_at)`, `(category_id, status, created_at)`, `(community_id, status, created_at)`, `(author_id, created_at)`, `(status, vote_count)`, `closes_at` | CHECK: sayaçlar ≥ 0, `closes_at > opens_at`, fiyat ve para birimi birlikte |
+| `polls` | `public_id` | `(status, created_at)`, `(category_id, status, created_at)`, `(community_id, status, created_at)`, `(author_id, created_at)`, `(status, vote_count)`, `closes_at`, `(opens_at DESC, id DESC)` (KV-27 aday havuzu, "Yeni" sekmesi; migration `20260930203000_mehmet_kv15_user_interests`) | CHECK: sayaçlar ≥ 0, `closes_at > opens_at`, fiyat ve para birimi birlikte |
 | `poll_options` | `(poll_id, position)`, `(poll_id, id)` | | CHECK: `position` 0–5. En az 2 seçenek uygulamada |
 | `poll_addenda` | | `(poll_id, created_at)` | Kilitli ankete bilgi eklemenin tek yolu |
 | `poll_media` | PK `(poll_id, media_id)`, `(poll_id, position)` | `media_id` | Görsel sayısı sınırı admin ayarından (KV-40) |
-| `votes` | **`(poll_id, user_id)`** | `(poll_id, option_id)`, `(user_id, created_at)` | Bileşik FK `(poll_id, option_id) → poll_options(poll_id, id)` |
+| `votes` | **`(poll_id, user_id)`** | `(poll_id, option_id)`, `(poll_id, created_at, invalidated_at)` (KV-27 "Senin İçin" sinyalleri, index-only sayım; migration `20260930203000_mehmet_kv15_user_interests`), `(user_id, created_at)` | Bileşik FK `(poll_id, option_id) → poll_options(poll_id, id)` |
 | `vote_events` | | `(poll_id, occurred_at)`, `(vote_id, occurred_at)`, `(user_id, occurred_at)` | Append-only; tür başına biçim CHECK'i |
 | `comments` | `(poll_id, id)` | `(poll_id, parent_id, created_at)`, `(poll_id, kind, like_count)`, `(author_id, created_at)` | Bileşik FK ile cevap aynı ankette; trigger ile tek seviye |
 | `comment_reactions` | PK `(comment_id, user_id)` | `user_id` | `value` LIKE/DISLIKE; `comment_likes`'ın yerine (KV-17). Sayaçlar `comments.like_count` / `dislike_count` |
@@ -393,7 +393,7 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 | Mehmet | `bookmarks` | `(user_id, poll_id)` PK | `polls.save_count`'u aynı transaction'da günceller |
 | Mehmet | `decision_updates`, `poll_follows` | `polls.id`; seçim için `(poll_id, option_id) → poll_options(poll_id, id)` bileşik FK | Seçenek başka ankete ait olamaz |
 | Mehmet | `featured_placements`, `announcements` | `polls.id` | Öne çıkarma organik trend puanını değiştirmez |
-| Mehmet | `user_interests` | `(user_id, category_id)` | |
+| Mehmet | `user_interests` | PK `(user_id, category_id)`; `user_id → users` CASCADE, `category_id → categories` RESTRICT; index `category_id` | KV-15 (#17), migration `20260930203000_mehmet_kv15_user_interests`. KV-27 "Senin İçin" feed'i ilgi sinyali olarak okur |
 
 Seçenek (`poll_options`) veya yorum bağlayan her tablo, bileşik FK için hazır olan `(poll_id, id)` unique anahtarlarını kullanır.
 

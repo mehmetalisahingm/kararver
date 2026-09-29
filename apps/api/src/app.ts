@@ -22,9 +22,11 @@ import { registerCategoryAdminRoutes } from "./modules/categories/routes.ts";
 import type { CategoryAdminStore } from "./modules/categories/store.ts";
 import { registerCommentRoutes } from "./modules/comments/routes.ts";
 import type { CommentStore } from "./modules/comments/store.ts";
+import { DEFAULT_FEED_SETTINGS, type FeedSettings } from "./modules/feed/for-you.ts";
 import { registerFeedRoutes } from "./modules/feed/routes.ts";
 import { registerOnboardingRoutes } from "./modules/onboarding/routes.ts";
 import type { OnboardingStore } from "./modules/onboarding/store.ts";
+import type { FeedStore } from "./modules/feed/store.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
 import { registerReportRoutes } from "./modules/reports/routes.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
@@ -53,6 +55,10 @@ export type AppDeps = {
   searchStore?: SearchStore;
   /** Verilmezse admin kategori route'ları (admin.categories.*) kaydedilmez. */
   categoryAdminStore?: CategoryAdminStore;
+  /** pollStore ile birlikte verilirse "Senin İçin" sıralaması (KV-27) açılır; yoksa for_you "new" sırasıdır. */
+  feedStore?: FeedStore;
+  /** Keşif payı ve tekrar sınırları (KV-40, #42); ayar servisi gelene kadar DEFAULT_FEED_SETTINGS. */
+  feedSettings?: () => Promise<FeedSettings>;
   /** Verilmezse oy route'u kaydedilmez. */
   voteStore?: VoteStore;
   /** Verilmezse topluluk route'ları kaydedilmez. */
@@ -146,6 +152,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       now,
       mediaPublicBaseUrl: config.mediaPublicBaseUrl,
       settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+      feed: deps.feedStore
+        ? { store: deps.feedStore, settings: deps.feedSettings ?? (async () => DEFAULT_FEED_SETTINGS) }
+        : undefined,
     });
     if (deps.searchStore) {
       registerSearchRoutes(route, {

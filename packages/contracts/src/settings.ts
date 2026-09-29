@@ -48,6 +48,20 @@ const flag = (description: string, publicPath: readonly string[], missing: strin
   publicPath,
 });
 
+/** Varsayılanı resmî kaynakta olmayan tamsayı ayarı; API geçici değeri kendi tarafında tutar. */
+const proposedInt = (description: string, min: Bound, max: Bound, missing: string): SettingDefinition => ({
+  type: "integer",
+  description,
+  min,
+  max,
+  default: null,
+  missing,
+  publicPath: null,
+});
+
+const FEED_PROPOSAL = (value: number) =>
+  `PRODUCT_TEAM_PLAN §7 ve #29 kabul koşulu bunu admin ayarı olarak ister, değer vermez. Öneri ${value} (Faruk, KV-27; API geçici olarak bunu kullanır), Mehmet teyidi bekliyor`;
+
 const NO_SWITCH_DEFAULT =
   "PRODUCT_TEAM_PLAN §16 'Sistem ayarları' ve 'Acil durum kontrolleri' anahtarı tanımlar, varsayılan değer vermez";
 
@@ -195,6 +209,14 @@ export const settingsRegistry = Object.freeze({
     "docs/DATA_MODEL.md §8.3 Eşikler",
     null,
   ),
+  "feed.explorationPercent": proposedInt(
+    "Senin İçin: kartların yüzde kaçı yeni/az oy almış anketlere ayrılır (keşif payı)",
+    0,
+    50,
+    FEED_PROPOSAL(20),
+  ),
+  "feed.maxSameAuthorPerWindow": proposedInt("Senin İçin: art arda 10 kartta aynı yazardan en fazla", 1, 10, FEED_PROPOSAL(2)),
+  "feed.maxSameCategoryPerWindow": proposedInt("Senin İçin: art arda 10 kartta aynı kategoriden en fazla", 1, 10, FEED_PROPOSAL(4)),
 } satisfies Record<string, SettingDefinition>);
 
 export type SettingKey = keyof typeof settingsRegistry;

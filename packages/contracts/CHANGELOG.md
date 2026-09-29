@@ -3,6 +3,19 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.9.0 — 2026-09-30 (Faruk, KV-27 "Senin İçin" feed)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5: yeni ayar anahtarı minor).
+
+- **Eklendi:** Ayar kayıt defterine `feed.explorationPercent` (0–50), `feed.maxSameAuthorPerWindow` (1–10),
+  `feed.maxSameCategoryPerWindow` (1–10). Public değil. **Resmî değer yok** (`default: null`): PRODUCT_TEAM_PLAN §7
+  ve #29 bunları admin ayarı olarak ister ama değer vermez. Öneri 20 / 2 / 4 (Faruk); API KV-40 gelene kadar bunları
+  kullanır. Mehmet teyidi bekliyor (KV-04 açık konu 8).
+- **Test:** `settings.test.ts` bilinçli olarak güncellendi: "feed.* kayıtta yok" kontrolü artık üç anahtarın
+  kayıtlı, public olmayan ve varsayılansız olduğunu doğruluyor; eksik varsayılanlar listesine eklendiler; eksik
+  alanlara verilen test girdisi tipe göre (boolean/tamsayı). `kv04-docs.test.ts` varsayılansız tamsayı ayarını da
+  kabul ediyor.
+
 ## 1.8.0 — 2026-09-29 (Utku, KV-12 RBAC katmanı)
 
 Kırıcı değişiklik yok (API_CONTRACTS §5: yeni fonksiyon ve DB hata eşlemesi minor; yeni refine DB'nin

@@ -17,6 +17,8 @@ import { createPrismaCommunityStore } from "../../src/modules/communities/prisma
 import type { AuthStore, UserStatus } from "../../src/modules/auth/store.ts";
 import { createPrismaMediaStore } from "../../src/modules/media/prisma-store.ts";
 import { DEFAULT_MEDIA_SETTINGS, type MediaSettings } from "../../src/modules/media/store.ts";
+import { DEFAULT_FEED_SETTINGS, type FeedSettings } from "../../src/modules/feed/for-you.ts";
+import { createPrismaFeedStore } from "../../src/modules/feed/prisma-store.ts";
 import { createPrismaCommentStore } from "../../src/modules/comments/prisma-store.ts";
 import { createPrismaOnboardingStore } from "../../src/modules/onboarding/prisma-store.ts";
 import { createPrismaPollStore } from "../../src/modules/polls/prisma-store.ts";
@@ -57,6 +59,8 @@ export type Harness = Backend & {
   pollSettings: PollSettings;
   /** Acil durum anahtarı features.comments (KV-40 gelene kadar). */
   commentsEnabled: { value: boolean };
+  /** "Senin İçin" keşif payı ve tekrar sınırları (KV-40 gelene kadar). */
+  feedSettings: FeedSettings;
   mediaSettings: MediaSettings;
   /** Medya route'ları sadece PostgreSQL backend'inde kayıtlıdır. */
   storage: FakeStorage;
@@ -162,6 +166,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     newAccountDailyLimit: 100,
   };
   const commentsEnabled = { value: true };
+  const feedSettings: FeedSettings = { ...DEFAULT_FEED_SETTINGS };
   const mediaSettings: MediaSettings = { ...DEFAULT_MEDIA_SETTINGS };
   const storage = createFakeStorage();
   const queue = createFakeQueue();
@@ -186,6 +191,8 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     pollStore: backend.prisma ? createPrismaPollStore(backend.prisma) : undefined,
     searchStore: backend.prisma ? createPrismaSearchStore(backend.prisma) : undefined,
     categoryAdminStore: backend.prisma ? createPrismaCategoryAdminStore(backend.prisma) : undefined,
+    feedStore: backend.prisma ? createPrismaFeedStore(backend.prisma) : undefined,
+    feedSettings: async () => feedSettings,
     voteStore: backend.prisma ? createPrismaVoteStore(backend.prisma) : undefined,
     communityStore: backend.prisma ? createPrismaCommunityStore(backend.prisma) : undefined,
     onboardingStore: backend.prisma ? createPrismaOnboardingStore(backend.prisma) : undefined,
@@ -216,6 +223,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     registrationEnabled,
     pollSettings,
     commentsEnabled,
+    feedSettings,
     mediaSettings,
     storage,
     queue,

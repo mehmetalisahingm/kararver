@@ -23,6 +23,10 @@ import {
 
 const def = (k: SettingKey) => settingsRegistry[k] as SettingDefinition;
 
+/** Varsayılanı eksik anahtarlar için tipe uygun test girdisi (varsayılan DEĞİLDİR). */
+const supply = (flag: boolean) =>
+  Object.fromEntries(MISSING_DEFAULTS.map((k) => [k, def(k).type === "boolean" ? flag : def(k).min ?? 0]));
+
 /** Kaynağı olmayan varsayılanlar (açık konu). Liste değişirse test bilinçli güncellenir. */
 const MISSING_DEFAULTS: SettingKey[] = [
   "polls.voteChangeAllowed",
@@ -31,6 +35,9 @@ const MISSING_DEFAULTS: SettingKey[] = [
   "features.comments",
   "features.uploads",
   "maintenance.enabled",
+  "feed.explorationPercent",
+  "feed.maxSameAuthorPerWindow",
+  "feed.maxSameCategoryPerWindow",
 ];
 
 function leafPaths(schema: z.ZodObject, prefix: string[] = []): string[] {
@@ -60,7 +67,7 @@ describe("kayıt defteri ↔ PublicConfig", () => {
 
   test("eksik alanlar dışarıdan verildiğinde varsayılanlar PublicConfig şeklini tam doldurur", () => {
     // Bu değerler test girdisidir, varsayılan DEĞİLDİR; yalnız eşlemenin tamlığını gösterir.
-    const supplied = Object.fromEntries(MISSING_DEFAULTS.map((k) => [k, false]));
+    const supplied = supply(false);
     const config = buildPublicConfig({ ...defaultSettings().values, ...supplied });
     assert.deepEqual(PublicConfig.parse(config), config);
     assert.equal(config.polls.maxDurationHours, 720);
@@ -69,9 +76,10 @@ describe("kayıt defteri ↔ PublicConfig", () => {
   });
 
   test("public olmayan ayar /config'e sızmaz", () => {
-    const supplied = Object.fromEntries(MISSING_DEFAULTS.map((k) => [k, true]));
+    const supplied = supply(true);
     const config = buildPublicConfig({ ...defaultSettings().values, ...supplied });
     assert.ok(!("trends" in config));
+    assert.ok(!("feed" in config));
     assert.ok(settingKeys.some((k) => def(k).publicPath === null));
   });
 
@@ -119,8 +127,15 @@ describe("anahtar ve kaynak kuralları", () => {
     assert.ok(!section.includes("registration.enabled"), "eski ad registration.enabled kaldırılmalı");
   });
 
-  test("trend katsayısı ve feed.* kayıtta yok (açık konu 9)", () => {
-    assert.deepEqual(settingKeys.filter((k) => /^feed\.|coefficient|weight/i.test(k)), []);
+  test("trend katsayısı kayıtta yok; feed.* (KV-27) kayıtta ama resmî değeri yok (açık konu 9)", () => {
+    assert.deepEqual(settingKeys.filter((k) => /coefficient|weight/i.test(k)), []);
+    const feed = settingKeys.filter((k) => k.startsWith("feed."));
+    assert.deepEqual(feed, ["feed.explorationPercent", "feed.maxSameAuthorPerWindow", "feed.maxSameCategoryPerWindow"]);
+    for (const k of feed) {
+      assert.equal(def(k).default, null, `${k}: kaynağı olmayan değer uydurulmaz`);
+      assert.match(def(k).missing!, /Öneri \d+ \(Faruk, KV-27/, k);
+      assert.equal(def(k).publicPath, null, `${k} public değil`);
+    }
   });
 
   test("yayın limitleri (KV-20) kaynağıyla kayıtlı: PRODUCT_TEAM_PLAN §13", () => {

@@ -170,8 +170,11 @@ Payload şemaları `events.ts` içindedir (strict zod). Kabul koşulundaki alanl
 | `maintenance.enabled` | boolean | — | **yok** | `maintenance` | aynı |
 | `trends.moversMinVotes` | integer | 0 – sınırsız | 30 | hayır | DATA_MODEL §8.3 "Eşikler" |
 | `trends.moversMinActiveAccounts` | integer | 0 – sınırsız | 10 | hayır | DATA_MODEL §8.3 "Eşikler" |
+| `feed.explorationPercent` | integer | 0 – 50 | **yok** | hayır | PRODUCT_TEAM_PLAN §7 ve #29 ayar olarak ister, değer vermez. Öneri 20 (Faruk, KV-27) |
+| `feed.maxSameAuthorPerWindow` | integer | 1 – 10 | **yok** | hayır | aynı. Öneri 2 |
+| `feed.maxSameCategoryPerWindow` | integer | 1 – 10 | **yok** | hayır | aynı. Öneri 4 |
 
-Kaynaklardaki dosyalar `packages/contracts/src/domains/` altındadır. Kayıtta **olmayanlar**: trend katsayıları, `feed.*` (§5). Cooldown ve günlük anket limiti KV-20 (#22) ile eklendi.
+Kaynaklardaki dosyalar `packages/contracts/src/domains/` altındadır. Kayıtta **olmayanlar**: trend katsayıları ve feed sıralama ağırlıkları (§5). Cooldown ve günlük anket limiti KV-20 (#22), `feed.*` keşif payı ve tekrar sınırları KV-27 (#29) ile eklendi.
 
 ---
 
@@ -213,5 +216,5 @@ Issue numaraları mevcut eşlemeye göredir (KV-N → #N+2).
 | 5 | **Yaptırım bildirimi**: `NotificationType`'ta yaptırım tipi yok; kullanıcıya uyarı/kısıt bildirimi gidecek mi? Tip eklemek minor. | Utku | KV-21 (#23) |
 | 6 | **`media.maxPerPoll` ürün varsayılanı**: varsayılan şu an tavana eşit (10); ürün varsayılanı Mehmet'e sorulacak. Tavan `polls.ts` mediaIds şemasıyla sabit; config ile API çelişmesin diye kayıtta `max = 10`. | Mehmet | KV-40 (#42) |
 | 7 | **Puan tavanı**: `points.initialGrant` ve `points.publishCost` için üst sınır kaynakta yok (kayıtta sınırsız). | Mehmet | #67 |
-| 8 | **Eksik 6 varsayılan**: `polls.voteChangeAllowed`, `features.registration`, `features.pollCreation`, `features.comments`, `features.uploads`, `maintenance.enabled`. Değer belgeye yazılınca `settings.test.ts`'teki `todo` kaldırılır. **PR bu yüzden taslaktır.** | Utku (kayıt), Mehmet (ürün), Faruk (`voteChangeAllowed`, KV-11 #13) | KV-40 (#42) |
-| 9 | **Kayıtta olmayan ayarlar**: ~~anket cooldown ve günlük anket limiti~~ (KV-20 ile eklendi: `polls.newAccount*`, `polls.dailyLimit`, `polls.cooldownMinutes`), trend katsayıları, `feed.*`. Değerleri belirlenince kaynağıyla kayda eklenir (minor). | Faruk (polls, trends, feed), Utku (rate-limit) | KV-10 (#12), KV-28 (#30), #22 |
+| 8 | **Eksik 9 varsayılan**: `polls.voteChangeAllowed`, `features.registration`, `features.pollCreation`, `features.comments`, `features.uploads`, `maintenance.enabled`; KV-27 ile `feed.explorationPercent`, `feed.maxSameAuthorPerWindow`, `feed.maxSameCategoryPerWindow` (öneri 20 / 2 / 4, API geçici olarak bunları kullanır; Mehmet teyidi). Değer belgeye yazılınca `settings.test.ts`'teki `todo` kaldırılır. **PR bu yüzden taslaktır.** | Utku (kayıt), Mehmet (ürün), Faruk (`voteChangeAllowed`, KV-11 #13; `feed.*`, KV-27 #29) | KV-40 (#42) |
+| 9 | **Kayıtta olmayan ayarlar**: ~~anket cooldown ve günlük anket limiti~~ (KV-20 ile eklendi: `polls.newAccount*`, `polls.dailyLimit`, `polls.cooldownMinutes`), trend katsayıları, feed sıralama ağırlıkları (~~`feed.*`~~ keşif payı/tekrar sınırı KV-27 ile eklendi, değerleri açık konu 8). Değerleri belirlenince kaynağıyla kayda eklenir (minor). | Faruk (polls, trends, feed), Utku (rate-limit) | KV-10 (#12), KV-28 (#30), #22 |

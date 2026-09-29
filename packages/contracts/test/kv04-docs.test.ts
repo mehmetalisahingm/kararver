@@ -23,7 +23,7 @@ test("her ayar belgedeki tabloda; varsayılanı eksik olanlar 'yok' ve açık ko
   for (const k of settingKeys) assert.ok(s.includes(`| \`${k}\` |`), k);
   const open = doc.slice(doc.indexOf("## 5. Açık konular"));
   for (const k of defaultSettings().missing) {
-    assert.match(s, new RegExp(`\\| \`${k.replace(".", "\\.")}\` \\| boolean \\| — \\| \\*\\*yok\\*\\*`), k);
+    assert.match(s, new RegExp(`\\| \`${k.replace(".", "\\.")}\` \\| (boolean|integer) \\| [^|]+ \\| \\*\\*yok\\*\\*`), k);
     assert.ok(open.includes(`\`${k}\``), `${k} açık konularda yok`);
   }
 });
