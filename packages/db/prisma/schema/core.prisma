@@ -100,6 +100,12 @@ model User {
   // Mert — community.prisma (KV-31)
   createdCommunities       Community[]           @relation("CommunityCreator")
   communityMemberships     CommunityMembership[]
+  // Utku — admin.prisma (KV-12)
+  role                     UserRole?             @relation("UserRoleHolder")
+  rolesGranted             UserRole[]            @relation("UserRoleGranter")
+  sanctions                Sanction[]            @relation("SanctionTarget")
+  sanctionsIssued          Sanction[]            @relation("SanctionIssuer")
+  sanctionsLifted          Sanction[]            @relation("SanctionLifter")
 
   @@index([status])
   @@map("users")
