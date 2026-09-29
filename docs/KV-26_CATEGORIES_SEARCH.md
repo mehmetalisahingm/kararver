@@ -1,6 +1,6 @@
 # KV-26: Kategori ve kapsamlı arama API (#28)
 
-> Sahip: **Faruk** · Kod: `apps/api/src/modules/search` · Sözleşme: `categories.list`, `search.query` (`packages/contracts/src/domains/discovery.ts`)
+> Sahip: **Faruk** · Kod: `apps/api/src/modules/search`, `apps/api/src/modules/categories` · Sözleşme: `categories.list`, `search.query` (`packages/contracts/src/domains/discovery.ts`), `admin.categories.*` (`packages/contracts/src/domains/admin.ts`)
 > Türkçe normalizasyon: [`TECH_DECISIONS.md` §3.9](./TECH_DECISIONS.md) (`kv_normalize`)
 
 ## Kategoriler
@@ -14,7 +14,20 @@
   - Listede ve kategori aramasında görünmez.
   - Yeni anket açılamaz (400 `VALIDATION_ERROR`, `field: categoryId`; KV-10).
   - **Mevcut anketleri görünür kalır:** detay, feed ve arama. Pasife almak içeriği gizlemez; içerik moderasyonla gizlenir.
-- **Admin kategori yönetimi** (`admin.categories.*`): Yazılmadı. Router'da `admin` yetki seviyesi ve DB'de rol tablosu yok; ikisi de KV-12 (#14, Utku). Onlar gelince bu modüle eklenecek.
+
+## Admin kategori yönetimi: `/v1/admin/categories`
+
+Yetki `category.manage` (ADMIN ve SUPER_ADMIN, KV-04); KV-12 RBAC katmanı router'ın kapısında verir. Misafir 401, kullanıcı ve moderatör 403. Silme yok; kategori `isActive=false` ile pasife alınır.
+
+| Endpoint | Davranış |
+|---|---|
+| `GET /admin/categories` | Pasifler dahil, `sortOrder` + `id` sıralı, opak cursor. `pollCount`: kaldırılmamış (`REMOVED` hariç) anket sayısı; gizli/incelemedeki anketler yöneticiye sayılır. |
+| `POST /admin/categories` | 201. Aynı slug 409 `CONFLICT` (`field: slug`). `Idempotency-Key` isteğe bağlı: aynı gövde aynı kaydı döner, farklı gövde 409 `IDEMPOTENCY_KEY_REUSED`. |
+| `PATCH /admin/categories/:id` | Kısmi güncelleme. Başka kategorinin slug'ı 409; olmayan kategori 404. |
+
+- **Slug tekilliği:** Aynı slug'a yazan işlemler slug üzerinde transaction advisory lock alır ve sonra kontrol eder. Çakışma unique index hatası (500) değil, 409 olur. Kilidi beklerken aynı `Idempotency-Key`'li istek tamamlandıysa 409 yerine kayıtlı sonuç döner (`assertNoCommittedKey`).
+- **`sortOrder`:** Sözleşme sadece tam sayı ister; sütun `int4` olduğundan aralık dışı değer 400 `VALIDATION_ERROR` olur.
+- **Bilinen açık: audit kaydı yok.** Gövdedeki `reason` doğrulanır ama saklanmaz. KV-04 §4.4'e göre audit kaydı işlemle aynı transaction'da yazılmalı; `audit_logs` tablosu KV-39 (#41, Utku) ile gelince create/update'e eklenecek.
 
 ## Arama: `GET /v1/search?q=&type=`
 
@@ -90,10 +103,13 @@ Küçük tablolarda (test veritabanı) planlayıcı `status` index'ini seçebili
 
 `apps/api/test/search.test.ts`: 12 senaryo + 1 birim testi. Gerçek PostgreSQL gerektirir. Arama bütün veritabanında çalıştığı için her test, Türkçe karakterli benzersiz bir "iz" kelimesiyle kendi verisini bulur.
 
+`apps/api/test/admin-categories.test.ts`: 8 senaryo (yetki, oluşturma/çakışma, idempotency, eşzamanlı aynı slug ve aynı anahtar, açık transaction ile deterministik slug yarışı, güncelleme, pasife alma, sayfalama). Mutasyon kontrolü: slug kilidi kaldırılınca deterministik yarış testi 500 alır; `assertNoCommittedKey` kaldırılınca aynı anahtarlı eşzamanlı istekler 409 alır.
+
 ## Kalan işler
 
 | Konu | İş |
 |---|---|
-| Admin kategori CRUD (`admin.categories.list/create/update`) | KV-12 (#14) RBAC gelince Faruk; ekranı KV-41 (#43, Mehmet) |
+| Admin kategori işlemlerinin audit kaydı (`reason` saklanmıyor) | KV-39 (#41, Utku) `audit_logs` gelince Faruk ekler |
+| Admin kategori yönetim ekranı | KV-41 (#43), Mehmet |
 | Arama sonucu sıralamasında benzerlik puanı (`similarity`) | Gerekirse ürün geri bildirimiyle |
 | Hız sınırı (arama spam'i) | KV-19 (#21), Utku |

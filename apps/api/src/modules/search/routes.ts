@@ -1,5 +1,5 @@
 // Kategori listesi ve arama — KV-26 (#28). Sözleşme: packages/contracts/src/domains/discovery.ts
-// Admin kategori yönetimi (admin.categories.*) KV-12 (#14) RBAC katmanı gelince eklenir.
+// Admin kategori yönetimi (admin.categories.*): modules/categories.
 import { PollCard } from "@kararver/contracts";
 import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
 import type { Route } from "../../http/route.ts";
