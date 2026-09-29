@@ -7,6 +7,7 @@ import { ApiClient } from "../lib/api-client";
 import { DemoClient } from "../lib/demo-client";
 import { emptyDraft, safeReturnTo } from "../lib/model";
 import type { Draft, ProductClient, User } from "../lib/model";
+import type { CommentDraft } from "../features/social/model";
 
 type Context = {
   demo: boolean;
@@ -22,6 +23,8 @@ type Context = {
   notify: (message: string) => void;
   returnTo: string;
   setReturnTo: (path: string) => void;
+  commentDrafts: Record<string, CommentDraft>;
+  setCommentDraft: (key: string, draft: CommentDraft) => void;
 };
 const ProductContext = createContext<Context | null>(null);
 export function useProduct() {
@@ -50,6 +53,7 @@ export function ProductProvider({
   const [sessionAttempt, retrySession] = useState(0);
   const [user, setUser] = useState<User | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, CommentDraft>>({});
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [message, notify] = useState("");
   const [returnTo, setReturn] = useState("/");
@@ -80,7 +84,20 @@ export function ProductProvider({
     });
     return () => { active = false; unsubscribe(); };
   }, [client, sessionAttempt]);
-  const syncUser = () => setUser(client.current());
+  const syncUser = () => {
+    const current = client.current();
+    if (current)
+      setCommentDrafts((old) => {
+        const next = { ...old };
+        for (const key of Object.keys(old))
+          if (key.startsWith("guest:")) {
+            next[current.id + key.slice(5)] = old[key];
+            delete next[key];
+          }
+        return next;
+      });
+    setUser(current);
+  };
   const setReturnTo = (path: string) => setReturn(safeReturnTo(path));
   function requireUser(path: string) {
     if (client.current()) return true;
@@ -108,6 +125,9 @@ export function ProductProvider({
     notify,
     returnTo,
     setReturnTo,
+    commentDrafts,
+    setCommentDraft: (key: string, value: CommentDraft) =>
+      setCommentDrafts((old) => ({ ...old, [key]: value })),
   };
   return (
     <ProductContext.Provider value={context}>
@@ -221,6 +241,11 @@ export function ProductProvider({
                   ["vote", "Oy"],
                   ["create", "Yayın"],
                   ["login", "Giriş"],
+                  ["engagement", "Yorum yükleme"],
+                  ["reaction", "Tepki"],
+                  ["comment", "Yorum gönderme"],
+                  ["editComment", "Yorum düzenleme"],
+                  ["deleteComment", "Yorum silme"],
                 ].map(([operation, label]) => (
                   <button
                     key={operation}

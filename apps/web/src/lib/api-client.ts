@@ -2,6 +2,7 @@ import { Category, Me, PollCard, PollDetail, VoteResult, dataOf, pageOf } from "
 import { HttpClient } from "./http-client.ts";
 import { UiError, safeReturnTo } from "./model.ts";
 import type { Draft, Poll, ProductClient, User } from "./model.ts";
+import type { CommentDraft, Engagement, Reaction } from "../features/social/model.ts";
 
 export function mapPoll(wire: ReturnType<typeof PollCard.parse> | ReturnType<typeof PollDetail.parse>): Poll {
   const detail = "options" in wire ? wire : null;
@@ -70,5 +71,23 @@ export class ApiClient implements ProductClient {
     const poll = await this.get(id);
     const { data } = dataOf(VoteResult).parse(await this.http.request("votes.put", { params: { id: poll.id }, body: { optionId } }));
     return { ...poll, ownVote: data.vote.optionId, results: data.results };
+  }
+  private socialUnavailable(): never {
+    throw new UiError("INTERNAL_ERROR", "Sosyal etkileşimlerin gerçek API entegrasyonu henüz hazır değil.");
+  }
+  async getEngagement(_pollId: string, _signal?: AbortSignal): Promise<Engagement> {
+    return this.socialUnavailable();
+  }
+  async react(_pollId: string, _commentId: string | null, _value: Reaction): Promise<Engagement> {
+    return this.socialUnavailable();
+  }
+  async addComment(_pollId: string, _draft: CommentDraft, _requestId: string): Promise<Engagement> {
+    return this.socialUnavailable();
+  }
+  async editComment(_pollId: string, _commentId: string, _text: string): Promise<Engagement> {
+    return this.socialUnavailable();
+  }
+  async deleteComment(_pollId: string, _commentId: string): Promise<Engagement> {
+    return this.socialUnavailable();
   }
 }
