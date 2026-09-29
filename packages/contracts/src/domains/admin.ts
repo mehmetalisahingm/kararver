@@ -312,7 +312,9 @@ export const adminEndpoints = [
       params: IdParams,
       body: z
         .strictObject({ type: SanctionType, reason: Reason, endsAt: Timestamp.nullable().default(null) })
-        .refine((b) => b.type !== "SUSPEND" || b.endsAt !== null, { message: "SUSPEND için endsAt zorunlu", path: ["endsAt"] }),
+        .refine((b) => b.type !== "SUSPEND" || b.endsAt !== null, { message: "SUSPEND için endsAt zorunlu", path: ["endsAt"] })
+        // BAN kalıcıdır; DB de reddeder (sanctions_ban_permanent_check, DATA_MODEL §9.1).
+        .refine((b) => b.type !== "BAN" || b.endsAt === null, { message: "BAN için endsAt null olmalı", path: ["endsAt"] }),
     },
     responses: { 201: dataOf(Sanction) },
     errors: [],

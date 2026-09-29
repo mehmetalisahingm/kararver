@@ -1,11 +1,13 @@
 // Endpoint'ler @kararver/contracts registry'sinden kaydedilir: method, path, istek şemaları,
 // yetki seviyesi ve cache politikası sözleşmeden gelir; modül sadece handler'ı yazar.
 // Böylece uygulama ile docs/API_CONTRACTS.md birbirinden kopamaz.
-import { getEndpoint, type EndpointContract } from "@kararver/contracts";
+import { getEndpoint, permissionForEndpoint, type ActionId, type ResourceContext } from "@kararver/contracts";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { z } from "zod";
 import type { SessionUser } from "../modules/auth/session.ts";
-import { ApiError, validationError } from "./errors.ts";
+import { createAccess, LEGACY_RESOURCE_CHECKS, needsResource, type ModerationScope } from "../modules/rbac/access.ts";
+import type { RbacStore } from "../modules/rbac/store.ts";
+import { validationError } from "./errors.ts";
 
 export type RouteContext = {
   request: FastifyRequest;
@@ -15,6 +17,13 @@ export type RouteContext = {
   query: any;
   /** public endpoint'te oturum yoksa null; user/verified endpoint'te her zaman dolu. */
   viewer: SessionUser | null;
+  /**
+   * KV-04 tam yetki kararı (KV-12): kaynağın sahibi/topluluğu/hedefi DB'den okunduktan sonra çağrılır.
+   * `action` verilmezse endpoint'in işlemi. Kaynak bağlamı gereken endpoint bunu çağırmadan dönemez.
+   */
+  authorize(resource: ResourceContext, action?: ActionId): Promise<void>;
+  /** Moderasyon kuyruğu filtresi: ADMIN+ tümü, MODERATOR atandığı topluluklar (DB'den). */
+  moderationScope(): Promise<ModerationScope>;
 };
 
 export type RouteResult = { status: number; body: unknown };
@@ -24,12 +33,14 @@ export type Authenticator = {
   resolve(request: FastifyRequest, reply: FastifyReply): Promise<SessionUser | null>;
 };
 
-type RouteOptions = { validateResponses: boolean; authenticator: Authenticator };
-
-// owner: router oturumu ve hesap durumunu kontrol eder (user ile aynı); kaynağın sahibi olup
-// olmadığını handler DB'deki sahip bilgisiyle kontrol eder, çünkü kaynak sadece orada bilinir.
-const SUPPORTED_AUTH = new Set(["public", "user", "verified", "owner"]);
-const RESTRICTED = new Set(["BANNED", "SUSPENDED"]);
+type RouteOptions = {
+  validateResponses: boolean;
+  /** true: kaynak bağlamı gereken endpoint ctx.authorize çağırmadan dönerse hata; false: sadece loglanır. */
+  enforceResourceChecks: boolean;
+  authenticator: Authenticator;
+  rbac: RbacStore;
+  now: () => Date;
+};
 
 function toFastifyPath(path: string): string {
   return `/v1${path}`;
@@ -42,24 +53,12 @@ function parse(schema: z.ZodType | undefined, value: unknown, location: "body" |
   return result.data;
 }
 
-function authorize(endpoint: EndpointContract, viewer: SessionUser | null): void {
-  if (endpoint.auth === "public") return;
-  if (!viewer) throw new ApiError("UNAUTHENTICATED", "Giriş yapmanız gerekiyor.");
-  if (RESTRICTED.has(viewer.status)) {
-    throw new ApiError("ACCOUNT_RESTRICTED", "Hesabınız bu işlem için kısıtlı.", [{ code: endpoint.id }]);
-  }
-  if (endpoint.auth === "verified" && !viewer.emailVerified) {
-    throw new ApiError("EMAIL_NOT_VERIFIED", "Önce e-postanızı doğrulayın.");
-  }
-}
-
 export function createRouter(app: FastifyInstance, options: RouteOptions) {
   return function route(id: string, handler: (ctx: RouteContext) => Promise<RouteResult>): void {
     const endpoint = getEndpoint(id);
-    if (!SUPPORTED_AUTH.has(endpoint.auth)) {
-      // moderator/admin kontrolleri ortak RBAC katmanıyla gelir (KV-12, #14).
-      throw new Error(`${id}: '${endpoint.auth}' yetki seviyesi henüz desteklenmiyor (KV-12)`);
-    }
+    // Yetki KV-04 kuralıyla verilir (modules/rbac/access.ts); eşlemesi olmayan endpoint kayıtta patlar.
+    const action = permissionForEndpoint(id);
+    const mustCheckResource = needsResource(action) && !LEGACY_RESOURCE_CHECKS.has(id);
 
     app.route({
       method: endpoint.method,
@@ -67,7 +66,8 @@ export function createRouter(app: FastifyInstance, options: RouteOptions) {
       handler: async (request, reply) => {
         reply.header("Cache-Control", "private, no-store");
         const viewer = await options.authenticator.resolve(request, reply);
-        authorize(endpoint, viewer);
+        const access = createAccess(options.rbac, viewer, action, options.now());
+        await access.gate();
         const ctx: RouteContext = {
           request,
           reply,
@@ -75,8 +75,16 @@ export function createRouter(app: FastifyInstance, options: RouteOptions) {
           query: parse(endpoint.request.query, request.query, "query"),
           body: parse(endpoint.request.body, request.body, "body"),
           viewer,
+          authorize: access.authorize,
+          moderationScope: access.moderationScope,
         };
         const result = await handler(ctx);
+        if (mustCheckResource && !access.resourceChecked && result.status < 400) {
+          // Unutulan kaynak kontrolü sessiz izin demektir.
+          const message = `${id}: '${action}' kaynak bağlamı ister, handler ctx.authorize çağırmadan döndü`;
+          if (options.enforceResourceChecks) throw new Error(message);
+          request.log.error({ endpoint: id, action }, message);
+        }
         const schema = endpoint.responses[result.status];
         if (!schema) throw new Error(`${id}: sözleşmede olmayan status ${result.status}`);
         if (options.validateResponses) {

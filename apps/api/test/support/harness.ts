@@ -18,8 +18,11 @@ import { DEFAULT_MEDIA_SETTINGS, type MediaSettings } from "../../src/modules/me
 import { createPrismaCommentStore } from "../../src/modules/comments/prisma-store.ts";
 import { createPrismaPollStore } from "../../src/modules/polls/prisma-store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings } from "../../src/modules/polls/store.ts";
+import { createPrismaRbacStore } from "../../src/modules/rbac/prisma-store.ts";
+import type { RbacStore } from "../../src/modules/rbac/store.ts";
 import { createPrismaVoteStore } from "../../src/modules/votes/prisma-store.ts";
 import { createFakeQueue, createFakeStorage, type FakeStorage } from "./fake-storage.ts";
+import { createMemoryRbacStore } from "./memory-rbac-store.ts";
 import { createMemoryAuthStore } from "./memory-store.ts";
 
 export const WEB_ORIGIN = "http://localhost:3000";
@@ -32,6 +35,8 @@ type Backend = {
   setStatus(userId: string, status: UserStatus): Promise<void>;
   addMedia(uploaderId: string, seed: MediaSeed): Promise<{ id: string; publicKey: string | null }>;
   activeSessions(userId: string): Promise<number>;
+  /** Rol/yaptırım okuma (KV-12). Test verisi yardımcıları: ./rbac-probe.ts */
+  rbac: RbacStore;
   close(): Promise<void>;
   /** Sadece PostgreSQL backend'inde; anket testleri seed ve doğrulama için kullanır. */
   prisma?: PrismaClient;
@@ -61,6 +66,7 @@ export const memoryBackend: BackendFactory = {
     const store = createMemoryAuthStore();
     return {
       store,
+      rbac: createMemoryRbacStore(),
       async setStatus(userId, status) {
         store.users.get(userId)!.status = status;
       },
@@ -100,6 +106,7 @@ export function prismaBackend(): BackendFactory | null {
       const prisma = createPrismaClient(url);
       return {
         store: createPrismaAuthStore(prisma),
+        rbac: createPrismaRbacStore(prisma),
         async setStatus(userId, status) {
           await prisma.user.update({ where: { id: userId }, data: { status } });
         },
@@ -166,6 +173,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
   const app = buildApp({
     config,
     authStore: backend.store,
+    rbacStore: backend.rbac,
     hasher: createArgon2Hasher(),
     mailer: { send: async (mail) => void mails.push(mail) },
     now: () => clock.now,

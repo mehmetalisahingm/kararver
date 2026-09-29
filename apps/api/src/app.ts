@@ -20,6 +20,7 @@ import { registerCommentRoutes } from "./modules/comments/routes.ts";
 import type { CommentStore } from "./modules/comments/store.ts";
 import { registerFeedRoutes } from "./modules/feed/routes.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
+import type { RbacStore } from "./modules/rbac/store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
 import { registerUserRoutes } from "./modules/users/routes.ts";
 import { registerVoteRoutes } from "./modules/votes/routes.ts";
@@ -28,6 +29,8 @@ import type { VoteStore } from "./modules/votes/store.ts";
 export type AppDeps = {
   config: Config;
   authStore: AuthStore;
+  /** Rol, yaptırım ve topluluk moderatörlüğü (KV-12); her istekte okunur. */
+  rbacStore: RbacStore;
   hasher: PasswordHasher;
   mailer: Mailer;
   now?: () => Date;
@@ -94,7 +97,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper };
   const route = createRouter(app, {
     validateResponses: config.appEnv !== "production",
+    enforceResourceChecks: config.appEnv !== "production",
     authenticator: createAuthenticator(deps.authStore, session, now),
+    rbac: deps.rbacStore,
+    now,
   });
 
   registerAuthRoutes(route, {

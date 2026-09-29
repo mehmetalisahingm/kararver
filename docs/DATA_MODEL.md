@@ -417,14 +417,16 @@ Seçenek (`poll_options`) veya yorum bağlayan her tablo, bileşik FK için haz�
 
 Aktif yaptırım: `lifted_at IS NULL AND (ends_at IS NULL OR ends_at > now())`; index `(user_id, lifted_at, ends_at)` (partial index değil, §10.4).
 
-**Servis kuralları (DB'de korunamaz, RBAC katmanı KV-12 PR-B)**
-- **`users.status` senkronu:** Yaptırım ekleme ve kaldırma aynı transaction'da `users.status`'u kalan aktif yaptırımlardan yeniden hesaplar: `BAN` > `SUSPEND` > `RESTRICT_*` → `RESTRICTED` > `ACTIVE` (`WARNING` durumu değiştirmez). `SUSPEND`/`BAN` açık oturumları iptal eder (§7.2). Süre dolumu zamana bağlı olduğu için trigger yakalayamaz; süresi dolan `SUSPEND`/`RESTRICT_*` için durumu yeniden hesaplayan bir job gerekir. `authorize` süresi dolan kısıtları zaten yok sayar, ama `users.status = SUSPENDED` job çalışana kadar kalır.
+**Servis kuralları (DB'de korunamaz; RBAC katmanı KV-12 PR-B, yaptırım servisi KV-33)**
+- **Okuma:** API her istekte rolü ve aktif yaptırımları bu tablolardan, topluluk moderatörlüğünü `community_memberships`'ten okur (`apps/api/src/modules/rbac`); önbellek yoktur. Rol/yaptırım değişikliği açık oturumda bir sonraki istekte etkilidir. `SUSPEND`/`BAN` etkisi `users.status`'tan gelir (tek otorite); `RESTRICT_*` satırdan gelir.
+- **`starts_at` her zaman yazma anıdır;** ileri tarihli yaptırım yoktur (sözleşmede alan yok). Aktiflik bu yüzden `starts_at`'e bakmaz.
+- **`users.status` senkronu:** Yaptırım ekleme ve kaldırma aynı transaction'da `users.status`'u kalan aktif yaptırımlardan yeniden hesaplar: `BAN` > `SUSPEND` > `RESTRICT_*` → `RESTRICTED` > `ACTIVE` (`WARNING` durumu değiştirmez). `SUSPEND`/`BAN` açık oturumları iptal eder (§7.2). Süre dolumu zamana bağlı olduğu için trigger yakalayamaz; süresi dolan `SUSPEND`/`RESTRICT_*` için durumu yeniden hesaplayan bir job gerekir (KV-33, Utku). `authorize` süresi dolan `RESTRICT_*`'ı zaten yok sayar, ama `users.status = SUSPENDED` job çalışana kadar kalır. **Bilinen sonuç:** giriş kontrolü (`auth.login`) de `users.status`'a baktığı için job olmadan süresi dolan SUSPEND'li kullanıcı giriş yapamaz ve açık oturumu da 403 alır. Yaptırım endpoint'leri de KV-33'te geldiği için bu durum şu an oluşamaz; job KV-33'te birlikte gelir.
 - **Son aktif SUPER_ADMIN:** Aktiflik `users.status`'a bağlı olduğu ve eşzamanlı iki işlem (iki SUPER_ADMIN'in birbirini aynı anda düşürmesi veya yaptırıma bağlaması) sayımı birlikte geçebileceği için DB kuralı değildir. `admin.roles.put` ve SUPER_ADMIN hedefli `SUSPEND`/`BAN`, transaction içinde önce `SELECT … FROM user_roles WHERE role = 'SUPER_ADMIN' FOR UPDATE` ile kilit alır, sonra `users.status = 'ACTIVE'` olanları sayar.
 - **Yetki:** Admin hedefe yaptırımın SUPER_ADMIN gerektirmesi, rol atamanın sadece SUPER_ADMIN'e açık olması `authorize` kuralıdır (KV-04), DB'de değildir.
 - **Aynı tipte birden çok aktif yaptırım** DB'de engellenmez (unique index süresi dolmuş ama kaldırılmamış satırlar yüzünden yanlış reddederdi); servis mevcut aktif yaptırımı kontrol eder.
 - **Lift idempotency:** `admin.sanctions.lift` "natural" idempotent'tir; zaten kaldırılmış yaptırımda servis mevcut satırı döner, DB'ye ikinci kaldırma yazmaz (yazarsa `KV_SANCTIONS_IMMUTABLE`).
 
-**PR-B'ye bırakılanlar (contracts minor):** `KV_SANCTIONS_IMMUTABLE → INTERNAL_ERROR` `dbErrorMap`'e eklenecek. `admin.sanctions.create` gövdesine "`BAN` için `endsAt` null olmalı" refine'ı eklenecek; şu an sözleşme `BAN` + `endsAt` kabul ediyor, DB reddediyor (`sanctions_ban_permanent_check`).
+**Sözleşme (contracts 1.8.0):** `dbErrorMap`'te `KV_SANCTIONS_IMMUTABLE → INTERNAL_ERROR` (kod hatası: loglanır, 500). `admin.sanctions.create` gövdesi `SUSPEND` için `endsAt` ister, `BAN` için `endsAt: null` ister; DB kısıtlarıyla (`sanctions_suspend_ends_check`, `sanctions_ban_permanent_check`) aynıdır.
 
 ---
 
