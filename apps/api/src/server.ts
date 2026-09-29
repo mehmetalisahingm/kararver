@@ -11,6 +11,7 @@ import { startPgBossMediaQueue } from "./modules/media/queue.ts";
 import { createS3MediaStorage } from "./modules/media/storage.ts";
 import { createPrismaCommentStore } from "./modules/comments/prisma-store.ts";
 import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
+import { createPrismaRbacStore } from "./modules/rbac/prisma-store.ts";
 import { createPrismaVoteStore } from "./modules/votes/prisma-store.ts";
 
 // Local'de repo kökündeki .env okunur; staging/production'da değerler ortamdan gelir.
@@ -30,6 +31,7 @@ const mediaQueue = config.storage
 const app = buildApp({
   config,
   authStore: createPrismaAuthStore(prisma),
+  rbacStore: createPrismaRbacStore(prisma),
   pollStore: createPrismaPollStore(prisma),
   voteStore: createPrismaVoteStore(prisma),
   commentStore: createPrismaCommentStore(prisma),

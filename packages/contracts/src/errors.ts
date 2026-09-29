@@ -75,4 +75,5 @@ export const dbErrorMap = Object.freeze({
   // Bunlar istemci hatası değil, kod hatasıdır: loglanır, 500 döner.
   KV_VOTE_EVENTS_APPEND_ONLY: "INTERNAL_ERROR",
   KV_VOTE_IDENTITY_IMMUTABLE: "INTERNAL_ERROR",
+  KV_SANCTIONS_IMMUTABLE: "INTERNAL_ERROR",
 } as const satisfies Record<string, ErrorCode>);

@@ -336,6 +336,17 @@ describe("validation", () => {
     assert.equal(body.safeParse({ body: "x", parentId: "01998b9a-0000-7000-8000-000000000040" }).success, true);
   });
 
+  test("yaptırım süresi: SUSPEND süreli, BAN kalıcı (DB CHECK ile aynı)", () => {
+    const body = getEndpoint("admin.sanctions.create").request.body!;
+    const endsAt = "2026-10-05T12:00:00.000Z";
+    assert.equal(body.safeParse({ type: "SUSPEND", reason: "spam tekrarı" }).success, false);
+    assert.equal(body.safeParse({ type: "SUSPEND", reason: "spam tekrarı", endsAt }).success, true);
+    assert.equal(body.safeParse({ type: "BAN", reason: "spam tekrarı", endsAt }).success, false);
+    assert.equal(body.safeParse({ type: "BAN", reason: "spam tekrarı" }).success, true);
+    assert.equal(body.safeParse({ type: "BAN", reason: "spam tekrarı", endsAt: null }).success, true);
+    assert.equal(body.safeParse({ type: "RESTRICT_COMMENTS", reason: "spam tekrarı", endsAt }).success, true);
+  });
+
   test("pagination: limit 1–100, varsayılan 20, cursor base64url", () => {
     assert.equal(CursorQuery.parse({}).limit, 20);
     assert.equal(CursorQuery.parse({ limit: "100" }).limit, 100);

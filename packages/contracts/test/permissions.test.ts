@@ -12,6 +12,7 @@ import {
   getEndpoint,
   highestRole,
   permissionForEndpoint,
+  preauthorize,
   restrictionsFromSanctions,
   type ActionId,
   type ActorSanction,
@@ -498,5 +499,72 @@ describe("zorunlu bağlam", () => {
 
   test("admin.roles.put endpoint'i SUPER_ADMIN kuralına bağlı", () => {
     assert.equal(actions[permissionForEndpoint(getEndpoint("admin.roles.put").id)].level, "super_admin");
+  });
+});
+
+// ─── İstek kapısı (preauthorize) ──────────────────────────────
+
+describe("preauthorize", () => {
+  const actors: [string, TrustedActor | null][] = [
+    ["misafir", null],
+    ["kullanıcı", user],
+    ["doğrulanmamış", actor({ emailVerified: false })],
+    ["RESTRICTED durum", actor({ status: "RESTRICTED" })],
+    ["SUSPENDED", actor({ status: "SUSPENDED" })],
+    ["BANNED", actor({ status: "BANNED" })],
+    ["yorum kısıtlı", actor({ sanctions: [commentsBan] })],
+    ["yayın kısıtlı", actor({ sanctions: [postingBan] })],
+    ["süresi dolmuş kısıt", actor({ sanctions: [{ ...commentsBan, endsAt: PAST }, { ...postingBan, endsAt: PAST }] })],
+    ["moderatör", moderator],
+    ["atanmamış moderatör", actor({ userId: "u-mod2", roles: ["MODERATOR"] })],
+    ["rolü alınmış moderatör", actor({ userId: "u-mod3", roles: ["USER"], moderatedCommunityIds: [C1] })],
+    ["admin", admin],
+    ["askıdaki admin", actor({ ...admin, status: "SUSPENDED" })],
+    ["super admin", superAdmin],
+  ];
+  const contexts = (action: ActionId, a: TrustedActor | null): ResourceContext[] => [
+    contextFor(action, a),
+    contextFor(action, a, { ownerId: "u-other" }),
+    contextFor(action, a, { ownerId: a?.userId ?? "u-self" }),
+    contextFor(action, a, { communityId: C2 }),
+    contextFor(action, a, { communityId: null }),
+    contextFor(action, a, { mediaPurpose: "AVATAR" }),
+    contextFor(action, a, { targetUserId: a?.userId ?? "u-self" }),
+    contextFor(action, a, { targetRoles: ["ADMIN"] }),
+    contextFor(action, a, { targetRoles: ["SUPER_ADMIN"], newRole: "ADMIN", activeSuperAdminCount: 1 }),
+  ];
+  const resourceFree = (action: ActionId) => !actions[action].requires?.length && actions[action].scope !== "community";
+
+  test("her endpoint için tam bağlamlı authorize ile çelişmez", () => {
+    for (const e of endpoints) {
+      const action = permissionForEndpoint(e.id);
+      for (const [name, a] of actors) {
+        const gate = preauthorize(a, action, NOW);
+        for (const ctx of contexts(action, a)) {
+          const full = authorize(a, action, ctx, NOW);
+          // Kapı reddederse tam karar da reddeder; tam karar izin verirse kapı da izin vermiştir.
+          if (!gate.allowed) assert.equal(full.allowed, false, `${e.id} / ${name}: kapı ret, authorize izin`);
+          if (resourceFree(action)) assert.deepEqual(gate, full, `${e.id} / ${name}: kaynaksız kuralda karar farklı`);
+        }
+      }
+    }
+  });
+
+  test("kaynaksız kuralda aynı ret kodu; kaynak isteyen kuralda kapı yalnız hesap/rol/kısıta bakar", () => {
+    const code = (d: ReturnType<typeof preauthorize>) => (d.allowed ? null : d.code);
+    assert.equal(code(preauthorize(actor({ sanctions: [commentsBan] }), "comment.create", NOW)), "ACCOUNT_RESTRICTED");
+    assert.equal(code(preauthorize(actor({ sanctions: [commentsBan] }), "vote.cast", NOW)), null);
+    assert.equal(code(preauthorize(actor({ sanctions: [postingBan] }), "poll.update", NOW)), "ACCOUNT_RESTRICTED");
+    // Avatar muafiyeti amaca bağlı: kapı izin verir, karar handler'daki authorize'ındır.
+    assert.equal(code(preauthorize(actor({ sanctions: [postingBan] }), "media.upload", NOW)), null);
+    assert.equal(code(preauthorize(user, "moderation.poll.apply", NOW)), "FORBIDDEN");
+    assert.equal(code(preauthorize(moderator, "moderation.poll.apply", NOW)), null);
+    assert.equal(code(preauthorize(actor({ roles: ["MODERATOR"] }), "report.queue.read", NOW)), "FORBIDDEN");
+    assert.equal(code(preauthorize(null, "poll.update", NOW)), "UNAUTHENTICATED");
+  });
+
+  test("bilinmeyen işlem ve geçersiz zaman hata verir", () => {
+    assert.throws(() => preauthorize(user, "admin.everything" as ActionId, NOW), /Bilinmeyen işlem/);
+    assert.throws(() => preauthorize(user, "content.read", new Date("x")), /Geçersiz zaman: now/);
   });
 });

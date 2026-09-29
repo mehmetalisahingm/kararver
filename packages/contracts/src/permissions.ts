@@ -331,12 +331,32 @@ const deny = (code: ErrorCode, reason: string): Decision => ({ allowed: false, c
  * fırlatır; sessizce izin veya ret üretilmez.
  */
 export function authorize(actor: TrustedActor | null, action: ActionId, resource: ResourceContext, now: Date): Decision {
-  const r: ActionRule = actions[action];
-  if (!r) throw new TypeError(`Bilinmeyen işlem: ${String(action)}`);
+  const r = ruleOf(action);
   for (const key of r.requires ?? []) {
     if (resource[key] === undefined) throw new TypeError(`authorize(${action}): resource.${key} zorunlu`);
   }
+  return decide(actor, r, resource, now);
+}
 
+/**
+ * `authorize`'ın kaynaktan bağımsız kısmı: istek kapısı (API router'ı, handler'dan önce).
+ * Seviye, hesap durumu, e-posta, yönetici rolü, kuyruk kapsamı ve kaynaktan bağımsız kısıt.
+ * `requires`'ı ve topluluk kapsamı olmayan kuralda `authorize` ile aynı kararı verir; diğerlerinde
+ * ret `authorize`'ın da reddettiği anlamına gelir, izin ise tam kararı handler'a bırakır.
+ * Tek fark sıra: sahiplik ve kısıt birlikte eksikse kapı ACCOUNT_RESTRICTED döner (ikisi de 403).
+ */
+export function preauthorize(actor: TrustedActor | null, action: ActionId, now: Date): Decision {
+  return decide(actor, ruleOf(action), null, now);
+}
+
+function ruleOf(action: ActionId): ActionRule {
+  const r: ActionRule | undefined = actions[action];
+  if (!r) throw new TypeError(`Bilinmeyen işlem: ${String(action)}`);
+  return r;
+}
+
+/** `resource` null ise kaynağa bağlı kontroller (sahiplik, topluluk, guard, medya muafiyeti) atlanır. */
+function decide(actor: TrustedActor | null, r: ActionRule, resource: ResourceContext | null, now: Date): Decision {
   instant(now, "now");
 
   // Misafire açık işlem hesap durumuna bakmaz: public okuma yaptırımdan ayrıdır.
@@ -350,12 +370,16 @@ export function authorize(actor: TrustedActor | null, action: ActionId, resource
     return deny("ACCOUNT_RESTRICTED", "Hesap askıda veya yasaklı");
   }
   if (r.level === "verified" && !actor.emailVerified) return deny("EMAIL_NOT_VERIFIED", "E-posta doğrulanmamış");
-  if (r.level === "owner" && resource.ownerId !== actor.userId) return deny("FORBIDDEN", "Kaynağın sahibi değil");
-  if (r.guard === "selfVote" && resource.ownerId === actor.userId) {
-    return deny("SELF_VOTE_FORBIDDEN", "Anket sahibi kendi anketine oy veremez");
+  if (resource) {
+    if (r.level === "owner" && resource.ownerId !== actor.userId) return deny("FORBIDDEN", "Kaynağın sahibi değil");
+    if (r.guard === "selfVote" && resource.ownerId === actor.userId) {
+      return deny("SELF_VOTE_FORBIDDEN", "Anket sahibi kendi anketine oy veremez");
+    }
   }
   if (r.restrictedBy && restrictionsFromSanctions(actor.sanctions, now).includes(r.restrictedBy)) {
-    const exempt = r.accountMediaExempt && accountMediaPurposes.includes(resource.mediaPurpose!);
+    // Muafiyet kaynağın amacına bağlıdır; kapıda bilinmez, karar tam authorize'a kalır.
+    if (r.accountMediaExempt && !resource) return allow;
+    const exempt = r.accountMediaExempt && accountMediaPurposes.includes(resource!.mediaPurpose!);
     if (!exempt) return deny("ACCOUNT_RESTRICTED", `Hesapta ${r.restrictedBy} kısıtı var`);
   }
   return allow;
@@ -365,12 +389,17 @@ function authorizeStaff(
   actor: TrustedActor,
   r: ActionRule,
   required: number,
-  resource: ResourceContext,
+  resource: ResourceContext | null,
 ): Decision {
   // Yetkili işlem yalnızca ACTIVE hesapla yapılır (canModerate ile aynı).
   if (actor.status !== "ACTIVE") return deny("FORBIDDEN", "Yetkili işlem için hesap ACTIVE olmalı");
   const role = highestRole(actor.roles);
   if (rank[role] < required) return deny("FORBIDDEN", `${r.level} yetkisi gerekli`);
+
+  if (r.scope === "queue" && role === "MODERATOR" && actor.moderatedCommunityIds.length === 0) {
+    return deny("FORBIDDEN", "Moderatör hiçbir topluluğa atanmamış");
+  }
+  if (!resource) return allow;
 
   if (r.scope === "community") {
     const ok = canModerate(
@@ -378,9 +407,6 @@ function authorizeStaff(
       { communityId: resource.communityId },
     );
     if (!ok) return deny("FORBIDDEN", "Moderatör bu topluluğa atanmamış");
-  }
-  if (r.scope === "queue" && role === "MODERATOR" && actor.moderatedCommunityIds.length === 0) {
-    return deny("FORBIDDEN", "Moderatör hiçbir topluluğa atanmamış");
   }
 
   if (r.guard === "sanctionTarget") {

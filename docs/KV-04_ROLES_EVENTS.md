@@ -32,6 +32,21 @@ if (!decision.allowed) throw httpError(decision.code); // UNAUTHENTICATED | ACCO
 - `now` zorunludur; süresi dolmuş yaptırımı (`endsAt <= now`) `authorize` kendisi eler. `endsAt = null` kalıcıdır.
 - Bir kuralın `requires` listesindeki bağlam (ör. `ownerId`, `communityId`) verilmezse `authorize` TypeError fırlatır. Eksik bağlam servis hatasıdır; sessiz izin veya ret üretilmez.
 - Her ret kodu ilgili endpoint'in sözleşmedeki hata kodları (`allErrors`) içindedir; test bunu bütün endpointler için doğrular.
+- `preauthorize(actor, action, now)`: `authorize`'ın kaynaktan bağımsız kısmı (aynı kod yolu). `requires`'ı ve topluluk kapsamı olmayan kuralda `authorize` ile aynı kararı verir; diğerlerinde kapının reddi tam kararda da ret demektir (test: her endpoint için).
+
+**API'de kullanım (KV-12, `apps/api/src/modules/rbac`).** Router her istekte handler'dan önce endpoint'in işlemiyle `preauthorize` çağırır; aktör (`user_roles`, aktif `sanctions`, gerekirse `community_memberships`) her istekte DB'den kurulur, önbellek yoktur. `ACCOUNT_RESTRICTED`'da `details[0].code` KV-04 işlem kimliğidir (ör. `comment.create`). Kaynağa bağlı kısım handler'dadır:
+
+```ts
+route("admin.reports.resolve", async ({ params, authorize }) => {
+  const report = await store.get(params.id);           // topluluk DB'den, request'ten değil (§4.2)
+  await authorize({ communityId: report.communityId }); // işlem verilmezse endpoint'in işlemi
+  …
+});
+```
+
+- Kuyruk listeleri `ctx.moderationScope()` ile filtrelenir: ADMIN/SUPER_ADMIN `{ all: true }`, MODERATOR `{ all: false, communityIds }`.
+- Kaynak bağlamı gereken (`requires` veya topluluk kapsamı olan) endpoint'in handler'ı `ctx.authorize`'ı çağırmadan başarılı dönerse test/dev ortamında 500, production'da hata logu (unutulan kontrol sessiz izin olmasın). KV-12 öncesi, sahipliği kendisi kontrol eden handler'lar `LEGACY_RESOURCE_CHECKS` listesindedir; yeni endpoint listeye eklenmez.
+- **Bilinen açık:** `RESTRICT_POSTING` içerik görseli yüklemeyi şu an engellemiyor. Avatar muafiyeti amaca bağlı olduğu için kapı karar veremez; `media.upload`/`media.complete` handler'larına `ctx.authorize({ mediaPurpose })` eklenmeli (Mert, KV-16).
 
 ### 1.2 Kurallar
 

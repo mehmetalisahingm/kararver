@@ -3,6 +3,19 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.8.0 — 2026-09-29 (Utku, KV-12 RBAC katmanı)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5: yeni fonksiyon ve DB hata eşlemesi minor; yeni refine DB'nin
+zaten reddettiği gövdeyi sözleşmede de reddeder).
+
+- **Eklendi:** `preauthorize(actor, action, now)` — `authorize`'ın kaynaktan bağımsız kısmı, API router'ının
+  istek kapısı. `authorize` aynı karar fonksiyonunu kullanır; davranışı değişmedi. Test: her endpoint için
+  kapının reddi tam kararda da ret, kaynaksız kuralda karar birebir aynı.
+- **Eklendi:** `dbErrorMap`'e `KV_SANCTIONS_IMMUTABLE` → `INTERNAL_ERROR` (yaptırım geçmişi değişmez;
+  migration `20260929151330_utku_kv12_admin_roles_sanctions`, DATA_MODEL §9.1).
+- **Değişti:** `admin.sanctions.create` gövdesi `BAN` için `endsAt: null` ister (DB `sanctions_ban_permanent_check`
+  ile aynı). Endpoint henüz uygulanmadı (KV-33); tüketici etkisi yok.
+
 ## 1.7.0 — 2026-09-28 (Faruk, KV-20 yayın limitleri)
 
 Kırıcı değişiklik yok (API_CONTRACTS §5: yeni ayar anahtarı minor).
