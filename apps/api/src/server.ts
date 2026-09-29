@@ -13,6 +13,7 @@ import { createS3MediaStorage } from "./modules/media/storage.ts";
 import { createPrismaCommentStore } from "./modules/comments/prisma-store.ts";
 import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
 import { createPrismaRbacStore } from "./modules/rbac/prisma-store.ts";
+import { createPrismaReportStore } from "./modules/reports/prisma-store.ts";
 import { createPrismaVoteStore } from "./modules/votes/prisma-store.ts";
 
 // Local'de repo kökündeki .env okunur; staging/production'da değerler ortamdan gelir.
@@ -36,6 +37,7 @@ const app = buildApp({
   pollStore: createPrismaPollStore(prisma),
   voteStore: createPrismaVoteStore(prisma),
   communityStore: createPrismaCommunityStore(prisma),
+  reportStore: createPrismaReportStore(prisma),
   commentStore: createPrismaCommentStore(prisma),
   hasher: createArgon2Hasher(),
   mailer: createMailer(config.mail.transport, config.mail.from),
