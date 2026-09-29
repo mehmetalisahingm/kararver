@@ -22,6 +22,8 @@ import { registerCommentRoutes } from "./modules/comments/routes.ts";
 import type { CommentStore } from "./modules/comments/store.ts";
 import { registerFeedRoutes } from "./modules/feed/routes.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
+import { registerReportRoutes } from "./modules/reports/routes.ts";
+import type { ReportStore } from "./modules/reports/store.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
 import { registerUserRoutes } from "./modules/users/routes.ts";
@@ -45,6 +47,8 @@ export type AppDeps = {
   voteStore?: VoteStore;
   /** Verilmezse topluluk route'ları kaydedilmez. */
   communityStore?: CommunityStore;
+  /** Verilmezse rapor route'u kaydedilmez. */
+  reportStore?: ReportStore;
   /** Verilmezse yorum route'ları kaydedilmez. */
   commentStore?: CommentStore;
   /** Acil durum anahtarı features.comments (KV-40, #42); verilmezse açık. */
@@ -137,6 +141,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   }
   if (deps.communityStore) {
     registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  }
+  if (deps.reportStore) {
+    registerReportRoutes(route, { store: deps.reportStore });
   }
   if (deps.commentStore) {
     registerCommentRoutes(route, {
