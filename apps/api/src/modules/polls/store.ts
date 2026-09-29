@@ -8,9 +8,52 @@ export type PollSettings = {
   minDurationHours: number;
   maxDurationHours: number;
   voteChangeAllowed: boolean;
+  /** Yayın limitleri (KV-20, #22). Değerler ve kaynakları: contracts settings.ts → polls.* */
+  newAccountPeriodDays: number;
+  newAccountDailyLimit: number;
+  newAccountCooldownMinutes: number;
+  dailyLimit: number;
+  cooldownMinutes: number;
 };
 
-export const DEFAULT_POLL_SETTINGS: PollSettings = { minDurationHours: 1, maxDurationHours: 720, voteChangeAllowed: true };
+/** Varsayılanlar contracts ayar kayıt defterindeki resmî değerlerdir (voteChangeAllowed hariç: resmî değer yok). */
+export const DEFAULT_POLL_SETTINGS: PollSettings = {
+  minDurationHours: 1,
+  maxDurationHours: 720,
+  voteChangeAllowed: true,
+  newAccountPeriodDays: 7,
+  newAccountDailyLimit: 3,
+  newAccountCooldownMinutes: 30,
+  dailyLimit: 10,
+  cooldownMinutes: 10,
+};
+
+/**
+ * Yayın limiti aşıldı (KV-20). Kontrol anket oluşturma transaction'ında, yazarın satırı kilitlenerek
+ * yapılır; eşzamanlı istekler limiti aşamaz. retryAfterSeconds: tekrar denenebilecek en erken an.
+ */
+export class PollLimitError extends Error {
+  readonly code: "PUBLISH_COOLDOWN" | "DAILY_PUBLISH_LIMIT" | "DUPLICATE_TITLE";
+  readonly retryAfterSeconds: number | null;
+
+  constructor(code: PollLimitError["code"], retryAfterSeconds: number | null) {
+    super(code);
+    this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+export type FeedTab = "new" | "top";
+
+export type FeedQuery = {
+  tab: FeedTab;
+  categoryId: string | null;
+  communityId: string | null;
+  /** Keyset: sıralama değerleri + id (http/cursor.ts). */
+  after: { keys: (string | number)[]; id: string } | null;
+  limit: number;
+  viewerId: string | null;
+};
 
 export type PollRecord = {
   id: string;
@@ -122,7 +165,9 @@ export interface PollStore {
    * Kategori aktifliği, topluluk üyeliği ve görsel uygunluğu transaction içinde, satırlar
    * kilitlenerek yeniden kontrol edilir; uygun değilse PollReferenceError fırlatır.
    */
-  createPoll(poll: NewPoll, scope: IdempotencyScope): Promise<IdempotentResult>;
+  createPoll(poll: NewPoll, scope: IdempotencyScope, limits: PollSettings): Promise<IdempotentResult>;
+  /** Herkese görünen (ACTIVE/LOCKED) anketler; deterministik sıra, id eşitlik kırıcı. */
+  listFeed(query: FeedQuery): Promise<(PollRecord & { voteCount: number })[]>;
   updatePoll(id: string, patch: PollPatch): Promise<void>;
   /** Etkin kapanış zaten geçmişse değişiklik yapmaz. */
   closePoll(id: string, now: Date): Promise<void>;

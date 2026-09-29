@@ -100,7 +100,6 @@ describe("endpoint registry", () => {
     const planned = endpoints.filter((e) => e.availability.status === "planned").map((e) => e.id);
     for (const id of [
       "reactions.poll.put",
-      "reactions.comment.put",
       "points.get",
       "points.ledger",
       "admin.points.adjust",

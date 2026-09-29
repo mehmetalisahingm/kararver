@@ -2,7 +2,7 @@
 // Kapsam dışı: admin.communities.* (KV-32, #34) moderator/admin yetki seviyesi gelince (KV-12, #14).
 import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
-import { decodeCursor, encodeCursor } from "./cursor.ts";
+import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
 import type { CommunityRecord, CommunityRole, CommunityStore, MemberRecord, MembersVisibility } from "./store.ts";
 
 export type CommunityDeps = { store: CommunityStore; now: () => Date; mediaPublicBaseUrl: string };
@@ -36,11 +36,11 @@ export function registerCommunityRoutes(route: Route, deps: CommunityDeps): void
   });
 
   route("communities.list", async ({ query }) => {
-    const key = decodeCursor("communities.list", query.cursor, ["number", "string"]);
-    const rows = await store.listActive(key ? { memberCount: key[0] as number, id: key[1] as string } : null, query.limit + 1);
+    const at = decodeCursor(query.cursor, "communities.list");
+    const rows = await store.listActive(at ? { memberCount: at.keys[0] as number, id: at.id } : null, query.limit + 1);
     const page = rows.slice(0, query.limit);
     const last = page.at(-1);
-    const nextCursor = rows.length > query.limit && last ? encodeCursor("communities.list", [last.memberCount, last.id]) : null;
+    const nextCursor = rows.length > query.limit && last ? encodeCursor("communities.list", [last.memberCount], last.id) : null;
     return { status: 200, body: { data: page.map(card), page: { nextCursor, hasMore: nextCursor !== null } } };
   });
 
@@ -68,15 +68,15 @@ export function registerCommunityRoutes(route: Route, deps: CommunityDeps): void
     if (!canSeeMembers(community.membersVisibility, role)) throw notFound();
 
     const list = `communities.members:${community.id}`;
-    const key = decodeCursor(list, query.cursor, ["string", "string"]);
+    const at = decodeCursor(query.cursor, list);
     const rows = await store.listMembers(
       community.id,
-      key ? { joinedAt: new Date(key[0] as string), userId: key[1] as string } : null,
+      at ? { joinedAt: new Date(at.keys[0] as string), userId: at.id } : null,
       query.limit + 1,
     );
     const page = rows.slice(0, query.limit);
     const last = page.at(-1);
-    const nextCursor = rows.length > query.limit && last ? encodeCursor(list, [last.joinedAt.toISOString(), last.user.id]) : null;
+    const nextCursor = rows.length > query.limit && last ? encodeCursor(list, [last.joinedAt.toISOString()], last.user.id) : null;
     return { status: 200, body: { data: page.map(member), page: { nextCursor, hasMore: nextCursor !== null } } };
   });
 

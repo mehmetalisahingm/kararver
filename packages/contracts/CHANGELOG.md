@@ -3,6 +3,25 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.7.0 — 2026-09-28 (Faruk, KV-20 yayın limitleri)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5: yeni ayar anahtarı minor).
+
+- **Eklendi:** Ayar kayıt defterine yayın limitleri (kaynak PRODUCT_TEAM_PLAN §13, public değil):
+  `polls.newAccountPeriodDays` (7), `polls.newAccountDailyLimit` (3), `polls.newAccountCooldownMinutes` (30),
+  `polls.dailyLimit` (10), `polls.cooldownMinutes` (10). KV-04 açık konu 9'un cooldown/günlük limit kısmı kapandı.
+- **Test:** `settings.test.ts` "cooldown/günlük limit kayıtta yok" kontrolü bilinçli olarak güncellendi:
+  artık bu 5 anahtarın kaynağı ve değerleri doğrulanıyor; `feed.*` ve trend katsayıları hâlâ kayıtta yok.
+
+## 1.6.0 — 2026-09-28 (Faruk, KV-17 yorumlar)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5).
+
+- **Değişti (metadata):** `reactions.comment.put` / `reactions.comment.delete` → `planned` yerine
+  `ready`. Tablo `comment_reactions` KV-17 ile açıldı (migration
+  `20260928210000_faruk_kv17_comment_reactions`); `comment_likes`'ın yerine geçer.
+  Anket tepkileri (`reactions.poll.*`) #66'da planlı kalır.
+
 ## 1.5.0 — 2026-09-28 (Faruk, KV-11 oy sistemi)
 
 Kırıcı değişiklik yok (API_CONTRACTS §5).

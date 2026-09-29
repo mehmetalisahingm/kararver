@@ -80,8 +80,8 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /polls/:id/comments`<br>Yorum, cevap veya alternatif öneri · `comments.create` | V | 201 | key (ops.) | Faruk `comments` | Ümit (web, KV-18) | #19 #20 | hazır |
 | `PATCH /comments/:id`<br>Kendi yorumunu düzenler · `comments.update` | O | 200 | doğal | Faruk `comments` | Ümit (web, KV-18) | #19 #20 | hazır |
 | `DELETE /comments/:id`<br>Kendi yorumunu kaldırır (soft delete) · `comments.delete` | O | 204 | doğal | Faruk `comments` | Ümit (web, KV-18) | #19 #20 | hazır |
-| `PUT /comments/:id/reaction`<br>Yoruma beğeni/dislike (#64'teki /comments/:id/like'ın yerine) · `reactions.comment.put` | U | 200 | doğal | Faruk `reactions` | Ümit (web, KV-18) | #66 #19 #20 | planlı — tablo #66 migration'ı ile gelecek |
-| `DELETE /comments/:id/reaction`<br>Yorum tepkisini kaldırır · `reactions.comment.delete` | U | 200 | doğal | Faruk `reactions` | Ümit (web, KV-18) | #66 #19 #20 | planlı — tablo #66 migration'ı ile gelecek |
+| `PUT /comments/:id/reaction`<br>Yoruma beğeni/dislike (#64'teki /comments/:id/like'ın yerine) · `reactions.comment.put` | U | 200 | doğal | Faruk `reactions` | Ümit (web, KV-18) | #66 #19 #20 | hazır |
+| `DELETE /comments/:id/reaction`<br>Yorum tepkisini kaldırır · `reactions.comment.delete` | U | 200 | doğal | Faruk `reactions` | Ümit (web, KV-18) | #66 #19 #20 | hazır |
 
 ### Keşif: feed, arama, kategori, trend
 
@@ -401,7 +401,7 @@ Cookie session ve CSRF kuralları FOUNDATION_CONTRACTS ve TECH_DECISIONS §3.4't
 | `idempotency_keys` (aktör, route, anahtar, istek hash'i, cevap, `expires_at`) | §4.5 `key-required` / `key-optional` | **KV-10 (#12)**; ilk kullanan `polls.create` |
 | "İlk giriş" tekilliği (`users.first_login_at` veya ledger'da kullanıcı başına tek `INITIAL_GRANT` kısıtı) | İlk girişte tek 20 puan, paralel girişte de | **KV-09 (#11)** ve #67 |
 | `polls.kind` (`POLL`/`DISCUSSION`), tartışmada `closes_at` ve `results_visibility` nullable | Anketsiz gönderi | #66 |
-| `reactions` (hedef tipi + hedef + kullanıcı, `UNIQUE`, `LIKE`/`DISLIKE`); `comment_likes`'ın yerine geçer | Like/dislike | #66 |
+| Yorum tepkileri: ✅ `comment_reactions` (KV-17, #19); `comment_likes`'ın yerine geçti. Anket tepkileri (`poll_reactions`, aynı `reaction_value` enum'u) | Like/dislike | Yorum: ✅ KV-17 · Anket: #66 |
 | İçerik sürüm geçmişi (`poll_revisions`, `comment_revisions`) | `admin.revisions.*` | #66 |
 | `point_ledger` (append-only, bakiye ≥ 0) | Yayın puanı | #67 (Mehmet) |
 | `polls.trend_excluded_at` | `EXCLUDE_FROM_TRENDS` moderasyon işlemi | KV-37 (#39) |

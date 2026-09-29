@@ -16,6 +16,7 @@ import { createPrismaCommunityStore } from "../../src/modules/communities/prisma
 import type { AuthStore, UserStatus } from "../../src/modules/auth/store.ts";
 import { createPrismaMediaStore } from "../../src/modules/media/prisma-store.ts";
 import { DEFAULT_MEDIA_SETTINGS, type MediaSettings } from "../../src/modules/media/store.ts";
+import { createPrismaCommentStore } from "../../src/modules/comments/prisma-store.ts";
 import { createPrismaPollStore } from "../../src/modules/polls/prisma-store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings } from "../../src/modules/polls/store.ts";
 import { createPrismaVoteStore } from "../../src/modules/votes/prisma-store.ts";
@@ -45,6 +46,8 @@ export type Harness = Backend & {
   registrationEnabled: { value: boolean };
   /** Testin değiştirebileceği sistem ayarları (KV-40 gelene kadar). */
   pollSettings: PollSettings;
+  /** Acil durum anahtarı features.comments (KV-40 gelene kadar). */
+  commentsEnabled: { value: boolean };
   mediaSettings: MediaSettings;
   /** Medya route'ları sadece PostgreSQL backend'inde kayıtlıdır. */
   storage: FakeStorage;
@@ -138,7 +141,16 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     },
   };
   const registrationEnabled = { value: true };
-  const pollSettings: PollSettings = { ...DEFAULT_POLL_SETTINGS };
+  // Yayın limitleri (KV-20) varsayılan olarak gevşek: aynı kullanıcıyla peş peşe anket açan senaryolar
+  // cooldown'a takılmasın. Limit testleri (feed-limits.test.ts) resmî değerleri açıkça kurar.
+  const pollSettings: PollSettings = {
+    ...DEFAULT_POLL_SETTINGS,
+    cooldownMinutes: 0,
+    newAccountCooldownMinutes: 0,
+    dailyLimit: 1000,
+    newAccountDailyLimit: 100,
+  };
+  const commentsEnabled = { value: true };
   const mediaSettings: MediaSettings = { ...DEFAULT_MEDIA_SETTINGS };
   const storage = createFakeStorage();
   const queue = createFakeQueue();
@@ -163,6 +175,8 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     voteStore: backend.prisma ? createPrismaVoteStore(backend.prisma) : undefined,
     communityStore: backend.prisma ? createPrismaCommunityStore(backend.prisma) : undefined,
     pollSettings: async () => pollSettings,
+    commentStore: backend.prisma ? createPrismaCommentStore(backend.prisma) : undefined,
+    isCommentsEnabled: async () => commentsEnabled.value,
     media: backend.prisma
       ? { store: createPrismaMediaStore(backend.prisma), storage, queue, settings: async () => mediaSettings }
       : undefined,
@@ -185,6 +199,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     clock,
     registrationEnabled,
     pollSettings,
+    commentsEnabled,
     mediaSettings,
     storage,
     queue,

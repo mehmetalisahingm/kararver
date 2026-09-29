@@ -7,7 +7,7 @@ import type { FastifyRequest } from "fastify";
 import { ApiError } from "../../http/errors.ts";
 import type { Route, RouteContext } from "../../http/route.ts";
 import { newPublicId, slugify } from "./slug.ts";
-import { PollReferenceError, type IdempotencyScope, type IdempotentResult, type PollPatch, type PollSettings, type PollStore } from "./store.ts";
+import { PollLimitError, PollReferenceError, type IdempotencyScope, type IdempotentResult, type PollPatch, type PollSettings, type PollStore } from "./store.ts";
 import { isClosed, isPubliclyVisible, toPollDetail } from "./view.ts";
 
 export type PollDeps = {
@@ -111,11 +111,24 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     }
   }
 
+  /** Yayın limitleri (KV-20): 429 + Retry-After; aynı başlık 409. */
+  function limitError(err: PollLimitError): ApiError {
+    const retry: Record<string, string> = err.retryAfterSeconds === null ? {} : { [headers.retryAfter]: String(err.retryAfterSeconds) };
+    if (err.code === "DAILY_PUBLISH_LIMIT") {
+      return new ApiError(err.code, "Günlük gönderi sınırına ulaştınız.", [{ code: "retry_after_seconds", message: String(err.retryAfterSeconds) }], retry);
+    }
+    if (err.code === "PUBLISH_COOLDOWN") {
+      return new ApiError(err.code, "Yeni gönderi için biraz beklemelisiniz.", [{ code: "retry_after_seconds", message: String(err.retryAfterSeconds) }], retry);
+    }
+    return new ApiError(err.code, "Aynı başlıkla açık bir gönderiniz zaten var.", [{ field: "title", code: "duplicate" }]);
+  }
+
   async function withReferenceErrors<T>(work: () => Promise<T>): Promise<T> {
     try {
       return await work();
     } catch (err) {
       if (err instanceof PollReferenceError) throw referenceError(err);
+      if (err instanceof PollLimitError) throw limitError(err);
       throw err;
     }
   }
@@ -169,6 +182,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
         options: body.options.map((o: { label: string }) => o.label),
       },
       scope,
+      settings,
     ));
     const { resourceId } = created(result);
     return { status: 201, body: { data: await detail({ id: resourceId }, viewer) } };

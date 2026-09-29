@@ -10,6 +10,7 @@ import { createPrismaCommunityStore } from "./modules/communities/prisma-store.t
 import { createPrismaMediaStore } from "./modules/media/prisma-store.ts";
 import { startPgBossMediaQueue } from "./modules/media/queue.ts";
 import { createS3MediaStorage } from "./modules/media/storage.ts";
+import { createPrismaCommentStore } from "./modules/comments/prisma-store.ts";
 import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
 import { createPrismaVoteStore } from "./modules/votes/prisma-store.ts";
 
@@ -33,6 +34,7 @@ const app = buildApp({
   pollStore: createPrismaPollStore(prisma),
   voteStore: createPrismaVoteStore(prisma),
   communityStore: createPrismaCommunityStore(prisma),
+  commentStore: createPrismaCommentStore(prisma),
   hasher: createArgon2Hasher(),
   mailer: createMailer(config.mail.transport, config.mail.from),
   media:
