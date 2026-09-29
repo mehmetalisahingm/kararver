@@ -1,3 +1,5 @@
+> 29 Eylül güncellemesi: HTTP entegrasyonu ve güncel kalan bağımlılıklar için [Frontend/backend entegrasyonu](FRONTEND_BACKEND_INTEGRATION.md) belgesine bakın. Aşağıdaki demo teslim notları ilk sürümü anlatır.
+
 # KV-13 — App shell, auth ve oluştur/oy ekranları
 
 Sahip: Ümit (@umitefe0) · Görev: #15 · Temel: ana dala alınan KV-01 ve KV-05.

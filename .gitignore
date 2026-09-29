@@ -15,6 +15,10 @@ coverage/
 # Prisma
 packages/db/generated/
 
+# Python spike/araştırma sanal ortamları
+.venv/
+.spike-venv/
+
 # Loglar / işletim sistemi
 *.log
 .DS_Store

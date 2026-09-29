@@ -8,7 +8,7 @@ export default function Page() {
       <h1>{user ? `Merhaba, ${user.name}.` : "Hesabınla katıl."}</h1>
       <p>
         {user
-          ? `Demo bakiyen: ${user.balance} puan. E-posta: ${user.email}`
+          ? `E-posta: ${user.email}${user.balance === null ? "" : `. Demo bakiyen: ${user.balance} puan`}`
           : "Keşfetmek için giriş yapman gerekmiyor."}
       </p>
       {!user && (

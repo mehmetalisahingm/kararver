@@ -4,7 +4,8 @@ type RecordPoll = Omit<Poll, "results" | "ownVote"> & {
   counts: number[];
   votes: Map<string, string>;
 };
-type Account = User & {
+type Account = Omit<User, "balance"> & {
+  balance: number;
   password: string;
   granted: boolean;
   resetRequested: boolean;

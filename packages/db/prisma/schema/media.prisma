@@ -1,11 +1,12 @@
-// ⚠️ İSKELET — Sahip: Mert (@MertKAYAR). KV-16'da genişletilecek.
-//
-// Bu dosya sadece core.prisma'daki FK'lerin (users.avatar_media_id,
-// poll_media.media_id) ilk migration'da çalışabilmesi için var.
-// Alanları, enum değerlerini ve indexleri Mert belirler. Değiştirirken:
-//   - id alanını ve aşağıdaki "core ilişkileri" bölümünü kaldırmayın,
-//   - core'u etkileyen değişikliklerde Faruk'u PR'a ekleyin (TECH_DECISIONS §6).
+// Sahip: Mert (@MertKAYAR) — KV-16
+// Yüklenen görseller: nesne anahtarları, işlenmiş kopya metadata'sı, moderasyon sonucu.
+// Akış ve kararlar: docs/MEDIA_MODERATION.md · Kurallar: docs/DATA_MODEL.md §9
+// Binary DB'de tutulmaz; sadece object storage anahtarları saklanır.
 
+// PENDING     → yüklendi, worker henüz işlemedi
+// APPROVED    → public bucket'ta, herkes görebilir
+// QUARANTINED → orta/yüksek risk ya da moderasyon hatası; sadece moderatör görür
+// REJECTED    → reddedildi veya onaydan sonra kaldırıldı; private bucket'ta kanıt olarak kalır
 enum MediaStatus {
   PENDING
   APPROVED
@@ -15,14 +16,74 @@ enum MediaStatus {
   @@map("media_status")
 }
 
+enum MediaPurpose {
+  POLL
+  AVATAR
+  COMMUNITY
+
+  @@map("media_purpose")
+}
+
+enum MediaRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@map("media_risk_level")
+}
+
 model MediaAsset {
-  id        String      @id @default(uuid(7)) @db.Uuid
-  status    MediaStatus @default(PENDING)
-  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  id         String       @id @default(uuid(7)) @db.Uuid
+  uploaderId String       @map("uploader_id") @db.Uuid
+  purpose    MediaPurpose
+  status     MediaStatus  @default(PENDING)
+
+  // Private bucket: kullanıcının yüklediği orijinal ve re-encode edilmiş (EXIF'siz) kopya.
+  originalObjectKey  String  @unique @map("original_object_key") @db.VarChar(512)
+  processedObjectKey String? @unique @map("processed_object_key") @db.VarChar(512)
+  // Public bucket: sadece APPROVED iken dolu (CHECK). Kaldırmada boşaltılır.
+  publicObjectKey    String? @unique @map("public_object_key") @db.VarChar(512)
+
+  // Worker'ın dosya imzasından tespit ettiği tür; istemcinin beyanı değil.
+  originalMimeType   String? @map("original_mime_type") @db.VarChar(100)
+  originalSizeBytes  Int?    @map("original_size_bytes")
+  // Orijinalin sha256'sı (hex). Tekrar yükleme kontrolü KV-38'de bunu kullanır.
+  contentSha256      String? @map("content_sha256") @db.Char(64)
+  width              Int?
+  height             Int?
+  processedSizeBytes Int?    @map("processed_size_bytes")
+
+  riskLevel          MediaRiskLevel? @map("risk_level")
+  riskScore          Float?          @map("risk_score") @db.Real
+  // Model çıktısı: [{class, score}]; kutular saklanmaz.
+  moderationLabels   Json?           @map("moderation_labels")
+  moderationModel    String?         @map("moderation_model") @db.VarChar(60)
+  moderatedAt        DateTime?       @map("moderated_at") @db.Timestamptz(3)
+  // ör. MODERATION_TIMEOUT, MODEL_ERROR, INVALID_IMAGE. Hata varsa medya QUARANTINED kalır.
+  processingError    String?         @map("processing_error") @db.VarChar(60)
+  processingAttempts Int             @default(0) @map("processing_attempts") @db.SmallInt
+
+  // Moderatör kararı (onay, red, kaldırma). Ayrıntılı geçmiş moderation_actions'ta (KV-24).
+  reviewedById String?   @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  reviewNote   String?   @map("review_note") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  uploader          User               @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: Restrict)
+  reviewedBy        User?              @relation("MediaReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  reports           Report[]
+  moderationActions ModerationAction[]
+  communityImages   Community[]
 
   // ── Core ilişkileri (Faruk) — kaldırmayın ──
   avatarOfUsers User[]      @relation("UserAvatar")
   pollMedia     PollMedia[]
 
+  // Moderasyon kuyruğu ve worker'ın bekleyen iş taraması.
+  @@index([status, createdAt])
+  @@index([uploaderId, createdAt(sort: Desc)])
+  @@index([contentSha256])
   @@map("media_assets")
 }

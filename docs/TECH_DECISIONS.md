@@ -362,7 +362,7 @@ pnpm dev
 #   worker → arka planda (log'da job'lar görünür)
 ```
 
-> ⚠️ **Mevcut durum (KV-02):** `pnpm db:migrate` çalışır; `packages/db` ilk migration'ı uygular (bkz. [`DATA_MODEL.md`](./DATA_MODEL.md)). `pnpm db:seed` henüz bir şey yapmaz, kategori seed'i gelince çalışacak. `pnpm dev` ise api/web/worker iskeletleri eklenince çalışır hale gelir. Script'ler root `package.json`'da şimdiden tanımlı, yani bu kurulum adımları değişmeyecek.
+> ⚠️ **Mevcut durum (KV-02):** `pnpm db:migrate` çalışır; `packages/db` ilk migration'ı uygular (bkz. [`DATA_MODEL.md`](./DATA_MODEL.md)). `pnpm db:seed` henüz bir şey yapmaz, kategori seed'i gelince çalışacak. `apps/api` KV-09 ile eklendi (`pnpm --filter @kararver/api dev`, bkz. [`KV-09_AUTH_BACKEND.md`](./KV-09_AUTH_BACKEND.md)); web/worker iskeletleri eklenince `pnpm dev` hepsini açar. Script'ler root `package.json`'da şimdiden tanımlı, yani bu kurulum adımları değişmeyecek.
 
 ### 8.3 Sık kullanılan komutlar
 ```bash
@@ -394,4 +394,4 @@ Bir kararı değiştirmek için bu dosyayı güncelleyen bir PR açılır. PR'da
 | 2 | Staging e-posta sağlayıcısı (SMTP) seçimi | Faruk | Staging'de e-posta doğrulama |
 | 3 | Branch protection ("code owner onayı zorunlu" açık mı?) | Repo sahibi (Mehmet) | — |
 | 4 | `docker-compose.yml` bu PR'ı hazırlayan makinede çalıştırılamadı (Docker kurulu değil) | Docker'ı olan bir reviewer | Local kurulumun doğrulanması |
-| 5 | Görsel moderasyon modelinin çalışma ortamı (Node mu, Python servisi mi) | Mert | Hosting'in kesinleşmesi |
+| 5 | ~~Görsel moderasyon modelinin çalışma ortamı (Node mu, Python servisi mi)~~ | Mert | **Kapatıldı (KV-08):** NudeNet (ONNX, MIT), `apps/worker` içinde havuzlanan Python alt-süreç olarak çalıştırılır — ayrı bir servis/host değil. Ayrıntı ve kanıt: [`docs/MEDIA_MODERATION.md`](./MEDIA_MODERATION.md). |

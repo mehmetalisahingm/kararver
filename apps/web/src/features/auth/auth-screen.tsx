@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Field } from "../../components/fields";
+import { ApiClient } from "../../lib/api-client";
 import { safeReturnTo } from "../../lib/model";
 export type AuthMode = "login" | "register" | "verify" | "forgot" | "reset";
 const titles: Record<AuthMode, string> = {
@@ -23,15 +24,24 @@ export function AuthScreen({
   target?: string;
   initialEmail?: string;
 }) {
-  const { client, syncUser, notify, returnTo } = useProduct();
+  const { client, demo, user, syncUser, notify, returnTo } = useProduct();
   const router = useRouter();
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (demo || !["verify", "reset"].includes(mode)) return;
+    const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
+    if (token) {
+      setCode(token);
+      window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+    }
+  }, [demo, mode]);
   const destination = safeReturnTo(target || returnTo);
   const suffix = `?returnTo=${encodeURIComponent(destination)}`;
   const emailSuffix = `${suffix}&email=${encodeURIComponent(email)}`;
@@ -50,8 +60,8 @@ export function AuthScreen({
         router.push(destination);
       }
       if (mode === "register") {
-        await client.register(name, email, password);
-        router.push(`/dogrula${emailSuffix}`);
+        await client.register(name, email, password, username);
+        if (demo) router.push(`/dogrula${emailSuffix}`); else setDone(true);
       }
       if (mode === "verify") {
         await client.verify(email, code);
@@ -80,32 +90,32 @@ export function AuthScreen({
       <p className="kv-muted">
         {mode === "login"
           ? "Birlikte düşünmek için küçük bir adım."
-          : "Örnek hesap akışını burada deneyebilirsin."}
+          : demo ? "Örnek hesap akışını burada deneyebilirsin." : "Hesabını güvenle yönet."}
       </p>
-      <div className="demo-note">
+      {demo && <div className="demo-note">
         Yalnızca demo bilgileri kullan. Hazır hesap:{" "}
         <strong>umit@example.test</strong> / <strong>Demo12345!</strong>. Diğer
         hesap: deniz@example.test. Yeni kayıt .test uzantılı olmalı. Kod:{" "}
         <strong>123456</strong>. Gerçek e-posta gönderilmez.
-      </div>
+      </div>}
       {done ? (
         <div className="screen-stack">
           <p role="status">
-            {mode === "forgot"
-              ? "Bu demo hesap varsa sıfırlama isteği hazırlandı."
+            {mode === "register" ? "E-postanı kontrol et. Hesap uygunsa doğrulama bağlantısı gönderildi." : mode === "forgot"
+              ? "Bu hesap varsa sıfırlama bağlantısı gönderildi."
               : mode === "verify"
-                ? "Demo e-postan doğrulandı. Şimdi giriş yapabilirsin."
-                : "Demo şifren yenilendi. Yeniden giriş yap."}
+                ? "E-postan doğrulandı. Şimdi giriş yapabilirsin."
+                : "Şifren yenilendi. Yeniden giriş yap."}
           </p>
           <Link
             className="kv-button"
             href={
-              mode === "forgot"
+              mode === "forgot" && demo
                 ? `/sifre-yenile${emailSuffix}`
                 : `/giris${emailSuffix}`
             }
           >
-            {mode === "forgot" ? "Sıfırlama ekranına geç" : "Giriş yap"}
+            {mode === "forgot" && demo ? "Sıfırlama ekranına geç" : "Giriş yap"}
           </Link>
         </div>
       ) : (
@@ -124,7 +134,10 @@ export function AuthScreen({
               />
             </Field>
           )}
-          <Field id="email" label="Demo e-posta">
+          {mode === "register" && !demo && <Field id="username" label="Kullanıcı adı" help="3–30 karakter: küçük harf, rakam, alt çizgi.">
+            <input id="username" name="username" className="kv-input" autoComplete="username" required pattern="[a-z0-9_]{3,30}" minLength={3} maxLength={30} value={username} onChange={e => setUsername(e.target.value)} />
+          </Field>}
+          {(demo || !["verify", "reset"].includes(mode)) && <Field id="email" label={demo ? "Demo e-posta" : "E-posta"}>
             <input
               id="email"
               name="email"
@@ -135,12 +148,12 @@ export function AuthScreen({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-          </Field>
+          </Field>}
           {["login", "register", "reset"].includes(mode) && (
             <Field
               id="password"
-              label={mode === "reset" ? "Yeni demo şifre" : "Demo şifre"}
-              help="En az 8 karakter. Gerçek şifreni kullanma."
+              label={demo ? (mode === "reset" ? "Yeni demo şifre" : "Demo şifre") : "Şifre"}
+              help={demo ? "En az 8 karakter. Gerçek şifreni kullanma." : "Yeni şifre 10–128 karakter olmalı."}
             >
               <input
                 id="password"
@@ -150,7 +163,8 @@ export function AuthScreen({
                   mode === "login" ? "current-password" : "new-password"
                 }
                 required
-                minLength={8}
+                minLength={demo ? 8 : mode === "login" ? 1 : 10}
+                maxLength={128}
                 className="kv-input"
                 value={password}
                 aria-describedby="password-help"
@@ -158,7 +172,7 @@ export function AuthScreen({
               />
             </Field>
           )}
-          {["verify", "reset"].includes(mode) && (
+          {demo && ["verify", "reset"].includes(mode) && (
             <Field id="code" label="Demo kodu">
               <input
                 id="code"
@@ -174,22 +188,28 @@ export function AuthScreen({
               />
             </Field>
           )}
+          {!demo && ["verify", "reset"].includes(mode) && <p className="kv-help">{code ? "E-postadaki bağlantı alındı. İşlemi tamamlamak için onayla." : "E-postana gönderilen bağlantıyı açmalısın."}</p>}
           <ErrorMessage message={error} />
-          <button className="kv-button" disabled={busy} aria-busy={busy}>
+          <button className="kv-button" disabled={busy || (!demo && ["verify", "reset"].includes(mode) && !code)} aria-busy={busy}>
             {busy
               ? "İşlem sürüyor…"
               : mode === "login"
                 ? "Giriş yap"
                 : mode === "register"
-                  ? "Demo hesabı oluştur"
+                  ? (demo ? "Demo hesabı oluştur" : "Hesap oluştur")
                   : mode === "verify"
-                    ? "Kodu doğrula"
+                    ? (demo ? "Kodu doğrula" : "E-postayı doğrula")
                     : mode === "forgot"
                       ? "Sıfırlama isteği oluştur"
-                      : "Demo şifreyi yenile"}
+                      : (demo ? "Demo şifreyi yenile" : "Şifreyi yenile")}
           </button>
         </form>
       )}
+      {!demo && mode === "verify" && user && !user.verified && <button type="button" className="kv-button kv-button--secondary" disabled={busy} onClick={async () => {
+        if (!(client instanceof ApiClient)) return;
+        setBusy(true); setError("");
+        try { await client.resendVerification(); notify("Doğrulama bağlantısı gönderildi."); } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
+      }}>Doğrulama bağlantısını yeniden gönder</button>}
       <div className="auth-links">
         {mode === "login" && (
           <>

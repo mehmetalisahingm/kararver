@@ -16,7 +16,7 @@ function PollCard({ poll }: { poll: Poll }) {
           </span>
           <span className="author">
             {poll.author}
-            <small>{poll.category} · Örnek içerik</small>
+            <small>{poll.category}</small>
           </span>
         </div>
         <span className="kv-badge kv-badge--neutral">
@@ -30,7 +30,7 @@ function PollCard({ poll }: { poll: Poll }) {
         </span>
       </div>
       <h2>
-        <Link href={`/karar/${poll.id}`}>{poll.title}</Link>
+        <Link href={poll.canonicalPath || `/karar/${poll.id}`}>{poll.title}</Link>
       </h2>
       <p className="kv-muted">{poll.description}</p>
       {poll.options.some((o) => o.image) && (
@@ -44,10 +44,10 @@ function PollCard({ poll }: { poll: Poll }) {
         </div>
       )}
       <div className="kv-row kv-between">
-        <span className="kv-help">{poll.comments.length} örnek yorum</span>
+        <span className="kv-help">{(poll.comments.length)} yorum</span>
         <Link
           className="kv-button kv-button--secondary"
-          href={`/karar/${poll.id}`}
+          href={poll.canonicalPath || `/karar/${poll.id}`}
         >
           {poll.kind === "discussion" ? "Tartışmayı oku" : "Anketi incele"}
         </Link>
@@ -90,7 +90,7 @@ export function Feed({ title = "Senin için" }: { title?: string }) {
         <p className="kv-muted">Merak et, keşfet, birlikte karar ver.</p>
       </div>
       <label className="kv-field">
-        Örnek akışta ara
+        Akışta ara
         <input
           className="kv-input"
           type="search"
@@ -163,7 +163,7 @@ export function PollDetail({ id }: { id: string }) {
     try {
       const next = await client.vote(id, selections[id]);
       setPoll(next);
-      notify("Oyun kaydedildi. Yayın puanın değişmedi.");
+      notify("Oyun kaydedildi.");
     } catch (e) {
       setError((e as Error).message);
       if (e instanceof UiError && e.code === "UNAUTHENTICATED") {
@@ -189,6 +189,8 @@ export function PollDetail({ id }: { id: string }) {
   if (!poll) return <Loading label="İçerik yükleniyor…" />;
   const closed =
     poll.status !== "ACTIVE" || Date.parse(poll.closesAt) <= Date.now();
+  const blocked = poll.canVote === false || (poll.canVote === undefined && Boolean(poll.ownVote));
+  const blockMessages: Record<string, string> = { OWN_POLL: "Kendi anketinde oy kullanamazsın.", EMAIL_NOT_VERIFIED: "Oy vermek için e-postanı doğrulamalısın.", ACCOUNT_RESTRICTED: "Hesabın bu işlem için kısıtlanmış.", VOTE_INVALIDATED: "Bu anketteki oyun geçersiz kılınmış.", VOTE_CHANGE_DISABLED: "Bu ankette oy değiştirme kapalı." };
   return (
     <div className="screen-stack">
       <Link href="/" className="back-link">
@@ -197,7 +199,7 @@ export function PollDetail({ id }: { id: string }) {
       <article className="kv-card poll-card">
         <div className="kv-row kv-between">
           <span className="kv-badge">{poll.category}</span>
-          <span className="kv-help">{poll.author} · Örnek içerik</span>
+          <span className="kv-help">{poll.author}</span>
         </div>
         <h1>{poll.title}</h1>
         <p className="kv-muted">{poll.description}</p>
@@ -206,7 +208,7 @@ export function PollDetail({ id }: { id: string }) {
             <fieldset
               id="vote-options"
               tabIndex={-1}
-              disabled={busy || closed || Boolean(poll.ownVote)}
+              disabled={busy || closed || blocked}
             >
               <legend>
                 {closed
@@ -228,7 +230,7 @@ export function PollDetail({ id }: { id: string }) {
                         name="vote"
                         type="radio"
                         value={option.id}
-                        checked={(poll.ownVote || selections[id]) === option.id}
+                        checked={(selections[id] || poll.ownVote) === option.id}
                         onChange={() => {
                           select(id, option.id);
                           setError("");
@@ -241,7 +243,8 @@ export function PollDetail({ id }: { id: string }) {
               </div>
             </fieldset>
             <ErrorMessage message={error} />
-            {!closed && !poll.ownVote && (
+            {poll.voteBlockedReason && blockMessages[poll.voteBlockedReason] && <p role="status">{blockMessages[poll.voteBlockedReason]}{poll.voteBlockedReason === "EMAIL_NOT_VERIFIED" && <Link href="/dogrula"> E-postayı doğrula</Link>}</p>}
+            {!closed && !blocked && (
               <button
                 className="kv-button"
                 disabled={busy}
@@ -271,7 +274,7 @@ export function PollDetail({ id }: { id: string }) {
                     />
                   </div>
                 ))}
-                <p className="kv-help">Toplam {poll.results.total} örnek oy</p>
+                <p className="kv-help">Toplam {poll.results.total} oy</p>
               </section>
             ) : (
               <p className="private-results">

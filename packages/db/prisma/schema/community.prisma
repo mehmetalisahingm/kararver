@@ -1,18 +1,69 @@
-// ⚠️ İSKELET — Sahip: Mert (@MertKAYAR). KV-31'de genişletilecek.
+// Sahip: Mert (@MertKAYAR) — KV-31
+// Admin kontrollü topluluklar ve üyelik. Topluluk rolü istemci iddiasından değil,
+// bu tablodaki üyelikten okunur (FOUNDATION_CONTRACTS yetki matrisi).
+// Kurallar: docs/DATA_MODEL.md §9
 //
-// Bu dosya sadece core.prisma'daki FK'nin (polls.community_id) ilk
-// migration'da çalışabilmesi için var. Üyelik, moderatör, slug vb. alanları
-// Mert ekler; status için ContentStatus yerine kendi enum'unu da seçebilir.
-// Değiştirirken id alanını ve "core ilişkileri" bölümünü kaldırmayın;
-// core'u etkileyen değişikliklerde Faruk'u PR'a ekleyin.
+// Durum content_status'tur: ACTIVE normal, HIDDEN kapatılmış (admin.communities.update
+// sözleşmesi), REMOVED moderasyonla kaldırılmış. Kapatılan topluluğun anketleri silinmez.
+// Slug kuralı API sözleşmesiyle aynıdır: ^[a-z0-9-]{2,60}$ (CHECK).
+
+enum CommunityRole {
+  MEMBER
+  MODERATOR
+
+  @@map("community_role")
+}
+
+// Üye listesinin kimler tarafından görülebileceği. Yetki sunucuda uygulanır;
+// istemci bu alanı yalnızca görünüm için kullanır (V1_USER_FLOW / API contract).
+enum CommunityMembersVisibility {
+  PUBLIC
+  MEMBERS
+  MODERATORS
+
+  @@map("community_members_visibility")
+}
 
 model Community {
-  id        String        @id @default(uuid(7)) @db.Uuid
-  status    ContentStatus @default(ACTIVE)
-  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                String                     @id @default(uuid(7)) @db.Uuid
+  slug              String                     @unique @db.VarChar(60)
+  name              String                     @db.VarChar(80)
+  description       String?                    @db.VarChar(1000)
+  imageMediaId      String?                    @map("image_media_id") @db.Uuid
+  status            ContentStatus              @default(ACTIVE)
+  membersVisibility CommunityMembersVisibility @default(MEMBERS) @map("members_visibility")
+  // Denormalize sayaç; üyelikle aynı transaction'da güncellenir (DATA_MODEL §2.5).
+  memberCount       Int                        @default(0) @map("member_count")
+  createdById       String                     @map("created_by_id") @db.Uuid
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  imageMedia  MediaAsset?           @relation(fields: [imageMediaId], references: [id], onDelete: Restrict)
+  createdBy   User                  @relation("CommunityCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  memberships CommunityMembership[]
 
   // ── Core ilişkileri (Faruk) — kaldırmayın ──
   polls Poll[]
 
+  @@index([status, memberCount(sort: Desc)])
   @@map("communities")
+}
+
+// Katıl = satır ekle, ayrıl = satırı sil (join tablosu, DATA_MODEL §2.4).
+// Bileşik PK tekrar katılmanın ikinci üyelik üretmesini engeller.
+model CommunityMembership {
+  communityId String        @map("community_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        CommunityRole @default(MEMBER)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([communityId, userId])
+  @@index([userId, createdAt(sort: Desc)])
+  // Topluluğun moderatör listesi ve yetki kontrolü.
+  @@index([communityId, role])
+  @@map("community_memberships")
 }
