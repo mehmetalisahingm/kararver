@@ -4,7 +4,7 @@
 import { dbErrorMap } from "@kararver/contracts";
 import { ApiError } from "../../http/errors.ts";
 import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
-import { readIdempotencyScope } from "../../http/idempotency.ts";
+import { idempotencyKeyReused, readIdempotencyScope } from "../../http/idempotency.ts";
 import type { Route, RouteContext } from "../../http/route.ts";
 import type { CommentKind, CommentRecord, CommentRejection, CommentSort, CommentStore } from "./store.ts";
 
@@ -24,6 +24,7 @@ const rejections: Record<CommentRejection, () => ApiError> = {
   PARENT_NOT_FOUND: () => new ApiError("VALIDATION_ERROR", "Cevap verilen yorum bulunamadı.", [{ field: "parentId", code: "not_found" }]),
   DEPTH_EXCEEDED: () => new ApiError("COMMENT_DEPTH_EXCEEDED", "Cevaplara cevap verilemez.", [{ field: "parentId", code: "depth" }]),
   NOT_OWNER: () => new ApiError("FORBIDDEN", "Bu işlem sadece yorumun sahibine açık."),
+  KEY_REUSED: () => idempotencyKeyReused(),
 };
 
 /** Ön kontrol atlanırsa DB trigger'ı (KV_COMMENT_DEPTH) yine reddeder; ham 500 yerine sözleşme kodu. */

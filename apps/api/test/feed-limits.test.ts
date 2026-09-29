@@ -203,7 +203,7 @@ describe("yayın limitleri ve feed (postgres)", { skip: backend ? false : "TEST_
       closesAt: new Date(now.getTime() + DAY),
       options: ["A", "B"],
     });
-    const scope = { userId: user.id, route: "polls.create", key: key(), requestHash: "a".repeat(64), now, ttlMs: DAY };
+    const scope = { userId: user.id, route: "polls.create", key: key(), requestHash: "a".repeat(64), now };
 
     // Yazar satırını tutan işlem: iki istek de erken tekrar kontrolünü geçip bu kilitte bekler.
     let release!: () => void;
@@ -237,6 +237,22 @@ describe("yayın limitleri ve feed (postgres)", { skip: backend ? false : "TEST_
     assertError(await send("POST", "/polls", body(cat), user.cookie, key()), 429, "PUBLISH_COOLDOWN");
     h.pollSettings.newAccountCooldownMinutes = 0;
     assert.equal((await send("POST", "/polls", body(cat), user.cookie, key())).statusCode, 201);
+  });
+
+  test("DB oturumu UTC: ham SQL'deki Date parametresi timestamptz ile doğru karşılaştırılır", async () => {
+    const d = new Date("2026-10-01T09:00:00.000Z");
+    const [row] = await db.$queryRaw<{ tz: string; same: boolean }[]>`
+      SELECT current_setting('TimeZone') AS tz, (timestamptz '2026-10-01 09:00:00+00' = ${d}) AS same`;
+    assert.deepEqual(row, { tz: "UTC", same: true });
+  });
+
+  test("aynı başlık: süresi dolmuş anket açık sayılmaz", async () => {
+    const user = await signUp();
+    const cat = await newCategory();
+    const title = `Süresi dolmuş anket ${randomUUID().slice(0, 6)}`;
+    assert.equal((await send("POST", "/polls", body(cat, { title, durationHours: 1 }), user.cookie, key())).statusCode, 201);
+    h.clock.advance(2 * HOUR);
+    assert.equal((await send("POST", "/polls", body(cat, { title }), user.cookie, key())).statusCode, 201);
   });
 
   // ─── Aynı başlık ────────────────────────────────────────────

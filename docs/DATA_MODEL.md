@@ -41,6 +41,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 - Her zaman kolonu **`timestamptz(3)`** tipindedir ve UTC saklanır. Sunucu, veritabanı ve job'lar UTC ile çalışır.
 - Europe/Istanbul'a çevirme sadece iki yerde yapılır: ekranda gösterirken ve takvim günü gereken hesaplarda (§8). Çevirme her zaman `AT TIME ZONE 'Europe/Istanbul'` ile yapılır, **`+3` elle yazılmaz**.
 - Standart kolonlar: `created_at` (varsayılan `now()`), `updated_at` (Prisma `@updatedAt`) ve soft delete olan tablolarda `deleted_at`.
+- **DB oturumu UTC'dir:** `createPrismaClient` bağlantıyı `TimeZone=UTC` ile açar. Ham SQL'de `Date` parametresi saat dilimsiz bağlanabildiği için, oturum başka bir saat diliminde olursa (ör. docker-compose `TZ=Europe/Istanbul`) `timestamptz` karşılaştırmaları kayar; KV-26 arama sayfalamasında bu görüldü. Ham SQL'de zaman parametresi ayrıca `…::timestamptz` ile açıkça çevrilir.
 - Sadece takvim günü tutan kolon: snapshot tablolarındaki `local_date` (`date` tipi, İstanbul günü).
 
 ### 2.3 İsimlendirme

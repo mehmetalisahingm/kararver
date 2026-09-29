@@ -137,8 +137,8 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
       return rows.map((r) => toRecord(r as Selected));
     },
 
-    createComment: ({ pollId, authorId, body, kind, parentId }, scope) =>
-      runIdempotent(prisma, scope, 201, async (tx): Promise<Outcome<string>> => {
+    createComment: async ({ pollId, authorId, body, kind, parentId }, scope): Promise<Outcome<string>> => {
+      const result = await runIdempotent(prisma, scope, 201, async (tx): Promise<Outcome<string>> => {
         const [poll] = await tx.$queryRaw<{ status: string; allow_comments: boolean }[]>`
           SELECT status::text, allow_comments FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
         if (!poll || !VISIBLE_POLL.includes(poll.status as never)) return notFound("POLL_NOT_FOUND");
@@ -156,7 +156,11 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
         const comment = await tx.comment.create({ data: { pollId, authorId, body, kind, parentId }, select: { id: true } });
         await tx.poll.update({ where: { id: pollId }, data: { commentCount: { increment: 1 } } });
         return { ok: true, value: comment.id };
-      }),
+      });
+      if (result.kind === "rejected") return { ok: false, reason: result.reason };
+      if (result.kind === "key_reused") return { ok: false, reason: "KEY_REUSED" };
+      return { ok: true, value: result.resourceId };
+    },
 
     async findComment(id, viewerId) {
       const row = await prisma.comment.findUnique({ where: { id }, select: commentSelect(viewerId) });
