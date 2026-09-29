@@ -15,6 +15,9 @@ import path from "node:path";
 import { after, before, describe, test } from "node:test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+// Enum hizalaması sözleşmenin kendisiyle karşılaştırılır (workspace bağımlılığı eklemeden, kaynaktan).
+import { SanctionType } from "../../contracts/src/domains/admin.ts";
+import { roles } from "../../contracts/src/helpers.ts";
 
 const packageDir = path.resolve(import.meta.dirname, "..");
 const prismaCli = createRequire(import.meta.url).resolve("prisma/build/index.js");
@@ -191,6 +194,7 @@ describe("migration", () => {
         "moderation_actions_append_only",
         "poll_options_guard_locked",
         "polls_guard_locked",
+        "sanctions_guard",
         "vote_events_append_only",
         "votes_forbid_self_vote",
         "votes_guard_identity",
@@ -689,7 +693,202 @@ describe("communities ve community_memberships (KV-31)", () => {
   });
 });
 
-// ─── 9. Türkçe normalizasyon ──────────────────────────────────
+// ─── 9. Rol ve yaptırım (KV-12) ───────────────────────────────
+
+describe("user_roles ve sanctions (KV-12)", () => {
+  const IMMUTABLE = /KV_SANCTIONS_IMMUTABLE/;
+
+  function grantRole(userId: string, role: string, grantedById: string | null) {
+    return db.$executeRaw`
+      INSERT INTO user_roles (user_id, role, granted_by_id, updated_at)
+      VALUES (${userId}::uuid, ${role}::user_role, ${grantedById}::uuid, now())`;
+  }
+
+  type SanctionInput = { type?: string; reason?: string; startsIn?: string; endsIn?: string | null };
+
+  /** Zamanlar now()'a göre interval olarak verilir; endsIn verilmezse kalıcı. */
+  async function sanction(userId: string, createdById: string, s: SanctionInput = {}): Promise<string> {
+    const id = randomUUID();
+    await db.$executeRaw`
+      INSERT INTO sanctions (id, user_id, type, reason, starts_at, ends_at, created_by_id)
+      VALUES (${id}::uuid, ${userId}::uuid, ${s.type ?? "RESTRICT_COMMENTS"}::sanction_type, ${s.reason ?? "test: spam"},
+              now() + ${s.startsIn ?? "0 seconds"}::interval, now() + ${s.endsIn ?? null}::interval, ${createdById}::uuid)`;
+    return id;
+  }
+
+  function lift(id: string, liftedById: string, reason = "test: itiraz kabul") {
+    return db.$executeRaw`
+      UPDATE sanctions SET lifted_at = now(), lifted_by_id = ${liftedById}::uuid, lift_reason = ${reason}
+      WHERE id = ${id}::uuid`;
+  }
+
+  test("rol: USER satırı, kendine rol ve verensiz rol yazılamaz; ilk SUPER_ADMIN verensiz yazılır", async () => {
+    const superAdmin = await createUser();
+    const user = await createUser();
+    await expectDbError(grantRole(user, "USER", superAdmin), CHECK_VIOLATION);
+    await expectDbError(grantRole(user, "ADMIN", user), CHECK_VIOLATION);
+    await expectDbError(grantRole(user, "ADMIN", null), CHECK_VIOLATION);
+
+    await grantRole(superAdmin, "SUPER_ADMIN", null);
+    await grantRole(user, "MODERATOR", superAdmin);
+    // Kullanıcı başına tek rol: atama satırı günceller, ikinci satır yazılamaz.
+    await expectDbError(grantRole(user, "ADMIN", superAdmin), UNIQUE_VIOLATION);
+    await db.$executeRaw`UPDATE user_roles SET role = 'ADMIN', updated_at = now() WHERE user_id = ${user}::uuid`;
+    await expectDbError(
+      db.$executeRaw`UPDATE user_roles SET granted_by_id = NULL WHERE user_id = ${user}::uuid`,
+      CHECK_VIOLATION,
+    );
+  });
+
+  test("var olmayan kullanıcıya rol ve yaptırım verilemez", async () => {
+    const admin = await createUser();
+    await expectDbError(grantRole(randomUUID(), "ADMIN", admin), FK_VIOLATION);
+    await expectDbError(grantRole(await createUser(), "ADMIN", randomUUID()), FK_VIOLATION);
+    await expectDbError(sanction(randomUUID(), admin), FK_VIOLATION);
+    await expectDbError(sanction(await createUser(), randomUUID()), FK_VIOLATION);
+  });
+
+  test("users'a giden bütün FK'ler RESTRICT; rol veya yaptırım izi olan kullanıcı silinemez", async () => {
+    const fks = await db.$queryRaw<{ name: string; onDelete: string }[]>`
+      SELECT conname AS name, confdeltype::text AS "onDelete" FROM pg_constraint
+      WHERE contype = 'f' AND confrelid = 'users'::regclass
+        AND conrelid IN ('user_roles'::regclass, 'sanctions'::regclass)
+      ORDER BY conname`;
+    assert.deepEqual(fks, [
+      { name: "sanctions_created_by_id_fkey", onDelete: "r" },
+      { name: "sanctions_lifted_by_id_fkey", onDelete: "r" },
+      { name: "sanctions_user_id_fkey", onDelete: "r" },
+      { name: "user_roles_granted_by_id_fkey", onDelete: "r" },
+      { name: "user_roles_user_id_fkey", onDelete: "r" },
+    ]);
+
+    const granter = await createUser();
+    const holder = await createUser();
+    await grantRole(holder, "MODERATOR", granter);
+    const target = await createUser();
+    const issuer = await createUser();
+    const lifter = await createUser();
+    await lift(await sanction(target, issuer), lifter);
+
+    for (const id of [granter, holder, target, issuer, lifter]) {
+      await expectDbError(db.$executeRaw`DELETE FROM users WHERE id = ${id}::uuid`, FK_VIOLATION);
+    }
+  });
+
+  test("yaptırım süresi: ends_at starts_at'ten sonra, SUSPEND süreli, BAN kalıcı", async () => {
+    const admin = await createUser();
+    const user = await createUser();
+    await expectDbError(sanction(user, admin, { endsIn: "0 seconds" }), CHECK_VIOLATION);
+    await expectDbError(sanction(user, admin, { startsIn: "1 day", endsIn: "1 hour" }), CHECK_VIOLATION);
+    await expectDbError(sanction(user, admin, { type: "SUSPEND" }), CHECK_VIOLATION);
+    await expectDbError(sanction(user, admin, { type: "BAN", endsIn: "30 days" }), CHECK_VIOLATION);
+
+    await sanction(user, admin, { type: "SUSPEND", endsIn: "7 days" });
+    await sanction(user, admin, { type: "BAN" });
+    await sanction(user, admin, { type: "RESTRICT_POSTING", endsIn: "1 day" });
+  });
+
+  test("kimse kendine yaptırım uygulayamaz ve kendi yaptırımını kaldıramaz", async () => {
+    const admin = await createUser();
+    const user = await createUser();
+    await expectDbError(sanction(admin, admin), CHECK_VIOLATION);
+    const id = await sanction(user, admin);
+    await expectDbError(lift(id, user), CHECK_VIOLATION);
+    await lift(id, admin);
+  });
+
+  test("gerekçe boş olamaz; kaldırma bilgisi üçü birlikte dolar", async () => {
+    const admin = await createUser();
+    const user = await createUser();
+    await expectDbError(sanction(user, admin, { reason: "  a " }), CHECK_VIOLATION);
+    const id = await sanction(user, admin);
+    await expectDbError(db.$executeRaw`UPDATE sanctions SET lifted_at = now() WHERE id = ${id}::uuid`, CHECK_VIOLATION);
+    await expectDbError(
+      db.$executeRaw`UPDATE sanctions SET lifted_at = now(), lifted_by_id = ${admin}::uuid WHERE id = ${id}::uuid`,
+      CHECK_VIOLATION,
+    );
+    await expectDbError(lift(id, admin, "   "), CHECK_VIOLATION);
+  });
+
+  test("yaptırım değişmez: sadece kaldırma alanları bir kez NULL'dan doluya geçer", async () => {
+    const admin = await createUser();
+    const otherAdmin = await createUser();
+    const user = await createUser();
+    const id = await sanction(user, admin, { type: "RESTRICT_POSTING", endsIn: "7 days" });
+
+    // Kaldırılmamış satırda diğer alanlar değişmez, satır silinmez.
+    for (const change of [
+      () => db.$executeRaw`UPDATE sanctions SET type = 'BAN', ends_at = NULL WHERE id = ${id}::uuid`,
+      () => db.$executeRaw`UPDATE sanctions SET ends_at = ends_at + interval '1 day' WHERE id = ${id}::uuid`,
+      () => db.$executeRaw`UPDATE sanctions SET reason = 'test: değişti' WHERE id = ${id}::uuid`,
+      () => db.$executeRaw`UPDATE sanctions SET user_id = ${otherAdmin}::uuid WHERE id = ${id}::uuid`,
+      () => db.$executeRaw`UPDATE sanctions SET created_by_id = ${otherAdmin}::uuid WHERE id = ${id}::uuid`,
+      // Kaldırma yapmayan (no-op) güncelleme de reddedilir.
+      () => db.$executeRaw`UPDATE sanctions SET lifted_at = NULL WHERE id = ${id}::uuid`,
+      // Kaldırmayla birlikte başka alan değiştirilemez.
+      () => db.$executeRaw`
+        UPDATE sanctions SET lifted_at = now(), lifted_by_id = ${otherAdmin}::uuid, lift_reason = 'test: kaldır',
+          ends_at = NULL
+        WHERE id = ${id}::uuid`,
+      () => db.$executeRaw`DELETE FROM sanctions WHERE id = ${id}::uuid`,
+    ]) {
+      await expectDbError(change(), IMMUTABLE);
+    }
+
+    // Tek izinli geçiş: kaldırma bilgisi NULL → dolu.
+    await lift(id, otherAdmin);
+    const row = await one(db.$queryRaw<{ type: string; lifted: boolean; liftedBy: string; reason: string }[]>`
+      SELECT type::text, lifted_at IS NOT NULL AS lifted, lifted_by_id::text AS "liftedBy", reason
+      FROM sanctions WHERE id = ${id}::uuid`);
+    assert.deepEqual(row, { type: "RESTRICT_POSTING", lifted: true, liftedBy: otherAdmin, reason: "test: spam" });
+
+    // Kaldırılmış satır: ikinci kaldırma, kaldırmayı geri alma, düzenleme ve silme reddedilir.
+    for (const change of [
+      () => lift(id, admin, "test: ikinci kaldırma"),
+      () => db.$executeRaw`UPDATE sanctions SET lifted_at = NULL, lifted_by_id = NULL, lift_reason = NULL WHERE id = ${id}::uuid`,
+      () => db.$executeRaw`UPDATE sanctions SET lift_reason = 'test: değişti' WHERE id = ${id}::uuid`,
+      () => db.$executeRaw`DELETE FROM sanctions WHERE id = ${id}::uuid`,
+    ]) {
+      await expectDbError(change(), IMMUTABLE);
+    }
+  });
+
+  test("aktif yaptırım sorgusu kaldırılanı ve süresi dolanı döndürmez, index'i kullanır", async () => {
+    const admin = await createUser();
+    const user = await createUser();
+    await sanction(user, admin, { type: "WARNING" });
+    await sanction(user, admin, { type: "RESTRICT_COMMENTS" });
+    await sanction(user, admin, { type: "SUSPEND", endsIn: "3 days" });
+    await sanction(user, admin, { type: "RESTRICT_POSTING", startsIn: "-2 days", endsIn: "-1 day" });
+    await lift(await sanction(user, admin, { type: "BAN" }), await createUser());
+
+    const active = await db.$queryRaw<{ type: string }[]>`
+      SELECT type::text FROM sanctions
+      WHERE user_id = ${user}::uuid AND lifted_at IS NULL AND (ends_at IS NULL OR ends_at > now())`;
+    assert.deepEqual(active.map((r) => r.type).sort(), ["RESTRICT_COMMENTS", "SUSPEND", "WARNING"]);
+
+    const plan = await db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SET LOCAL enable_seqscan = off");
+      return tx.$queryRaw<{ "QUERY PLAN": string }[]>`
+        EXPLAIN SELECT * FROM sanctions
+        WHERE user_id = ${user}::uuid AND lifted_at IS NULL AND (ends_at IS NULL OR ends_at > now())`;
+    });
+    assert.match(plan.map((r) => r["QUERY PLAN"]).join("\n"), /sanctions_user_id_lifted_at_ends_at_idx/);
+  });
+
+  // Sıra da doğrulanır: user_role'de tanım sırası hiyerarşidir (USER < … < SUPER_ADMIN); SQL'de
+  // rol karşılaştırılırsa yanlış sıra sessiz yetki hatası olur. enum_range tanım sırasını verir.
+  test("DB enum değerleri API sözleşmesindeki adlarla ve sırayla aynı (contracts Role, SanctionType)", async () => {
+    const userRoles = await db.$queryRaw<{ label: string }[]>`
+      SELECT v::text AS label FROM unnest(enum_range(NULL::user_role)) WITH ORDINALITY AS r(v, i) ORDER BY i`;
+    const sanctionTypes = await db.$queryRaw<{ label: string }[]>`
+      SELECT v::text AS label FROM unnest(enum_range(NULL::sanction_type)) WITH ORDINALITY AS r(v, i) ORDER BY i`;
+    assert.deepEqual(userRoles.map((r) => r.label), [...roles]);
+    assert.deepEqual(sanctionTypes.map((r) => r.label), [...SanctionType.options]);
+  });
+});
+
+// ─── 10. Türkçe normalizasyon ─────────────────────────────────
 
 describe("kv_normalize", () => {
   const cases: [string, string][] = [

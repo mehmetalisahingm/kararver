@@ -20,7 +20,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 | `media.prisma` | **Mert** | `MediaAsset`: nesne anahtarları, işlenmiş kopya metadata'sı, moderasyon sonucu ([MEDIA_MODERATION.md](./MEDIA_MODERATION.md)) | ✅ KV-16 (şema) |
 | `community.prisma` | **Mert** | `Community` (slug, ad, görsel, üye sayısı, oluşturan), `CommunityMembership` (üyelik + topluluk rolü) | ✅ KV-31 (şema) |
 | `moderation.prisma` | Mert | `Report`, `ModerationAction` (append-only). Engelli görsel hash listesi KV-38'de eklenecek | ✅ KV-24 (şema) |
-| `admin.prisma` | Utku | Roller, yaptırımlar, audit, ayarlar, bildirimler | ⏳ KV-04 / KV-21 / KV-39 / KV-40 |
+| `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi). Audit, ayarlar, bildirimler sonra | ✅ KV-12 (şema) · ⏳ KV-21 / KV-39 / KV-40 |
 | `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ⏳ KV-22 / KV-23 / KV-42 / KV-15 |
 
 **İskelet tablolar neden var:** Çekirdek tablolar Mert'in iki tablosuna FK veriyor: `polls.community_id → communities` ve `users.avatar_media_id`, `poll_media.media_id → media_assets`. FK'nin hedefi olmadan ilk migration çalışmaz. Bu yüzden iki tablo sadece `id`, `status` ve `created_at` alanlarıyla açıldı. Geri kalan alanları, enum değerlerini ve indexleri sahibi belirler. İskeletteki `id` alanı ve "core ilişkileri" bölümü kaldırılmamalıdır.
@@ -190,8 +190,8 @@ erDiagram
   reports }o--o| comments : ""
   reports }o--o| media_assets : ""
   reports }o--o| users : "raporlanan kullanıcı"
-  users ||--o{ user_roles : "Utku · KV-04"
-  users ||--o{ sanctions : "Utku"
+  users ||--o| user_roles : "Utku · KV-12 · granted_by_id da users"
+  users ||--o{ sanctions : "Utku · KV-12 · created_by_id, lifted_by_id da users"
   users ||--o{ audit_logs : "actor_id · Utku · KV-39"
   users ||--o{ notifications : "Utku · KV-21"
   users ||--o{ bookmarks : "Mehmet · KV-22"
@@ -385,7 +385,7 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 | Mert | `media_assets` (KV-16) | `users.avatar_media_id`, `poll_media.media_id` ona bağlanır; `uploader_id`, `reviewed_by_id → users.id` | Anket ve profilde sadece `status = APPROVED` görseller gösterilir (sorgu kuralı). `public_object_key` sadece `APPROVED` iken dolu olabilir (`media_assets_public_key_check`) |
 | Mert | `communities`, `community_memberships` (KV-31) | `polls.community_id` ona bağlanır; üyelik PK'si `(community_id, user_id)`; `created_by_id → users.id`, `image_media_id → media_assets.id` | Topluluk kapatılsa (`status = HIDDEN`, `admin.communities.update` sözleşmesi) bile anketler silinmez (`RESTRICT`). Topluluk moderatörlüğü `community_memberships.role = MODERATOR`'dır; yetki istemciden değil bu satırdan okunur. `member_count` üyelikle aynı transaction'da güncellenir |
 | Mert | `reports`, `moderation_actions` (KV-24) | Hedef başına ayrı nullable FK: `poll_id`, `comment_id`, `media_id`, `reported_user_id` / `target_user_id`, ve "tam olarak biri dolu" CHECK'i | Tek `target_type`/`target_id` çifti FK bütünlüğünü kaybettirdiği için önerilmez. Kullanıcı + hedef başına tek satır (unique); kapanmış raporun sahibi yeniden raporlarsa aynı satır `OPEN`'a döner (`reports.create` sözleşmesi). `moderation_actions` append-only (trigger), gerekçe zorunlu. Karar güncellemesi raporu için FK, KV-23 tablosu açılınca eklenir |
-| Utku | `user_roles`, `sanctions` | `users.id` | Yaptırım `users.status`'u da günceller (§7.2) |
+| Utku | `user_roles`, `sanctions` (KV-12) | `user_id`, `granted_by_id`, `created_by_id`, `lifted_by_id → users.id`, hepsi `RESTRICT` | Ayrıntı ve servis kuralları §9.1. Yaptırım `users.status`'u da günceller (§7.2) |
 | Utku | `audit_logs` | `actor_id → users.id`; hedef `target_type` + `target_id` | Append-only (KV-39); polimorfik hedef burada kabul edilir |
 | Utku | `system_settings` | — | Oy değiştirme izni, trend katsayıları, snapshot eşikleri buradan okunur |
 | Utku | `notifications`, `notification_preferences` | `users.id` | Olayları çekirdek modüller üretir (KV-04 olay zarfı) |
@@ -395,6 +395,36 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 | Mehmet | `user_interests` | `(user_id, category_id)` | |
 
 Seçenek (`poll_options`) veya yorum bağlayan her tablo, bileşik FK için hazır olan `(poll_id, id)` unique anahtarlarını kullanır.
+
+### 9.1 Rol ve yaptırım (Utku, KV-12)
+
+Şema `admin.prisma`, kısıtlar `…_utku_kv12_admin_roles_sanctions` migration'ının elle yazılan bölümündedir. Enum değerleri contracts `Role` ve `SanctionType` ile birebir ve aynı sıradadır; test değerleri sözleşmeden import ederek karşılaştırır.
+
+**Silme:** `users`'a giden beş FK de `RESTRICT`'tir (`CASCADE`/`SET NULL` yok). Kullanıcı soft delete edildiği için rol ve yaptırım izi korunur; `granted_by_id` ve `created_by_id`/`lifted_by_id` boşaltılmaz.
+
+**DB'nin zorladığı kurallar**
+
+| Kural | Kısıt |
+|---|---|
+| Kullanıcı başına tek rol; satır yoksa USER, `USER` satırı yazılmaz | PK `user_id`, `user_roles_not_user_check` |
+| Kimse kendi rolünü atayamaz | `user_roles_not_self_check` |
+| Veren (`granted_by_id`) sadece ilk SUPER_ADMIN'de boş olabilir | `user_roles_bootstrap_check` |
+| `ends_at` NULL (kalıcı) ya da `starts_at`'ten sonra | `sanctions_period_check` |
+| `SUSPEND` süreli (`ends_at` dolu), `BAN` kalıcı (`ends_at` NULL) | `sanctions_suspend_ends_check`, `sanctions_ban_permanent_check` |
+| Kimse kendine yaptırım uygulayamaz ve kendi yaptırımını kaldıramaz (KV-04 §4.1) | `sanctions_not_self_check`, `sanctions_lift_not_self_check` |
+| Gerekçe ve kaldırma gerekçesi en az 3 anlamlı karakter; kaldırma alanları üçü birlikte dolar | `sanctions_reason_check`, `sanctions_lift_check` |
+| Yaptırım silinemez ve güncellenemez; sadece `lifted_at`/`lifted_by_id`/`lift_reason` bir kez NULL'dan doluya geçer | trigger `sanctions_guard` → `KV_SANCTIONS_IMMUTABLE` |
+
+Aktif yaptırım: `lifted_at IS NULL AND (ends_at IS NULL OR ends_at > now())`; index `(user_id, lifted_at, ends_at)` (partial index değil, §10.4).
+
+**Servis kuralları (DB'de korunamaz, RBAC katmanı KV-12 PR-B)**
+- **`users.status` senkronu:** Yaptırım ekleme ve kaldırma aynı transaction'da `users.status`'u kalan aktif yaptırımlardan yeniden hesaplar: `BAN` > `SUSPEND` > `RESTRICT_*` → `RESTRICTED` > `ACTIVE` (`WARNING` durumu değiştirmez). `SUSPEND`/`BAN` açık oturumları iptal eder (§7.2). Süre dolumu zamana bağlı olduğu için trigger yakalayamaz; süresi dolan `SUSPEND`/`RESTRICT_*` için durumu yeniden hesaplayan bir job gerekir. `authorize` süresi dolan kısıtları zaten yok sayar, ama `users.status = SUSPENDED` job çalışana kadar kalır.
+- **Son aktif SUPER_ADMIN:** Aktiflik `users.status`'a bağlı olduğu ve eşzamanlı iki işlem (iki SUPER_ADMIN'in birbirini aynı anda düşürmesi veya yaptırıma bağlaması) sayımı birlikte geçebileceği için DB kuralı değildir. `admin.roles.put` ve SUPER_ADMIN hedefli `SUSPEND`/`BAN`, transaction içinde önce `SELECT … FROM user_roles WHERE role = 'SUPER_ADMIN' FOR UPDATE` ile kilit alır, sonra `users.status = 'ACTIVE'` olanları sayar.
+- **Yetki:** Admin hedefe yaptırımın SUPER_ADMIN gerektirmesi, rol atamanın sadece SUPER_ADMIN'e açık olması `authorize` kuralıdır (KV-04), DB'de değildir.
+- **Aynı tipte birden çok aktif yaptırım** DB'de engellenmez (unique index süresi dolmuş ama kaldırılmamış satırlar yüzünden yanlış reddederdi); servis mevcut aktif yaptırımı kontrol eder.
+- **Lift idempotency:** `admin.sanctions.lift` "natural" idempotent'tir; zaten kaldırılmış yaptırımda servis mevcut satırı döner, DB'ye ikinci kaldırma yazmaz (yazarsa `KV_SANCTIONS_IMMUTABLE`).
+
+**PR-B'ye bırakılanlar (contracts minor):** `KV_SANCTIONS_IMMUTABLE → INTERNAL_ERROR` `dbErrorMap`'e eklenecek. `admin.sanctions.create` gövdesine "`BAN` için `endsAt` null olmalı" refine'ı eklenecek; şu an sözleşme `BAN` + `endsAt` kabul ediyor, DB reddediyor (`sanctions_ban_permanent_check`).
 
 ---
 
@@ -464,6 +494,7 @@ pnpm db:test
 | `reports` / `moderation_actions` (KV-24, +7 test) | Rapor tam olarak bir hedefe bağlanır; aynı kullanıcı aynı hedefi iki kez raporlayamaz; kendini raporlayamaz; sonuçlanan rapor sonuçlandıranı taşır, açık rapor taşımaz; raporlanan anket hard delete edilemez; işlem gerekçesiz/hedefsiz yazılamaz; moderasyon geçmişi `KV_MODERATION_ACTIONS_APPEND_ONLY` ile korunur |
 | `communities` / `community_memberships` (KV-31, +5 test) | Aynı kullanıcı ikinci kez katılamaz, ayrılıp yeniden katılabilir; slug benzersiz ve URL biçiminde, ad boş olamaz; üye sayısı negatif olamaz; moderatör rolü üyelikte tutulur ve kaldırılabilir; anketi olan topluluk silinemez, kapatmak anketleri etkilemez |
 | Enum hizalaması (+1 test) | `media_purpose`, `report_reason` ve `moderation_action_type` değerleri API sözleşmesindeki (KV-03) adlarla aynı |
+| `user_roles` / `sanctions` (KV-12, +9 test) | Tek rol, `USER` satırı yok, kendine rol yok, verensiz sadece SUPER_ADMIN; var olmayan kullanıcıya FK hatası; `users`'a giden 5 FK `RESTRICT` ve izi olan kullanıcı silinemez; süre, `SUSPEND` süreli / `BAN` kalıcı; kendine yaptırım ve kendi yaptırımını kaldırma yok; gerekçe ve kaldırma alanları; `KV_SANCTIONS_IMMUTABLE` (tek izinli geçiş kaldırma, ikinci kaldırma yok); aktif yaptırım sorgusu ve index; `user_role`/`sanction_type` contracts `Role`/`SanctionType` ile birebir |
 
 ### 11.3 Bu PR'daki kanıt
 
@@ -484,3 +515,4 @@ pnpm db:test
 | 3 | Hesap silmede KVKK kapsamı: hangi alanlar anonimleşir, oylar ne olur | Faruk + Utku |
 | 4 | Kullanıcı adında izinli karakterler (Türkçe harf olacak mı?) | KV-09 |
 | 5 | Mert, Utku ve Mehmet tablolarının §9'daki FK yönleriyle uyumu | İlgili sahipler, PR review'unda |
+| 6 | **İlk SUPER_ADMIN nasıl oluşur?** Öneri: tek seferlik CLI (ör. `pnpm --filter @kararver/api admin:bootstrap --email …`). Transaction + advisory lock; herhangi bir SUPER_ADMIN satırı varsa reddeder; hedef var olan, e-postası doğrulanmış, `ACTIVE` kullanıcı olmalı; `granted_by_id = NULL` ile yazar (`user_roles_bootstrap_check` bunu sadece SUPER_ADMIN'e izin verir); KV-39 gelince audit'e yazar. Reddedilenler: `SUPER_ADMIN_EMAIL` env ile açılışta yükseltme (kalıcı yükseltme yolu), seed migration (ortama özel veri). Script KV-12 kapsamında ayrıca yazılacak | Utku |
