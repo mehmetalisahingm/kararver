@@ -5,6 +5,8 @@ import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
 import { UiError } from "../../lib/model";
 import type { Poll } from "../../lib/model";
+import { SocialPanel } from "../social/social-panel";
+import { PollGallery } from "./gallery";
 
 function PollCard({ poll }: { poll: Poll }) {
   return (
@@ -44,7 +46,7 @@ function PollCard({ poll }: { poll: Poll }) {
         </div>
       )}
       <div className="kv-row kv-between">
-        <span className="kv-help">{(poll.comments.length)} yorum</span>
+        <span className="kv-help">{poll.commentCount ?? poll.comments.length} yorum / öneri</span>
         <Link
           className="kv-button kv-button--secondary"
           href={poll.canonicalPath || `/karar/${poll.id}`}
@@ -126,7 +128,7 @@ export function Feed({ title = "Senin için" }: { title?: string }) {
   );
 }
 export function PollDetail({ id }: { id: string }) {
-  const { client, user, selections, select, requireUser, notify, syncUser } =
+  const { client, demo, user, selections, select, requireUser, notify, syncUser } =
     useProduct();
   const [poll, setPoll] = useState<Poll | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -284,27 +286,32 @@ export function PollDetail({ id }: { id: string }) {
           </>
         )}
       </article>
-      <section
-        className="kv-card screen-stack"
-        aria-labelledby="comments-title"
-      >
-        <h2 id="comments-title">Yorumlar</h2>
-        {poll.comments.length ? (
-          poll.comments.map((c) => (
-            <div key={c.id} className="comment">
-              <strong>{c.author}</strong>
-              <p>{c.text}</p>
-            </div>
-          ))
-        ) : (
-          <p className="kv-muted">Henüz yorum yok.</p>
-        )}
-        <p className="kv-help">
-          {poll.commentsEnabled
-            ? "Yorum yazma ve sosyal etkileşimler bir sonraki UI görevinde bağlanacak."
-            : "Bu içerikte yorumlar kapalı."}
-        </p>
-      </section>
+      <PollGallery key={poll.id} poll={poll} />
+      {demo ? (
+        <SocialPanel key={`${poll.id}:${user?.id || "guest"}`} poll={poll} />
+      ) : (
+        <section
+          className="kv-card screen-stack"
+          aria-labelledby="comments-title"
+        >
+          <h2 id="comments-title">Yorumlar</h2>
+          {poll.comments.length ? (
+            poll.comments.map((c) => (
+              <div key={c.id} className="comment">
+                <strong>{c.author}</strong>
+                <p>{c.text}</p>
+              </div>
+            ))
+          ) : (
+            <p className="kv-muted">Henüz yorum yok.</p>
+          )}
+          <p className="kv-help">
+            {poll.commentsEnabled
+              ? "Gerçek sosyal etkileşim API entegrasyonu henüz tamamlanmadı."
+              : "Bu içerikte yorumlar kapalı."}
+          </p>
+        </section>
+      )}
     </div>
   );
 }

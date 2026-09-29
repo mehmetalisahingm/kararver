@@ -1,5 +1,7 @@
 import { UiError, validateDraft } from "./model.ts";
 import type { Draft, Poll, ProductClient, User } from "./model.ts";
+import { DemoEngagement } from "../features/social/demo-engagement.ts";
+import type { CommentDraft, Reaction } from "../features/social/model.ts";
 type RecordPoll = Omit<Poll, "results" | "ownVote"> & {
   counts: number[];
   votes: Map<string, string>;
@@ -16,6 +18,7 @@ export class DemoClient implements ProductClient {
   private polls: RecordPoll[];
   private userId: string | null = null;
   private failure: string | null = null;
+  private engagement = new DemoEngagement();
   private requests = new Map<string, { fingerprint: string; pollId: string }>();
   private delay: number;
   constructor(delay = 180) {
@@ -87,6 +90,39 @@ export class DemoClient implements ProductClient {
         ],
         counts: [62, 38],
         visibility: "always",
+        gallery: [
+          {
+            id: "coast-photo",
+            status: "ready",
+            src: "/images/coast.jpg",
+            alt: "Kıyı kasabası ve deniz manzarası",
+          },
+          {
+            id: "beach-photo",
+            status: "ready",
+            src: "/images/beach.jpg",
+            alt: "Sakin bir koy ve plaj",
+          },
+          {
+            id: "pending-photo",
+            status: "pending",
+            alt: "İncelemedeki fotoğraf",
+          },
+          {
+            id: "removed-photo",
+            status: "removed",
+            alt: "Kaldırılan fotoğraf",
+          },
+        ],
+        price: {
+          amount: "12000.00",
+          currency: "TRY",
+          note: "Örnek bütçe · kişi başı, 3 gece; güncel teklif değildir.",
+        },
+        details: [
+          { label: "Süre", value: "3 gece" },
+          { label: "Ulaşım", value: "Bütçeye dahil değil" },
+        ],
       },
       {
         ...base,
@@ -137,8 +173,9 @@ export class DemoClient implements ProductClient {
   failNext(operation: string) {
     this.failure = operation;
   }
-  private async wait(operation: string) {
+  private async wait(operation: string, signal?: AbortSignal) {
     await new Promise((resolve) => setTimeout(resolve, this.delay));
+    signal?.throwIfAborted();
     if (this.failure === operation) {
       this.failure = null;
       throw new UiError(
@@ -179,6 +216,7 @@ export class DemoClient implements ProductClient {
     const total = counts.reduce((a, b) => a + b, 0);
     return structuredClone({
       ...rest,
+      commentCount: this.engagement.count(p.id, p.comments.length),
       ownVote,
       results: visible
         ? {
@@ -349,5 +387,71 @@ export class DemoClient implements ProductClient {
       poll.votes.set(account.id, optionId);
     }
     return this.project(poll);
+  }
+  async getEngagement(id: string, signal?: AbortSignal) {
+    await this.wait("engagement", signal);
+    return this.engagement.snapshot(
+      this.project(this.record(id)),
+      this.current(),
+    );
+  }
+  async react(id: string, commentId: string | null, value: Reaction) {
+    const actor = this.account().id;
+    await this.wait("reaction");
+    if (this.account().id !== actor)
+      throw new UiError(
+        "UNAUTHENTICATED",
+        "Oturum değişti. İşlemi tekrar onayla.",
+      );
+    return this.engagement.react(
+      this.project(this.record(id)),
+      this.current()!,
+      commentId,
+      value,
+    );
+  }
+  async addComment(id: string, draft: CommentDraft, requestId: string) {
+    const actor = this.account().id;
+    await this.wait("comment");
+    if (this.account().id !== actor)
+      throw new UiError(
+        "UNAUTHENTICATED",
+        "Oturum değişti. İşlemi tekrar onayla.",
+      );
+    return this.engagement.add(
+      this.project(this.record(id)),
+      this.current()!,
+      draft,
+      requestId,
+    );
+  }
+  async editComment(id: string, commentId: string, text: string) {
+    const actor = this.account().id;
+    await this.wait("editComment");
+    if (this.account().id !== actor)
+      throw new UiError(
+        "UNAUTHENTICATED",
+        "Oturum değişti. İşlemi tekrar onayla.",
+      );
+    return this.engagement.edit(
+      this.project(this.record(id)),
+      this.current()!,
+      commentId,
+      text,
+    );
+  }
+  async deleteComment(id: string, commentId: string) {
+    const actor = this.account().id;
+    await this.wait("deleteComment");
+    if (this.account().id !== actor)
+      throw new UiError(
+        "UNAUTHENTICATED",
+        "Oturum değişti. İşlemi tekrar onayla.",
+      );
+    return this.engagement.delete(
+      this.project(this.record(id)),
+      this.current()!,
+      commentId,
+    );
   }
 }

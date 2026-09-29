@@ -36,6 +36,10 @@
 .product[data-theme="light"] .kv-button--secondary:hover {
   background: #e0e4ed;
 }
+.product .kv-button--secondary {
+  /* Keep foreground/background in sync when switching themes. */
+  transition: none;
+}
 .app-header {
   display: flex;
   align-items: center;
@@ -510,5 +514,205 @@ progress::-webkit-progress-value {
   }
   .kv-dialog {
     padding: 22px;
+  }
+}
+
+/* KV-18: gallery and social interactions use the shared light/dark tokens. */
+.reaction-row,
+.social-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.reaction-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 13px;
+  border: 1px solid var(--kv-border);
+  border-radius: 12px;
+  color: var(--kv-text);
+  background: var(--kv-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.reaction-button[aria-pressed="true"] {
+  color: var(--kv-accent);
+  border-color: var(--kv-accent);
+  background: var(--kv-soft);
+}
+.reaction-button span {
+  font-size: 20px;
+}
+.reaction-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.social-panel {
+  overflow-wrap: anywhere;
+}
+.comment-composer {
+  border: 1px solid var(--kv-border);
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--kv-background);
+}
+.comment-composer textarea,
+.social-comment textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.comment-composer .kv-field {
+  margin: 0;
+}
+.social-comment {
+  padding: 18px 0;
+  display: grid;
+  gap: 12px;
+}
+.comment-thread {
+  border-top: 1px solid var(--kv-border);
+}
+.social-reply {
+  margin-left: 18px;
+  padding-left: 16px;
+  border-left: 2px solid var(--kv-border);
+}
+.comment-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.reply-target {
+  border-left: 3px solid var(--kv-accent);
+  padding-left: 12px;
+  font-size: 13px;
+}
+.gallery-stage {
+  margin: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--kv-background);
+}
+.gallery-stage > img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1.65;
+  object-fit: cover;
+  display: block;
+}
+.gallery-stage figcaption {
+  padding: 12px 16px;
+  color: var(--kv-muted);
+  font-size: 12px;
+}
+.gallery-unavailable {
+  min-height: 220px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.gallery-unavailable > span {
+  font-size: 40px;
+  color: var(--kv-accent);
+}
+.gallery-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gallery-thumb {
+  padding: 3px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--kv-background);
+  color: var(--kv-muted);
+  min-height: 52px;
+  width: 80px;
+  cursor: pointer;
+  font-size: 10px;
+}
+.gallery-thumb[aria-pressed="true"] {
+  border-color: var(--kv-accent);
+}
+.gallery-thumb img {
+  display: block;
+  width: 100%;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.price-info {
+  padding: 16px;
+  background: var(--kv-background);
+  border-radius: 14px;
+}
+.price-info strong {
+  display: block;
+  font-size: 28px;
+  margin: 5px 0;
+}
+.price-info p {
+  font-size: 13px;
+  margin: 0;
+}
+.poll-details {
+  margin: 0;
+}
+.poll-details > div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--kv-border);
+}
+.poll-details dt {
+  color: var(--kv-muted);
+}
+.poll-details dd {
+  margin: 0;
+}
+.result {
+  animation: reveal-result 350ms ease-out both;
+}
+@keyframes reveal-result {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .result {
+    animation: none;
+  }
+}
+@media (max-width: 600px) {
+  .comment-composer {
+    padding: 12px;
+  }
+  .comment-composer > .kv-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .gallery-thumb {
+    width: 55px;
+  }
+  .gallery-controls {
+    gap: 4px;
+  }
+  .gallery-controls > .reaction-button {
+    padding: 6px 10px;
   }
 }
