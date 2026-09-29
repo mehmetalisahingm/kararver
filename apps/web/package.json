@@ -1,0 +1,29 @@
+{
+  "name": "@kararver/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/sync-assets.mjs && next dev --hostname 127.0.0.1",
+    "dev:demo": "node scripts/serve-demo.mjs",
+    "build": "node scripts/sync-assets.mjs && next build",
+    "start": "next start --hostname 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts test/*.test.mjs",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "next": "16.3.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "@kararver/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "6.0.3",
+    "@playwright/test": "1.63.0",
+    "@axe-core/playwright": "4.13.0"
+  }
+}
