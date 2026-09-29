@@ -18,6 +18,8 @@ import type { MediaStorage } from "./modules/media/storage.ts";
 import { DEFAULT_MEDIA_SETTINGS, type MediaSettings, type MediaStore } from "./modules/media/store.ts";
 import { createAuthenticator, type SessionSettings } from "./modules/auth/session.ts";
 import type { AuthStore } from "./modules/auth/store.ts";
+import { registerCategoryAdminRoutes } from "./modules/categories/routes.ts";
+import type { CategoryAdminStore } from "./modules/categories/store.ts";
 import { registerCommentRoutes } from "./modules/comments/routes.ts";
 import type { CommentStore } from "./modules/comments/store.ts";
 import { registerFeedRoutes } from "./modules/feed/routes.ts";
@@ -47,6 +49,8 @@ export type AppDeps = {
   pollSettings?: () => Promise<PollSettings>;
   /** pollStore ile birlikte verilirse kategori ve arama route'ları kaydedilir. */
   searchStore?: SearchStore;
+  /** Verilmezse admin kategori route'ları (admin.categories.*) kaydedilmez. */
+  categoryAdminStore?: CategoryAdminStore;
   /** Verilmezse oy route'u kaydedilmez. */
   voteStore?: VoteStore;
   /** Verilmezse topluluk route'ları kaydedilmez. */
@@ -148,6 +152,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
       });
     }
+  }
+  if (deps.categoryAdminStore) {
+    registerCategoryAdminRoutes(route, { store: deps.categoryAdminStore, now });
   }
   if (deps.voteStore) {
     registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });

@@ -12,6 +12,7 @@ import { loadConfig } from "../../src/config.ts";
 import type { Mail } from "../../src/mail/mailer.ts";
 import { createArgon2Hasher } from "../../src/modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "../../src/modules/auth/prisma-store.ts";
+import { createPrismaCategoryAdminStore } from "../../src/modules/categories/prisma-store.ts";
 import { createPrismaCommunityStore } from "../../src/modules/communities/prisma-store.ts";
 import type { AuthStore, UserStatus } from "../../src/modules/auth/store.ts";
 import { createPrismaMediaStore } from "../../src/modules/media/prisma-store.ts";
@@ -183,6 +184,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     isRegistrationEnabled: async () => registrationEnabled.value,
     pollStore: backend.prisma ? createPrismaPollStore(backend.prisma) : undefined,
     searchStore: backend.prisma ? createPrismaSearchStore(backend.prisma) : undefined,
+    categoryAdminStore: backend.prisma ? createPrismaCategoryAdminStore(backend.prisma) : undefined,
     voteStore: backend.prisma ? createPrismaVoteStore(backend.prisma) : undefined,
     communityStore: backend.prisma ? createPrismaCommunityStore(backend.prisma) : undefined,
     reportStore: backend.prisma ? createPrismaReportStore(backend.prisma) : undefined,
