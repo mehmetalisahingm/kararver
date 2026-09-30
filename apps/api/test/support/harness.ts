@@ -18,6 +18,7 @@ import type { AuthStore, UserStatus } from "../../src/modules/auth/store.ts";
 import { createPrismaMediaStore } from "../../src/modules/media/prisma-store.ts";
 import { DEFAULT_MEDIA_SETTINGS, type MediaSettings } from "../../src/modules/media/store.ts";
 import { createPrismaCommentStore } from "../../src/modules/comments/prisma-store.ts";
+import { createPrismaOnboardingStore } from "../../src/modules/onboarding/prisma-store.ts";
 import { createPrismaPollStore } from "../../src/modules/polls/prisma-store.ts";
 import { createPrismaSearchStore } from "../../src/modules/search/prisma-store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings } from "../../src/modules/polls/store.ts";
@@ -187,6 +188,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     categoryAdminStore: backend.prisma ? createPrismaCategoryAdminStore(backend.prisma) : undefined,
     voteStore: backend.prisma ? createPrismaVoteStore(backend.prisma) : undefined,
     communityStore: backend.prisma ? createPrismaCommunityStore(backend.prisma) : undefined,
+    onboardingStore: backend.prisma ? createPrismaOnboardingStore(backend.prisma) : undefined,
     reportStore: backend.prisma ? createPrismaReportStore(backend.prisma) : undefined,
     pollSettings: async () => pollSettings,
     commentStore: backend.prisma ? createPrismaCommentStore(backend.prisma) : undefined,
