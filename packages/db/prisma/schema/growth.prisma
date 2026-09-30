@@ -1,0 +1,16 @@
+// Sahip: Mehmet (@mehmetalisahingm) — KV-15 / KV-22 / KV-23 / KV-42
+// İlgi alanı, bookmark, karar güncellemesi, takip, öne çıkarma ve duyuru tabloları bu dosyada büyür.
+// UserInterest KV-15 (#17) tarafından sahiplenilir; KV-27 (#29) kişiselleştirilmiş feed bu veriyi tüketir.
+
+model UserInterest {
+  userId     String   @map("user_id") @db.Uuid
+  categoryId String   @map("category_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([userId, categoryId])
+  @@index([categoryId])
+  @@map("user_interests")
+}

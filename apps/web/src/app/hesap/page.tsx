@@ -16,6 +16,11 @@ export default function Page() {
           Giriş yap
         </Link>
       )}
+      {user && (
+        <Link className="kv-button kv-button--secondary" href="/ilgi-alanlari">
+          İlgi alanlarını düzenle
+        </Link>
+      )}
       <Link href="/">Akışa dön</Link>
       <p className="kv-help">
         Bu ekran oturum özetidir. Herkese açık profil ve kaydedilenler kendi

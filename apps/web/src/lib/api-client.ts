@@ -1,4 +1,4 @@
-import { Category, Me, PollCard, PollDetail, VoteResult, dataOf, pageOf } from "@kararver/contracts";
+import { Category, CommunityCard, Me, PollCard, PollDetail, VoteResult, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
 import { UiError, safeReturnTo } from "./model.ts";
 import type { Draft, Poll, ProductClient, User } from "./model.ts";
@@ -59,6 +59,17 @@ export class ApiClient implements ProductClient {
     return mapPoll(dataOf(PollDetail).parse(await this.http.request(uuid ? "polls.get" : "polls.lookup", uuid ? { params: { id } } : { query: { publicId } })).data);
   }
   async publicationCategories() { return dataOf(Category.array()).parse(await this.http.request("categories.list")).data; }
+  async interests() {
+    const response = await this.http.request("interests.get") as { data: { categoryIds: string[] } };
+    return response.data.categoryIds;
+  }
+  async saveInterests(categoryIds: string[]) {
+    const response = await this.http.request("interests.put", { body: { categoryIds } }) as { data: { categoryIds: string[] } };
+    return response.data.categoryIds;
+  }
+  async onboardingCommunities(limit = 3) {
+    return pageOf(CommunityCard).parse(await this.http.request("communities.list", { query: { limit: String(limit) } })).data;
+  }
   async create(draft: Draft, key: string) {
     const common = { title: draft.title.trim(), description: draft.description.trim(), categoryId: draft.categoryId, allowComments: draft.commentsEnabled };
     const body = draft.kind === "discussion" ? { ...common, kind: "DISCUSSION" } : {
