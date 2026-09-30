@@ -23,6 +23,8 @@ import type { CategoryAdminStore } from "./modules/categories/store.ts";
 import { registerCommentRoutes } from "./modules/comments/routes.ts";
 import type { CommentStore } from "./modules/comments/store.ts";
 import { registerFeedRoutes } from "./modules/feed/routes.ts";
+import { registerOnboardingRoutes } from "./modules/onboarding/routes.ts";
+import type { OnboardingStore } from "./modules/onboarding/store.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
 import { registerReportRoutes } from "./modules/reports/routes.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
@@ -55,6 +57,8 @@ export type AppDeps = {
   voteStore?: VoteStore;
   /** Verilmezse topluluk route'ları kaydedilmez. */
   communityStore?: CommunityStore;
+  /** Verilmezse onboarding/ilgi route'ları kaydedilmez. */
+  onboardingStore?: OnboardingStore;
   /** Verilmezse rapor route'u kaydedilmez. */
   reportStore?: ReportStore;
   /** Verilmezse yorum route'ları kaydedilmez. */
@@ -161,6 +165,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   }
   if (deps.communityStore) {
     registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  }
+  if (deps.onboardingStore) {
+    registerOnboardingRoutes(route, deps.onboardingStore);
   }
   if (deps.reportStore) {
     registerReportRoutes(route, { store: deps.reportStore });
