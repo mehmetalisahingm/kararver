@@ -3,35 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useProduct } from "../../components/product-provider";
+import { ApiClient } from "../../lib/api-client";
 import { categories as demoCategoryNames } from "../../lib/model";
 
 type CategoryItem = { id: string; name: string; description?: string | null };
 type CommunityItem = { id: string; slug: string; name: string; description?: string | null; memberCount?: number };
 
-type ApiEnvelope<T> = { data: T };
-type ApiPage<T> = { data: T[] };
-
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBase}/v1${path}`, {
-    credentials: "include",
-    ...init,
-    headers: {
-      ...(init?.body ? { "content-type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
-  const payload = response.status === 204 ? null : await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = payload?.error?.message ?? "İşlem tamamlanamadı. Tekrar deneyebilirsin.";
-    throw new Error(message);
-  }
-  return payload as T;
-}
+const MAX_INTERESTS = 20;
 
 export function OnboardingPanel() {
-  const { demo, user, notify } = useProduct();
+  const { demo, user, notify, client } = useProduct();
   const [items, setItems] = useState<CategoryItem[]>([]);
   const [communities, setCommunities] = useState<CommunityItem[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -64,16 +45,24 @@ export function OnboardingPanel() {
       return;
     }
 
+    if (!(client instanceof ApiClient)) {
+      setError("API istemcisi hazır değil.");
+      setLoading(false);
+      return;
+    }
+
     Promise.all([
-      api<ApiEnvelope<CategoryItem[]>>("/categories"),
-      api<ApiEnvelope<{ categoryIds: string[] }>>("/me/interests"),
-      api<ApiPage<CommunityItem>>("/communities?limit=3"),
+      client.publicationCategories(),
+      client.interests(),
+      client.onboardingCommunities(3),
     ])
-      .then(([categoryResponse, interestResponse, communityResponse]) => {
+      .then(([categoryResponse, interestIds, communityResponse]) => {
         if (!active) return;
-        setItems(categoryResponse.data);
-        setSelected(interestResponse.data.categoryIds);
-        setCommunities(communityResponse.data);
+        const activeIds = new Set(categoryResponse.map((category) => category.id));
+        setItems(categoryResponse);
+        // Yönetici daha önce seçilmiş bir kategoriyi pasife aldıysa görünmez ID kayda geri gönderilmez.
+        setSelected(interestIds.filter((id) => activeIds.has(id)));
+        setCommunities(communityResponse);
       })
       .catch((reason: Error) => {
         if (active) setError(reason.message);
@@ -85,27 +74,29 @@ export function OnboardingPanel() {
     return () => {
       active = false;
     };
-  }, [demo, user, attempt]);
+  }, [client, demo, user, attempt]);
 
   function toggle(id: string) {
     setSaved(false);
+    if (!selected.includes(id) && selected.length >= MAX_INTERESTS) {
+      setError(`En fazla ${MAX_INTERESTS} kategori seçebilirsin.`);
+      return;
+    }
+    setError("");
     setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
   }
 
   async function save() {
-    if (!user || saving || selected.length === 0) return;
+    if (!user || saving) return;
     setSaving(true);
     setError("");
     try {
       if (!demo) {
-        const response = await api<ApiEnvelope<{ categoryIds: string[] }>>("/me/interests", {
-          method: "PUT",
-          body: JSON.stringify({ categoryIds: selected }),
-        });
-        setSelected(response.data.categoryIds);
+        if (!(client instanceof ApiClient)) throw new Error("API istemcisi hazır değil.");
+        setSelected(await client.saveInterests(selected));
       }
       setSaved(true);
-      notify("İlgi alanların kaydedildi.");
+      notify(selected.length ? "İlgi alanların kaydedildi." : "İlgi alanların temizlendi.");
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
@@ -153,12 +144,15 @@ export function OnboardingPanel() {
             <div aria-label="İlgi kategorileri">
               {items.map((item) => {
                 const active = selected.includes(item.id);
+                const disabled = !active && selected.length >= MAX_INTERESTS;
                 return (
                   <button
                     type="button"
                     key={item.id}
                     className={active ? "kv-button" : "kv-button kv-button--ghost"}
                     aria-pressed={active}
+                    disabled={disabled}
+                    title={disabled ? `En fazla ${MAX_INTERESTS} kategori seçebilirsin.` : undefined}
                     onClick={() => toggle(item.id)}
                   >
                     {item.name}
@@ -166,10 +160,12 @@ export function OnboardingPanel() {
                 );
               })}
             </div>
-            <p className="kv-muted">{selected.length ? `${selected.length} kategori seçili.` : "Henüz kategori seçmedin."}</p>
+            <p className="kv-muted">
+              {selected.length ? `${selected.length}/${MAX_INTERESTS} kategori seçili.` : "Henüz kategori seçmedin."}
+            </p>
             <div>
-              <button className="kv-button" disabled={saving || selected.length === 0} onClick={() => void save()}>
-                {saving ? "Kaydediliyor…" : "Seçimlerimi kaydet"}
+              <button className="kv-button" disabled={saving} onClick={() => void save()}>
+                {saving ? "Kaydediliyor…" : selected.length ? "Seçimlerimi kaydet" : "Tercihlerimi temizle"}
               </button>{" "}
               <button className="kv-button kv-button--secondary" disabled={saving} onClick={skip}>
                 Şimdilik atla
