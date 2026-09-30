@@ -118,6 +118,7 @@ export function safeReturnTo(value: string | null): string {
   return value &&
     (/^\/$/.test(value) ||
       /^\/olustur$/.test(value) ||
+      /^\/ilgi-alanlari$/.test(value) ||
       /^\/karar\/[A-Za-z0-9_-]+$/.test(value))
     ? value
     : "/";
