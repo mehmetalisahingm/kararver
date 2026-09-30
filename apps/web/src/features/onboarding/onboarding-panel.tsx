@@ -92,27 +92,30 @@ export function OnboardingPanel() {
     setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
   }
 
-  async function save(categoryIds: string[]) {
-    if (!user || saving) return;
+  async function save() {
+    if (!user || saving || selected.length === 0) return;
     setSaving(true);
     setError("");
     try {
       if (!demo) {
         const response = await api<ApiEnvelope<{ categoryIds: string[] }>>("/me/interests", {
           method: "PUT",
-          body: JSON.stringify({ categoryIds }),
+          body: JSON.stringify({ categoryIds: selected }),
         });
         setSelected(response.data.categoryIds);
-      } else {
-        setSelected(categoryIds);
       }
       setSaved(true);
-      notify(categoryIds.length === 0 ? "İlgi seçimini atladın. Akışın farklı alanlardan başlayacak." : "İlgi alanların kaydedildi.");
+      notify("İlgi alanların kaydedildi.");
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
       setSaving(false);
     }
+  }
+
+  function skip() {
+    setSaved(true);
+    notify("İlgi seçimini atladın. Akışın farklı alanlardan başlayacak.");
   }
 
   if (!user) {
@@ -165,14 +168,14 @@ export function OnboardingPanel() {
             </div>
             <p className="kv-muted">{selected.length ? `${selected.length} kategori seçili.` : "Henüz kategori seçmedin."}</p>
             <div>
-              <button className="kv-button" disabled={saving} onClick={() => void save(selected)}>
+              <button className="kv-button" disabled={saving || selected.length === 0} onClick={() => void save()}>
                 {saving ? "Kaydediliyor…" : "Seçimlerimi kaydet"}
               </button>{" "}
-              <button className="kv-button kv-button--secondary" disabled={saving} onClick={() => void save([])}>
+              <button className="kv-button kv-button--secondary" disabled={saving} onClick={skip}>
                 Şimdilik atla
               </button>
             </div>
-            {saved && <p role="status">Tercihin kaydedildi.</p>}
+            {saved && <p role="status">Tercihin işlendi.</p>}
           </div>
         )}
       </div>
