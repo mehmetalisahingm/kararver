@@ -40,11 +40,6 @@ export const LedgerEntry = z.strictObject({
 });
 export const PointsSummary = z.strictObject({ balance: Count, publishCost: z.number().int().min(0) });
 
-/** Boş liste onboarding'i atlamak/tercihleri temizlemek için geçerlidir; aynı kategori iki kez seçilemez. */
-export const InterestCategoryIds = z.array(Id).max(20).refine((ids) => new Set(ids).size === ids.length, {
-  message: "Aynı kategori birden fazla kez seçilemez.",
-});
-
 const UsernameParams = z.strictObject({ username: Username });
 const growth = (module: string) => ({ owner: "Mehmet", module }) as const;
 const web = ["Ümit (web)"];
@@ -219,7 +214,7 @@ export const growthEndpoints = [
     unblocks: ["#17"],
     availability: { status: "ready" },
     request: {},
-    responses: { 200: dataOf(z.strictObject({ categoryIds: InterestCategoryIds })) },
+    responses: { 200: dataOf(z.strictObject({ categoryIds: z.array(Id) })) },
     errors: [],
     idempotency: "none",
     cache: "private",
@@ -229,18 +224,17 @@ export const growthEndpoints = [
     domain: "growth",
     method: "PUT",
     path: "/me/interests",
-    summary: "İlgi kategorilerini ayarla (tam liste; boş liste geçerli)",
+    summary: "İlgi kategorilerini ayarla (tam liste)",
     auth: "user",
     provider: growth("onboarding"),
     consumers: web,
     unblocks: ["#17", "#29"],
     availability: { status: "ready" },
-    request: { body: z.strictObject({ categoryIds: InterestCategoryIds }) },
-    responses: { 200: dataOf(z.strictObject({ categoryIds: InterestCategoryIds })) },
-    errors: ["VALIDATION_ERROR"],
+    request: { body: z.strictObject({ categoryIds: z.array(Id).min(1).max(20) }) },
+    responses: { 200: dataOf(z.strictObject({ categoryIds: z.array(Id) })) },
+    errors: [],
     idempotency: "natural",
     cache: "private",
-    notes: ["Boş liste onboarding'i atlama veya tercihleri temizleme olarak kabul edilir."],
   }),
   defineEndpoint({
     id: "shares.create",
