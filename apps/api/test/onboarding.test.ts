@@ -69,10 +69,10 @@ describe("KV-15 onboarding (postgres)", { skip: backend ? false : "TEST_DATABASE
 
   test("misafir ilgi alanlarını okuyamaz veya yazamaz", async () => {
     assertError(await request("GET", "/me/interests"), 401, "UNAUTHENTICATED");
-    assertError(await request("PUT", "/me/interests", { categoryIds: [] }), 401, "UNAUTHENTICATED");
+    assertError(await request("PUT", "/me/interests", { categoryIds: [randomUUID()] }), 401, "UNAUTHENTICATED");
   });
 
-  test("yeni kullanıcı boş ilgi listesiyle başlar", async () => {
+  test("yeni kullanıcı seçim yapmadan boş ilgi listesiyle kalabilir", async () => {
     const res = await request("GET", "/me/interests", undefined, cookie);
     assert.equal(res.statusCode, 200, res.body);
     assert.deepEqual(res.json().data.categoryIds, []);
@@ -91,13 +91,8 @@ describe("KV-15 onboarding (postgres)", { skip: backend ? false : "TEST_DATABASE
     assert.equal(await db.userInterest.count({ where: { userId } }), 1);
   });
 
-  test("boş liste onboarding'i atlar ve mevcut tercihleri temizler", async () => {
-    const a = await category();
-    assert.equal((await request("PUT", "/me/interests", { categoryIds: [a.id] }, cookie)).statusCode, 200);
-    const cleared = await request("PUT", "/me/interests", { categoryIds: [] }, cookie);
-    assert.equal(cleared.statusCode, 200, cleared.body);
-    assert.deepEqual(cleared.json().data.categoryIds, []);
-    assert.equal(await db.userInterest.count({ where: { userId } }), 0);
+  test("boş PUT mevcut sözleşme gereği reddedilir; atlama web akışında yazma yapmaz", async () => {
+    assertError(await request("PUT", "/me/interests", { categoryIds: [] }, cookie), 400, "VALIDATION_ERROR");
   });
 
   test("pasif/bilinmeyen kategori eski seçimleri bozmadan reddedilir", async () => {
