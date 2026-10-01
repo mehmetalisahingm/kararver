@@ -119,6 +119,7 @@ export function safeReturnTo(value: string | null): string {
     (/^\/$/.test(value) ||
       /^\/olustur$/.test(value) ||
       /^\/ilgi-alanlari$/.test(value) ||
+      /^\/admin(?:\/[A-Za-z0-9_-]+)?$/.test(value) ||
       /^\/karar\/[A-Za-z0-9_-]+$/.test(value))
     ? value
     : "/";
