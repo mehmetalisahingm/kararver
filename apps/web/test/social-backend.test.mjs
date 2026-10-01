@@ -66,7 +66,9 @@ test("KV-18 real HTTP/PostgreSQL: two accounts, comments, replies, alternatives,
     assert.equal(state.comments.find(c => c.id === reply.id).text, "Yanıt");
     assert.ok(state.comments.every(c => !c.canEdit));
     // Closing voting does not close discussion; locking the content does.
-    await h.prisma.poll.update({where:{id:poll.id}, data:{closesAt:new Date(h.clock.now.getTime()-1000)}});
+    await h.prisma.poll.update({where:{id:poll.id}, data:{
+      opensAt:new Date(h.clock.now.getTime()-86400000), closesAt:new Date(h.clock.now.getTime()-1000),
+    }});
     assert.equal((await guest.get(poll.id)).status, "CLOSED");
     assert.equal((await guest.get(poll.id)).results.visible, true);
     await reader.addComment(poll.id, {text:"Oylama sonrası yorum",kind:"comment",parentId:null}, randomUUID());
