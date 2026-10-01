@@ -10,6 +10,31 @@ export type User = {
   email: string;
   verified: boolean;
   balance: number | null;
+  username?: string;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  createdAt?: string;
+};
+export type PublicProfile = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  joinedAt: string;
+  stats: { pollCount: number; votesReceived: number; commentCount: number };
+};
+export type ProfileComment = {
+  id: string;
+  pollId: string;
+  body: string;
+  createdAt: string;
+  likes: number;
+  dislikes: number;
+};
+export type PageResult<T> = {
+  data: T[];
+  page: { nextCursor: string | null; hasMore: boolean };
 };
 export type Results =
   | { visible: false }
@@ -118,7 +143,9 @@ export function safeReturnTo(value: string | null): string {
   return value &&
     (/^\/$/.test(value) ||
       /^\/olustur$/.test(value) ||
+      /^\/hesap$/.test(value) ||
       /^\/ilgi-alanlari$/.test(value) ||
+      /^\/profil\/[a-z0-9_]{3,30}$/.test(value) ||
       /^\/admin(?:\/[A-Za-z0-9_-]+)?$/.test(value) ||
       /^\/karar\/[A-Za-z0-9_-]+$/.test(value))
     ? value
@@ -136,4 +163,10 @@ export interface ProductClient extends EngagementClient, DiscoveryClient {
   current(): User | null;
   create(draft: Draft, requestId: string): Promise<Poll>;
   vote(id: string, optionId: string): Promise<Poll>;
+  getProfile(username: string): Promise<PublicProfile>;
+  updateProfile(input: { displayName?: string; bio?: string | null }): Promise<User>;
+  getProfilePolls(username: string, cursor?: string): Promise<PageResult<Poll>>;
+  getProfileComments(username: string, cursor?: string): Promise<PageResult<ProfileComment>>;
+  getBookmarks(cursor?: string): Promise<PageResult<Poll>>;
+  setBookmark(id: string, saved: boolean): Promise<boolean>;
 }
