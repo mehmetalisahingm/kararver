@@ -1,4 +1,4 @@
-// Frontend view models, NOT the unfinished KV-03 wire contract.
+// Frontend view models mapped from validated wire contracts.
 import type { EngagementClient } from "../features/social/model.ts";
 import type { DiscoveryClient } from "../features/discovery/model.ts";
 export type GalleryItem =
@@ -9,7 +9,7 @@ export type User = {
   name: string;
   email: string;
   verified: boolean;
-  balance: number;
+  balance: number | null;
 };
 export type Results =
   | { visible: false }
@@ -20,6 +20,9 @@ export type Results =
     };
 export type Poll = {
   id: string;
+  canonicalPath?: string;
+  canVote?: boolean;
+  voteBlockedReason?: string | null;
   title: string;
   description: string;
   kind: "poll" | "discussion";
@@ -40,6 +43,7 @@ export type Poll = {
   price?: { amount: string; currency: "TRY"; note: string };
 };
 export type Draft = {
+  categoryId?: string;
   kind: "poll" | "discussion";
   title: string;
   description: string;
@@ -106,7 +110,7 @@ export function validateDraft(draft: Draft): FieldErrors {
     if (!Number.isFinite(draft.hours) || draft.hours < 1 || draft.hours > 720)
       errors.hours = "Süre 1 saat ile 30 gün arasında olmalı.";
   }
-  if (!categories.includes(draft.category))
+  if (!draft.categoryId && !categories.includes(draft.category))
     errors.category = "Bir kategori seçmelisin.";
   return errors;
 }
@@ -114,7 +118,8 @@ export function safeReturnTo(value: string | null): string {
   return value &&
     (/^\/$/.test(value) ||
       /^\/olustur$/.test(value) ||
-      /^\/karar\/[a-z0-9-]+$/.test(value))
+      /^\/ilgi-alanlari$/.test(value) ||
+      /^\/karar\/[A-Za-z0-9_-]+$/.test(value))
     ? value
     : "/";
 }
@@ -122,7 +127,7 @@ export interface ProductClient extends EngagementClient, DiscoveryClient {
   list(): Promise<Poll[]>;
   get(id: string): Promise<Poll>;
   login(email: string, password: string): Promise<User>;
-  register(name: string, email: string, password: string): Promise<void>;
+  register(name: string, email: string, password: string, username?: string): Promise<void>;
   verify(email: string, code: string): Promise<void>;
   requestReset(email: string): Promise<void>;
   reset(email: string, code: string, password: string): Promise<void>;

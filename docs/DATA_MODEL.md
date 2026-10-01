@@ -17,11 +17,11 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 | `schema.prisma` | Faruk | Generator ve datasource | ✅ |
 | `core.prisma` | Faruk | Hesap, kategori/etiket, anket, seçenek, oy, oy geçmişi, yorum | ✅ |
 | `trends.prisma` | Faruk | Günlük snapshot, trend çalıştırmaları ve skorları | ✅ |
-| `media.prisma` | **Mert** | `MediaAsset`, şimdilik **iskelet** | 🟡 KV-16'da genişletilecek |
-| `community.prisma` | **Mert** | `Community`, şimdilik **iskelet** | 🟡 KV-31'de genişletilecek |
-| `moderation.prisma` | Mert | Report, moderasyon işlemleri, engelli görsel hash'leri | ⏳ KV-24 |
-| `admin.prisma` | Utku | Roller, yaptırımlar, audit, ayarlar, bildirimler | ⏳ KV-04 / KV-21 / KV-39 / KV-40 |
-| `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ⏳ KV-22 / KV-23 / KV-42 / KV-15 |
+| `media.prisma` | **Mert** | `MediaAsset`: nesne anahtarları, işlenmiş kopya metadata'sı, moderasyon sonucu ([MEDIA_MODERATION.md](./MEDIA_MODERATION.md)) | ✅ KV-16 (şema) |
+| `community.prisma` | **Mert** | `Community` (slug, ad, görsel, üye sayısı, oluşturan), `CommunityMembership` (üyelik + topluluk rolü) | ✅ KV-31 (şema) |
+| `moderation.prisma` | Mert | `Report`, `ModerationAction` (append-only). Engelli görsel hash listesi KV-38'de eklenecek | ✅ KV-24 (şema) |
+| `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi). Audit, ayarlar, bildirimler sonra | ✅ KV-12 (şema) · ⏳ KV-21 / KV-39 / KV-40 |
+| `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ✅ `UserInterest` (KV-15) · ⏳ KV-22 / KV-23 / KV-42 |
 
 **İskelet tablolar neden var:** Çekirdek tablolar Mert'in iki tablosuna FK veriyor: `polls.community_id → communities` ve `users.avatar_media_id`, `poll_media.media_id → media_assets`. FK'nin hedefi olmadan ilk migration çalışmaz. Bu yüzden iki tablo sadece `id`, `status` ve `created_at` alanlarıyla açıldı. Geri kalan alanları, enum değerlerini ve indexleri sahibi belirler. İskeletteki `id` alanı ve "core ilişkileri" bölümü kaldırılmamalıdır.
 
@@ -35,12 +35,13 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 - Her tablonun birincil anahtarı **UUIDv7**'dir: Postgres `uuid` tipi, Prisma'da `@default(uuid(7))`. Zamana göre sıralanabildiği için cursor pagination'da `ORDER BY id` kullanılabilir. Tahmin edilemez olduğu için URL'de sıra numarası sızmaz.
 - ID'yi uygulama üretir (Prisma client). Elle yazılan SQL'de `id` değeri açıkça verilir. PostgreSQL 17'de yerleşik `uuidv7()` fonksiyonu yok.
 - Anket URL'i: `/karar/<slug>-<publicId>`. `publicId` 8 karakterlik, URL güvenli, unique bir koddur (üretimi KV-10'da). `slug` sadece okunabilirlik içindir, unique değildir.
-- Join tablolarında birincil anahtar bileşiktir, ayrı bir `id` alanı yoktur: `poll_tags`, `poll_media`, `comment_likes`, snapshot tabloları.
+- Join tablolarında birincil anahtar bileşiktir, ayrı bir `id` alanı yoktur: `poll_tags`, `poll_media`, `comment_reactions`, snapshot tabloları.
 
 ### 2.2 Zaman
 - Her zaman kolonu **`timestamptz(3)`** tipindedir ve UTC saklanır. Sunucu, veritabanı ve job'lar UTC ile çalışır.
 - Europe/Istanbul'a çevirme sadece iki yerde yapılır: ekranda gösterirken ve takvim günü gereken hesaplarda (§8). Çevirme her zaman `AT TIME ZONE 'Europe/Istanbul'` ile yapılır, **`+3` elle yazılmaz**.
 - Standart kolonlar: `created_at` (varsayılan `now()`), `updated_at` (Prisma `@updatedAt`) ve soft delete olan tablolarda `deleted_at`.
+- **DB oturumu UTC'dir:** `createPrismaClient` bağlantıyı `TimeZone=UTC` ile açar. Ham SQL'de `Date` parametresi saat dilimsiz bağlanabildiği için, oturum başka bir saat diliminde olursa (ör. docker-compose `TZ=Europe/Istanbul`) `timestamptz` karşılaştırmaları kayar; KV-26 arama sayfalamasında bu görüldü. Ham SQL'de zaman parametresi ayrıca `…::timestamptz` ile açıkça çevrilir.
 - Sadece takvim günü tutan kolon: snapshot tablolarındaki `local_date` (`date` tipi, İstanbul günü).
 
 ### 2.3 İsimlendirme
@@ -83,7 +84,7 @@ erDiagram
   users ||--o{ votes : "user_id"
   users ||--o{ vote_events : "user_id"
   users ||--o{ comments : "author_id"
-  users ||--o{ comment_likes : "user_id"
+  users ||--o{ comment_reactions : "user_id"
   media_assets |o--o{ users : "avatar_media_id"
 
   categories ||--o{ polls : "category_id"
@@ -102,7 +103,7 @@ erDiagram
 
   polls ||--o{ comments : ""
   comments |o--o{ comments : "(poll_id, parent_id) tek seviye"
-  comments ||--o{ comment_likes : ""
+  comments ||--o{ comment_reactions : "LIKE / DISLIKE"
 
   polls ||--o{ poll_daily_snapshots : "İstanbul günü"
   poll_daily_snapshots ||--|{ poll_option_daily_snapshots : ""
@@ -190,8 +191,8 @@ erDiagram
   reports }o--o| comments : ""
   reports }o--o| media_assets : ""
   reports }o--o| users : "raporlanan kullanıcı"
-  users ||--o{ user_roles : "Utku · KV-04"
-  users ||--o{ sanctions : "Utku"
+  users ||--o| user_roles : "Utku · KV-12 · granted_by_id da users"
+  users ||--o{ sanctions : "Utku · KV-12 · created_by_id, lifted_by_id da users"
   users ||--o{ audit_logs : "actor_id · Utku · KV-39"
   users ||--o{ notifications : "Utku · KV-21"
   users ||--o{ bookmarks : "Mehmet · KV-22"
@@ -214,14 +215,15 @@ erDiagram
 | `auth_tokens` | `token_hash` | `(user_id, purpose)` | Tek kullanımlık: `used_at` |
 | `categories` | `slug` | `(is_active, sort_order)` | Admin ekranı Mehmet'te, API Faruk'ta |
 | `tags`, `poll_tags` | `slug` · PK `(poll_id, tag_id)` | `tag_id` | |
-| `polls` | `public_id` | `(status, created_at)`, `(category_id, status, created_at)`, `(community_id, status, created_at)`, `(author_id, created_at)`, `(status, vote_count)`, `closes_at` | CHECK: sayaçlar ≥ 0, `closes_at > opens_at`, fiyat ve para birimi birlikte |
+| `polls` | `public_id` | `(status, created_at)`, `(category_id, status, created_at)`, `(community_id, status, created_at)`, `(author_id, created_at)`, `(status, vote_count)`, `closes_at`, `(opens_at DESC, id DESC)` (KV-27 aday havuzu, "Yeni" sekmesi; migration `20260930203000_mehmet_kv15_user_interests`) | CHECK: sayaçlar ≥ 0, `closes_at > opens_at`, fiyat ve para birimi birlikte. **#66:** `kind` POLL/DISCUSSION; `polls_kind_shape_check` (anket: `closes_at` ve `results_visibility` dolu; tartışma: ikisi ve `closed_at` boş); `kind` değişmez (`polls_kind_immutable`); tartışmaya seçenek/oy yazılamaz (`poll_options_check_kind`, `votes_check_kind` → `KV_NOT_A_POLL`); `like_count` / `dislike_count` |
 | `poll_options` | `(poll_id, position)`, `(poll_id, id)` | | CHECK: `position` 0–5. En az 2 seçenek uygulamada |
 | `poll_addenda` | | `(poll_id, created_at)` | Kilitli ankete bilgi eklemenin tek yolu |
 | `poll_media` | PK `(poll_id, media_id)`, `(poll_id, position)` | `media_id` | Görsel sayısı sınırı admin ayarından (KV-40) |
-| `votes` | **`(poll_id, user_id)`** | `(poll_id, option_id)`, `(user_id, created_at)` | Bileşik FK `(poll_id, option_id) → poll_options(poll_id, id)` |
+| `votes` | **`(poll_id, user_id)`** | `(poll_id, option_id)`, `(poll_id, created_at, invalidated_at)` (KV-27 "Senin İçin" sinyalleri, index-only sayım; migration `20260930203000_mehmet_kv15_user_interests`), `(user_id, created_at)` | Bileşik FK `(poll_id, option_id) → poll_options(poll_id, id)` |
 | `vote_events` | | `(poll_id, occurred_at)`, `(vote_id, occurred_at)`, `(user_id, occurred_at)` | Append-only; tür başına biçim CHECK'i |
 | `comments` | `(poll_id, id)` | `(poll_id, parent_id, created_at)`, `(poll_id, kind, like_count)`, `(author_id, created_at)` | Bileşik FK ile cevap aynı ankette; trigger ile tek seviye |
-| `comment_likes` | PK `(comment_id, user_id)` | `user_id` | |
+| `comment_reactions` | PK `(comment_id, user_id)` | `user_id` | `value` LIKE/DISLIKE; `comment_likes`'ın yerine (KV-17). Sayaçlar `comments.like_count` / `dislike_count` |
+| `poll_reactions` | PK `(poll_id, user_id)` | `user_id` | Gönderi (anket veya tartışma) beğeni/dislike'ı, anket oyundan ayrı (#66). Sayaçlar `polls.like_count` / `dislike_count`, gönderi satırı kilitlenerek aynı transaction'da |
 
 ---
 
@@ -342,7 +344,7 @@ ACTIVE | RESTRICTED | SUSPENDED ──► BANNED ──► ACTIVE   (sadece admi
 
 Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından itibaren, Europe/Istanbul takvim günleriyle** tanımlanır.
 
-> **Teyit bekliyor:** Bu tanım `main`'deki `PRODUCT_TEAM_PLAN.md` §8'de yazılı değil. Faruk'un kararıyla buraya yazıldı (açılış günü kısmi gün, pencere sonları İstanbul gece yarısı). Ürün tarafından onayı Mehmet'ten bekleniyor (KV-02 PR'ı).
+> **Onaylandı:** Mehmet, PR #63 incelemesinde 2026-09-27 tarihinde Europe/Istanbul takvim günü yaklaşımını kabul etti. Açılış günü kısmi gün, pencere sonları İstanbul gece yarısıdır; tam 168 saatlik kayan pencere kullanılmaz.
 
 ### 8.1 Tanımlar
 - `open_local_date = (polls.opens_at AT TIME ZONE 'Europe/Istanbul')::date`: Anketin açıldığı İstanbul günü.
@@ -382,19 +384,52 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 
 | Sahip | Tablo (planlanan) | Çekirdeğe bağlantısı | Kural |
 |---|---|---|---|
-| Mert | `media_assets` (iskelet var) | `users.avatar_media_id`, `poll_media.media_id` ona bağlanır | Anket ve profilde sadece `status = APPROVED` görseller gösterilir (sorgu kuralı, KV-16) |
-| Mert | `communities` (iskelet var), `community_memberships` | `polls.community_id` ona bağlanır; üyelik `users`'a bağlanır | Topluluk kapatılsa bile anketler silinmez (`RESTRICT`) |
-| Mert | `reports`, `moderation_actions` | Hedef başına ayrı nullable FK: `poll_id`, `comment_id`, `media_id`, `reported_user_id`, ve "tam olarak biri dolu" CHECK'i | Tek `target_type`/`target_id` çifti FK bütünlüğünü kaybettirdiği için önerilmez |
-| Utku | `user_roles`, `sanctions` | `users.id` | Yaptırım `users.status`'u da günceller (§7.2) |
+| Mert | `media_assets` (KV-16) | `users.avatar_media_id`, `poll_media.media_id` ona bağlanır; `uploader_id`, `reviewed_by_id → users.id` | Anket ve profilde sadece `status = APPROVED` görseller gösterilir (sorgu kuralı). `public_object_key` sadece `APPROVED` iken dolu olabilir (`media_assets_public_key_check`) |
+| Mert | `communities`, `community_memberships` (KV-31) | `polls.community_id` ona bağlanır; üyelik PK'si `(community_id, user_id)`; `created_by_id → users.id`, `image_media_id → media_assets.id` | Topluluk kapatılsa (`status = HIDDEN`, `admin.communities.update` sözleşmesi) bile anketler silinmez (`RESTRICT`). Topluluk moderatörlüğü `community_memberships.role = MODERATOR`'dır; yetki istemciden değil bu satırdan okunur. `member_count` üyelikle aynı transaction'da güncellenir |
+| Mert | `reports`, `moderation_actions` (KV-24) | Hedef başına ayrı nullable FK: `poll_id`, `comment_id`, `media_id`, `reported_user_id` / `target_user_id`, ve "tam olarak biri dolu" CHECK'i | Tek `target_type`/`target_id` çifti FK bütünlüğünü kaybettirdiği için önerilmez. Kullanıcı + hedef başına tek satır (unique); kapanmış raporun sahibi yeniden raporlarsa aynı satır `OPEN`'a döner (`reports.create` sözleşmesi). `moderation_actions` append-only (trigger), gerekçe zorunlu. Karar güncellemesi raporu için FK, KV-23 tablosu açılınca eklenir |
+| Utku | `user_roles`, `sanctions` (KV-12) | `user_id`, `granted_by_id`, `created_by_id`, `lifted_by_id → users.id`, hepsi `RESTRICT` | Ayrıntı ve servis kuralları §9.1. Yaptırım `users.status`'u da günceller (§7.2) |
 | Utku | `audit_logs` | `actor_id → users.id`; hedef `target_type` + `target_id` | Append-only (KV-39); polimorfik hedef burada kabul edilir |
 | Utku | `system_settings` | — | Oy değiştirme izni, trend katsayıları, snapshot eşikleri buradan okunur |
 | Utku | `notifications`, `notification_preferences` | `users.id` | Olayları çekirdek modüller üretir (KV-04 olay zarfı) |
 | Mehmet | `bookmarks` | `(user_id, poll_id)` PK | `polls.save_count`'u aynı transaction'da günceller |
 | Mehmet | `decision_updates`, `poll_follows` | `polls.id`; seçim için `(poll_id, option_id) → poll_options(poll_id, id)` bileşik FK | Seçenek başka ankete ait olamaz |
 | Mehmet | `featured_placements`, `announcements` | `polls.id` | Öne çıkarma organik trend puanını değiştirmez |
-| Mehmet | `user_interests` | `(user_id, category_id)` | |
+| Mehmet | `user_interests` | PK `(user_id, category_id)`; `user_id → users` CASCADE, `category_id → categories` RESTRICT; index `category_id` | KV-15 (#17), migration `20260930203000_mehmet_kv15_user_interests`. KV-27 "Senin İçin" feed'i ilgi sinyali olarak okur |
 
 Seçenek (`poll_options`) veya yorum bağlayan her tablo, bileşik FK için hazır olan `(poll_id, id)` unique anahtarlarını kullanır.
+
+### 9.1 Rol ve yaptırım (Utku, KV-12)
+
+Şema `admin.prisma`, kısıtlar `…_utku_kv12_admin_roles_sanctions` migration'ının elle yazılan bölümündedir. Enum değerleri contracts `Role` ve `SanctionType` ile birebir ve aynı sıradadır; test değerleri sözleşmeden import ederek karşılaştırır.
+
+**Silme:** `users`'a giden beş FK de `RESTRICT`'tir (`CASCADE`/`SET NULL` yok). Kullanıcı soft delete edildiği için rol ve yaptırım izi korunur; `granted_by_id` ve `created_by_id`/`lifted_by_id` boşaltılmaz.
+
+**DB'nin zorladığı kurallar**
+
+| Kural | Kısıt |
+|---|---|
+| Kullanıcı başına tek rol; satır yoksa USER, `USER` satırı yazılmaz | PK `user_id`, `user_roles_not_user_check` |
+| Kimse kendi rolünü atayamaz | `user_roles_not_self_check` |
+| Veren (`granted_by_id`) sadece ilk SUPER_ADMIN'de boş olabilir | `user_roles_bootstrap_check` |
+| `ends_at` NULL (kalıcı) ya da `starts_at`'ten sonra | `sanctions_period_check` |
+| `SUSPEND` süreli (`ends_at` dolu), `BAN` kalıcı (`ends_at` NULL) | `sanctions_suspend_ends_check`, `sanctions_ban_permanent_check` |
+| Kimse kendine yaptırım uygulayamaz ve kendi yaptırımını kaldıramaz (KV-04 §4.1) | `sanctions_not_self_check`, `sanctions_lift_not_self_check` |
+| Gerekçe ve kaldırma gerekçesi en az 3 anlamlı karakter; kaldırma alanları üçü birlikte dolar | `sanctions_reason_check`, `sanctions_lift_check` |
+| Yaptırım silinemez ve güncellenemez; sadece `lifted_at`/`lifted_by_id`/`lift_reason` bir kez NULL'dan doluya geçer | trigger `sanctions_guard` → `KV_SANCTIONS_IMMUTABLE` |
+
+Aktif yaptırım: `lifted_at IS NULL AND (ends_at IS NULL OR ends_at > now())`; index `(user_id, lifted_at, ends_at)` (partial index değil, §10.4).
+
+**Servis kuralları (DB'de korunamaz; RBAC katmanı KV-12 PR-B, yaptırım servisi KV-33)**
+- **Okuma:** API her istekte rolü ve aktif yaptırımları bu tablolardan, topluluk moderatörlüğünü `community_memberships`'ten okur (`apps/api/src/modules/rbac`); önbellek yoktur. Rol/yaptırım değişikliği açık oturumda bir sonraki istekte etkilidir. `SUSPEND`/`BAN` etkisi `users.status`'tan gelir (tek otorite); `RESTRICT_*` satırdan gelir.
+- **`starts_at` her zaman yazma anıdır;** ileri tarihli yaptırım yoktur (sözleşmede alan yok). Aktiflik bu yüzden `starts_at`'e bakmaz.
+- **`users.status` senkronu:** Yaptırım ekleme ve kaldırma aynı transaction'da `users.status`'u kalan aktif yaptırımlardan yeniden hesaplar: `BAN` > `SUSPEND` > `RESTRICT_*` → `RESTRICTED` > `ACTIVE` (`WARNING` durumu değiştirmez). `SUSPEND`/`BAN` açık oturumları iptal eder (§7.2). Süre dolumu zamana bağlı olduğu için trigger yakalayamaz; süresi dolan `SUSPEND`/`RESTRICT_*` için durumu yeniden hesaplayan bir job gerekir (KV-33, Utku). `authorize` süresi dolan `RESTRICT_*`'ı zaten yok sayar, ama `users.status = SUSPENDED` job çalışana kadar kalır. **Bilinen sonuç:** giriş kontrolü (`auth.login`) de `users.status`'a baktığı için job olmadan süresi dolan SUSPEND'li kullanıcı giriş yapamaz ve açık oturumu da 403 alır. Yaptırım endpoint'leri de KV-33'te geldiği için bu durum şu an oluşamaz; job KV-33'te birlikte gelir.
+- **İlk SUPER_ADMIN:** Hiç SUPER_ADMIN yokken yalnız `admin:bootstrap` CLI'ı yazar; "tek bir kez" kuralı DB'de değil CLI'dadır (`user_roles_bootstrap_check` verensiz satırı her SUPER_ADMIN'e izin verir). Ayrıntı: [`KV-12_ADMIN_BOOTSTRAP.md`](./KV-12_ADMIN_BOOTSTRAP.md), §11.4/6.
+- **Son aktif SUPER_ADMIN:** Aktiflik `users.status`'a bağlı olduğu ve eşzamanlı iki işlem (iki SUPER_ADMIN'in birbirini aynı anda düşürmesi veya yaptırıma bağlaması) sayımı birlikte geçebileceği için DB kuralı değildir. `admin.roles.put` ve SUPER_ADMIN hedefli `SUSPEND`/`BAN`, transaction içinde önce `SELECT … FROM user_roles WHERE role = 'SUPER_ADMIN' FOR UPDATE` ile kilit alır, sonra `users.status = 'ACTIVE'` olanları sayar.
+- **Yetki:** Admin hedefe yaptırımın SUPER_ADMIN gerektirmesi, rol atamanın sadece SUPER_ADMIN'e açık olması `authorize` kuralıdır (KV-04), DB'de değildir.
+- **Aynı tipte birden çok aktif yaptırım** DB'de engellenmez (unique index süresi dolmuş ama kaldırılmamış satırlar yüzünden yanlış reddederdi); servis mevcut aktif yaptırımı kontrol eder.
+- **Lift idempotency:** `admin.sanctions.lift` "natural" idempotent'tir; zaten kaldırılmış yaptırımda servis mevcut satırı döner, DB'ye ikinci kaldırma yazmaz (yazarsa `KV_SANCTIONS_IMMUTABLE`).
+
+**Sözleşme (contracts 1.8.0):** `dbErrorMap`'te `KV_SANCTIONS_IMMUTABLE → INTERNAL_ERROR` (kod hatası: loglanır, 500). `admin.sanctions.create` gövdesi `SUSPEND` için `endsAt` ister, `BAN` için `endsAt: null` ister; DB kısıtlarıyla (`sanctions_suspend_ends_check`, `sanctions_ban_permanent_check`) aynıdır.
 
 ---
 
@@ -450,7 +485,7 @@ pnpm db:test
   ```
 - **Sunucu çalışmıyorsa:** Test `PostgreSQL'e bağlanılamadı (...). Sunucu çalışıyor mu?` mesajıyla durur.
 
-### 11.2 Test kapsamı (27 test)
+### 11.2 Test kapsamı (46 test)
 
 | Grup | Ne doğrulanır |
 |---|---|
@@ -460,6 +495,11 @@ pnpm db:test
 | Oy geçmişi | `vote_events` UPDATE/DELETE `KV_VOTE_EVENTS_APPEND_ONLY` ile reddedilir. Olay biçimi CHECK'i çalışır (aynı seçeneğe `CHANGE` olmaz) |
 | Yorum | Cevaba cevap `KV_COMMENT_DEPTH` verir. Cevabı olan yorum cevaba dönüştürülemez. `ALTERNATIVE` sadece üst seviyede olabilir. Cevap başka anketteki yoruma bağlanamaz |
 | `kv_normalize` | TECH_DECISIONS §3.9 tablosu ve ek örnekler: `Şişe→sise`, `IŞIK/ışık→isik`, `İstanbul→istanbul`, `ağaç→agac`, `Göz→goz`, `Üzüm→uzum`, `ÇİÇEK→cicek`, `Iğdır→igdir` |
+| `media_assets` (KV-16, +6 test) | Onaylanmamış görsel public anahtar alamaz; onaylı görsel public ve işlenmiş kopya olmadan var olamaz; onaydan sonra kaldırmada public anahtar aynı UPDATE'te boşaltılmalı; risk skoru 0–1; inceleme alanları birlikte dolar; yükleyen FK'si ve galerideki görselin silinememesi |
+| `reports` / `moderation_actions` (KV-24, +7 test) | Rapor tam olarak bir hedefe bağlanır; aynı kullanıcı aynı hedefi iki kez raporlayamaz; kendini raporlayamaz; sonuçlanan rapor sonuçlandıranı taşır, açık rapor taşımaz; raporlanan anket hard delete edilemez; işlem gerekçesiz/hedefsiz yazılamaz; moderasyon geçmişi `KV_MODERATION_ACTIONS_APPEND_ONLY` ile korunur |
+| `communities` / `community_memberships` (KV-31, +5 test) | Aynı kullanıcı ikinci kez katılamaz, ayrılıp yeniden katılabilir; slug benzersiz ve URL biçiminde, ad boş olamaz; üye sayısı negatif olamaz; moderatör rolü üyelikte tutulur ve kaldırılabilir; anketi olan topluluk silinemez, kapatmak anketleri etkilemez |
+| Enum hizalaması (+1 test) | `media_purpose`, `report_reason` ve `moderation_action_type` değerleri API sözleşmesindeki (KV-03) adlarla aynı |
+| `user_roles` / `sanctions` (KV-12, +9 test) | Tek rol, `USER` satırı yok, kendine rol yok, verensiz sadece SUPER_ADMIN; var olmayan kullanıcıya FK hatası; `users`'a giden 5 FK `RESTRICT` ve izi olan kullanıcı silinemez; süre, `SUSPEND` süreli / `BAN` kalıcı; kendine yaptırım ve kendi yaptırımını kaldırma yok; gerekçe ve kaldırma alanları; `KV_SANCTIONS_IMMUTABLE` (tek izinli geçiş kaldırma, ikinci kaldırma yok); aktif yaptırım sorgusu ve index; `user_role`/`sanction_type` contracts `Role`/`SanctionType` ile birebir |
 
 ### 11.3 Bu PR'daki kanıt
 
@@ -469,14 +509,15 @@ pnpm db:test
 | `prisma migrate diff --from-empty --to-schema prisma/schema --script` | ✅ Migration'ın 1. bölümüyle birebir aynı (20 tablo, 9 enum) |
 | `prisma generate` ve `tsc` (`src` + `test`) | ✅ Hatasız |
 | Test dosyası DB olmadan çalıştırıldı | ✅ Yükleniyor, 27 testi kaydediyor, anlaşılır bağlantı hatasıyla duruyor. `_test` koruması çalışıyor |
-| **Testlerin gerçek PostgreSQL'de çalışması** | ⏳ **Henüz çalıştırılmadı.** Yazarın makinesinde Docker çalışmıyor (sanallaştırma hatası). Docker'ı olan bir reviewer'dan `docker compose up -d && pnpm db:test` sonucu bekleniyor |
+| **Gerçek PostgreSQL 17.11 testi** | ✅ 2026-09-27: GitHub Actions üzerinde 27/27 geçti; migrate reset/diff ve 20 eşzamanlı oy dahil. [Koşu](https://github.com/mehmetalisahingm/kararver/actions/runs/36335631011). Aynı koşuda storage geçti; UI hashchange bekleme hatası sonraki committe düzeltildi. |
 
 ### 11.4 Açık konular
 
 | # | Konu | Kim |
 |---|---|---|
-| 1 | Snapshot pencere tanımının (§8) ürün onayı; `main`'deki planda yok | Mehmet |
+| 1 | Snapshot pencere tanımı PR #63 incelemesinde onaylandı; §8 güncellendi | Tamamlandı |
 | 2 | `LOCKED` durumundaki anket oy alabilir mi? | KV-11 |
 | 3 | Hesap silmede KVKK kapsamı: hangi alanlar anonimleşir, oylar ne olur | Faruk + Utku |
 | 4 | Kullanıcı adında izinli karakterler (Türkçe harf olacak mı?) | KV-09 |
 | 5 | Mert, Utku ve Mehmet tablolarının §9'daki FK yönleriyle uyumu | İlgili sahipler, PR review'unda |
+| 6 | **İlk SUPER_ADMIN nasıl oluşur?** **Çözüldü (KV-12):** tek seferlik CLI `pnpm --filter @kararver/api admin:bootstrap --email … [--apply]` (varsayılan dry-run; mantık `apps/api/src/modules/rbac/bootstrap.ts`). Transaction + sabit anahtarlı advisory lock; herhangi bir SUPER_ADMIN satırı varsa reddeder; hedef var olan, silinmemiş, e-postası doğrulanmış, `ACTIVE` kullanıcı olmalı; mevcut rol satırını (ör. MODERATOR) yükseltir, yoksa ekler; `granted_by_id = NULL` ile yazar (`user_roles_bootstrap_check` bunu sadece SUPER_ADMIN'e izin verir); audit tablosu gelene kadar stdout'a tek satır yazar, KV-39 gelince audit'e de yazar. Reddedilenler: `SUPER_ADMIN_EMAIL` env ile açılışta yükseltme (kalıcı yükseltme yolu), seed migration (ortama özel veri). Kullanım, çıkış kodları ve kurtarma: [`KV-12_ADMIN_BOOTSTRAP.md`](./KV-12_ADMIN_BOOTSTRAP.md) | Tamamlandı |

@@ -1,5 +1,8 @@
 # KararVer — Ürün, Ekip ve 5 Haftalık Hızlı Geliştirme Planı
 
+> **V1 kapsam güncellemesi:** [Kullanıcı akışı ve katılım kararları](V1_USER_FLOW.md) — misafir keşfi, anketsiz gönderiler, beğeni/dislike, ilk girişte 20 puan ve yayın başına 10 puan, kullanıcı/admin logları, premium grafikler ve topluluk üyeleri V1 içindedir. Bu puan bakiyesi, gelecek sürüm itibar/rozet sisteminden ayrıdır.
+
+
 > Amaç: Klasik, eksik bir MVP değil; gerçek kullanıcıya açılabilecek, premium görünen, moderasyonu güçlü, admin tarafından yönetilebilen ve büyümeye hazır bir **V1** çıkarmak.
 >
 > Ekip: **Faruk, Ümit, Mert, Utku, Mehmet**

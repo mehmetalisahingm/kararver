@@ -114,7 +114,7 @@ export function SocialPanel({ poll }: { poll: Poll }) {
       if (alive.current) {
         setData(before);
         setError(
-          `${(e as Error).message} Değişiklik geri alındı; tekrar deneyebilirsin.`,
+          `${(e as Error).message} Görünüm yenilenmedi; işlemin durumunu kontrol edip tekrar deneyebilirsin.`,
         );
       }
       return false;
@@ -540,6 +540,13 @@ export function SocialPanel({ poll }: { poll: Poll }) {
           Daha fazla göster ({roots.length - limit})
         </button>
       )}
+      {data.hasMore && client.loadMoreEngagement && <button className="kv-button kv-button--secondary" disabled={busy} onClick={async () => {
+        if (lock.current) return;
+        lock.current=true; setBusy(true); setError("");
+        try { const next=await client.loadMoreEngagement!(poll.id); if (alive.current) { setData(next); setLimit(n=>n+20); } }
+        catch (error) { if (alive.current) setError((error as Error).message); }
+        finally { lock.current=false; if (alive.current) setBusy(false); }
+      }}>Diğer yorum ve yanıtları yükle</button>}
       <dialog
         ref={dialog}
         className="kv-dialog"

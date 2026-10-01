@@ -19,7 +19,6 @@ import type {
   TrendItem,
   TrendPage,
 } from "./model";
-
 function DiscoveryNav({
   current,
 }: {
@@ -255,7 +254,7 @@ function SearchCard({ item }: { item: SearchResult }) {
         <span className="eyebrow">KULLANICI</span>
         <h2>{item.user.displayName}</h2>
         <p>@{item.user.username}</p>
-        <p className="kv-help">Örnek herkese açık kullanıcı özeti.</p>
+        <p className="kv-help">Herkese açık kullanıcı özeti.</p>
       </article>
     );
   return (
@@ -263,7 +262,7 @@ function SearchCard({ item }: { item: SearchResult }) {
       <span className="eyebrow">TOPLULUK</span>
       <h2>{item.community.name}</h2>
       <p className="kv-help">
-        Örnek topluluk özeti. Topluluk sayfası henüz bağlı değil.
+        Topluluk özeti. Topluluk sayfası henüz bağlı değil.
       </p>
     </article>
   );
@@ -353,13 +352,13 @@ function FeedBody({
             )}
           </div>
           <p className="kv-help">
-            Örnek seçki ·{" "}
+            İçerikleri keşfet ·{" "}
             {query.tab === "for_you"
               ? "Popüler ve yeni içerikleri birlikte keşfet."
               : query.tab === "new"
                 ? "Yeni içeriklere göz at."
-                : "Çok oy alan örnek içerikler."}{" "}
-            Gerçek sıralama servisi henüz bağlı değil.
+                : "Çok oy alan içerikler."}{" "}
+            
           </p>
         </>
       )}
@@ -575,7 +574,7 @@ function TrendBody({
       <p className="kv-muted">{trendDescriptions[query.format]}</p>
       {meta && (
         <div className="trend-period">
-          <span className="kv-badge">Tarihli demo</span>
+          <span className="kv-badge">Hesaplama dönemi</span>
           <p>
             <strong>
               {dateLabel(meta.windowStart)} – {dateLabel(meta.windowEnd)}
@@ -627,22 +626,22 @@ function TrendBody({
                     <div>
                       <Link
                         className="eyebrow"
-                        href={`/kategori/${categories.find((c) => c.name === item.poll.category)?.slug || "yasam"}`}
+                        href={categories.some((c) => c.name === item.poll.category) ? `/kategori/${categories.find((c) => c.name === item.poll.category)!.slug}` : "/kategoriler"}
                       >
                         {item.poll.category}
                       </Link>
                       <h2>
-                        <Link href={`/karar/${item.poll.id}`}>
+                        <Link href={item.poll.canonicalPath || `/karar/${item.poll.id}`}>
                           {item.poll.title}
                         </Link>
                       </h2>
                       <p className="kv-help">
-                        {item.poll.author} · Örnek içerik
+                        {item.poll.author}
                       </p>
                     </div>
                   </div>
                   <ResultChart poll={item.poll} movement={item.movement} />
-                  <Link href={`/karar/${item.poll.id}`} className="back-link">
+                  <Link href={item.poll.canonicalPath || `/karar/${item.poll.id}`} className="back-link">
                     {item.poll.kind === "discussion"
                       ? "Tartışmaya katıl"
                       : "Anketi incele"}{" "}

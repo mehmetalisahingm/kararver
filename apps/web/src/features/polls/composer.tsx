@@ -1,8 +1,9 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
+import { ApiClient } from "../../lib/api-client";
 import { ErrorMessage, Field } from "../../components/fields";
 import {
   categories,
@@ -12,9 +13,19 @@ import {
 } from "../../lib/model";
 import type { FieldErrors } from "../../lib/model";
 export function Composer() {
-  const { client, draft, setDraft, user, syncUser, requireUser, notify } =
+  const { client, demo, draft, setDraft, user, syncUser, requireUser, notify } =
     useProduct();
   const router = useRouter();
+  const [remoteCategories, setRemoteCategories] = useState<{id: string; name: string}[]>([]);
+  const [categoryError, setCategoryError] = useState("");
+  const [categoryAttempt, retryCategories] = useState(0);
+  useEffect(() => {
+    if (!(client instanceof ApiClient)) return;
+    let active = true;
+    setCategoryError("");
+    client.publicationCategories().then(items => { if (active) setRemoteCategories(items); }).catch(error => { if (active) setCategoryError(error.message); });
+    return () => { active = false; };
+  }, [client, categoryAttempt]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,6 +41,7 @@ export function Composer() {
   function review(event: FormEvent) {
     event.preventDefault();
     const next = validateDraft(draft);
+    if (!demo && !remoteCategories.some(c => c.id === draft.categoryId)) next.category = "Geçerli bir kategori seçmelisin.";
     setErrors(next);
     if (Object.keys(next).length) {
       setTimeout(
@@ -46,7 +58,7 @@ export function Composer() {
     lock.current = true;
     setBusy(true);
     setError("");
-    const fingerprint = JSON.stringify(draft);
+    const fingerprint = JSON.stringify([user?.id, draft]);
     if (request.current.fingerprint !== fingerprint)
       request.current = { fingerprint, key: crypto.randomUUID() };
     try {
@@ -54,8 +66,8 @@ export function Composer() {
       syncUser();
       setDraft(emptyDraft());
       dialog.current?.close();
-      notify("Demo içerik yayımlandı. Bakiyenden 10 örnek puan düşüldü.");
-      router.push(`/karar/${poll.id}`);
+      notify(demo ? "Demo içerik yayımlandı. Bakiyenden 10 örnek puan düşüldü." : "İçeriğin yayımlandı.");
+      router.push(poll.canonicalPath || `/karar/${poll.id}`);
     } catch (e) {
       setError((e as Error).message);
       if (e instanceof UiError) setErrors(e.fields);
@@ -209,18 +221,17 @@ export function Composer() {
             </div>
           </fieldset>
         )}
-        <Field id="category" label="Kategori">
+        <Field id="category" label="Kategori" error={errors.category}>
           <select
             id="category"
             className="kv-input"
-            value={draft.category}
-            onChange={(e) => update({ category: e.target.value })}
+            value={demo ? draft.category : draft.categoryId ?? ""}
+            onChange={(e) => demo ? update({ category: e.target.value }) : update({ categoryId: e.target.value, category: remoteCategories.find(c => c.id === e.target.value)?.name ?? "" })}
           >
-            {categories.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
+            {demo ? categories.map(c => <option key={c}>{c}</option>) : <><option value="">Kategori seç</option>{remoteCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</>}
           </select>
         </Field>
+        {categoryError && <div><ErrorMessage message={categoryError} /><button type="button" className="kv-button" onClick={() => retryCategories(n => n + 1)}>Kategorileri tekrar yükle</button></div>}
         {draft.kind === "poll" && (
           <>
             <Field id="hours" label="Anket süresi">
@@ -272,7 +283,7 @@ export function Composer() {
           Fotoğraf zorunlu değil. Güvenli görsel yükleme medya modülü hazır
           olduğunda eklenecek.
         </p>
-        <div className="cost-summary">
+        {demo && <div className="cost-summary">
           <span>
             Yayın maliyeti <strong>10 puan</strong>
           </span>
@@ -281,8 +292,8 @@ export function Composer() {
               ? `Bakiyen: ${user.balance} puan`
               : "İlk başarılı demo girişinde: 20 puan"}
           </span>
-        </div>
-        {user && user.balance < 10 && (
+        </div>}
+        {user && user.balance !== null && user.balance < 10 && (
           <p className="error-message" role="status">
             Bakiyen yetersiz. Taslağın korunuyor; okumaya ve oy vermeye devam
             edebilirsin.
@@ -292,7 +303,7 @@ export function Composer() {
         <button
           ref={previewButton}
           className="kv-button"
-          disabled={busy || Boolean(user && user.balance < 10)}
+          disabled={busy || Boolean(user && user.balance !== null && user.balance < 10) || (!demo && !remoteCategories.length)}
         >
           {busy ? "Yayımlanıyor…" : "Yayın önizlemesi"}
         </button>
@@ -309,17 +320,17 @@ export function Composer() {
         <div className="screen-stack">
           <h2 id="publish-title">Yayımlamaya hazır mısın?</h2>
           <p>{draft.title}</p>
-          <p>
+          {demo && <p>
             Bu demo yayın <strong>10 puan</strong> kullanır. İşlemden sonra{" "}
             <strong>{(user?.balance || 0) - 10} puanın</strong> kalır.
-          </p>
+          </p>}
           <button
             className="kv-button"
             onClick={publish}
             disabled={busy}
             aria-busy={busy}
           >
-            {busy ? "Yayımlanıyor…" : "10 puan ile yayımla"}
+            {busy ? "Yayımlanıyor…" : (demo ? "10 puan ile yayımla" : "Yayımla")}
           </button>
           <button
             autoFocus

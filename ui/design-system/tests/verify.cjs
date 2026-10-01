@@ -93,6 +93,7 @@ const { AxeBuilder } = require('@axe-core/playwright');
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#main').evaluate(el => el === document.activeElement), true);
     await page.goto(`${baseURL}/#unknown`);
+    await page.locator('[data-page="not-found"]').waitFor({ state: 'visible' });
     assert.equal(await page.locator('[data-page="not-found"]').isVisible(), true);
     report.checks.push('Skip link and unknown route fallback');
 
@@ -100,6 +101,8 @@ const { AxeBuilder } = require('@axe-core/playwright');
     await route('feed');
     await page.screenshot({ path: path.join(output, 'mobile.png'), fullPage: true });
     await page.locator('.preview-mobile-nav a[href="#create"]').click();
+    // hashchange is asynchronous: click completion is not route completion.
+    await page.locator('[data-page="create"]').waitFor({ state: 'visible' });
     assert.equal(await page.locator('.preview-mobile-nav a[href="#create"]').getAttribute('aria-current'), 'page');
     assert.equal(await page.locator('#main').evaluate(el => el === document.activeElement), true);
     await page.screenshot({ path: path.join(output, 'mobile-form.png'), fullPage: true });

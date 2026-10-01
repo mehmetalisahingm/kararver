@@ -1,14 +1,16 @@
 "use client";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { Fragment, createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { ApiClient } from "../lib/api-client";
 import { DemoClient } from "../lib/demo-client";
 import { emptyDraft, safeReturnTo } from "../lib/model";
 import type { Draft, ProductClient, User } from "../lib/model";
 import type { CommentDraft } from "../features/social/model";
 
 type Context = {
+  demo: boolean;
   client: ProductClient;
   user: User | null;
   syncUser: () => void;
@@ -45,7 +47,10 @@ export function ProductProvider({
   children: ReactNode;
   demo: boolean;
 }) {
-  const [client] = useState(() => new DemoClient());
+  const [client] = useState(() => demo ? new DemoClient() : new ApiClient(process.env.NEXT_PUBLIC_API_URL ?? ""));
+  const [sessionReady, setSessionReady] = useState(demo);
+  const [sessionError, setSessionError] = useState("");
+  const [sessionAttempt, retrySession] = useState(0);
   const [user, setUser] = useState<User | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [commentDrafts, setCommentDrafts] = useState<
@@ -71,6 +76,16 @@ export function ProductProvider({
       document.querySelector<HTMLElement>("#main")?.focus();
     }
   }, [pathname]);
+  useEffect(() => {
+    if (!(client instanceof ApiClient)) return;
+    let active = true;
+    const unsubscribe = client.subscribe(() => { if (active) setUser(client.current()); });
+    setSessionError("");
+    client.restore().then(() => { if (active) setSessionReady(true); }).catch((error) => {
+      if (active) setSessionError(error.message);
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [client, sessionAttempt]);
   const syncUser = () => {
     const current = client.current();
     if (current)
@@ -98,6 +113,7 @@ export function ProductProvider({
     trigger.current?.focus();
   }
   const context = {
+    demo,
     client,
     user,
     syncUser,
@@ -139,14 +155,16 @@ export function ProductProvider({
           </button>
           {user ? (
             <>
-              <span className="balance">{user.balance} puan</span>
+              {user.balance !== null && <span className="balance">{user.balance} puan</span>}
               <button
                 className="kv-button kv-button--secondary"
                 onClick={async () => {
-                  await client.logout();
-                  syncUser();
-                  notify("Demo oturumundan çıkış yaptın.");
-                  router.push("/");
+                  try {
+                    await client.logout();
+                    syncUser();
+                    notify("Oturumundan çıkış yaptın.");
+                    router.push("/");
+                  } catch (error) { notify((error as Error).message); }
                 }}
               >
                 Çıkış
@@ -163,7 +181,7 @@ export function ProductProvider({
           )}
         </header>
         <div className="app-layout">
-          <aside className="app-sidebar">
+          <aside className="app-sidebar" aria-label="Ana gezinme">
             <nav aria-label="Masaüstü navigasyonu">
               {navigation.map((n) => (
                 <Link
@@ -190,27 +208,16 @@ export function ProductProvider({
             </Link>
           </aside>
           <main id="main" tabIndex={-1}>
-            <p className="demo-banner">
-              {demo
-                ? "Demo ortamı · Örnek veriler, sayfa yenilendiğinde sıfırlanır. Gerçek hesap veya işlem değildir."
-                : "API bağlantısı henüz hazırlanıyor. Gerçek hesap ve yayın işlemleri kullanılamıyor."}
-            </p>
+            {demo && <p className="demo-banner">Demo ortamı · Örnek veriler, sayfa yenilendiğinde sıfırlanır. Gerçek hesap veya işlem değildir.</p>}
             <div className="announcement" role="status">
               {message}
             </div>
-            {demo ? (
-              children
-            ) : (
-              <div className="kv-card kv-state">
-                <h1>Bağlantı hazırlanıyor.</h1>
-                <p>
-                  Bu ortamda demo oturum açılmaz. Ekranları yerelde denemek için
-                  belgelenen demo komutunu kullanın.
-                </p>
-              </div>
-            )}
+            {sessionReady ? <Fragment key={user?.id ?? "guest"}>{children}</Fragment> : <div className="kv-card kv-state">
+              <h1>{sessionError ? "Bağlantı kurulamadı." : "Oturum kontrol ediliyor…"}</h1>
+              {sessionError && <><p role="alert">{sessionError}</p><button className="kv-button" onClick={() => retrySession(n => n + 1)}>Tekrar dene</button></>}
+            </div>}
           </main>
-          <aside className="app-aside">
+          <aside className="app-aside" aria-label="Topluluk önerileri">
             <div className="kv-card kv-stack">
               <span className="eyebrow">TOPLULUĞUN GÜNDEMİ</span>
               <h2>Bir fikrin var mı?</h2>
@@ -221,13 +228,13 @@ export function ProductProvider({
                 + Soru sor
               </Link>
             </div>
-            <div className="kv-card kv-stack">
+            {demo && <div className="kv-card kv-stack">
               <h2>Keşfetmeye başla</h2>
               <Link href="/karar/calisma-sekli">Uzaktan mı, ofisten mi?</Link>
               <Link href="/karar/tatil-rotasi">Sıradaki tatil rotan</Link>
               <Link href="/karar/ilk-bisiklet">İlk bisikletini seçerken</Link>
-            </div>
-            {demo && (
+            </div>}
+            {client instanceof DemoClient && (
               <details className="demo-controls">
                 <summary>Demo test araçları</summary>
                 <p>Sonraki istekte bir hata örneği gösterir.</p>

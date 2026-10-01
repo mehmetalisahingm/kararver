@@ -52,6 +52,7 @@
 /apps/web/src/features/audit/               @Utkuuzun14
 /apps/web/src/features/settings/            @Utkuuzun14
 /packages/config/                           @Utkuuzun14
+/apps/mock-api/                             @Utkuuzun14
 /.github/workflows/                         @Utkuuzun14
 
 # ── Mehmet — ürün yüzeyleri / büyüme ──────────────────────────
@@ -84,6 +85,7 @@
 /packages/db/prisma/schema/growth.prisma     @mehmetalisahingm @farukkemree
 /docs/DATA_MODEL.md                         @farukkemree @mehmetalisahingm @Utkuuzun14
 /packages/contracts/                        @farukkemree @mehmetalisahingm @umitefe0
+/docs/API_CONTRACTS.md                      @farukkemree @mehmetalisahingm @umitefe0
 
 # ── Altyapı / kritik ortak dosyalar ───────────────────────────
 /docker-compose.yml                         @farukkemree @Utkuuzun14

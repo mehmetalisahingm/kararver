@@ -1,0 +1,78 @@
+// Sahip: Utku — KV-12 (#14)
+// Global roller ve kullanıcı yaptırımları. Rol, durum ve yaptırım istemci iddiasından değil,
+// bu tablolardan okunur (TrustedActor, packages/contracts/src/permissions.ts).
+// Kurallar: docs/DATA_MODEL.md §9.1 · Yetki matrisi: docs/FOUNDATION_CONTRACTS.md, docs/KV-04_ROLES_EVENTS.md
+//
+// Audit (KV-39), sistem ayarları (KV-40) ve bildirimler (KV-21) bu dosyaya sonra eklenir.
+// users'a giden bütün FK'ler RESTRICT'tir: kullanıcı soft delete edilir, rol ve yaptırım izi korunur.
+// Prisma'nın ifade edemediği CHECK kısıtları ve trigger migration SQL'inde elle yazılıdır.
+
+// Değerler contracts Role ile birebir aynıdır (test). USER satırı yazılmaz (CHECK): satır yoksa USER.
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+
+  @@map("user_role")
+}
+
+// Değerler contracts SanctionType ile birebir aynıdır (test).
+// WARNING yetkiyi etkilemez; RESTRICT_* işlem kısıtıdır; SUSPEND süreli, BAN kalıcıdır (CHECK).
+enum SanctionType {
+  WARNING
+  RESTRICT_COMMENTS
+  RESTRICT_POSTING
+  SUSPEND
+  BAN
+
+  @@map("sanction_type")
+}
+
+// Kullanıcı başına tek global rol (PK user_id). Roller hiyerarşiktir; atama satırı değiştirir,
+// USER'a düşürme satırı siler. Topluluk moderatörlüğü burada değil, community_memberships'tedir.
+model UserRole {
+  userId      String   @id @map("user_id") @db.Uuid
+  role        Role
+  // Rolü veren SUPER_ADMIN. Sadece ilk SUPER_ADMIN (bootstrap) için boş olabilir (CHECK).
+  grantedById String?  @map("granted_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user      User  @relation("UserRoleHolder", fields: [userId], references: [id], onDelete: Restrict)
+  grantedBy User? @relation("UserRoleGranter", fields: [grantedById], references: [id], onDelete: Restrict)
+
+  // Aktif SUPER_ADMIN sayımı ve rol listeleri.
+  @@index([role])
+  @@index([grantedById])
+  @@map("user_roles")
+}
+
+// Yaptırım geçmişi. Silinmez ve güncellenemez; sadece kaldırma alanları bir kez NULL'dan
+// doluya geçebilir (trigger). Aktif = lifted_at IS NULL AND (ends_at IS NULL OR ends_at > now()).
+// users.status bu tablonun özetidir ve servis tarafından aynı transaction'da güncellenir (§9).
+model Sanction {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  type        SanctionType
+  reason      String       @db.VarChar(500)
+  startsAt    DateTime     @default(now()) @map("starts_at") @db.Timestamptz(3)
+  // NULL = kalıcı. SUSPEND'de zorunlu, BAN'da yasak (CHECK).
+  endsAt      DateTime?    @map("ends_at") @db.Timestamptz(3)
+  createdById String       @map("created_by_id") @db.Uuid
+  // Kaldırma bilgisi; üçü birlikte dolar (CHECK).
+  liftedAt    DateTime?    @map("lifted_at") @db.Timestamptz(3)
+  liftedById  String?      @map("lifted_by_id") @db.Uuid
+  liftReason  String?      @map("lift_reason") @db.VarChar(500)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user      User  @relation("SanctionTarget", fields: [userId], references: [id], onDelete: Restrict)
+  createdBy User  @relation("SanctionIssuer", fields: [createdById], references: [id], onDelete: Restrict)
+  liftedBy  User? @relation("SanctionLifter", fields: [liftedById], references: [id], onDelete: Restrict)
+
+  // Aktif yaptırımlar (TrustedActor.sanctions, AdminUserDetail.activeSanctions).
+  @@index([userId, liftedAt, endsAt])
+  @@index([createdById])
+  @@index([liftedById])
+  @@map("sanctions")
+}

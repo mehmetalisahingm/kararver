@@ -43,7 +43,7 @@ test("guest can read; cancel gate stays put; login returns without automatically
   await expect(
     page.getByRole("heading", { name: "Sonuçlar", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Toplam 101 örnek oy")).toBeVisible();
+  await expect(page.getByText("Toplam 101 oy")).toBeVisible();
 });
 test("draft survives auth and publish error; explicit confirm debits once", async ({
   page,
@@ -97,7 +97,7 @@ test("draft survives auth and publish error; explicit confirm debits once", asyn
   await login(page, "deniz@example.test");
   await expect(page).toHaveURL(createdPath);
   await page.getByRole("button", { name: "Oyumu onayla" }).click();
-  await expect(page.getByText("Toplam 1 örnek oy")).toBeVisible();
+  await expect(page.getByText("Toplam 1 oy")).toBeVisible();
   await expect(page.locator(".balance")).toHaveText("20 puan");
 });
 test("discussion needs no options; closed and locked voting unavailable", async ({

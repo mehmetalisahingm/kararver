@@ -11,7 +11,7 @@ export function PollCard({ poll }: { poll: Poll }) {
           </span>
           <span className="author">
             {poll.author}
-            <small>{poll.category} · Örnek içerik</small>
+            <small>{poll.category}</small>
           </span>
         </div>
         <span className="kv-badge kv-badge--neutral">
@@ -25,7 +25,7 @@ export function PollCard({ poll }: { poll: Poll }) {
         </span>
       </div>
       <h2>
-        <Link href={`/karar/${poll.id}`}>{poll.title}</Link>
+        <Link href={poll.canonicalPath || `/karar/${poll.id}`}>{poll.title}</Link>
       </h2>
       <p className="kv-muted">{poll.description}</p>
       {poll.options.some((o) => o.image) && (
@@ -40,11 +40,11 @@ export function PollCard({ poll }: { poll: Poll }) {
       )}
       <div className="kv-row kv-between">
         <span className="kv-help">
-          {poll.commentCount ?? poll.comments.length} örnek yorum / öneri
+          {poll.commentCount ?? poll.comments.length} yorum / öneri
         </span>
         <Link
           className="kv-button kv-button--secondary"
-          href={`/karar/${poll.id}`}
+          href={poll.canonicalPath || `/karar/${poll.id}`}
         >
           {poll.kind === "discussion" ? "Tartışmayı oku" : "Anketi incele"}
         </Link>

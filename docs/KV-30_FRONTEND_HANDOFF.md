@@ -1,3 +1,5 @@
+> 29 Eylül güncellemesi: HTTP entegrasyonu ve güncel kalan bağımlılıklar için [Frontend/backend entegrasyonu](FRONTEND_BACKEND_INTEGRATION.md) belgesine bakın. Aşağıdaki demo teslim notları ilk sürümü anlatır.
+
 # KV-30 — Keşfet, kategori ve trend ekranları
 
 Sahip: Ümit (@umitefe0) · Görev: #32 · UI temeli: PR #68 ve #74.
