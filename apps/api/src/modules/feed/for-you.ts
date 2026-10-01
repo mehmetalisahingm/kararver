@@ -114,17 +114,29 @@ export function rankForYou(
 
   const placed: Scored[] = [];
   const done = new Set<string>();
-  const fits = (c: Scored) => {
-    const recent = placed.slice(-DIVERSITY_WINDOW);
-    return (
-      recent.filter((p) => p.authorId === c.authorId).length < settings.maxSameAuthorPerWindow &&
-      recent.filter((p) => p.categoryId === c.categoryId).length < settings.maxSameCategoryPerWindow
-    );
-  };
+  // Son DIVERSITY_WINDOW karttaki yazar/kategori sayıları artımlı tutulur (KV-47: her adayda pencereyi
+  // yeniden saymak 500 adayda karesel maliyetti, yük altında CPU'nun üçte birini yiyordu).
+  const authorCount = new Map<string, number>();
+  const categoryCount = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string, d: number) => m.set(k, (m.get(k) ?? 0) + d);
+  const fits = (c: Scored) =>
+    (authorCount.get(c.authorId) ?? 0) < settings.maxSameAuthorPerWindow &&
+    (categoryCount.get(c.categoryId) ?? 0) < settings.maxSameCategoryPerWindow;
+  /** Her sıranın ilk yerleşmemiş elemanı; önündekiler bir daha taranmaz. */
+  const start = new Map<Scored[], number>([[main, 0], [explore, 0]]);
   /** Sıradaki yerleşmemiş ve sınıra uyan ilk aday; uyan yoksa yerleşmemiş ilk aday; hiç yoksa undefined. */
   const pick = (order: Scored[]) => {
-    const open = order.filter((c) => !done.has(c.id));
-    return open.find(fits) ?? open[0];
+    let i = start.get(order)!;
+    while (i < order.length && done.has(order[i]!.id)) i++;
+    start.set(order, i);
+    let firstOpen: Scored | undefined;
+    for (; i < order.length; i++) {
+      const c = order[i]!;
+      if (done.has(c.id)) continue;
+      firstOpen ??= c;
+      if (fits(c)) return c;
+    }
+    return firstOpen;
   };
 
   while (placed.length < main.length) {
@@ -132,6 +144,13 @@ export function rankForYou(
     const next = fromExplore ?? pick(main)!;
     done.add(next.id);
     placed.push({ ...next, explore: fromExplore !== undefined });
+    bump(authorCount, next.authorId, 1);
+    bump(categoryCount, next.categoryId, 1);
+    const leaving = placed[placed.length - 1 - DIVERSITY_WINDOW];
+    if (leaving) {
+      bump(authorCount, leaving.authorId, -1);
+      bump(categoryCount, leaving.categoryId, -1);
+    }
   }
   return placed;
 }

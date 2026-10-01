@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "node --watch src/server.ts",
     "start": "node src/server.ts",
+    "start:cluster": "node src/cluster.ts",
+    "perf:seed": "node perf/seed.ts",
+    "perf:load": "node perf/load.ts",
+    "perf:queries": "node perf/query-count.ts",
     "test": "node --test --test-concurrency=1 \"test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json",
     "admin:bootstrap": "node src/modules/rbac/bootstrap-cli.ts"
