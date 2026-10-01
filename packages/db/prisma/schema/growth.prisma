@@ -42,6 +42,8 @@ model PointAccount {
   balance   Int      @default(0)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
   @@map("point_accounts")
 }
 
@@ -54,6 +56,8 @@ model PointLedgerEntry {
   referenceId    String?           @map("reference_id") @db.Uuid
   idempotencyKey String            @map("idempotency_key") @db.VarChar(200)
   createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
