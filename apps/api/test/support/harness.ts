@@ -158,6 +158,9 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     },
   };
   const registrationEnabled = { value: true };
+  // Test süreçlerinde "resmî limitler" tekrar yüklendiğinde de puan ekonomisi ilgisiz testleri etkilemesin.
+  // #67 points.test.ts maliyeti kendi senaryosunda açıkça 10'a çeker; production varsayılanı kaynakta 10 kalır.
+  DEFAULT_POLL_SETTINGS.publishCostPoints = 0;
   // Yayın limitleri (KV-20) varsayılan olarak gevşek: aynı kullanıcıyla peş peşe anket açan senaryolar
   // cooldown'a takılmasın. Puan da 0: yalnız points.test.ts #67 maliyetini 10'a çeker.
   const pollSettings: PollSettings = {
