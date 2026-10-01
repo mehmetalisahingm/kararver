@@ -67,8 +67,8 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `DELETE /polls/:id`<br>Sahibin kaldırması (soft delete) · `polls.delete` | O | 204 | doğal | Faruk `polls` | Ümit (web) | #12 | hazır |
 | `POST /polls/:id/addenda`<br>Tarihli ek açıklama (kilitli ankete bilgi eklemenin tek yolu) · `polls.addenda.create` | O | 201 | key (ops.) | Faruk `polls` | Ümit (web) | #12 #20 | hazır |
 | `PUT /polls/:id/vote`<br>Oy ver / değiştir (tek aktif oy) · `votes.put` | V | 200/201 | doğal | Faruk `votes` | Ümit (web) | #13 #15 #20 | hazır |
-| `PUT /polls/:id/reaction`<br>Gönderiye beğeni/dislike (oydan ayrı) · `reactions.poll.put` | U | 200 | doğal | Faruk `reactions` | Ümit (web) | #66 #20 | planlı — tablo #66 migration'ı ile gelecek |
-| `DELETE /polls/:id/reaction`<br>Gönderi tepkisini kaldırır · `reactions.poll.delete` | U | 200 | doğal | Faruk `reactions` | Ümit (web) | #66 #20 | planlı — tablo #66 migration'ı ile gelecek |
+| `PUT /polls/:id/reaction`<br>Gönderiye beğeni/dislike (oydan ayrı) · `reactions.poll.put` | U | 200 | doğal | Faruk `reactions` | Ümit (web) | #66 #20 | hazır |
+| `DELETE /polls/:id/reaction`<br>Gönderi tepkisini kaldırır · `reactions.poll.delete` | U | 200 | doğal | Faruk `reactions` | Ümit (web) | #66 #20 | hazır |
 | `GET /polls/:id/history`<br>Günlük dağılım (grafik verisi, İstanbul günleri) · `polls.history` | G | 200 | — | Faruk `trends` | Ümit (trend/grafik, KV-30) | #31 #32 | hazır |
 
 ### Yorum ve alternatif öneri
@@ -400,8 +400,8 @@ Cookie session ve CSRF kuralları FOUNDATION_CONTRACTS ve TECH_DECISIONS §3.4't
 |---|---|---|
 | `idempotency_keys` (aktör, route, anahtar, istek hash'i, cevap, `expires_at`) | §4.5 `key-required` / `key-optional` | **KV-10 (#12)**; ilk kullanan `polls.create` |
 | "İlk giriş" tekilliği (`users.first_login_at` veya ledger'da kullanıcı başına tek `INITIAL_GRANT` kısıtı) | İlk girişte tek 20 puan, paralel girişte de | **KV-09 (#11)** ve #67 |
-| `polls.kind` (`POLL`/`DISCUSSION`), tartışmada `closes_at` ve `results_visibility` nullable | Anketsiz gönderi | #66 |
-| Yorum tepkileri: ✅ `comment_reactions` (KV-17, #19); `comment_likes`'ın yerine geçti. Anket tepkileri (`poll_reactions`, aynı `reaction_value` enum'u) | Like/dislike | Yorum: ✅ KV-17 · Anket: #66 |
+| `polls.kind` (`POLL`/`DISCUSSION`), tartışmada `closes_at` ve `results_visibility` nullable | Anketsiz gönderi | ✅ #66 (`20261001120000_faruk_kv66_discussions_reactions`) |
+| Yorum tepkileri: ✅ `comment_reactions` (KV-17, #19); `comment_likes`'ın yerine geçti. Anket tepkileri (`poll_reactions`, aynı `reaction_value` enum'u) | Like/dislike | Yorum: ✅ KV-17 · Gönderi: ✅ #66 |
 | İçerik sürüm geçmişi (`poll_revisions`, `comment_revisions`) | `admin.revisions.*` | #66 |
 | `point_ledger` (append-only, bakiye ≥ 0) | Yayın puanı | #67 (Mehmet) |
 | `polls.trend_excluded_at` | `EXCLUDE_FROM_TRENDS` moderasyon işlemi | ✅ Sütun **KV-28 (#30)** ile açıldı, trend job'u uyar; yazan işlem KV-37 (#39) |

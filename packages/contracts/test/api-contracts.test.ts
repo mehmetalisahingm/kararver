@@ -96,10 +96,10 @@ describe("endpoint registry", () => {
     assert.equal(getEndpoint("votes.put").idempotency, "natural");
   });
 
-  test("V1_USER_FLOW endpointleri planlı olarak işaretli", () => {
+  test("V1_USER_FLOW endpointleri: gönderi tepkileri hazır (#66), puan ve sürüm geçmişi planlı", () => {
     const planned = endpoints.filter((e) => e.availability.status === "planned").map((e) => e.id);
+    for (const id of ["reactions.poll.put", "reactions.poll.delete"]) assert.equal(getEndpoint(id).availability.status, "ready", id);
     for (const id of [
-      "reactions.poll.put",
       "points.get",
       "points.ledger",
       "admin.points.adjust",

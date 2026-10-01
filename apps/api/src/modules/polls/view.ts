@@ -12,8 +12,9 @@ export function isPubliclyVisible(poll: { status: string }): poll is { status: "
   return poll.status === "ACTIVE" || poll.status === "LOCKED";
 }
 
-export function isClosed(poll: { closesAt: Date; closedAt: Date | null }, now: Date): boolean {
-  return poll.closedAt !== null || poll.closesAt <= now;
+/** Tartışma (closesAt null) hiç kapanmaz. */
+export function isClosed(poll: { closesAt: Date | null; closedAt: Date | null }, now: Date): boolean {
+  return poll.closedAt !== null || (poll.closesAt !== null && poll.closesAt <= now);
 }
 
 function excerpt(description: string | null): string | null {
@@ -29,15 +30,17 @@ export function toPollDetail(poll: PollRecord, viewer: SessionUser | null, now: 
   const vote = poll.viewerVote;
   const hasValidVote = vote !== null && !vote.invalidated;
 
+  const isPoll = poll.kind === "POLL";
   const visible = resultsVisibleTo({
-    resultsVisibility: poll.resultsVisibility,
+    resultsVisibility: poll.resultsVisibility ?? "ALWAYS",
     closed,
     viewerHasValidVote: hasValidVote,
     viewerIsAuthor: isAuthor,
   });
   // Toplam seçenek sayaçlarının toplamıdır; ikisi aynı transaction'da güncellenir (DATA_MODEL §5.3).
   const total = poll.options.reduce((sum, o) => sum + o.voteCount, 0);
-  const results = pollResults({ visible, total, options: poll.options.map((o) => ({ id: o.id, votes: o.voteCount })) });
+  // Tartışmada sonuç yoktur (sözleşme: DISCUSSION için null).
+  const results = isPoll ? pollResults({ visible, total, options: poll.options.map((o) => ({ id: o.id, votes: o.voteCount })) }) : null;
 
   const media = poll.media.map((m) => ({ id: m.id, url: `${mediaBase}/${m.publicKey}`, width: m.width, height: m.height }));
 
@@ -45,13 +48,13 @@ export function toPollDetail(poll: PollRecord, viewer: SessionUser | null, now: 
     ? {
         vote: vote?.optionId ?? null,
         voteInvalidated: vote?.invalidated ?? false,
-        // Tepki (#66), kaydetme ve takip (Mehmet, KV-22/KV-23) tabloları gelene kadar sabit.
-        reaction: null,
+        reaction: poll.reactions.viewer,
+        // Kaydetme ve takip (Mehmet, KV-22/KV-23) tabloları gelene kadar sabit.
         bookmarked: false,
         following: false,
         isAuthor,
         ...voteAvailability({
-          kind: "POLL",
+          kind: poll.kind,
           viewerIsAuthor: isAuthor,
           closed,
           contentStatus: poll.status,
@@ -71,8 +74,7 @@ export function toPollDetail(poll: PollRecord, viewer: SessionUser | null, now: 
     id: poll.id,
     publicId: poll.publicId,
     slug: poll.slug,
-    // Tartışma gönderisi (DISCUSSION) #66 ile gelir; o zamana kadar her gönderi ankettir.
-    kind: "POLL" as const,
+    kind: poll.kind,
     title: poll.title,
     excerpt: excerpt(poll.description),
     author: {
@@ -86,10 +88,10 @@ export function toPollDetail(poll: PollRecord, viewer: SessionUser | null, now: 
     coverImage: media[0] ?? null,
     status: poll.status,
     createdAt: poll.createdAt.toISOString(),
-    closesAt: poll.closesAt.toISOString(),
+    closesAt: poll.closesAt?.toISOString() ?? null,
     closed,
     commentCount: poll.commentCount,
-    reactions: { likes: 0, dislikes: 0, viewer: null },
+    reactions: { likes: poll.reactions.likes, dislikes: poll.reactions.dislikes, viewer: viewer ? poll.reactions.viewer : null },
     results,
     viewer: viewerState,
     description: poll.description,

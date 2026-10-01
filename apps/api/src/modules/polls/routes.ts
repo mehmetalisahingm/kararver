@@ -30,6 +30,11 @@ export function mapDbError(err: unknown): ErrorCode | null {
   return null;
 }
 
+/** Tartışma gönderisinde ankete özgü işlem (oy, seçenek, sonuç görünürlüğü, kapatma) — #66. */
+function notAPoll(fields: readonly string[]): ApiError {
+  return new ApiError("NOT_A_POLL", "Bu bir tartışma gönderisi; seçenek, oy ve süre yok.", fields.map((field) => ({ field, code: "not_a_poll" })));
+}
+
 export function registerPollRoutes(route: Route, deps: PollDeps): void {
   const { store, now } = deps;
 
@@ -122,9 +127,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
   route("polls.create", async (ctx) => {
     const { body, viewer, request } = ctx;
     const scope = readIdempotencyScope(request, { userId: viewer!.id, route: "polls.create", body, now: now(), required: true })!;
-    if (body.kind !== "POLL") {
-      throw new ApiError("VALIDATION_ERROR", "Tartışma gönderileri henüz açık değil.", [{ field: "kind", code: "not_supported_yet" }]);
-    }
+    const isPoll = body.kind === "POLL";
     // Başarılı bir isteğin tekrarı, sonucu sonradan değişebilecek kontrollerden (süre ayarı, kategori,
     // üyelik, görsel durumu) önce kayıtlı sonucu alır.
     const prior = await store.findIdempotentResult(scope);
@@ -133,7 +136,8 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
       return { status: 201, body: { data: await detail({ id: resourceId }, viewer) } };
     }
     const settings = await deps.settings();
-    if (body.durationHours < settings.minDurationHours || body.durationHours > settings.maxDurationHours) {
+    // Tartışma (#66) süresizdir; süre sınırı sadece ankete uygulanır.
+    if (isPoll && (body.durationHours < settings.minDurationHours || body.durationHours > settings.maxDurationHours)) {
       throw new ApiError("VALIDATION_ERROR", `Süre ${settings.minDurationHours}–${settings.maxDurationHours} saat arasında olmalı.`, [
         { field: "durationHours", code: "out_of_range" },
       ]);
@@ -144,6 +148,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     const publicId = await uniquePublicId();
     const result = await withReferenceErrors(() => store.createPoll(
       {
+        kind: body.kind,
         authorId: viewer!.id,
         publicId,
         slug: slugify(body.title),
@@ -157,10 +162,10 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
         priceCurrency: body.price?.currency ?? null,
         extraInfo: body.extraInfo || null,
         allowComments: body.allowComments,
-        resultsVisibility: body.resultsVisibility,
+        resultsVisibility: isPoll ? body.resultsVisibility : null,
         opensAt,
-        closesAt: new Date(opensAt.getTime() + body.durationHours * HOUR_MS),
-        options: body.options.map((o: { label: string }) => o.label),
+        closesAt: isPoll ? new Date(opensAt.getTime() + body.durationHours * HOUR_MS) : null,
+        options: isPoll ? body.options.map((o: { label: string }) => o.label) : [],
       },
       scope,
       settings,
@@ -178,6 +183,10 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     const meta = await ownedPoll(params.id, viewer!.id);
     if (meta.status === "LOCKED") throw new ApiError("CONTENT_LOCKED", "Bu gönderi moderasyon nedeniyle kilitli.");
     if (!isPubliclyVisible(meta)) throw new ApiError("NOT_FOUND", "İçerik bulunamadı.");
+    if (meta.kind !== "POLL") {
+      const pollOnly = (["options", "resultsVisibility"] as const).filter((f) => body[f] !== undefined);
+      if (pollOnly.length > 0) throw notAPoll(pollOnly);
+    }
 
     const touchesLocked = LOCKED_FIELDS.filter((f) => body[f] !== undefined);
     if (meta.firstValidVoteAt && touchesLocked.length > 0) {
@@ -221,6 +230,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
   route("polls.close", async ({ params, viewer }) => {
     const meta = await ownedPoll(params.id, viewer!.id);
     if (!isPubliclyVisible(meta)) throw new ApiError("NOT_FOUND", "İçerik bulunamadı.");
+    if (meta.kind !== "POLL") throw notAPoll([]);
     if (!isClosed(meta, now())) await store.closePoll(params.id, now());
     return { status: 200, body: { data: await detail({ id: params.id }, viewer) } };
   });
@@ -247,4 +257,18 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     const addendum = (await store.findAddendum(resourceId))!;
     return { status: 201, body: { data: { id: addendum.id, body: addendum.body, createdAt: addendum.createdAt.toISOString() } } };
   });
+
+  // Gönderi tepkileri (#66): anket ve tartışmada; anket oyundan ayrıdır. Hesap + gönderi başına tek aktif tepki.
+  async function react(pollId: string, userId: string, value: "LIKE" | "DISLIKE" | null) {
+    const result = await store.setReaction(pollId, userId, value);
+    if (result.kind !== "ok") {
+      if (result.kind === "locked") throw new ApiError("CONTENT_LOCKED", "Bu gönderi moderasyon nedeniyle kilitli.");
+      throw new ApiError("NOT_FOUND", "İçerik bulunamadı.");
+    }
+    return { status: 200, body: { data: result.summary } };
+  }
+
+  route("reactions.poll.put", async ({ params, body, viewer }) => react(params.id, viewer!.id, body.value));
+
+  route("reactions.poll.delete", async ({ params, viewer }) => react(params.id, viewer!.id, null));
 }

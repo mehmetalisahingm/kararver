@@ -3,6 +3,15 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.10.0 — 2026-10-01 (Faruk, #66 tartışma gönderileri ve gönderi tepkileri)
+
+Kırıcı değişiklik yok (API_CONTRACTS §5: planlı endpoint'in hazır olması ve yeni DB hata eşlemesi minor).
+
+- **Değişti:** `reactions.poll.put` / `reactions.poll.delete` artık `ready` (tablo `poll_reactions`, migration `20261001120000_faruk_kv66_discussions_reactions`).
+- **Değişti:** `polls.create` notu: `kind=DISCUSSION` sağlayıcıda açık; yayın puanı #67 gelene kadar iki türde de yok.
+- **Eklendi:** `dbErrorMap`: `KV_NOT_A_POLL` → `NOT_A_POLL`, `KV_POLL_KIND_IMMUTABLE` → `INTERNAL_ERROR`.
+- **Test:** `api-contracts.test.ts` içindeki "V1_USER_FLOW endpointleri planlı" kontrolü bilinçli güncellendi: gönderi tepkileri artık hazır olmalı; puan ve sürüm geçmişi hâlâ planlı.
+
 ## 1.9.0 — 2026-09-30 (Faruk, KV-27 "Senin İçin" feed)
 
 Kırıcı değişiklik yok (API_CONTRACTS §5: yeni ayar anahtarı minor).

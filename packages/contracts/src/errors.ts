@@ -72,8 +72,10 @@ export const dbErrorMap = Object.freeze({
   KV_POLL_CONTENT_LOCKED: "POLL_CONTENT_LOCKED",
   KV_COMMENT_DEPTH: "COMMENT_DEPTH_EXCEEDED",
   KV_SELF_VOTE: "SELF_VOTE_FORBIDDEN",
+  KV_NOT_A_POLL: "NOT_A_POLL",
   // Bunlar istemci hatası değil, kod hatasıdır: loglanır, 500 döner.
   KV_VOTE_EVENTS_APPEND_ONLY: "INTERNAL_ERROR",
   KV_VOTE_IDENTITY_IMMUTABLE: "INTERNAL_ERROR",
   KV_SANCTIONS_IMMUTABLE: "INTERNAL_ERROR",
+  KV_POLL_KIND_IMMUTABLE: "INTERNAL_ERROR",
 } as const satisfies Record<string, ErrorCode>);

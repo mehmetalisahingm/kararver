@@ -56,20 +56,26 @@ export type FeedQuery = {
   viewerId: string | null;
 };
 
+export type PollKind = "POLL" | "DISCUSSION";
+export type ReactionValue = "LIKE" | "DISLIKE";
+export type ReactionSummary = { likes: number; dislikes: number; viewer: ReactionValue | null };
+
 export type PollRecord = {
   id: string;
   publicId: string;
   slug: string;
+  /** DISCUSSION (#66): seçenek, oy, süre ve sonuç görünürlüğü yok; closesAt ve resultsVisibility null. */
+  kind: PollKind;
   title: string;
   description: string | null;
   extraInfo: string | null;
   priceAmount: string | null;
   priceCurrency: string | null;
   status: ContentStatus;
-  resultsVisibility: "ALWAYS" | "AFTER_VOTE";
+  resultsVisibility: "ALWAYS" | "AFTER_VOTE" | null;
   allowComments: boolean;
   opensAt: Date;
-  closesAt: Date;
+  closesAt: Date | null;
   closedAt: Date | null;
   firstValidVoteAt: Date | null;
   commentCount: number;
@@ -84,9 +90,12 @@ export type PollRecord = {
   addenda: { id: string; body: string; createdAt: Date }[];
   /** İzleyicinin bu anketteki oyu (misafirde null). */
   viewerVote: { optionId: string; invalidated: boolean } | null;
+  /** Gönderi tepkileri (#66); viewer misafirde null. */
+  reactions: ReactionSummary;
 };
 
 export type NewPoll = {
+  kind: PollKind;
   authorId: string;
   publicId: string;
   slug: string;
@@ -100,9 +109,12 @@ export type NewPoll = {
   priceCurrency: string | null;
   extraInfo: string | null;
   allowComments: boolean;
-  resultsVisibility: "ALWAYS" | "AFTER_VOTE";
+  /** DISCUSSION'da null. */
+  resultsVisibility: "ALWAYS" | "AFTER_VOTE" | null;
   opensAt: Date;
-  closesAt: Date;
+  /** DISCUSSION'da null (süresiz). */
+  closesAt: Date | null;
+  /** DISCUSSION'da boş. */
   options: string[];
 };
 
@@ -144,7 +156,14 @@ export class PollReferenceError extends Error {
 export interface PollStore {
   findPoll(by: { id: string } | { publicId: string }, viewerId: string | null): Promise<PollRecord | null>;
   /** Sadece sahiplik ve durum kontrolü için hafif okuma. */
-  findPollMeta(id: string): Promise<{ authorId: string; status: ContentStatus; firstValidVoteAt: Date | null; closedAt: Date | null; closesAt: Date } | null>;
+  findPollMeta(id: string): Promise<{
+    kind: PollKind;
+    authorId: string;
+    status: ContentStatus;
+    firstValidVoteAt: Date | null;
+    closedAt: Date | null;
+    closesAt: Date | null;
+  } | null>;
   isActiveCategory(categoryId: string): Promise<boolean>;
   communityAccess(communityId: string, userId: string): Promise<CommunityAccess>;
   /** Hepsi yükleyenin kendi, POLL amaçlı ve REJECTED olmayan görselleri mi? */
@@ -171,5 +190,10 @@ export interface PollStore {
   closePoll(id: string, now: Date): Promise<void>;
   removePoll(id: string, now: Date): Promise<void>;
   createAddendum(pollId: string, body: string, scope: IdempotencyScope | null): Promise<IdempotentResult>;
+  /**
+   * Gönderi tepkisini yazar (value) veya kaldırır (null). Gönderi satırı kilitlenir: hesap + gönderi başına tek
+   * aktif tepki, sayaçlar aynı transaction'da. Görünmeyen gönderi not_found, kilitli (LOCKED) gönderi locked.
+   */
+  setReaction(pollId: string, userId: string, value: ReactionValue | null): Promise<{ kind: "ok"; summary: ReactionSummary } | { kind: "not_found" | "locked" }>;
   findAddendum(id: string): Promise<{ id: string; body: string; createdAt: Date } | null>;
 }
