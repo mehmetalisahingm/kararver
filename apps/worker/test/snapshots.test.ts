@@ -7,9 +7,9 @@ import assert from "node:assert/strict";
 import { randomInt } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import type { PrismaClient } from "@kararver/db";
-import { istanbulDate, runDailySnapshots, snapshotDay, type SnapshotJobDeps } from "../src/jobs/snapshots/job.ts";
+import { istanbulDate, recomputeStaleSnapshots, runDailySnapshots, snapshotDay, type SnapshotJobDeps } from "../src/jobs/snapshots/job.ts";
 import { TREND_CONFIG } from "../src/jobs/trends/config.ts";
-import { refreshFormat, type TrendJobDeps } from "../src/jobs/trends/job.ts";
+import { refreshFormat, refreshTrends, type TrendJobDeps } from "../src/jobs/trends/job.ts";
 import { fixtures, migratedClient, testDatabaseUrl } from "./support/db.ts";
 
 const url = testDatabaseUrl();
@@ -183,5 +183,42 @@ describe("snapshots.daily ve Haftanın Değişkenleri (postgres)", { skip: url ?
     await refreshFormat(trendDeps(old), "WEEKLY_MOVERS", old);
     const stale = await db.trendRun.findFirstOrThrow({ where: { format: "WEEKLY_MOVERS", windowEnd: old }, include: { scores: true } });
     assert.equal(stale.scores.some((s) => s.pollId === missing.id), false);
+  });
+
+  test("KV-43: geçersiz sayılan oydan sonra etkilenen günler yeniden üretilir; işaret temizlenir; trend job'u da yapar", async () => {
+    const D0 = freshDay();
+    const [D1, D2, D3] = [addDays(D0, 1), addDays(D0, 2), addDays(D0, 3)];
+    const p = await f.poll({ opensAt: ist(D0, 9), categoryId });
+    const [A, B] = p.optionIds;
+    const fake = await f.voter(p.id, [[ist(D0, 10), "CAST", A]]);
+    await f.voter(p.id, [[ist(D0, 11), "CAST", A]]);
+    await f.voter(p.id, [[ist(D1, 10), "CAST", B]]);
+    const afterDays = ist(D3, 0, 5);
+    await snapshotRange(D0, [0, 1, 2], afterDays);
+    const totals = async () => [(await day(p.id, D0))!.total, (await day(p.id, D1))!.total, (await day(p.id, D2))!.total];
+    assert.deepEqual(await totals(), [2, 3, 3]);
+
+    // API'nin (admin.votes.invalidate) yaptığı düzeltme: oy geçersiz, olay aktörlü, anket işaretli.
+    const [admin] = await f.users(1);
+    const vote = await db.vote.findUniqueOrThrow({ where: { pollId_userId: { pollId: p.id, userId: fake } } });
+    const at = ist(D3, 1);
+    await db.vote.update({ where: { id: vote.id }, data: { invalidatedAt: at, invalidationReason: "sahte hesap" } });
+    await db.voteEvent.create({ data: { voteId: vote.id, pollId: p.id, userId: fake, type: "INVALIDATE", fromOptionId: A, reason: "sahte hesap", actorId: admin!, occurredAt: at } });
+    await db.poll.update({ where: { id: p.id }, data: { snapshotsStaleSince: vote.createdAt } });
+
+    const done = await recomputeStaleSnapshots(snapDeps(ist(D3, 2)));
+    assert.deepEqual(done.find((d) => d.pollId === p.id), { pollId: p.id, days: 3 });
+    assert.deepEqual(await totals(), [1, 2, 2], "geçmiş günler düzeldi");
+    assert.equal((await day(p.id, D0))!.A, 1);
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: p.id } })).snapshotsStaleSince, null);
+    assert.equal((await recomputeStaleSnapshots(snapDeps(ist(D3, 3)))).some((d) => d.pollId === p.id), false, "ikinci çalıştırmada iş yok");
+
+    // Geri alma da aynı yoldan: trend job'u (her 5 dk) önce düzeltmeyi işler.
+    await db.vote.update({ where: { id: vote.id }, data: { invalidatedAt: null, invalidationReason: null } });
+    await db.voteEvent.create({ data: { voteId: vote.id, pollId: p.id, userId: fake, type: "RESTORE", toOptionId: A, reason: "itiraz kabul", actorId: admin!, occurredAt: ist(D3, 4) } });
+    await db.poll.update({ where: { id: p.id }, data: { snapshotsStaleSince: vote.createdAt } });
+    await refreshTrends(trendDeps(ist(D3, 5)));
+    assert.deepEqual(await totals(), [2, 3, 3], "geri alınan oy yeniden sayılır");
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: p.id } })).snapshotsStaleSince, null);
   });
 });

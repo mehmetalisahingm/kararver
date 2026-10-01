@@ -2,7 +2,7 @@
 // KV-24 (#26), KV-37 (#39), KV-38 (#40); içerik sürüm geçmişi sağlayıcısı Faruk (#66)
 import { z } from "zod";
 import { MediaView } from "./media.ts";
-import { ContentStatus, CursorQuery, dataOf, Id, IdParams, pageOf, PublicUser, Timestamp } from "../common.ts";
+import { ContentStatus, Count, CursorQuery, dataOf, Id, IdParams, pageOf, PublicUser, Timestamp } from "../common.ts";
 import { defineEndpoint } from "../endpoint.ts";
 
 export const ReportTargetType = z.enum(["POLL", "COMMENT", "MEDIA", "USER"]);
@@ -40,6 +40,25 @@ export const ModerationAction = z.enum([
   "INCLUDE_IN_TRENDS",
 ]);
 const Reason = z.string().trim().min(3).max(500);
+
+/** KV-43: geçersiz sayma hedefi. Tek istekte en fazla 100 oy veya 100 hesap. */
+export const InvalidateVotesBody = z.strictObject({
+  target: z.discriminatedUnion("type", [
+    z.strictObject({ type: z.literal("VOTES"), voteIds: z.array(Id).min(1).max(100) }),
+    z.strictObject({ type: z.literal("ACCOUNTS"), userIds: z.array(Id).min(1).max(100), pollId: Id.optional() }),
+  ]),
+  reason: Reason,
+});
+export const RestoreVotesBody = z.strictObject({ voteIds: z.array(Id).min(1).max(100), reason: Reason });
+export const VoteCorrectionResult = z.strictObject({
+  /** Bu istekle durumu değişen oy sayısı. */
+  changed: Count,
+  /** Zaten istenen durumda olduğu için dokunulmayan oy sayısı (tekrar istek). */
+  unchanged: Count,
+  /** Bulunamayan oy kimlikleri (VOTES hedefi ve geri alma). */
+  notFound: z.array(Id),
+  affectedPollIds: z.array(Id),
+});
 
 export const Revision = z.strictObject({
   version: z.number().int().min(1),
@@ -210,4 +229,45 @@ export const moderationEndpoints = [
   }),
   revisionsEndpoint("polls"),
   revisionsEndpoint("comments"),
+  defineEndpoint({
+    id: "admin.votes.invalidate",
+    domain: "moderation",
+    method: "POST",
+    path: "/admin/votes/invalidate",
+    summary: "Doğrulanmış manipülasyon oylarını gerekçeyle geçersiz sayar (KV-43)",
+    auth: "admin",
+    provider: { owner: "Faruk", module: "votes" },
+    consumers: ["Mert (moderasyon UI, KV-37)", "Utku (admin users, KV-33)"],
+    unblocks: ["#45"],
+    availability: { status: "ready" },
+    request: { body: InvalidateVotesBody },
+    responses: { 200: dataOf(VoteCorrectionResult) },
+    errors: [],
+    idempotency: "natural",
+    cache: "private",
+    notes: [
+      "target VOTES: tek tek oylar. ACCOUNTS: hesapların oyları; pollId verilirse sadece o ankette, verilmezse bütün anketlerde.",
+      "Sadece geçerli oylar işlenir (WHERE invalidated_at IS NULL): tekrar istek çift düşüm yapmaz; zaten geçersiz olanlar unchanged'de sayılır.",
+      "Sayaçlar ve sonuç aynı transaction'da düzelir; günlük snapshot'lar ve trendler bir sonraki trend çalıştırmasında (en geç 5 dk) yeniden üretilir.",
+      "Ban veya askı tek başına oyları geçersiz saymaz; bu her zaman ayrı ve gerekçeli işlemdir (DATA_MODEL §5.4).",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.votes.restore",
+    domain: "moderation",
+    method: "POST",
+    path: "/admin/votes/restore",
+    summary: "Yanlışlıkla geçersiz sayılan oyları gerekçeyle geri alır (KV-43)",
+    auth: "admin",
+    provider: { owner: "Faruk", module: "votes" },
+    consumers: ["Mert (moderasyon UI, KV-37)"],
+    unblocks: ["#45"],
+    availability: { status: "ready" },
+    request: { body: RestoreVotesBody },
+    responses: { 200: dataOf(VoteCorrectionResult) },
+    errors: [],
+    idempotency: "natural",
+    cache: "private",
+    notes: ["Sadece geçersiz sayılmış oylar geri gelir; geçerli olanlar unchanged'de sayılır. Anket kapanmış olsa da geri alınır."],
+  }),
 ];

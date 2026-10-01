@@ -93,7 +93,9 @@ model User {
   idempotencyKeys  IdempotencyKey[]
   polls            Poll[]
   votes            Vote[]
-  voteEvents       VoteEvent[]
+  voteEvents       VoteEvent[]       @relation("VoteEventUser")
+  // KV-43: yaptığı oy geçersiz sayma / geri alma işlemleri
+  voteCorrections  VoteEvent[]       @relation("VoteEventActor")
   comments         Comment[]
   commentReactions CommentReaction[]
   pollReactions    PollReaction[]
@@ -237,6 +239,9 @@ model Poll {
   // Doluysa anket algoritmik trend listelerine girmez (EXCLUDE_FROM_TRENDS moderasyon işlemi, KV-37 Mert yazar).
   // Görünürlüğü etkilemez; editör seçimi/öne çıkarma ayrı yüzeydir (KV-28, docs/KV-28_TRENDS.md).
   trendExcludedAt   DateTime?          @map("trend_excluded_at") @db.Timestamptz(3)
+  // Oy geçersiz sayıldı/geri alındı (KV-43): bu andan sonraki günlük snapshot'lar yeniden üretilecek. Worker
+  // (trends.refresh, snapshots.daily) yeniden üretip temizler. NULL: snapshot'lar güncel.
+  snapshotsStaleSince DateTime?        @map("snapshots_stale_since") @db.Timestamptz(3)
   voteCount         Int                @default(0) @map("vote_count")
   commentCount      Int                @default(0) @map("comment_count")
   saveCount         Int                @default(0) @map("save_count")
@@ -371,11 +376,15 @@ model VoteEvent {
   fromOptionId String?       @map("from_option_id") @db.Uuid
   toOptionId   String?       @map("to_option_id") @db.Uuid
   reason       String?       @db.VarChar(500)
+  // INVALIDATE/RESTORE'u yapan yönetici (KV-43); audit tablosu (KV-39) gelene kadar "kim yaptı" izi burada.
+  // CHECK vote_events_actor_check: INVALIDATE/RESTORE'da aktör ve gerekçe zorunlu; CAST/CHANGE'de aktör yok.
+  actorId      String?       @map("actor_id") @db.Uuid
   occurredAt   DateTime      @default(now()) @map("occurred_at") @db.Timestamptz(3)
 
   vote       Vote        @relation(fields: [voteId], references: [id], onDelete: Restrict)
   poll       Poll        @relation(fields: [pollId], references: [id], onDelete: Restrict)
-  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user       User        @relation("VoteEventUser", fields: [userId], references: [id], onDelete: Restrict)
+  actor      User?       @relation("VoteEventActor", fields: [actorId], references: [id], onDelete: Restrict)
   fromOption PollOption? @relation("VoteEventFrom", fields: [fromOptionId], references: [id], onDelete: Restrict)
   toOption   PollOption? @relation("VoteEventTo", fields: [toOptionId], references: [id], onDelete: Restrict)
 

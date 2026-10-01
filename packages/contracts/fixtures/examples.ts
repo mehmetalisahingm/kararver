@@ -30,6 +30,7 @@ const FEATURED = id(90);
 const ANN = id(91);
 const LEDGER = id(92);
 const AUDIT = id(93);
+const VOTE = id(94);
 const T0 = "2026-09-27T09:00:00.000Z";
 const T1 = "2026-09-28T09:00:00.000Z";
 const T_CLOSE = "2026-09-30T09:00:00.000Z";
@@ -317,6 +318,8 @@ export const examples: Example[] = [
   { endpoint: "admin.media.decide", name: "ok", request: { params: { id: MEDIA }, body: { decision: "APPROVE", reason: "Uygun içerik" } }, status: 200, body: data(mediaView("APPROVED", { url: mediaRef.url, preview: null })) },
   { endpoint: "admin.revisions.polls", name: "ok", request: { params: pollParams }, status: 200, body: page([{ version: 1, editor: deniz, editedAt: T0, snapshot: { title: "Bu araba bu fiyata alınır mı?" } }]) },
   { endpoint: "admin.revisions.comments", name: "ok", request: { params: { id: COMMENT } }, status: 200, body: page([{ version: 1, editor: umit, editedAt: T1, snapshot: { body: "Boyalı parça fiyatı düşürür." } }]) },
+  { endpoint: "admin.votes.invalidate", name: "hesaplar", request: { body: { target: { type: "ACCOUNTS", userIds: [U2], pollId: POLL }, reason: "Sahte hesap ağı doğrulandı" } }, status: 200, body: data({ changed: 1, unchanged: 0, notFound: [], affectedPollIds: [POLL] }) },
+  { endpoint: "admin.votes.restore", name: "ok", request: { body: { voteIds: [VOTE], reason: "Yanlış tespit, itiraz kabul" } }, status: 200, body: data({ changed: 1, unchanged: 0, notFound: [], affectedPollIds: [POLL] }) },
 
   // ── communities ──
   { endpoint: "communities.list", name: "ok", status: 200, body: page([communityCard]) },

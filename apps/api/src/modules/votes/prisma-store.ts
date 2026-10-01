@@ -1,6 +1,6 @@
 // VoteStore'un PostgreSQL/Prisma uygulaması. Tablolar: polls, poll_options, votes, vote_events.
 import type { PrismaClient } from "@kararver/db";
-import type { CastVoteResult, PollTally, VoteStore } from "./store.ts";
+import type { CastVoteResult, PollTally, VoteCorrection, VoteStore } from "./store.ts";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
@@ -78,5 +78,110 @@ export function createPrismaVoteStore(prisma: PrismaClient): VoteStore {
         await tx.pollOption.update({ where: { id: optionId }, data: { voteCount: { increment: 1 } } });
         return { kind: "changed", vote, tally: await tally(tx, pollId, poll, now) };
       }),
+
+    invalidateVotes: (target, { reason, actorId, now }) =>
+      prisma.$transaction(async (tx) => {
+        const candidates =
+          target.type === "VOTES"
+            ? await tx.vote.findMany({ where: { id: { in: target.voteIds } }, select: { id: true, pollId: true } })
+            : await tx.vote.findMany({
+                where: { userId: { in: target.userIds }, ...(target.pollId ? { pollId: target.pollId } : {}) },
+                select: { id: true, pollId: true },
+              });
+        const notFound = target.type === "VOTES" ? missing(target.voteIds, candidates) : [];
+        if (candidates.length === 0) return { changed: 0, unchanged: 0, notFound, affectedPollIds: [] };
+        await lockPolls(tx, candidates.map((c) => c.pollId));
+
+        // Kilitten sonra: sadece hâlâ geçerli olanlar. Tekrar istek ve eşzamanlı ikinci yönetici 0 satır alır.
+        const changed = await tx.$queryRaw<Changed[]>`
+          UPDATE votes SET invalidated_at = ${now.toISOString()}::timestamptz, invalidation_reason = ${reason},
+            updated_at = ${now.toISOString()}::timestamptz
+          WHERE id = ANY(${candidates.map((c) => c.id)}::uuid[]) AND invalidated_at IS NULL
+          RETURNING id::text, poll_id::text, user_id::text, option_id::text, created_at`;
+        await applyCorrection(tx, changed, -1, { type: "INVALIDATE", reason, actorId, now });
+        return summary(changed, candidates.length, notFound);
+      }),
+
+    restoreVotes: (voteIds, { reason, actorId, now }) =>
+      prisma.$transaction(async (tx) => {
+        const candidates = await tx.vote.findMany({ where: { id: { in: voteIds } }, select: { id: true, pollId: true } });
+        const notFound = missing(voteIds, candidates);
+        if (candidates.length === 0) return { changed: 0, unchanged: 0, notFound, affectedPollIds: [] };
+        await lockPolls(tx, candidates.map((c) => c.pollId));
+
+        const changed = await tx.$queryRaw<Changed[]>`
+          UPDATE votes SET invalidated_at = NULL, invalidation_reason = NULL, updated_at = ${now.toISOString()}::timestamptz
+          WHERE id = ANY(${candidates.map((c) => c.id)}::uuid[]) AND invalidated_at IS NOT NULL
+          RETURNING id::text, poll_id::text, user_id::text, option_id::text, created_at`;
+        await applyCorrection(tx, changed, +1, { type: "RESTORE", reason, actorId, now });
+        // Geri gelen geçerli oy anketi kilitler (geçersiz oy kilitlemez; kilit kalıcıdır, DATA_MODEL §6).
+        const polls = [...new Set(changed.map((c) => c.poll_id))];
+        if (polls.length > 0) {
+          await tx.$executeRaw`
+            UPDATE polls SET first_valid_vote_at = ${now.toISOString()}::timestamptz
+            WHERE id = ANY(${polls}::uuid[]) AND first_valid_vote_at IS NULL`;
+        }
+        return summary(changed, candidates.length, notFound);
+      }),
   };
+}
+
+type Changed = { id: string; poll_id: string; user_id: string; option_id: string; created_at: Date };
+
+const missing = (ids: string[], found: { id: string }[]) => {
+  const have = new Set(found.map((f) => f.id));
+  return [...new Set(ids)].filter((id) => !have.has(id));
+};
+
+const summary = (changed: Changed[], candidates: number, notFound: string[]): VoteCorrection => ({
+  changed: changed.length,
+  unchanged: candidates - changed.length,
+  notFound,
+  affectedPollIds: [...new Set(changed.map((c) => c.poll_id))].sort(),
+});
+
+/** Etkilenen anketleri id sırasıyla kilitler: oy verme (tek anket kilidi) ve diğer düzeltmelerle deadlock olmaz. */
+async function lockPolls(tx: Tx, pollIds: string[]): Promise<void> {
+  const ids = [...new Set(pollIds)].sort();
+  await tx.$queryRaw`SELECT id FROM polls WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+}
+
+/**
+ * Olay, sayaçlar ve snapshot işareti. delta −1 (geçersiz sayma) veya +1 (geri alma). Snapshot'lar, oyun ilk verildiği
+ * andan itibaren etkilenir: anketin snapshots_stale_since değeri en erken etkilenen oy zamanına çekilir.
+ */
+async function applyCorrection(
+  tx: Tx,
+  changed: Changed[],
+  delta: 1 | -1,
+  event: { type: "INVALIDATE" | "RESTORE"; reason: string; actorId: string; now: Date },
+): Promise<void> {
+  if (changed.length === 0) return;
+  await tx.voteEvent.createMany({
+    data: changed.map((c) => ({
+      voteId: c.id,
+      pollId: c.poll_id,
+      userId: c.user_id,
+      type: event.type,
+      fromOptionId: event.type === "INVALIDATE" ? c.option_id : null,
+      toOptionId: event.type === "RESTORE" ? c.option_id : null,
+      reason: event.reason,
+      actorId: event.actorId,
+      // occurred_at DB varsayılanı (now()): CAST/CHANGE ile aynı saat kaynağı, olay sırası tek kaynaktan.
+    })),
+  });
+  const byOption = new Map<string, number>();
+  const byPoll = new Map<string, { n: number; since: Date }>();
+  for (const c of changed) {
+    byOption.set(c.option_id, (byOption.get(c.option_id) ?? 0) + 1);
+    const p = byPoll.get(c.poll_id);
+    byPoll.set(c.poll_id, { n: (p?.n ?? 0) + 1, since: p && p.since < c.created_at ? p.since : c.created_at });
+  }
+  for (const [id, n] of byOption) await tx.pollOption.update({ where: { id }, data: { voteCount: { increment: delta * n } } });
+  for (const [id, { n, since }] of byPoll) {
+    await tx.$executeRaw`
+      UPDATE polls SET vote_count = vote_count + ${delta * n},
+        snapshots_stale_since = LEAST(coalesce(snapshots_stale_since, ${since.toISOString()}::timestamptz), ${since.toISOString()}::timestamptz)
+      WHERE id = ${id}::uuid`;
+  }
 }
