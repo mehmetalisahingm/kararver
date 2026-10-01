@@ -158,6 +158,8 @@ export const communityEndpoints = [
       body: z
         .strictObject({
           ...CommunityBody.partial().shape,
+          // partial() default'u korur: gönderilmeyen alan MEMBERS'a sıfırlanırdı (zod 4).
+          membersVisibility: MembersVisibility.optional(),
           status: z.enum(["ACTIVE", "HIDDEN"]).optional(),
           reason: z.string().trim().min(3).max(500),
         })

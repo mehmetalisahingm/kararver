@@ -3,6 +3,12 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.12.1 — 2026-10-02 (Mert, KV-32 topluluk yönetimi)
+
+Kırıcı değişiklik yok (şema hatası düzeltmesi, istek biçimi aynı).
+
+- **Düzeltildi:** `admin.communities.update` gövdesinde `membersVisibility` zod 4 `partial()` yüzünden varsayılanı (`MEMBERS`) koruyordu; alan gönderilmese de görünürlük `MEMBERS`'a sıfırlanır ve "en az bir alan" kuralı hep geçerdi. Alan artık gerçekten isteğe bağlı.
+
 ## 1.12.0 — 2026-10-02 (Faruk, KV-43 oy geçersiz sayma)
 
 Kırıcı değişiklik yok (yeni endpoint, yeni işlem ve yeni şemalar minor).
