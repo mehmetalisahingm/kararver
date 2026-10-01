@@ -57,7 +57,11 @@ export function registerMediaRoutes(route: Route, deps: MediaDeps): void {
 
   const view = (media: Parameters<typeof toMediaView>[0]) => toMediaView(media, storage, deps.mediaPublicBaseUrl, now());
 
-  route("media.uploads.create", async ({ body, viewer, request }) => {
+  route("media.uploads.create", async ({ body, viewer, request, authorize }) => {
+    // KV-04/KV-12: RESTRICT_POSTING içerik görsellerini (POLL/COMMUNITY) engeller;
+    // hesap bakımı olan AVATAR yüklemesi muaf kalır. Amaç request şemasından doğrulanmış değerdir.
+    await authorize({ mediaPurpose: body.purpose });
+
     const settings = await deps.settings();
     if (!settings.uploadsEnabled) throw new ApiError("FEATURE_DISABLED", "Görsel yükleme geçici olarak kapalı.");
     if (!settings.allowedTypes.includes(body.mimeType)) throw typeNotAllowed(settings.allowedTypes);
@@ -82,8 +86,11 @@ export function registerMediaRoutes(route: Route, deps: MediaDeps): void {
     };
   });
 
-  route("media.complete", async ({ params, viewer }) => {
+  route("media.complete", async ({ params, viewer, authorize }) => {
     const media = await ownedMedia(params.id, viewer!.id);
+    // Tamamlama anında yaptırım değişmiş olabilir; her istekte tekrar DB'den okunan RBAC kararı uygulanır.
+    await authorize({ ownerId: media.uploaderId, mediaPurpose: media.purpose });
+
     if (media.status === "PENDING" && media.processedObjectKey === null) {
       const object = await storage.headPrivate(media.originalObjectKey);
       if (!object) {
