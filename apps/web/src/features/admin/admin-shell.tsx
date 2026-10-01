@@ -63,7 +63,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <span className="eyebrow">YÖNETİM</span>
         <h1>Yönetim erişimi gerekli</h1>
         <p className="kv-muted">Bu alan yalnız yetkili moderatör ve yöneticiler içindir. Menü gizliliği kullanıcı deneyimidir; asıl yetki kontrolü backend RBAC tarafından yapılır.</p>
-        <Link className="kv-button" href={user ? "/" : "/giris"}>{user ? "Ana sayfaya dön" : "Giriş yap"}</Link>
+        <Link className="kv-button" href={user ? "/" : `/giris?returnTo=${encodeURIComponent(pathname)}`}>{user ? "Ana sayfaya dön" : "Giriş yap"}</Link>
       </section>
     );
   }
