@@ -36,6 +36,15 @@ export type NewToken = { purpose: TokenPurpose; tokenHash: string; expiresAt: Da
 
 export type ProfilePatch = { displayName?: string; bio?: string | null; avatarMediaId?: string | null };
 
+export type PointLedgerRecord = {
+  id: string;
+  delta: number;
+  balanceAfter: number;
+  reason: "INITIAL_GRANT" | "PUBLISH" | "ADMIN_ADJUSTMENT" | "MODERATION_REFUND";
+  referenceId: string | null;
+  createdAt: Date;
+};
+
 export interface AuthStore {
   findUserByEmail(emailNormalized: string): Promise<UserRecord | null>;
   findUserById(id: string): Promise<UserRecord | null>;
@@ -45,6 +54,7 @@ export interface AuthStore {
   /** Aynı amaçlı kullanılmamış eski token'ları geçersiz kılar ve yenisini ekler. */
   issueToken(userId: string, token: NewToken, now: Date): Promise<void>;
 
+  /** Oturum + last_login + ilk giriş puanı aynı transaction'da işlenir. */
   createSession(session: { userId: string; tokenHash: string; expiresAt: Date; ipAddress: string | null; userAgent: string | null }, now: Date): Promise<void>;
   findSession(tokenHash: string): Promise<SessionRecord | null>;
   touchSession(id: string, now: Date): Promise<void>;
@@ -58,4 +68,12 @@ export interface AuthStore {
   /** Kullanıcının kendi, AVATAR amaçlı ve REJECTED olmayan görseli mi? */
   isUsableAvatar(userId: string, mediaId: string): Promise<boolean>;
   updateProfile(userId: string, patch: ProfilePatch): Promise<UserRecord>;
+
+  /** V1 #67: yayın puanı bakiyesi ve append-only hareket listesi. */
+  getPointsSummary(userId: string): Promise<{ balance: number; publishCost: number }>;
+  listPointLedger(
+    userId: string,
+    after: { createdAt: Date; id: string } | null,
+    limit: number,
+  ): Promise<PointLedgerRecord[]>;
 }
