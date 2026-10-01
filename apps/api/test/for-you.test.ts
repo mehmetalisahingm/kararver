@@ -11,6 +11,7 @@ import {
   isExplorationSlot,
   pageOf,
   rankForYou,
+  score,
   type FeedSettings,
   type ForYouCandidate,
 } from "../src/modules/feed/for-you.ts";
@@ -150,6 +151,54 @@ describe("Senin İçin sıralaması", () => {
     const placed = rankForYou(list, T, new Set(["cat-liked"]), settings());
     assert.equal(placed[0]!.id, list[0]!.id);
     assert.deepEqual(new Set(ids(placed)), new Set(ids(list)));
+  });
+});
+
+describe("yerleşim performans düzeltmesi (KV-47)", () => {
+  /** KV-27'deki ilk (karesel) yerleşim: davranış referansı. Yeni uygulama bununla birebir aynı sırayı vermeli. */
+  function reference(candidates: readonly ForYouCandidate[], at: Date, interests: ReadonlySet<string>, s: FeedSettings) {
+    const byRecency = (a: ForYouCandidate, b: ForYouCandidate) => b.opensAt.getTime() - a.opensAt.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+    const main = candidates.map((c) => ({ ...c, score: score(c, at, interests), explore: false })).sort((a, b) => b.score - a.score || byRecency(a, b));
+    const explore = main.filter((c) => isExplorationCandidate(c, at)).sort(byRecency);
+    const placed: typeof main = [];
+    const done = new Set<string>();
+    const fits = (c: (typeof main)[number]) => {
+      const recent = placed.slice(-DIVERSITY_WINDOW);
+      return recent.filter((p) => p.authorId === c.authorId).length < s.maxSameAuthorPerWindow && recent.filter((p) => p.categoryId === c.categoryId).length < s.maxSameCategoryPerWindow;
+    };
+    const pick = (order: typeof main) => {
+      const open = order.filter((c) => !done.has(c.id));
+      return open.find(fits) ?? open[0];
+    };
+    while (placed.length < main.length) {
+      const fromExplore = isExplorationSlot(placed.length, s.explorationPercent) ? pick(explore) : undefined;
+      const next = fromExplore ?? pick(main)!;
+      done.add(next.id);
+      placed.push({ ...next, explore: fromExplore !== undefined });
+    }
+    return placed.map((c) => [c.id, c.explore]);
+  }
+
+  test("50 rastgele (tekrarlanabilir) aday setinde eski yerleşimle birebir aynı sıra ve keşif yuvaları", () => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    for (let round = 0; round < 50; round++) {
+      const n = 20 + Math.floor(rnd() * 300);
+      const list = Array.from({ length: n }, (_, i) =>
+        poll(round * 1000 + i, {
+          authorId: `a-${Math.floor(rnd() * 15)}`,
+          categoryId: `c-${Math.floor(rnd() * 6)}`,
+          opensAt: new Date(T.getTime() - Math.floor(rnd() * 200) * HOUR),
+          votesTotal: Math.floor(rnd() * 40),
+          votes24h: Math.floor(rnd() * 20),
+          comments24h: Math.floor(rnd() * 8),
+          visible: rnd() > 0.1,
+        }),
+      );
+      const s = settings({ explorationPercent: [0, 10, 20, 35][round % 4]!, maxSameAuthorPerWindow: 1 + (round % 3), maxSameCategoryPerWindow: 2 + (round % 4) });
+      const interests = new Set(round % 2 ? ["c-1", "c-3"] : []);
+      assert.deepEqual(rankForYou(list, T, interests, s).map((c) => [c.id, c.explore]), reference(list, T, interests, s), `tur ${round}`);
+    }
   });
 });
 
