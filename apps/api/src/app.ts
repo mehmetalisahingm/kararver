@@ -29,6 +29,8 @@ import { registerOnboardingRoutes } from "./modules/onboarding/routes.ts";
 import type { OnboardingStore } from "./modules/onboarding/store.ts";
 import type { FeedStore } from "./modules/feed/store.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
+import { registerProfileRoutes } from "./modules/profiles/routes.ts";
+import type { ProfileStore } from "./modules/profiles/store.ts";
 import { registerReportRoutes } from "./modules/reports/routes.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
@@ -54,6 +56,8 @@ export type AppDeps = {
   isRegistrationEnabled?: () => Promise<boolean>;
   /** Verilmezse anket route'ları kaydedilmez (ör. sadece auth'u test eden düzenek). */
   pollStore?: PollStore;
+  /** KV-22 public profil/private bookmark store'u; pollStore ile birlikte route'ları açar. */
+  profileStore?: ProfileStore;
   /** Sistem ayarları (KV-40, #42); ayar servisi gelene kadar DEFAULT_POLL_SETTINGS. */
   pollSettings?: () => Promise<PollSettings>;
   /** pollStore ile birlikte verilirse kategori ve arama route'ları kaydedilir. */
@@ -163,6 +167,15 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         ? { store: deps.feedStore, settings: deps.feedSettings ?? (async () => DEFAULT_FEED_SETTINGS) }
         : undefined,
     });
+    if (deps.profileStore) {
+      registerProfileRoutes(route, {
+        store: deps.profileStore,
+        polls: deps.pollStore,
+        now,
+        mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+        settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+      });
+    }
     if (deps.trendStore) {
       registerTrendRoutes(route, {
         store: deps.trendStore,
