@@ -30,10 +30,8 @@ export function needsResource(action: ActionId): boolean {
 }
 
 /**
- * KV-12 öncesi yazılmış, sahiplik/self-vote/medya amacı kontrolünü kendisi yapan handler'lar.
+ * KV-12 öncesi yazılmış, sahiplik/self-vote kontrolünü kendisi yapan handler'lar.
  * `ctx.authorize`'a geçen endpoint listeden çıkar; yeni endpoint buraya eklenmez.
- * Bilinen açık: media.uploads.create/media.complete RESTRICT_POSTING'i uygulamıyor (kapı avatar
- * muafiyeti yüzünden amacı bilmeden karar veremez); handler'a ctx.authorize({ mediaPurpose }) eklenmeli (Mert).
  */
 export const LEGACY_RESOURCE_CHECKS: ReadonlySet<string> = new Set([
   "polls.update",
@@ -43,8 +41,6 @@ export const LEGACY_RESOURCE_CHECKS: ReadonlySet<string> = new Set([
   "votes.put",
   "comments.update",
   "comments.delete",
-  "media.uploads.create",
-  "media.complete",
   "media.get",
 ]);
 
