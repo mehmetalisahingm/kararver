@@ -25,6 +25,7 @@ const Env = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   S3_BUCKET_PRIVATE: z.string().min(3).optional(),
+  S3_BUCKET_PUBLIC: z.string().min(3).optional(),
 });
 
 export type StorageConfig = {
@@ -34,6 +35,8 @@ export type StorageConfig = {
   accessKeyId: string;
   secretAccessKey: string;
   privateBucket: string;
+  /** admin.media.decide onayda kopyalar, red/kaldırmada siler; otomatik onayı worker yapar. */
+  publicBucket: string;
 };
 
 export type Config = {
@@ -51,7 +54,7 @@ export type Config = {
   storage: StorageConfig | null;
 };
 
-const STORAGE_KEYS = ["S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_BUCKET_PRIVATE"] as const;
+const STORAGE_KEYS = ["S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_BUCKET_PRIVATE", "S3_BUCKET_PUBLIC"] as const;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = Env.safeParse(env);
@@ -98,6 +101,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
             accessKeyId: e.S3_ACCESS_KEY_ID!,
             secretAccessKey: e.S3_SECRET_ACCESS_KEY!,
             privateBucket: e.S3_BUCKET_PRIVATE!,
+            publicBucket: e.S3_BUCKET_PUBLIC!,
           },
   };
 }

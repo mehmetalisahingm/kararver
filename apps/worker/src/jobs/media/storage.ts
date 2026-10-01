@@ -12,6 +12,8 @@ export interface WorkerStorage {
 }
 
 export class ObjectTooLargeError extends Error {}
+/** Moderasyonla sonradan kaldırılabilen public medya stale CDN/browser kopyası bırakmamalı. */
+export const PUBLIC_MEDIA_CACHE_CONTROL = "no-store";
 
 function isNotFound(err: unknown): boolean {
   const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
@@ -44,14 +46,13 @@ export function createS3WorkerStorage(config: StorageConfig): WorkerStorage {
       await client.send(new PutObjectCommand({ Bucket: config.privateBucket, Key: key, Body: data, ContentType: contentType }));
     },
     async writePublic(key, data, contentType) {
-      // Anahtar görsel id'sinden türediği ve içerik değişmediği için CDN'de uzun süre önbelleklenebilir.
       await client.send(
         new PutObjectCommand({
           Bucket: config.publicBucket,
           Key: key,
           Body: data,
           ContentType: contentType,
-          CacheControl: "public, max-age=31536000, immutable",
+          CacheControl: PUBLIC_MEDIA_CACHE_CONTROL,
         }),
       );
     },

@@ -13,6 +13,7 @@ import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerCommunityRoutes } from "./modules/communities/routes.ts";
 import type { CommunityStore } from "./modules/communities/store.ts";
 import type { MediaQueue } from "./modules/media/queue.ts";
+import { registerMediaAdminRoutes } from "./modules/media/admin-routes.ts";
 import { registerMediaRoutes } from "./modules/media/routes.ts";
 import type { MediaStorage } from "./modules/media/storage.ts";
 import { DEFAULT_MEDIA_SETTINGS, type MediaSettings, type MediaStore } from "./modules/media/store.ts";
@@ -94,7 +95,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         : {
             level: deps.logger?.level ?? config.logLevel,
             ...(deps.logger?.stream ? { stream: deps.logger.stream } : {}),
-            // Varsayılan serializer header/gövde loglamaz; yine de cookie ve parola alanları maskelenir.
             redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]', "*.password", "*.token"],
           },
     bodyLimit: 64 * 1024,
@@ -106,7 +106,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     },
   });
 
-  // Gövdesiz POST (logout, resend) Content-Type: application/json ile gelse de geçerli sayılır.
   app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
     if (body === "") return done(null, undefined);
     try {
@@ -179,21 +178,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       });
     }
   }
-  if (deps.categoryAdminStore) {
-    registerCategoryAdminRoutes(route, { store: deps.categoryAdminStore, now });
-  }
-  if (deps.voteStore) {
-    registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
-  }
-  if (deps.communityStore) {
-    registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
-  }
-  if (deps.onboardingStore) {
-    registerOnboardingRoutes(route, deps.onboardingStore);
-  }
-  if (deps.reportStore) {
-    registerReportRoutes(route, { store: deps.reportStore });
-  }
+  if (deps.categoryAdminStore) registerCategoryAdminRoutes(route, { store: deps.categoryAdminStore, now });
+  if (deps.voteStore) registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
+  if (deps.communityStore) registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
+  if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
   if (deps.commentStore) {
     registerCommentRoutes(route, {
       store: deps.commentStore,
@@ -211,9 +200,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       mediaPublicBaseUrl: config.mediaPublicBaseUrl,
       settings: deps.media.settings ?? (async () => DEFAULT_MEDIA_SETTINGS),
     });
+    registerMediaAdminRoutes(route, { store: deps.media.store, storage: deps.media.storage, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
 
   app.get("/health", async (_request, reply) => reply.header("Cache-Control", "no-store").send({ status: "ok" }));
-
   return app;
 }

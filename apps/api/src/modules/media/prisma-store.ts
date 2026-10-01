@@ -1,6 +1,8 @@
 // MediaStore'un PostgreSQL uygulaması — media_assets (DATA_MODEL.md §9, docs/MEDIA_MODERATION.md).
-import type { PrismaClient } from "@kararver/db";
-import type { IdempotencyScope, IdempotentResult, MediaRecord, MediaStore } from "./store.ts";
+import type { Prisma, PrismaClient } from "@kararver/db";
+import { communityOfMedia } from "../moderation/community-of.ts";
+import { publicObjectKeyFor } from "./storage.ts";
+import type { IdempotencyScope, IdempotentResult, MediaRecord, MediaStatus, MediaStore } from "./store.ts";
 
 const recordSelect = {
   id: true,
@@ -75,6 +77,77 @@ export function createPrismaMediaStore(prisma: PrismaClient): MediaStore {
 
     async rejectPending(id, reason) {
       await prisma.mediaAsset.updateMany({ where: { id, status: "PENDING" }, data: { status: "REJECTED", processingError: reason } });
+    },
+
+    async listForReview({ status, scope, after }, limit) {
+      // Topluluğu olmayan görsel (avatar, topluluksuz anket) yalnız ADMIN+ kuyruğundadır.
+      const inScope: Prisma.MediaAssetWhereInput[] = scope.all
+        ? []
+        : [
+            {
+              OR: [
+                { pollMedia: { some: { poll: { communityId: { in: scope.communityIds } } } } },
+                { communityImages: { some: { id: { in: scope.communityIds } } } },
+              ],
+            },
+          ];
+      const afterClause: Prisma.MediaAssetWhereInput[] = after
+        ? [{ OR: [{ createdAt: { gt: after.createdAt } }, { createdAt: after.createdAt, id: { gt: after.id } }] }]
+        : [];
+      return (await prisma.mediaAsset.findMany({
+        where: { status, AND: [...inScope, ...afterClause] },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: limit,
+        select: recordSelect,
+      })) as MediaRecord[];
+    },
+
+    async findForReview(id) {
+      const media = (await prisma.mediaAsset.findUnique({ where: { id }, select: recordSelect })) as MediaRecord | null;
+      return media ? { ...media, communityId: await communityOfMedia(prisma, id) } : null;
+    },
+
+    async applyDecision({ id, actorId, decision, reason, now }) {
+      return prisma.$transaction(async (tx) => {
+        const locked = await tx.$queryRaw<{ status: MediaStatus; processed_object_key: string | null }[]>`
+          SELECT status::text AS status, processed_object_key FROM media_assets WHERE id = ${id}::uuid FOR UPDATE`;
+        const current = locked[0];
+        if (!current) return { kind: "not_found" as const };
+
+        const target: MediaStatus = decision === "APPROVE" ? "APPROVED" : "REJECTED";
+        const load = async () => (await tx.mediaAsset.findUniqueOrThrow({ where: { id }, select: recordSelect })) as MediaRecord;
+        if (current.status === target) return { kind: "unchanged" as const, media: await load() };
+
+        const from: MediaStatus[] = decision === "APPROVE" ? ["QUARANTINED", "REJECTED"] : ["QUARANTINED", "APPROVED"];
+        if (!from.includes(current.status)) return { kind: "conflict" as const, status: current.status, reason: "not_reviewable" as const };
+        if (decision === "APPROVE" && current.processed_object_key === null) {
+          return { kind: "conflict" as const, status: current.status, reason: "no_processed_copy" as const };
+        }
+
+        const media = (await tx.mediaAsset.update({
+          where: { id },
+          data: {
+            status: target,
+            // CHECK: public anahtar yalnız APPROVED'da dolu; kaldırmada aynı UPDATE'te boşalır.
+            publicObjectKey: decision === "APPROVE" ? publicObjectKeyFor(id) : null,
+            reviewedById: actorId,
+            reviewedAt: now,
+            reviewNote: reason.slice(0, 500),
+          },
+          select: recordSelect,
+        })) as MediaRecord;
+        await tx.moderationAction.create({
+          data: { actorId, action: decision, mediaId: id, fromStatus: current.status, toStatus: target, reason },
+        });
+        if (decision === "REJECT") {
+          // Reddedilen görselin açık raporları karşılanmıştır; kuyrukta ölü kayıt kalmaz.
+          await tx.report.updateMany({
+            where: { mediaId: id, status: "OPEN" },
+            data: { status: "ACTIONED", resolvedById: actorId, resolvedAt: now, resolutionNote: reason },
+          });
+        }
+        return { kind: "applied" as const, media };
+      });
     },
   };
 }
