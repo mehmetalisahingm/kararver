@@ -404,7 +404,7 @@ Cookie session ve CSRF kuralları FOUNDATION_CONTRACTS ve TECH_DECISIONS §3.4't
 | Yorum tepkileri: ✅ `comment_reactions` (KV-17, #19); `comment_likes`'ın yerine geçti. Anket tepkileri (`poll_reactions`, aynı `reaction_value` enum'u) | Like/dislike | Yorum: ✅ KV-17 · Anket: #66 |
 | İçerik sürüm geçmişi (`poll_revisions`, `comment_revisions`) | `admin.revisions.*` | #66 |
 | `point_ledger` (append-only, bakiye ≥ 0) | Yayın puanı | #67 (Mehmet) |
-| `polls.trend_excluded_at` | `EXCLUDE_FROM_TRENDS` moderasyon işlemi | KV-37 (#39) |
+| `polls.trend_excluded_at` | `EXCLUDE_FROM_TRENDS` moderasyon işlemi | ✅ Sütun **KV-28 (#30)** ile açıldı, trend job'u uyar; yazan işlem KV-37 (#39) |
 | `community_memberships`, `communities` alanları | Üyelik ve üye listesi | KV-31 (#33) |
 | `media_assets` alanları, `reports`, admin/growth tabloları | İlgili modüller | Sahiplerinin işleri (DATA_MODEL §9) |
 

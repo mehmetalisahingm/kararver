@@ -217,6 +217,9 @@ model Poll {
   // İlk geçerli oyda trigger doldurur; dolduktan sonra başlık, açıklama, seçenekler
   // ve sonuç görünürlüğü değiştirilemez (ek bilgi: PollAddendum) ve bu alan geri alınamaz.
   firstValidVoteAt  DateTime?         @map("first_valid_vote_at") @db.Timestamptz(3)
+  // Doluysa anket algoritmik trend listelerine girmez (EXCLUDE_FROM_TRENDS moderasyon işlemi, KV-37 Mert yazar).
+  // Görünürlüğü etkilemez; editör seçimi/öne çıkarma ayrı yüzeydir (KV-28, docs/KV-28_TRENDS.md).
+  trendExcludedAt   DateTime?         @map("trend_excluded_at") @db.Timestamptz(3)
   voteCount         Int               @default(0) @map("vote_count")
   commentCount      Int               @default(0) @map("comment_count")
   saveCount         Int               @default(0) @map("save_count")
@@ -330,6 +333,8 @@ model Vote {
   // invalidated_at index'te olduğu için sayım tabloya gitmeden (index-only) yapılır.
   @@index([pollId, createdAt, invalidatedAt])
   @@index([userId, createdAt(sort: Desc)])
+  // Trend pencereleri (KV-28): son 24 saat / 7 günde verilen oylar.
+  @@index([createdAt])
   @@map("votes")
 }
 
@@ -393,6 +398,8 @@ model Comment {
   @@index([pollId, parentId, createdAt])
   @@index([pollId, kind, likeCount(sort: Desc)])
   @@index([authorId, createdAt(sort: Desc)])
+  // Trend pencereleri (KV-28): son 24 saat / 7 günde yazılan yorumlar.
+  @@index([createdAt])
   @@map("comments")
 }
 

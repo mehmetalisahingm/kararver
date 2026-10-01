@@ -1,5 +1,5 @@
 // Worker giriş noktası: pnpm --filter @kararver/worker dev (TECH_DECISIONS §3.5).
-// Şimdilik sadece media.process (Mert). Diğer job'lar (trends, snapshots, notifications) kendi
+// media.process (Mert, KV-16) ve trends.refresh (Faruk, KV-28). Diğer job'lar (snapshots, notifications) kendi
 // klasörlerinde eklenir ve burada kaydedilir.
 import path from "node:path";
 import { defaultSettings } from "@kararver/contracts";
@@ -10,6 +10,8 @@ import { MEDIA_PROCESS_QUEUE, MEDIA_QUEUE_OPTIONS, processMedia } from "./jobs/m
 import { createSubprocessModerator } from "./jobs/media/moderator.ts";
 import { createS3WorkerStorage } from "./jobs/media/storage.ts";
 import { createPrismaMediaJobStore } from "./jobs/media/store.ts";
+import { TRENDS_CRON, TRENDS_QUEUE } from "./jobs/trends/config.ts";
+import { refreshTrends } from "./jobs/trends/job.ts";
 
 if (!process.env.APP_ENV) {
   try {
@@ -57,7 +59,15 @@ await boss.work<{ mediaId: string }>(MEDIA_PROCESS_QUEUE, { batchSize: 1, localC
   });
   log("info", "media.process", { mediaId, result, ms: Date.now() - started, attempt: job!.retryCount });
 });
-log("info", "worker hazır", { queues: [MEDIA_PROCESS_QUEUE], concurrency: config.mediaConcurrency });
+// trends.refresh: singleton kuyruk (üst üste binmez), 5 dakikada bir. Job kendisi de idempotent (job.ts).
+await boss.createQueue(TRENDS_QUEUE, { policy: "singleton", retryLimit: 0 });
+await boss.schedule(TRENDS_QUEUE, TRENDS_CRON, null, { tz: "Europe/Istanbul" });
+await boss.work(TRENDS_QUEUE, { batchSize: 1 }, async () => {
+  const started = Date.now();
+  await refreshTrends({ prisma, now: () => new Date(), log });
+  log("info", "trends.refresh bitti", { ms: Date.now() - started });
+});
+log("info", "worker hazır", { queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE], concurrency: config.mediaConcurrency });
 
 async function shutdown(signal: string): Promise<void> {
   log("info", "kapanıyor", { signal });
