@@ -17,11 +17,12 @@ export function createPrismaTrendStore(prisma: PrismaClient): TrendStore {
       const rows = await prisma.trendScore.findMany({
         where: { runId, ...(categoryId ? { poll: { categoryId } } : {}) },
         orderBy: { rank: "asc" },
-        select: { pollId: true, poll: { select: { status: true, trendExcludedAt: true } } },
+        select: { pollId: true, components: true, poll: { select: { status: true, trendExcludedAt: true } } },
       });
       // Çalıştırmadan sonra gizlenen/kaldırılan veya trendden çıkarılan anket gösterilmez (yerini korur).
       return rows.map((r) => ({
         pollId: r.pollId,
+        components: (r.components ?? {}) as Record<string, unknown>,
         visible: (r.poll.status === "ACTIVE" || r.poll.status === "LOCKED") && r.poll.trendExcludedAt === null,
       }));
     },

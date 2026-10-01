@@ -40,7 +40,12 @@ export function fixtures(db: PrismaClient) {
     return (await db.category.create({ data: { slug: `w-${short()}`, name: "Worker testi" }, select: { id: true } })).id;
   }
 
-  async function poll(opts: { opensAt: Date; categoryId: string; authorId?: string }): Promise<{ id: string; optionId: string; authorId: string }> {
+  async function poll(opts: {
+    opensAt: Date;
+    categoryId: string;
+    authorId?: string;
+    resultsVisibility?: "ALWAYS" | "AFTER_VOTE";
+  }): Promise<{ id: string; optionId: string; optionIds: [string, string]; authorId: string }> {
     const authorId = opts.authorId ?? (await users(1))[0]!;
     const id = randomUUID();
     await db.poll.create({
@@ -52,12 +57,14 @@ export function fixtures(db: PrismaClient) {
         categoryId: opts.categoryId,
         title: `Trend ${short()}`,
         opensAt: opts.opensAt,
+        ...(opts.resultsVisibility ? { resultsVisibility: opts.resultsVisibility } : {}),
         closesAt: new Date(opts.opensAt.getTime() + 60 * 24 * 60 * 60 * 1000),
       },
     });
     const optionId = randomUUID();
-    await db.pollOption.createMany({ data: [{ id: optionId, pollId: id, position: 0, label: "A" }, { pollId: id, position: 1, label: "B" }] });
-    return { id, optionId, authorId };
+    const second = randomUUID();
+    await db.pollOption.createMany({ data: [{ id: optionId, pollId: id, position: 0, label: "A" }, { id: second, pollId: id, position: 1, label: "B" }] });
+    return { id, optionId, optionIds: [optionId, second], authorId };
   }
 
   /** n farklı hesaptan oy; i. oyun zamanı at(i). */
@@ -71,5 +78,49 @@ export function fixtures(db: PrismaClient) {
     await db.comment.createMany({ data: Array.from({ length: n }, (_, i) => ({ pollId, authorId, body: `yorum ${i}`, createdAt: at(i) })) });
   }
 
-  return { users, category, poll, votes, comments };
+  type Step = [at: Date, type: "CAST" | "CHANGE" | "INVALIDATE" | "RESTORE", optionId: string | null];
+
+  /**
+   * Bir hesabın oy geçmişi: votes satırı son duruma göre, vote_events her adım için (şekil kurallarına uygun).
+   * CAST/RESTORE/CHANGE için optionId hedef seçenek; INVALIDATE için null.
+   */
+  async function voter(pollId: string, steps: Step[]): Promise<string> {
+    const [userId] = await users(1);
+    let current: string | null = null;
+    let valid = true;
+    let invalidatedAt: Date | null = null;
+    const events: { type: Step[1]; from: string | null; to: string | null; at: Date }[] = [];
+    for (const [at, type, optionId] of steps) {
+      if (type === "INVALIDATE") {
+        events.push({ type, from: current, to: null, at });
+        valid = false;
+        invalidatedAt = at;
+      } else if (type === "CHANGE") {
+        events.push({ type, from: current, to: optionId, at });
+        current = optionId;
+      } else {
+        events.push({ type, from: null, to: optionId, at });
+        current = optionId;
+        valid = true;
+        invalidatedAt = null;
+      }
+    }
+    const vote = await db.vote.create({
+      data: {
+        pollId,
+        userId: userId!,
+        optionId: current!,
+        createdAt: steps[0]![0],
+        invalidatedAt: valid ? null : invalidatedAt,
+        invalidationReason: valid ? null : "test: geçersiz",
+      },
+      select: { id: true },
+    });
+    await db.voteEvent.createMany({
+      data: events.map((e) => ({ voteId: vote.id, pollId, userId: userId!, type: e.type, fromOptionId: e.from, toOptionId: e.to, occurredAt: e.at, reason: e.type === "INVALIDATE" ? "test" : null })),
+    });
+    return userId!;
+  }
+
+  return { users, category, poll, votes, comments, voter };
 }

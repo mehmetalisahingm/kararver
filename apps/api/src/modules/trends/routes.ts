@@ -1,14 +1,15 @@
 // Trend listeleri — KV-28 (#30). Sözleşme: packages/contracts/src/domains/discovery.ts → trends.list
 // Her format için güncel başarılı çalıştırma okunur. Cursor çalıştırma kimliğini ve sıralamadaki konumu taşır:
 // kaydırma sırasında sıra değişmez; yeni çalıştırma gelince eski cursor 400 INVALID_CURSOR.
-// WEEKLY_MOVERS KV-29 (#31) ile hesaplanır; o zamana kadar ve henüz çalıştırma yokken boş liste + INSUFFICIENT_HISTORY.
+// WEEKLY_MOVERS (KV-29) hareketi (movement) çalıştırmanın bileşenlerinden gelir. Çalıştırma yoksa veya Haftanın
+// Değişkenleri'nde eşiği geçen anket yoksa boş liste + INSUFFICIENT_HISTORY.
 import { PollCard } from "@kararver/contracts";
 import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
 import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
 import type { PollSettings, PollStore } from "../polls/store.ts";
 import { toPollDetail } from "../polls/view.ts";
-import type { TrendFormatId, TrendStore } from "./store.ts";
+import type { TrendEntry, TrendFormatId, TrendStore } from "./store.ts";
 
 export type TrendDeps = {
   store: TrendStore;
@@ -19,6 +20,21 @@ export type TrendDeps = {
 };
 
 const CARD_KEYS = Object.keys(PollCard.shape) as (keyof typeof PollCard.shape)[];
+
+/** Haftanın Değişkenleri kartındaki hareket; diğer formatlarda null. Puan ve diğer bileşenler public değildir. */
+function movement(format: TrendFormatId, c: TrendEntry["components"]) {
+  if (format !== "WEEKLY_MOVERS") return null;
+  return {
+    optionId: String(c.optionId),
+    fromPercent: Number(c.fromPercent),
+    toPercent: Number(c.toPercent),
+    deltaPoints: Number(c.deltaPoints),
+    sampleFrom: Number(c.sampleFrom),
+    sampleTo: Number(c.sampleTo),
+    windowFromEnd: new Date(String(c.windowFromEnd)).toISOString(),
+    windowToEnd: new Date(String(c.windowToEnd)).toISOString(),
+  };
+}
 
 function invalidCursor(): ApiError {
   return new ApiError("INVALID_CURSOR", "Liste yenilendi; baştan yükleyin.", [{ field: "cursor", code: "stale" }]);
@@ -31,7 +47,7 @@ export function registerTrendRoutes(route: Route, deps: TrendDeps): void {
     const after = decodeCursor(query.cursor, filter);
     const empty = { status: 200, body: { data: [], page: { nextCursor: null, hasMore: false }, meta: null, reason: "INSUFFICIENT_HISTORY" } };
 
-    const run = format === "WEEKLY_MOVERS" ? null : await deps.store.latestRun(format);
+    const run = await deps.store.latestRun(format);
     if (!run) {
       if (after) throw invalidCursor();
       return empty;
@@ -46,11 +62,11 @@ export function registerTrendRoutes(route: Route, deps: TrendDeps): void {
 
     // Sıra numarası, kategori filtresinden sonra görünür kartlar arasındaki konumdur (1'den).
     const entries = await deps.store.entries(run.id, query.categoryId ?? null);
-    const page: { pollId: string; rank: number }[] = [];
+    const page: { pollId: string; rank: number; components: TrendEntry["components"] }[] = [];
     let rank = entries.slice(0, offset).filter((e) => e.visible).length;
     let i = offset;
     for (; i < entries.length && page.length < query.limit; i++) {
-      if (entries[i]!.visible) page.push({ pollId: entries[i]!.pollId, rank: ++rank });
+      if (entries[i]!.visible) page.push({ pollId: entries[i]!.pollId, rank: ++rank, components: entries[i]!.components });
     }
     const more = entries.slice(i).some((e) => e.visible);
     const last = page[page.length - 1];
@@ -60,11 +76,11 @@ export function registerTrendRoutes(route: Route, deps: TrendDeps): void {
     const polls = new Map((await deps.polls.listByIds(page.map((p) => p.pollId), viewer?.id ?? null)).map((p) => [p.id, p]));
     const now = deps.now();
     const settings = await deps.settings();
-    const data = page.flatMap(({ pollId, rank }) => {
+    const data = page.flatMap(({ pollId, rank, components }) => {
       const poll = polls.get(pollId);
       if (!poll) return [];
       const detail = toPollDetail(poll, viewer, now, settings, deps.mediaPublicBaseUrl) as Record<string, unknown>;
-      return [{ rank, poll: Object.fromEntries(CARD_KEYS.map((k) => [k, detail[k]])), movement: null }];
+      return [{ rank, poll: Object.fromEntries(CARD_KEYS.map((k) => [k, detail[k]])), movement: movement(format, components) }];
     });
 
     return {
@@ -79,6 +95,7 @@ export function registerTrendRoutes(route: Route, deps: TrendDeps): void {
           windowStart: run.windowStart.toISOString(),
           windowEnd: run.windowEnd.toISOString(),
         },
+        ...(format === "WEEKLY_MOVERS" && entries.length === 0 ? { reason: "INSUFFICIENT_HISTORY" } : {}),
       },
     };
   });

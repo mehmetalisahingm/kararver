@@ -69,7 +69,7 @@ describe("trends.refresh (postgres)", { skip: url ? false : "TEST_DATABASE_URL y
     const names = { [A.id]: "A", [B.id]: "B", [C.id]: "C", [D.id]: "D", [Ep.id]: "E" };
 
     const results = await refreshTrends(deps(new Date(E.getTime() + 90_000)));
-    assert.deepEqual(results.map((r) => r.status), ["SUCCEEDED", "SUCCEEDED", "SUCCEEDED", "SUCCEEDED"]);
+    assert.deepEqual(results.map((r) => r.status), COMPUTED_FORMATS.map(() => "SUCCEEDED"));
 
     // Günün Yükselenleri: son 24 saat, yaşla azalan ağırlık → yeni ve hızlı D, sonra E.
     assert.deepEqual(await order("DAILY_RISING", E, names), ["D", "E"]);
