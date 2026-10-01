@@ -46,6 +46,8 @@ export default function Page() {
     );
   }
 
+  const username = user.username;
+
   async function saveProfile(event: FormEvent) {
     event.preventDefault();
     if (!client.updateProfile || busy) return;
@@ -55,7 +57,7 @@ export default function Page() {
       await client.updateProfile({ displayName: displayName.trim(), bio: bio.trim() || null });
       syncUser();
       notify("Profilin güncellendi.");
-      if (user.username && client.getProfile) setProfile(await client.getProfile(user.username));
+      if (username && client.getProfile) setProfile(await client.getProfile(username));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -98,7 +100,7 @@ export default function Page() {
             <h1>{user.name}</h1>
             <p className="kv-muted">{user.email}</p>
           </div>
-          {user.username && <Link className="kv-button kv-button--secondary" href={`/profil/${user.username}`}>Public profili gör</Link>}
+          {username && <Link className="kv-button kv-button--secondary" href={`/profil/${username}`}>Public profili gör</Link>}
         </div>
 
         {profile && (
