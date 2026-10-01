@@ -1,16 +1,21 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-async function login(page: import("@playwright/test").Page, email: string) {
-  await page.goto("/giris");
+async function loginToAdmin(
+  page: import("@playwright/test").Page,
+  target: string,
+  email: string,
+) {
+  await page.goto(target);
+  await page.locator("main").getByRole("link", { name: "Giriş yap", exact: true }).click();
   await page.getByLabel("Demo e-posta", { exact: true }).fill(email);
   await page.getByLabel("Demo şifre", { exact: true }).fill("Demo12345!");
   await page.getByRole("button", { name: "Giriş yap", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${target.replaceAll("/", "\\/")}$`));
 }
 
 test("SUPER_ADMIN sees complete admin navigation and shared patterns", async ({ page }) => {
-  await login(page, "umit@example.test");
-  await page.goto("/admin");
+  await loginToAdmin(page, "/admin", "umit@example.test");
   await expect(page.getByRole("heading", { name: "Yönetim merkezi" })).toBeVisible();
   const nav = page.getByRole("complementary", { name: "Yönetim navigasyonu" });
   for (const label of ["Dashboard", "Kullanıcılar", "İçerikler", "Yorumlar", "Raporlar", "Medya", "Kategoriler", "Topluluklar", "Öne çıkarılanlar", "Ayarlar", "Audit"]) {
@@ -27,17 +32,15 @@ test("SUPER_ADMIN sees complete admin navigation and shared patterns", async ({ 
 });
 
 test("normal user cannot see admin navigation; backend RBAC remains authority", async ({ page }) => {
-  await login(page, "deniz@example.test");
-  await page.goto("/admin");
+  await loginToAdmin(page, "/admin", "deniz@example.test");
   await expect(page.getByRole("heading", { name: "Yönetim erişimi gerekli" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Yönetim navigasyonu" })).toHaveCount(0);
 });
 
 test("admin shell is responsive and accessible", async ({ page }) => {
-  await login(page, "umit@example.test");
+  await loginToAdmin(page, "/admin/categories", "umit@example.test");
   for (const width of [360, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto("/admin/categories");
     await expect(page.getByRole("heading", { name: "Kategoriler" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const report = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
