@@ -12,19 +12,36 @@ export function PollDetail({ id }: { id: string }) {
   const { client, user, selections, select, requireUser, notify, syncUser } =
     useProduct();
   const [poll, setPoll] = useState<Poll | null>(null);
+  const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [attempt, retry] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const lock = useRef(false);
   useEffect(() => {
     let active = true;
     setPoll(null);
+    setSaved(false);
     setLoadError("");
     client
       .get(id)
-      .then((p) => {
-        if (active) setPoll(p);
+      .then(async (p) => {
+        if (!active) return;
+        setPoll(p);
+        if (!user || !client.getBookmarks) return;
+        // Contract'ta tek bookmark status endpoint'i yok; private listeyi cursor ile tarayarak
+        // ilk render'da doğru Kaydet/Kaldır durumunu buluruz. PUT yine doğal idempotent'tir.
+        let cursor: string | undefined;
+        do {
+          const page = await client.getBookmarks(cursor);
+          if (!active) return;
+          if (page.data.some((item) => item.id === p.id)) {
+            setSaved(true);
+            return;
+          }
+          cursor = page.page.nextCursor ?? undefined;
+        } while (cursor);
       })
       .catch((e) => {
         if (active) setLoadError(e.message);
@@ -58,6 +75,24 @@ export function PollDetail({ id }: { id: string }) {
       setBusy(false);
     }
   }
+  async function toggleBookmark() {
+    if (!poll || !requireUser(`/karar/${id}`) || !client.setBookmark || bookmarkBusy) return;
+    setBookmarkBusy(true);
+    setError("");
+    try {
+      const next = await client.setBookmark(poll.id, !saved);
+      setSaved(next);
+      notify(next ? "Gönderi kaydedildi." : "Kayıt kaldırıldı.");
+    } catch (e) {
+      setError((e as Error).message);
+      if (e instanceof UiError && e.code === "UNAUTHENTICATED") {
+        syncUser();
+        requireUser(`/karar/${id}`);
+      }
+    } finally {
+      setBookmarkBusy(false);
+    }
+  }
   if (loadError)
     return (
       <div className="kv-card kv-state">
@@ -82,7 +117,19 @@ export function PollDetail({ id }: { id: string }) {
       <article className="kv-card poll-card">
         <div className="kv-row kv-between">
           <span className="kv-badge">{poll.category}</span>
-          <span className="kv-help">{poll.author}</span>
+          <div className="kv-row">
+            <span className="kv-help">{poll.author}</span>
+            {client.setBookmark && (
+              <button
+                className="kv-button kv-button--ghost"
+                disabled={bookmarkBusy}
+                aria-pressed={saved}
+                onClick={() => void toggleBookmark()}
+              >
+                {bookmarkBusy ? "Kaydediliyor…" : saved ? "Kaydı kaldır" : "Kaydet"}
+              </button>
+            )}
+          </div>
         </div>
         <h1>{poll.title}</h1>
         <p className="kv-muted">{poll.description}</p>
