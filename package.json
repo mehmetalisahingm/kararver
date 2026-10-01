@@ -20,6 +20,7 @@
     "db:reset": "pnpm --filter @kararver/db run db:reset",
     "db:test": "pnpm --filter @kararver/db run test:db",
     "mock:dev": "pnpm --filter @kararver/mock-api run serve",
-    "mock:test": "pnpm --filter @kararver/mock-api run test"
+    "mock:test": "pnpm --filter @kararver/mock-api run test",
+    "smoke": "node scripts/smoke.mjs"
   }
 }
