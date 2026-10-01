@@ -11,7 +11,7 @@ function createdAtKeyset(after: ProfilePageCursor) {
       { createdAt: { lt: after.createdAt } },
       { createdAt: after.createdAt, id: { lt: after.id } },
     ],
-  } as const;
+  };
 }
 
 export function createPrismaProfileStore(prisma: PrismaClient): ProfileStore {
@@ -100,9 +100,9 @@ export function createPrismaProfileStore(prisma: PrismaClient): ProfileStore {
             },
           },
           reactions: {
-            where: { userId: viewerId ?? undefined },
+            where: viewerId ? { userId: viewerId } : { userId: "00000000-0000-0000-0000-000000000000" },
             select: { value: true },
-            take: viewerId ? 1 : 0,
+            take: 1,
           },
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
