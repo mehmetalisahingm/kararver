@@ -32,6 +32,8 @@ import { registerPollRoutes } from "./modules/polls/routes.ts";
 import { registerReportRoutes } from "./modules/reports/routes.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
+import { registerRevisionRoutes } from "./modules/revisions/routes.ts";
+import type { RevisionStore } from "./modules/revisions/store.ts";
 import { registerSearchRoutes } from "./modules/search/routes.ts";
 import type { SearchStore } from "./modules/search/store.ts";
 import { registerTrendRoutes } from "./modules/trends/routes.ts";
@@ -56,6 +58,8 @@ export type AppDeps = {
   pollSettings?: () => Promise<PollSettings>;
   /** pollStore ile birlikte verilirse kategori ve arama route'ları kaydedilir. */
   searchStore?: SearchStore;
+  /** Verilmezse içerik sürüm geçmişi (admin.revisions.*, #66) kaydedilmez. */
+  revisionStore?: RevisionStore;
   /** Verilmezse admin kategori route'ları (admin.categories.*) kaydedilmez. */
   categoryAdminStore?: CategoryAdminStore;
   /** pollStore ile birlikte verilirse "Senin İçin" sıralaması (KV-27) açılır; yoksa for_you "new" sırasıdır. */
@@ -179,6 +183,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     }
   }
   if (deps.categoryAdminStore) registerCategoryAdminRoutes(route, { store: deps.categoryAdminStore, now });
+  if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.voteStore) registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
   if (deps.communityStore) registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);

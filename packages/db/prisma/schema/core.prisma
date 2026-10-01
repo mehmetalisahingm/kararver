@@ -97,6 +97,8 @@ model User {
   comments         Comment[]
   commentReactions CommentReaction[]
   pollReactions    PollReaction[]
+  pollRevisions    PollRevision[]
+  commentRevisions CommentRevision[]
 
   // Mert — media.prisma (KV-16)
   uploadedMedia            MediaAsset[]          @relation("MediaUploader")
@@ -248,6 +250,7 @@ model Poll {
   community         Community?          @relation(fields: [communityId], references: [id], onDelete: Restrict)
   options           PollOption[]
   reactions         PollReaction[]
+  revisions         PollRevision[]
   tags              PollTag[]
   media             PollMedia[]
   addenda           PollAddendum[]
@@ -404,6 +407,7 @@ model Comment {
   poll              Poll               @relation(fields: [pollId], references: [id], onDelete: Restrict)
   author            User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
   // Bileşik FK: cevap, ebeveyniyle aynı ankette olmak zorunda.
+  revisions         CommentRevision[]
   parent            Comment?           @relation("CommentReplies", fields: [pollId, parentId], references: [pollId, id], onDelete: Restrict)
   replies           Comment[]          @relation("CommentReplies")
   reactions         CommentReaction[]
@@ -437,6 +441,39 @@ model PollReaction {
   @@id([pollId, userId])
   @@index([userId])
   @@map("poll_reactions")
+}
+
+// İçerik sürüm geçmişi (#66, V1_USER_FLOW "Kullanıcı ve admin logları"): her oluşturma ve düzenlemede içeriğin
+// o anki hali yeni sürüm olarak yazılır. Sürüm 1 ilk paylaşımdır. Append-only (trigger). Okuma yalnız ADMIN+
+// (admin.revisions.polls). Operasyon loglarında içerik değil, sadece bu kayda referans tutulur.
+model PollRevision {
+  id       String   @id @default(uuid(7)) @db.Uuid
+  pollId   String   @map("poll_id") @db.Uuid
+  version  Int
+  editorId String   @map("editor_id") @db.Uuid
+  editedAt DateTime @map("edited_at") @db.Timestamptz(3)
+  snapshot Json
+
+  poll   Poll @relation(fields: [pollId], references: [id], onDelete: Restrict)
+  editor User @relation(fields: [editorId], references: [id], onDelete: Restrict)
+
+  @@unique([pollId, version])
+  @@map("poll_revisions")
+}
+
+model CommentRevision {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  commentId String   @map("comment_id") @db.Uuid
+  version   Int
+  editorId  String   @map("editor_id") @db.Uuid
+  editedAt  DateTime @map("edited_at") @db.Timestamptz(3)
+  snapshot  Json
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Restrict)
+  editor  User    @relation(fields: [editorId], references: [id], onDelete: Restrict)
+
+  @@unique([commentId, version])
+  @@map("comment_revisions")
 }
 
 model CommentReaction {

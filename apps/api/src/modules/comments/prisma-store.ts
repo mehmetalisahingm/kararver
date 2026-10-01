@@ -3,6 +3,7 @@
 // silme ve tepki işlemleri birbirini kilitlemeden (deadlock) sıraya girer.
 import type { PrismaClient } from "@kararver/db";
 import { runIdempotent } from "../../http/idempotency.ts";
+import { writeRevision } from "../revisions/write.ts";
 import type { CommentRecord, CommentStore, Outcome, PageRequest, ReactionSummary, ReactionValue } from "./store.ts";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
@@ -153,7 +154,9 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
           if (parent.parent_id !== null) return notFound("DEPTH_EXCEEDED");
           await tx.comment.update({ where: { id: parentId }, data: { replyCount: { increment: 1 } } });
         }
-        const comment = await tx.comment.create({ data: { pollId, authorId, body, kind, parentId }, select: { id: true } });
+        const comment = await tx.comment.create({ data: { pollId, authorId, body, kind, parentId }, select: { id: true, createdAt: true } });
+        // Sürüm 1: ilk paylaşım (#66 içerik geçmişi).
+        await writeRevision(tx, "comment", comment.id, authorId, comment.createdAt);
         await tx.poll.update({ where: { id: pollId }, data: { commentCount: { increment: 1 } } });
         return { ok: true, value: comment.id };
       });
@@ -177,6 +180,7 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
         if (row.author_id !== authorId) return notFound("NOT_OWNER");
         if (row.poll_status === "LOCKED") return notFound("CONTENT_LOCKED");
         await tx.comment.update({ where: { id }, data: { body, editedAt: now } });
+        await writeRevision(tx, "comment", id, authorId, now);
         return { ok: true, value: undefined };
       }),
 

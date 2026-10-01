@@ -28,6 +28,7 @@ import { createPrismaRbacStore } from "../../src/modules/rbac/prisma-store.ts";
 import type { RbacStore } from "../../src/modules/rbac/store.ts";
 import { createPrismaReportStore } from "../../src/modules/reports/prisma-store.ts";
 import { createPrismaTrendStore } from "../../src/modules/trends/prisma-store.ts";
+import { createPrismaRevisionStore } from "../../src/modules/revisions/prisma-store.ts";
 import { createPrismaVoteStore } from "../../src/modules/votes/prisma-store.ts";
 import { createFakeQueue, createFakeStorage, type FakeStorage } from "./fake-storage.ts";
 import { createMemoryRbacStore } from "./memory-rbac-store.ts";
@@ -191,6 +192,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     isRegistrationEnabled: async () => registrationEnabled.value,
     pollStore: backend.prisma ? createPrismaPollStore(backend.prisma) : undefined,
     searchStore: backend.prisma ? createPrismaSearchStore(backend.prisma) : undefined,
+    revisionStore: backend.prisma ? createPrismaRevisionStore(backend.prisma) : undefined,
     categoryAdminStore: backend.prisma ? createPrismaCategoryAdminStore(backend.prisma) : undefined,
     feedStore: backend.prisma ? createPrismaFeedStore(backend.prisma) : undefined,
     feedSettings: async () => feedSettings,

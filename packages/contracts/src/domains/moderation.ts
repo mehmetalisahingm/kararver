@@ -1,5 +1,5 @@
 // Rapor, moderasyon kuyruğu ve içerik işlemleri — sağlayıcı Mert
-// KV-24 (#26), KV-37 (#39), KV-38 (#40); içerik sürüm geçmişi sağlayıcısı Faruk (planlı, #66)
+// KV-24 (#26), KV-37 (#39), KV-38 (#40); içerik sürüm geçmişi sağlayıcısı Faruk (#66)
 import { z } from "zod";
 import { MediaView } from "./media.ts";
 import { ContentStatus, CursorQuery, dataOf, Id, IdParams, pageOf, PublicUser, Timestamp } from "../common.ts";
@@ -93,7 +93,7 @@ const revisionsEndpoint = (target: "polls" | "comments") =>
     provider: { owner: "Faruk", module: target },
     consumers: ["Mert (moderasyon, KV-37)", "Utku (audit, KV-39)"],
     unblocks: ["#39", "#41"],
-    availability: { status: "planned", tableIn: "#66" },
+    availability: { status: "ready" },
     request: { params: IdParams, query: CursorQuery },
     responses: { 200: pageOf(Revision) },
     errors: ["INVALID_CURSOR"],

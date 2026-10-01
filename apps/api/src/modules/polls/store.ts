@@ -185,7 +185,8 @@ export interface PollStore {
   listFeed(query: FeedQuery): Promise<(PollRecord & { voteCount: number })[]>;
   /** Verilen id'lerdeki herkese görünen anketler, verilen sırayla (arama sonuçları). */
   listByIds(ids: string[], viewerId: string | null): Promise<PollRecord[]>;
-  updatePoll(id: string, patch: PollPatch): Promise<void>;
+  /** Düzenleme ve yeni içerik sürümü (#66) aynı transaction'da; editor: düzenleyen ve zaman. */
+  updatePoll(id: string, patch: PollPatch, editor: { id: string; at: Date }): Promise<void>;
   /** Etkin kapanış zaten geçmişse değişiklik yapmaz. */
   closePoll(id: string, now: Date): Promise<void>;
   removePoll(id: string, now: Date): Promise<void>;

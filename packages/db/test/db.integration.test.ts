@@ -191,10 +191,12 @@ describe("migration", () => {
     assert.deepEqual(
       triggers.map((t) => t.tgname),
       [
+        "comment_revisions_append_only",
         "comments_single_level",
         "moderation_actions_append_only",
         "poll_options_check_kind",
         "poll_options_guard_locked",
+        "poll_revisions_append_only",
         "polls_guard_locked",
         "polls_kind_immutable",
         "sanctions_guard",
