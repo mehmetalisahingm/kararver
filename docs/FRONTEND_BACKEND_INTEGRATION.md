@@ -70,3 +70,14 @@ gerçek auth route'larına ayrı yerel test portlarından bağlanır (web 3002, 
 Test sunucusu bellek içi store ve yalnızca yerel testte erişilen mail yakalayıcı
 kullanır; production/staging sunucusuna eklenmez. Docker/PostgreSQL bu ortamda
 bulunmadığından kalıcı veriyle yayın/oy/yorum smoke doğrulaması henüz yapılmadı.
+
+## KV-30 gerçek sağlayıcı kabul testi
+
+`TEST_DATABASE_URL` izole, adı `_test` ile biten PostgreSQL veritabanını göstermeli.
+`pnpm --filter @kararver/web test` içindeki `discovery-backend.test.mjs`, gerçek
+Fastify HTTP sunucusu ve Prisma store'larıyla kategori, üç feed sekmesi, cursor,
+Türkçe arama, beş ayrı trend sıralaması, tarih/örneklem, gizli sonuç ve yetersiz
+geçmiş davranışını sınar. Trend job çıktıları veritabanına test verisi olarak
+konur; worker hesaplama doğruluğu kendi testlerinin sorumluluğudur.
+Veritabanı yoksa bu test açıkça atlanır. Foundation checks database işi testi
+PostgreSQL ile çalıştırır; yerel skip sonucu kabul kanıtı değildir.

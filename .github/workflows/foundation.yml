@@ -37,6 +37,8 @@ jobs:
       - run: pnpm --filter @kararver/db run db:validate
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Frontend adapters against real API and PostgreSQL
+        run: pnpm --filter @kararver/web test
       - run: pnpm mock:test
   ui:
     runs-on: ubuntu-latest

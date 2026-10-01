@@ -156,7 +156,7 @@ export function ResultChart({
       <p className="chart-note">
         {movement
           ? "İki dönem sonundaki birikimli dağılımlar karşılaştırılır. Fark yüzde puandır; yeni gelen oyların oranı veya göreli yüzde artış değildir."
-          : `Toplam ${number(poll.results.total)} örnek oy. Grafik mevcut birikimli dağılımı gösterir; dönem içi oy sayısı veya trend puanı değildir.`}
+          : `Toplam ${number(poll.results.total)} oy. Grafik mevcut birikimli dağılımı gösterir; dönem içi oy sayısı veya trend puanı değildir.`}
       </p>
     </section>
   );
