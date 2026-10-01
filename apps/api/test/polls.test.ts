@@ -221,14 +221,14 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     }
   });
 
-  test("pasif kategori 400; tartışma gönderisi henüz kapalı (#66)", async () => {
+  test("pasif kategori 400; tartışma gönderisi açılır (#66, ayrıntısı discussions.test.ts)", async () => {
     const owner = await signUp();
     const inactive = await send("POST", "/polls", pollBody({ categoryId: inactiveCategoryId }), owner.cookie, key());
     assertError(inactive, 400, "VALIDATION_ERROR");
     assert.equal(inactive.json().error.details[0].field, "categoryId");
     const discussion = await send("POST", "/polls", { kind: "DISCUSSION", title: "Bu bütçeyle hangi arabayı almalıyım?", categoryId }, owner.cookie, key());
-    assertError(discussion, 400, "VALIDATION_ERROR");
-    assert.equal(discussion.json().error.details[0].code, "not_supported_yet");
+    assert.equal(discussion.statusCode, 201, discussion.body);
+    assert.equal(discussion.json().data.kind, "DISCUSSION");
   });
 
   test("görseller: sadece kendi POLL görselin; APPROVED olan görünür, bekleyen görünmez", async () => {
@@ -501,6 +501,7 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     const store = createPrismaPollStore(db);
     const media = await h.addMedia(owner.id, { purpose: "POLL", status: "APPROVED" });
     const newPoll = (mediaIds: string[]) => ({
+      kind: "POLL" as const,
       authorId: owner.id,
       publicId: randomUUID().replaceAll("-", "").slice(0, 8),
       slug: "yaris-testi",

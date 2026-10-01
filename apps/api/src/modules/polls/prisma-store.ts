@@ -1,5 +1,5 @@
 // PollStore'un PostgreSQL/Prisma uygulaması. Tablolar: polls, poll_options, tags, poll_tags,
-// poll_media, poll_addenda, votes, idempotency_keys (DATA_MODEL.md, API_CONTRACTS.md §6).
+// poll_media, poll_addenda, votes, poll_reactions, idempotency_keys (DATA_MODEL.md, API_CONTRACTS.md §6).
 import type { PrismaClient } from "@kararver/db";
 import { assertNoCommittedKey, findIdempotentResult, runIdempotent } from "../../http/idempotency.ts";
 import {
@@ -37,6 +37,8 @@ const pollInclude = (viewerId: string | null) =>
     addenda: { select: { id: true, body: true, createdAt: true }, orderBy: { createdAt: "asc" } },
     // İzleyicinin kendi oyu; misafirde hiçbir oy okunmaz.
     votes: { where: { userId: viewerId ?? undefined }, select: { optionId: true, invalidatedAt: true }, take: viewerId ? 1 : 0 },
+    // İzleyicinin kendi tepkisi (#66); misafirde hiçbiri okunmaz.
+    reactions: { where: { userId: viewerId ?? undefined }, select: { value: true }, take: viewerId ? 1 : 0 },
   }) as const;
 
 /**
@@ -79,6 +81,7 @@ type PollRow = NonNullable<Awaited<ReturnType<PrismaClient["poll"]["findUnique"]
   media: { media: { id: string; publicObjectKey: string | null; width: number | null; height: number | null } }[];
   addenda: { id: string; body: string; createdAt: Date }[];
   votes: { optionId: string; invalidatedAt: Date | null }[];
+  reactions: { value: "LIKE" | "DISLIKE" }[];
 };
 
 function toRecord(poll: PollRow): PollRecord {
@@ -88,6 +91,7 @@ function toRecord(poll: PollRow): PollRecord {
     id: poll.id,
     publicId: poll.publicId,
     slug: poll.slug,
+    kind: poll.kind,
     title: poll.title,
     description: poll.description,
     extraInfo: poll.extraInfo,
@@ -117,6 +121,7 @@ function toRecord(poll: PollRow): PollRecord {
       .map((m) => ({ id: m.media.id, publicKey: m.media.publicObjectKey!, width: m.media.width, height: m.media.height })),
     addenda: poll.addenda,
     viewerVote: vote ? { optionId: vote.optionId, invalidated: vote.invalidatedAt !== null } : null,
+    reactions: { likes: poll.likeCount, dislikes: poll.dislikeCount, viewer: poll.reactions[0]?.value ?? null },
   };
   return record;
 }
@@ -151,12 +156,12 @@ async function enforcePublishLimits(tx: Tx, poll: NewPoll, userCreatedAt: Date, 
     throw new PollLimitError("PUBLISH_COOLDOWN", seconds(last.getTime() + cooldownMs - now.getTime()));
   }
 
-  // Aynı başlık: yazarın hâlâ açık (kapanmamış, kaldırılmamış) bir anketiyle aynı başlık, Türkçe
-  // karakter ve büyük/küçük harf farkı gözetmeden (kv_normalize).
+  // Aynı başlık: yazarın hâlâ açık (kapanmamış, kaldırılmamış) bir gönderisiyle aynı başlık, Türkçe
+  // karakter ve büyük/küçük harf farkı gözetmeden (kv_normalize). Tartışma süresizdir: kaldırılana kadar açık sayılır.
   const duplicate = await tx.$queryRaw<{ one: number }[]>`
     SELECT 1 AS one FROM polls
     WHERE author_id = ${poll.authorId}::uuid AND status <> 'REMOVED'
-      AND closed_at IS NULL AND closes_at > ${now.toISOString()}::timestamptz
+      AND closed_at IS NULL AND (closes_at IS NULL OR closes_at > ${now.toISOString()}::timestamptz)
       AND kv_normalize(title) = kv_normalize(${poll.title})
     LIMIT 1`;
   if (duplicate.length > 0) throw new PollLimitError("DUPLICATE_TITLE", null);
@@ -229,7 +234,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
     findPollMeta: (id) =>
       prisma.poll.findUnique({
         where: { id },
-        select: { authorId: true, status: true, firstValidVoteAt: true, closedAt: true, closesAt: true },
+        select: { kind: true, authorId: true, status: true, firstValidVoteAt: true, closedAt: true, closesAt: true },
       }),
 
     async isActiveCategory(categoryId) {
@@ -273,6 +278,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
             authorId: poll.authorId,
             categoryId: poll.categoryId,
             communityId: poll.communityId,
+            kind: poll.kind,
             title: poll.title,
             description: poll.description,
             priceAmount: poll.priceAmount,
@@ -282,7 +288,8 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
             resultsVisibility: poll.resultsVisibility,
             opensAt: poll.opensAt,
             closesAt: poll.closesAt,
-            options: { create: poll.options.map((label, position) => ({ label, position })) },
+            // DISCUSSION'da seçenek yok (DB trigger KV_NOT_A_POLL da reddeder).
+            ...(poll.options.length > 0 ? { options: { create: poll.options.map((label, position) => ({ label, position })) } } : {}),
             media: { create: [...new Set(poll.mediaIds)].map((mediaId, position) => ({ mediaId, position })) },
           },
           select: { id: true },
@@ -321,6 +328,30 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
         const addendum = await tx.pollAddendum.create({ data: { pollId, body }, select: { id: true } });
         return addendum.id;
       }),
+
+    setReaction(pollId, userId, value) {
+      return prisma.$transaction(async (tx) => {
+        // Gönderi satırı kilitlenir: aynı hesabın eşzamanlı istekleri sıraya girer, sayaçlar kaymaz (KV-17 ile aynı).
+        const [poll] = await tx.$queryRaw<{ status: string }[]>`
+          SELECT status::text AS status FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
+        if (!poll || (poll.status !== "ACTIVE" && poll.status !== "LOCKED")) return { kind: "not_found" as const };
+        // Kilitli içerikte yeni tepki verilemez; mevcut tepki kaldırılabilir (sözleşme: DELETE hata listesi boş).
+        if (value !== null && poll.status === "LOCKED") return { kind: "locked" as const };
+
+        const current = await tx.pollReaction.findUnique({ where: { pollId_userId: { pollId, userId } }, select: { value: true } });
+        const counter = (v: "LIKE" | "DISLIKE") => (v === "LIKE" ? "likeCount" : "dislikeCount");
+        if ((current?.value ?? null) !== value) {
+          const delta: Record<string, { increment: number } | { decrement: number }> = {};
+          if (current) delta[counter(current.value)] = { decrement: 1 };
+          if (value) delta[counter(value)] = { increment: 1 };
+          if (value === null) await tx.pollReaction.delete({ where: { pollId_userId: { pollId, userId } } });
+          else await tx.pollReaction.upsert({ where: { pollId_userId: { pollId, userId } }, create: { pollId, userId, value }, update: { value } });
+          await tx.poll.update({ where: { id: pollId }, data: delta });
+        }
+        const counts = await tx.poll.findUniqueOrThrow({ where: { id: pollId }, select: { likeCount: true, dislikeCount: true } });
+        return { kind: "ok" as const, summary: { likes: counts.likeCount, dislikes: counts.dislikeCount, viewer: value } };
+      });
+    },
 
     findAddendum: (id) => prisma.pollAddendum.findUnique({ where: { id }, select: { id: true, body: true, createdAt: true } }),
   };

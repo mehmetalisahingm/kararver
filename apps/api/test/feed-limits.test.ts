@@ -185,6 +185,7 @@ describe("yayın limitleri ve feed (postgres)", { skip: backend ? false : "TEST_
     const store = createPrismaPollStore(db);
     const now = h.clock.now;
     const poll = (publicId: string) => ({
+      kind: "POLL" as const,
       authorId: user.id,
       publicId,
       slug: "yaris",

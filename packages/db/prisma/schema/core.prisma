@@ -22,6 +22,15 @@ enum ContentStatus {
   @@map("content_status")
 }
 
+// Gönderi türü (#66, V1_USER_FLOW): seçenekli anket veya seçeneksiz tartışma/soru gönderisi.
+// Tür oluşturulduktan sonra değişmez (trigger). DISCUSSION'da seçenek, oy, süre ve sonuç görünürlüğü yoktur.
+enum PollKind {
+  POLL
+  DISCUSSION
+
+  @@map("poll_kind")
+}
+
 enum ResultsVisibility {
   ALWAYS
   AFTER_VOTE
@@ -87,6 +96,7 @@ model User {
   voteEvents       VoteEvent[]
   comments         Comment[]
   commentReactions CommentReaction[]
+  pollReactions    PollReaction[]
 
   // Mert — media.prisma (KV-16)
   uploadedMedia            MediaAsset[]          @relation("MediaUploader")
@@ -194,43 +204,50 @@ model PollTag {
 // ─── Anket ────────────────────────────────────────────────────
 
 model Poll {
-  id                String            @id @default(uuid(7)) @db.Uuid
+  id                String             @id @default(uuid(7)) @db.Uuid
   // URL: /karar/<slug>-<publicId>
-  publicId          String            @unique @map("public_id") @db.VarChar(12)
-  slug              String            @db.VarChar(120)
-  authorId          String            @map("author_id") @db.Uuid
-  categoryId        String            @map("category_id") @db.Uuid
-  communityId       String?           @map("community_id") @db.Uuid
-  title             String            @db.VarChar(200)
+  publicId          String             @unique @map("public_id") @db.VarChar(12)
+  slug              String             @db.VarChar(120)
+  authorId          String             @map("author_id") @db.Uuid
+  categoryId        String             @map("category_id") @db.Uuid
+  communityId       String?            @map("community_id") @db.Uuid
+  kind              PollKind           @default(POLL)
+  title             String             @db.VarChar(200)
   description       String?
-  priceAmount       Decimal?          @map("price_amount") @db.Decimal(14, 2)
-  priceCurrency     String?           @map("price_currency") @db.Char(3)
-  extraInfo         String?           @map("extra_info")
-  status            ContentStatus     @default(ACTIVE)
-  resultsVisibility ResultsVisibility @default(ALWAYS) @map("results_visibility")
-  allowComments     Boolean           @default(true) @map("allow_comments")
+  priceAmount       Decimal?           @map("price_amount") @db.Decimal(14, 2)
+  priceCurrency     String?            @map("price_currency") @db.Char(3)
+  extraInfo         String?            @map("extra_info")
+  status            ContentStatus      @default(ACTIVE)
+  // DISCUSSION'da NULL (CHECK polls_kind_shape_check).
+  resultsVisibility ResultsVisibility? @default(ALWAYS) @map("results_visibility")
+  allowComments     Boolean            @default(true) @map("allow_comments")
   // Oylamanın başladığı an. Snapshot pencereleri buradan sayılır.
-  opensAt           DateTime          @default(now()) @map("opens_at") @db.Timestamptz(3)
-  closesAt          DateTime          @map("closes_at") @db.Timestamptz(3)
+  opensAt           DateTime           @default(now()) @map("opens_at") @db.Timestamptz(3)
+  // DISCUSSION'da NULL: tartışma süresizdir, kapanmaz (CHECK polls_kind_shape_check).
+  closesAt          DateTime?          @map("closes_at") @db.Timestamptz(3)
   // Sahip/admin erken kapatırsa dolar. Etkin kapanış = LEAST(closes_at, closed_at).
-  closedAt          DateTime?         @map("closed_at") @db.Timestamptz(3)
+  closedAt          DateTime?          @map("closed_at") @db.Timestamptz(3)
   // İlk geçerli oyda trigger doldurur; dolduktan sonra başlık, açıklama, seçenekler
   // ve sonuç görünürlüğü değiştirilemez (ek bilgi: PollAddendum) ve bu alan geri alınamaz.
-  firstValidVoteAt  DateTime?         @map("first_valid_vote_at") @db.Timestamptz(3)
+  firstValidVoteAt  DateTime?          @map("first_valid_vote_at") @db.Timestamptz(3)
   // Doluysa anket algoritmik trend listelerine girmez (EXCLUDE_FROM_TRENDS moderasyon işlemi, KV-37 Mert yazar).
   // Görünürlüğü etkilemez; editör seçimi/öne çıkarma ayrı yüzeydir (KV-28, docs/KV-28_TRENDS.md).
-  trendExcludedAt   DateTime?         @map("trend_excluded_at") @db.Timestamptz(3)
-  voteCount         Int               @default(0) @map("vote_count")
-  commentCount      Int               @default(0) @map("comment_count")
-  saveCount         Int               @default(0) @map("save_count")
-  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt         DateTime?         @map("deleted_at") @db.Timestamptz(3)
+  trendExcludedAt   DateTime?          @map("trend_excluded_at") @db.Timestamptz(3)
+  voteCount         Int                @default(0) @map("vote_count")
+  commentCount      Int                @default(0) @map("comment_count")
+  saveCount         Int                @default(0) @map("save_count")
+  // Gönderi tepkileri (#66); poll_reactions ile aynı transaction'da güncellenir.
+  likeCount         Int                @default(0) @map("like_count")
+  dislikeCount      Int                @default(0) @map("dislike_count")
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz(3)
 
   author            User                @relation(fields: [authorId], references: [id], onDelete: Restrict)
   category          Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   community         Community?          @relation(fields: [communityId], references: [id], onDelete: Restrict)
   options           PollOption[]
+  reactions         PollReaction[]
   tags              PollTag[]
   media             PollMedia[]
   addenda           PollAddendum[]
@@ -406,6 +423,22 @@ model Comment {
 // Yorum tepkisi (beğeni/dislike) — KV-17 (#19). comment_likes'ın yerine geçer (API_CONTRACTS §6).
 // Kullanıcı + yorum başına tek aktif tepki; değiştirme satırı günceller, kaldırma siler.
 // Anket tepkileri (#66) aynı ReactionValue enum'unu kullanır.
+// Gönderi (anket veya tartışma) beğeni/dislike'ı (#66). Anket oyundan ayrıdır. Hesap + gönderi başına tek aktif tepki.
+model PollReaction {
+  pollId    String        @map("poll_id") @db.Uuid
+  userId    String        @map("user_id") @db.Uuid
+  value     ReactionValue
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  poll Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([pollId, userId])
+  @@index([userId])
+  @@map("poll_reactions")
+}
+
 model CommentReaction {
   commentId String        @map("comment_id") @db.Uuid
   userId    String        @map("user_id") @db.Uuid

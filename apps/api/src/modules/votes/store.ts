@@ -21,6 +21,7 @@ export type PollTally = {
 
 export type CastVoteRejection =
   | "NOT_FOUND"
+  | "NOT_A_POLL"
   | "SELF_VOTE_FORBIDDEN"
   | "POLL_CLOSED"
   | "CONTENT_LOCKED"

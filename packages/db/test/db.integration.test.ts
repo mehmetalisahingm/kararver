@@ -193,10 +193,13 @@ describe("migration", () => {
       [
         "comments_single_level",
         "moderation_actions_append_only",
+        "poll_options_check_kind",
         "poll_options_guard_locked",
         "polls_guard_locked",
+        "polls_kind_immutable",
         "sanctions_guard",
         "vote_events_append_only",
+        "votes_check_kind",
         "votes_forbid_self_vote",
         "votes_guard_identity",
         "votes_mark_first_valid",

@@ -5,10 +5,12 @@ import type { CastVoteResult, PollTally, VoteStore } from "./store.ts";
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
 type LockedPoll = {
+  kind: "POLL" | "DISCUSSION";
   author_id: string;
   status: string;
+  /** Sadece POLL'da dolu; tartışma castVote'ta NOT_A_POLL ile erken reddedilir. */
   results_visibility: "ALWAYS" | "AFTER_VOTE";
-  closes_at: Date;
+  closes_at: Date | null;
   closed_at: Date | null;
 };
 
@@ -18,7 +20,7 @@ async function tally(tx: Tx, pollId: string, poll: LockedPoll, now: Date): Promi
   const options = await tx.pollOption.findMany({ where: { pollId }, select: { id: true, voteCount: true }, orderBy: { position: "asc" } });
   return {
     resultsVisibility: poll.results_visibility,
-    closed: poll.closed_at !== null || poll.closes_at <= now,
+    closed: poll.closed_at !== null || poll.closes_at! <= now,
     options,
   };
 }
@@ -31,14 +33,15 @@ export function createPrismaVoteStore(prisma: PrismaClient): VoteStore {
         // (1) aynı hesaptan eşzamanlı istekler tek oy üretir, (2) kapanıştan sonra commit edilen oy
         // olmaz, (3) sayaç güncellemeleri kilit yükseltmesiyle deadlock'a girmez.
         const [poll] = await tx.$queryRaw<LockedPoll[]>`
-          SELECT author_id::text, status::text, results_visibility::text AS results_visibility, closes_at, closed_at
+          SELECT kind::text AS kind, author_id::text, status::text, results_visibility::text AS results_visibility, closes_at, closed_at
           FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
         const reject = (reason: Extract<CastVoteResult, { kind: "rejected" }>["reason"]): CastVoteResult => ({ kind: "rejected", reason });
 
         // Sıra, viewer.voteBlockedReason ile aynıdır (contracts → voteAvailability).
         if (!poll || (poll.status !== "ACTIVE" && poll.status !== "LOCKED")) return reject("NOT_FOUND");
+        if (poll.kind !== "POLL") return reject("NOT_A_POLL");
         if (poll.author_id === userId) return reject("SELF_VOTE_FORBIDDEN");
-        if (poll.closed_at !== null || poll.closes_at <= now) return reject("POLL_CLOSED");
+        if (poll.closed_at !== null || poll.closes_at! <= now) return reject("POLL_CLOSED");
         if (poll.status === "LOCKED") return reject("CONTENT_LOCKED");
         if ((await tx.pollOption.count({ where: { id: optionId, pollId } })) === 0) return reject("OPTION_NOT_IN_POLL");
 

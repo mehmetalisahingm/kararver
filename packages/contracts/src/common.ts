@@ -97,7 +97,7 @@ export const MediaRef = z.strictObject({
 });
 
 export const ReactionValue = z.enum(["LIKE", "DISLIKE"]);
-/** Planlı (#66): tepki tablosu gelene kadar sağlayıcı `likes: 0, dislikes: 0, viewer: null` döner. */
+/** Gönderi ve yorum tepkisi özeti (#66, KV-17). `viewer` misafirde null. */
 export const ReactionSummary = z.strictObject({
   likes: Count,
   dislikes: Count,

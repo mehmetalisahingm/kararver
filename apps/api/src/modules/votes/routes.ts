@@ -16,6 +16,7 @@ export type VoteDeps = {
 
 const rejections: Record<CastVoteRejection, () => ApiError> = {
   NOT_FOUND: () => new ApiError("NOT_FOUND", "İçerik bulunamadı."),
+  NOT_A_POLL: () => new ApiError("NOT_A_POLL", "Tartışma gönderisinde oy yok."),
   SELF_VOTE_FORBIDDEN: () => new ApiError("SELF_VOTE_FORBIDDEN", "Kendi anketinize oy veremezsiniz."),
   POLL_CLOSED: () => new ApiError("POLL_CLOSED", "Anket kapandı."),
   CONTENT_LOCKED: () => new ApiError("CONTENT_LOCKED", "Bu gönderi moderasyon nedeniyle kilitli."),
