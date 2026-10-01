@@ -63,8 +63,9 @@ describe("snapshots.daily ve Haftanın Değişkenleri (postgres)", { skip: url ?
     await f.voter(p.id, [[ist(D0, 13), "CAST", A], [ist(D1, 8), "INVALIDATE", null]]);
 
     const now = ist(addDays(D1, 1), 0, 5);
-    assert.equal(await snapshotDay(snapDeps(now), D0), 1);
-    assert.equal(await snapshotDay(snapDeps(now), D1), 1);
+    // Sadece kendi anketi: aynı DB'de uzak gelecekte açık başka anketler olabilir (ör. 2099'da kapanan fixture).
+    assert.equal(await snapshotDay(snapDeps(now), D0, [p.id]), 1);
+    assert.equal(await snapshotDay(snapDeps(now), D1, [p.id]), 1);
     assert.deepEqual(await day(p.id, D0), { pollDay: 0, total: 2, cutoffAt: ist(D1, 0).toISOString(), A: 2, B: 0, version: 1 });
     assert.deepEqual(await day(p.id, D1), { pollDay: 1, total: 3, cutoffAt: ist(addDays(D1, 1), 0).toISOString(), A: 1, B: 2, version: 1 });
     assert.equal(ist(D1, 0).toISOString().slice(0, 10), D0, "cutoff UTC'de bir önceki gündür (21:00Z)");
