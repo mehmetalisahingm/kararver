@@ -1,10 +1,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { examples } from "@kararver/contracts/fixtures";
-import { ApiClient } from "../src/lib/api-client.ts";
+import { ApiClient, mapPoll } from "../src/lib/api-client.ts";
+import { PollDetail } from "@kararver/contracts";
 import { UiError } from "../src/lib/model.ts";
 function example(endpoint: string,name?: string) { return structuredClone(examples.find(e=>e.endpoint===endpoint && (name ? e.name===name : e.status<300))!); }
 const pollId=(example("polls.get").request!.params as {id:string}).id;
+
+test("poll details preserve public addenda and decimal price", () => {
+  const wire = PollDetail.parse((example("polls.get").body as {data:unknown}).data);
+  wire.extraInfo = "İlk bilgi";
+  wire.price = {amount:"1234.50",currency:"TRY"};
+  wire.addenda = [{id:crypto.randomUUID(),body:"Sonradan eklenen açıklama",createdAt:"2026-10-01T09:00:00.000Z"}];
+  const poll = mapPoll(wire);
+  assert.equal(poll.price?.amount,"1234.50");
+  assert.deepEqual(poll.details?.map(item=>item.value),["İlk bilgi","Sonradan eklenen açıklama"]);
+  assert.match(poll.details![1].label,/12:00/);
+});
 test("social adapter uses paginated comments/replies and preserves pending pages on failure",async()=>{
   const calls:string[]=[];let fail=true;
   const client=new ApiClient("http://api.test",async(url)=>{

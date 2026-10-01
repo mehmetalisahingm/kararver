@@ -95,7 +95,7 @@ export function PollGallery({ poll }: { poll: Poll }) {
       )}
       {poll.price && (
         <div className="price-info">
-          <span className="kv-help">Paylaşılan örnek bütçe</span>
+          <span className="kv-help">Paylaşılan bütçe</span>
           <strong>
             {new Intl.NumberFormat("tr-TR", {
               style: "currency",
