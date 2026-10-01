@@ -21,6 +21,8 @@ Ana ürün döngüsü:
 
 Stack, sürümler, modül sahipliği ve sıfırdan kurulum adımları için [`docs/TECH_DECISIONS.md`](./docs/TECH_DECISIONS.md) dosyasına bakın.
 
+Yerel kurulum (Windows/macOS/Linux), `pnpm check:setup` ve sorun giderme: [`docs/KV-06_LOCAL_SETUP.md`](./docs/KV-06_LOCAL_SETUP.md).
+
 ## Ortak UI — KV-05
 
 Ümit'in framework bağımsız [tasarım sistemi önizlemesi](./ui/design-system/index.html), koyu/mor tema ve ortak bileşen örneklerini içerir. Çalıştırma, bileşen API'leri ve responsive/erişilebilirlik kuralları: [UI sözleşmesi](./docs/KV-05_UI_CONTRACT.md).

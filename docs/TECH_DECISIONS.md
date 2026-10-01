@@ -310,6 +310,8 @@ Kurallar:
 
 ## 8. Sıfırdan kurulum (yeni ekip üyesi)
 
+Güncel, platforma göre (Windows cmd/PowerShell, macOS/Linux) adımlar, `pnpm check:setup` ve sorun giderme: [`KV-06_LOCAL_SETUP.md`](./KV-06_LOCAL_SETUP.md).
+
 ### 8.1 Ön koşullar (bir kez)
 - **Git**
 - **Node.js 24.21.0 LTS**: [nodejs.org](https://nodejs.org) veya `nvm install` / `nvm use` (repo'da `.nvmrc` var)
@@ -337,6 +339,9 @@ pnpm -v                          # 10.34.5 görmelisin
 #        corepack enable --install-directory "$HOME/bin"   # $HOME/bin PATH'te olmalı
 # Not: "corepack pnpm install" tek başına çalışır ama root script'leri (db:migrate, dev)
 #      içeride "pnpm" çağırdığı için PATH'te pnpm yoksa hata verir. Bu yüzden enable şart.
+# "corepack enable" EPERM verirse pnpm'i npm ile kurun; sürüm package.json packageManager
+#   alanındaki sürümdür (örnek: "packageManager": "pnpm@10.34.5" ise):
+#        npm i -g pnpm@10.34.5
 
 # 3. Ortam dosyasını oluştur
 cp .env.example .env
@@ -351,9 +356,9 @@ docker compose logs seaweedfs-init   # iki bucket'ın oluşturulduğunu gösteri
 # 5. Bağımlılıkları kur
 pnpm install
 
-# 6. Veritabanı: migration + seed
+# 6. Veritabanı: migration
 pnpm db:migrate
-pnpm db:seed
+# Kategori seed'i yok; kategoriler admin endpoint'i ile eklenir (KV-26).
 
 # 7. Geliştirme sunucuları
 pnpm dev
@@ -361,8 +366,6 @@ pnpm dev
 #   api → http://localhost:4000
 #   worker → arka planda (log'da job'lar görünür)
 ```
-
-> ⚠️ **Mevcut durum (KV-02):** `pnpm db:migrate` çalışır; `packages/db` ilk migration'ı uygular (bkz. [`DATA_MODEL.md`](./DATA_MODEL.md)). `pnpm db:seed` henüz bir şey yapmaz, kategori seed'i gelince çalışacak. `apps/api` KV-09 ile eklendi (`pnpm --filter @kararver/api dev`, bkz. [`KV-09_AUTH_BACKEND.md`](./KV-09_AUTH_BACKEND.md)); web/worker iskeletleri eklenince `pnpm dev` hepsini açar. Script'ler root `package.json`'da şimdiden tanımlı, yani bu kurulum adımları değişmeyecek.
 
 ### 8.3 Sık kullanılan komutlar
 ```bash
