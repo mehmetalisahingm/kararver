@@ -20,7 +20,13 @@ export function mapPoll(wire: ReturnType<typeof PollCard.parse> | ReturnType<typ
     voteBlockedReason: wire.viewer?.voteBlockedReason ?? null,
     commentCount: wire.commentCount,
     gallery: (detail?.media ?? (wire.coverImage ? [wire.coverImage] : [])).map(m => ({id:m.id,status:"ready",src:m.url,alt:wire.title})),
-    details: detail?.extraInfo ? [{label:"Ek bilgi",value:detail.extraInfo}] : [],
+    details: [
+      ...(detail?.extraInfo ? [{label:"Ek bilgi",value:detail.extraInfo}] : []),
+      ...(detail?.addenda ?? []).map((item, index) => ({
+        label: `Ek açıklama ${index + 1} · ${new Date(item.createdAt).toLocaleString("tr-TR", {timeZone:"Europe/Istanbul"})}`,
+        value: item.body,
+      })),
+    ],
     price: detail?.price ? {...detail.price,note:""} : undefined,
     canVote: wire.viewer?.canVote, commentsEnabled: detail?.allowComments ?? false, comments: [],
   };

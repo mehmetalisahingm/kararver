@@ -52,3 +52,18 @@ Demo, `NEXT_PUBLIC_KV_DATA_MODE=demo` ile açıkça etkinleştirilir. Bellek iç
 - 16 temel rota/boyut + 4 galeri tema/boyut + düzenleme/silme modalı kontrolleri: 22 axe denetiminde ihlal yok. Klavye, Escape/fokus dönüşü, hareket azaltma, 360 piksel yatay taşma ve runtime hata kontrolleri geçti.
 - İlave tarayıcı kontrolünde altı yorumun dört kayıttan devamı, boş alternatif listesi ve ağ hatasından sonra görseli tekrar yükleme doğrulandı. Mobil yorum alanı ve açık tema galeri çıktıları görsel olarak incelendi.
 - Bunlar Chromium/Edge demo kontrolleridir; gerçek cihaz/Safari/Firefox ve gerçek API/staging kabulünün yerini tutmaz.
+
+## 1 Ekim — #18 dışındaki UI/test tamamlaması
+
+Yorumların sırası API sayfa dizisinden bağımsız olarak en yeni tarihten eskiye
+kurulur. Public `addenda` açıklamaları İstanbul tarih/saat bilgisiyle gösterilir;
+fiyatın decimal değeri korunur. Gerçek içerikte bütçe etiketi örnek veri demez.
+
+`social-backend.test.mjs`, CI PostgreSQL üzerinde iki hesap ve gerçek HTTP ile
+tekrar yorumun tekilleşmesi, yanıt/alternatif, tepki değiştirme/kaldırma, sahiplik,
+düzenleme/silme, silinen yorumun yanıtı ve gizli/kapalı/kilitli durumları doğrular.
+Veritabanı yokken açıkça atlanır; başarı kanıtı PR'ın CI sonucudur.
+
+#18 kapsamındaki upload, karantina, medya pipeline ve sahibine özel medya
+inceleme/retry entegrasyonu bu teslimde tamamlanmış sayılmaz. #20 bu bağımlılık
+ve ilgili kabul tamamlanmadan kapatılmaz. Sosyal HTTP adapter'ı #79'da yer alır.

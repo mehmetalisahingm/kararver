@@ -347,7 +347,7 @@ export function SocialPanel({ poll }: { poll: Poll }) {
   if (!data) return <Loading label="Yorumlar yükleniyor…" />;
   const roots = data.comments
     .filter((c) => !c.parentId && c.kind === tab)
-    .toReversed();
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
   const parent = data.comments.find((c) => c.id === draft.parentId);
   return (
     <section
