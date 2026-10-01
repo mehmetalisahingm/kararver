@@ -13,8 +13,8 @@ model UserInterest {
 }
 
 // KV-22 (#24) — kullanıcının private kaydetme listesi.
-// İlişki alanları bilinçli olarak burada tutulmuyor: growth modülü çekirdek User/Poll şemasını
-// sahiplik dışı değiştirmeden scalar FK'larla çalışır; gerçek FK'lar migration'da DB seviyesinde vardır.
+// Çekirdek User/Poll modellerini modül sahipliği dışında büyütmemek için scalar kimliklerle tutulur.
+// Uygulama görünürlük/mevcut-kayıt kontrolünü transaction içinde yapar; ürün hard delete yerine soft-delete kullanır.
 model Bookmark {
   userId    String   @map("user_id") @db.Uuid
   pollId    String   @map("poll_id") @db.Uuid
@@ -40,7 +40,7 @@ enum PointLedgerReason {
 model PointAccount {
   userId    String   @id @map("user_id") @db.Uuid
   balance   Int      @default(0)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("point_accounts")
 }
