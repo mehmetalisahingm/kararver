@@ -15,6 +15,7 @@ import { createPrismaFeedStore } from "./modules/feed/prisma-store.ts";
 import { createPrismaCommentStore } from "./modules/comments/prisma-store.ts";
 import { createPrismaOnboardingStore } from "./modules/onboarding/prisma-store.ts";
 import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
+import { createPrismaProfileStore } from "./modules/profiles/prisma-store.ts";
 import { createPrismaRbacStore } from "./modules/rbac/prisma-store.ts";
 import { createPrismaReportStore } from "./modules/reports/prisma-store.ts";
 import { createPrismaSearchStore } from "./modules/search/prisma-store.ts";
@@ -41,6 +42,7 @@ const app = buildApp({
   authStore: createPrismaAuthStore(prisma),
   rbacStore: createPrismaRbacStore(prisma),
   pollStore: createPrismaPollStore(prisma),
+  profileStore: createPrismaProfileStore(prisma),
   searchStore: createPrismaSearchStore(prisma),
   revisionStore: createPrismaRevisionStore(prisma),
   categoryAdminStore: createPrismaCategoryAdminStore(prisma),
