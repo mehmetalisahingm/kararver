@@ -11,6 +11,7 @@ import { createPrismaMediaStore } from "./modules/media/prisma-store.ts";
 import { startPgBossMediaQueue } from "./modules/media/queue.ts";
 import { createS3MediaStorage } from "./modules/media/storage.ts";
 import { createPrismaCategoryAdminStore } from "./modules/categories/prisma-store.ts";
+import { createPrismaFeedStore } from "./modules/feed/prisma-store.ts";
 import { createPrismaCommentStore } from "./modules/comments/prisma-store.ts";
 import { createPrismaOnboardingStore } from "./modules/onboarding/prisma-store.ts";
 import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
@@ -40,6 +41,7 @@ const app = buildApp({
   pollStore: createPrismaPollStore(prisma),
   searchStore: createPrismaSearchStore(prisma),
   categoryAdminStore: createPrismaCategoryAdminStore(prisma),
+  feedStore: createPrismaFeedStore(prisma),
   voteStore: createPrismaVoteStore(prisma),
   communityStore: createPrismaCommunityStore(prisma),
   onboardingStore: createPrismaOnboardingStore(prisma),

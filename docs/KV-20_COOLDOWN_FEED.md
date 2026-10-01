@@ -32,7 +32,7 @@ Yazarın **hâlâ açık** (kapanmamış, kaldırılmamış) bir anketiyle aynı
 |---|---|
 | `new` | `opensAt` ↓, `id` ↓ |
 | `top` | `voteCount` ↓, `opensAt` ↓, `id` ↓ (tüm zamanlar) |
-| `for_you` | **Geçici:** `new` ile aynı sırada. Kişiselleştirme KV-27 (#29) ile gelir |
+| `for_you` | KV-27 (#29) ile kişiselleştirildi: [`KV-27_FOR_YOU_FEED.md`](./KV-27_FOR_YOU_FEED.md) |
 | `rising` | **Henüz yok:** 400 `VALIDATION_ERROR` (`code: not_supported_yet`); trend motoruna (KV-28, #30) bağlı |
 
 - **Görünürlük:** Feed'de sadece `ACTIVE` ve `LOCKED` anketler çıkar. Gizli, incelemede ve kaldırılmış içerik feed'e girmez.
@@ -53,7 +53,6 @@ Test düzeneği, eski senaryolar etkilenmesin diye limitleri varsayılan olarak 
 
 | Konu | İş |
 |---|---|
-| `for_you` kişiselleştirme | KV-27 (#29) |
 | `rising` sekmesi ve trend listeleri | KV-28 (#30) |
 | Ayar servisi (admin değişikliği) | KV-40 (#42), Utku |
 | IP/istek hız sınırı (rate limit) | KV-19 (#21), Utku |

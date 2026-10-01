@@ -10,7 +10,7 @@ export function encodeCursor(filter: string, keys: (string | number)[], id: stri
   return Buffer.from(JSON.stringify(payload)).toString("base64url");
 }
 
-function invalid(): ApiError {
+export function invalidCursor(): ApiError {
   return new ApiError("INVALID_CURSOR", "Sayfa bilgisi geçersiz; listeyi baştan yükleyin.", [{ field: "cursor", code: "invalid" }]);
 }
 
@@ -21,7 +21,7 @@ export function decodeCursor(cursor: string | undefined, filter: string): { keys
   try {
     payload = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
   } catch {
-    throw invalid();
+    throw invalidCursor();
   }
   const p = payload as Partial<Payload>;
   if (
@@ -32,7 +32,7 @@ export function decodeCursor(cursor: string | undefined, filter: string): { keys
     !Array.isArray(p.k) ||
     !p.k.every((x) => typeof x === "string" || typeof x === "number")
   ) {
-    throw invalid();
+    throw invalidCursor();
   }
   return { keys: p.k, id: p.id };
 }

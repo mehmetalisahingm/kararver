@@ -363,7 +363,8 @@ describe("yayın limitleri ve feed (postgres)", { skip: backend ? false : "TEST_
     assertError(await get(`/feed?tab=rising`), 400, "VALIDATION_ERROR");
 
     const forYou = await walk(`/feed?tab=for_you&categoryId=${cat}`, 100);
-    assert.deepEqual(forYou, await walk(`/feed?tab=new&categoryId=${cat}`, 100), "for_you şimdilik new sıralaması");
+    // Tek yazar, tek kategori ve oy yokken "Senin İçin" (KV-27) yenilik sırasına iner.
+    assert.deepEqual(forYou, await walk(`/feed?tab=new&categoryId=${cat}`, 100), "sinyal yokken for_you yenilik sırası");
   });
 
   test("topluluk filtresi sadece o topluluğun anketlerini döner", async () => {
