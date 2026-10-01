@@ -131,8 +131,8 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /admin/comments/:id/moderation`<br>Yorum üzerinde gerekçeli moderasyon işlemi · `admin.moderation.comments` | M | 200 | doğal | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #39 #26 | hazır |
 | `GET /admin/media`<br>Görsel inceleme kuyruğu · `admin.media.list` | M | 200 | — | Mert `media` | Mert (admin moderasyon UI, KV-37) | #18 #40 | hazır |
 | `POST /admin/media/:id/decision`<br>Görseli onayla / reddet · `admin.media.decide` | M | 200 | doğal | Mert `media` | Mert (admin moderasyon UI, KV-37) | #18 #40 | hazır |
-| `GET /admin/polls/:id/revisions`<br>İçerik sürüm geçmişi · `admin.revisions.polls` | A | 200 | — | Faruk `polls` | Mert (moderasyon, KV-37), Utku (audit, KV-39) | #39 #41 | planlı — tablo #66 migration'ı ile gelecek |
-| `GET /admin/comments/:id/revisions`<br>İçerik sürüm geçmişi · `admin.revisions.comments` | A | 200 | — | Faruk `comments` | Mert (moderasyon, KV-37), Utku (audit, KV-39) | #39 #41 | planlı — tablo #66 migration'ı ile gelecek |
+| `GET /admin/polls/:id/revisions`<br>İçerik sürüm geçmişi · `admin.revisions.polls` | A | 200 | — | Faruk `polls` | Mert (moderasyon, KV-37), Utku (audit, KV-39) | #39 #41 | hazır |
+| `GET /admin/comments/:id/revisions`<br>İçerik sürüm geçmişi · `admin.revisions.comments` | A | 200 | — | Faruk `comments` | Mert (moderasyon, KV-37), Utku (audit, KV-39) | #39 #41 | hazır |
 
 ### Topluluklar
 

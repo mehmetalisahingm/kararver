@@ -3,6 +3,15 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.11.0 — 2026-10-01 (Faruk, #66 içerik sürüm geçmişi)
+
+Kırıcı değişiklik yok (planlı endpoint'in hazır olması ve yeni DB hata eşlemesi minor).
+
+- **Değişti:** `admin.revisions.polls` / `admin.revisions.comments` artık `ready` (tablolar `poll_revisions`, `comment_revisions`, migration `20261001150000_faruk_kv66_content_revisions`). Sürüm 1 ilk paylaşımdır; her düzenleme yeni sürüm yazar.
+- **Değişti:** `comments.update` notu: her düzenleme yeni sürüm olarak geçmişe yazılır.
+- **Eklendi:** `dbErrorMap`: `KV_REVISIONS_APPEND_ONLY` → `INTERNAL_ERROR`.
+- **Test:** `api-contracts.test.ts` V1_USER_FLOW kontrolü bilinçli güncellendi: sürüm geçmişi de hazır olmalı; puan endpoint'leri hâlâ planlı.
+
 ## 1.10.0 — 2026-10-01 (Faruk, #66 tartışma gönderileri ve gönderi tepkileri)
 
 Kırıcı değişiklik yok (API_CONTRACTS §5: planlı endpoint'in hazır olması ve yeni DB hata eşlemesi minor).

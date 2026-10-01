@@ -115,7 +115,7 @@ export const commentEndpoints = [
     errors: ["CONTENT_LOCKED"],
     idempotency: "natural",
     cache: "private",
-    notes: ["Önceki sürüm içerik geçmişine yazılır (planlı, #66)."],
+    notes: ["Her düzenleme yeni içerik sürümü olarak geçmişe yazılır (admin.revisions.comments, #66)."],
   }),
   defineEndpoint({
     id: "comments.delete",

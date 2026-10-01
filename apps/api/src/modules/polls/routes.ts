@@ -223,7 +223,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     if (body.options !== undefined) patch.options = body.options;
 
     // Ön kontrol ile yazma arasında ilk oy gelirse DB trigger'ı reddeder → 409 (DATA_MODEL §6 "Yarış durumu").
-    await withDbErrors(() => store.updatePoll(params.id, patch));
+    await withDbErrors(() => store.updatePoll(params.id, patch, { id: viewer!.id, at: now() }));
     return { status: 200, body: { data: await detail({ id: params.id }, viewer) } };
   });
 

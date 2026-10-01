@@ -224,6 +224,7 @@ erDiagram
 | `comments` | `(poll_id, id)` | `(poll_id, parent_id, created_at)`, `(poll_id, kind, like_count)`, `(author_id, created_at)` | Bileşik FK ile cevap aynı ankette; trigger ile tek seviye |
 | `comment_reactions` | PK `(comment_id, user_id)` | `user_id` | `value` LIKE/DISLIKE; `comment_likes`'ın yerine (KV-17). Sayaçlar `comments.like_count` / `dislike_count` |
 | `poll_reactions` | PK `(poll_id, user_id)` | `user_id` | Gönderi (anket veya tartışma) beğeni/dislike'ı, anket oyundan ayrı (#66). Sayaçlar `polls.like_count` / `dislike_count`, gönderi satırı kilitlenerek aynı transaction'da |
+| `poll_revisions`, `comment_revisions` | `(poll_id, version)`, `(comment_id, version)` | | İçerik sürüm geçmişi (#66): her oluşturma/düzenlemede `kv_poll_snapshot` / `kv_comment_snapshot` anlık görüntüsü, editör ve zaman. Append-only trigger; okuma ADMIN+ |
 
 ---
 

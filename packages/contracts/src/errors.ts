@@ -78,4 +78,5 @@ export const dbErrorMap = Object.freeze({
   KV_VOTE_IDENTITY_IMMUTABLE: "INTERNAL_ERROR",
   KV_SANCTIONS_IMMUTABLE: "INTERNAL_ERROR",
   KV_POLL_KIND_IMMUTABLE: "INTERNAL_ERROR",
+  KV_REVISIONS_APPEND_ONLY: "INTERNAL_ERROR",
 } as const satisfies Record<string, ErrorCode>);

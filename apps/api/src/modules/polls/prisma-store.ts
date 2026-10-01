@@ -2,6 +2,7 @@
 // poll_media, poll_addenda, votes, poll_reactions, idempotency_keys (DATA_MODEL.md, API_CONTRACTS.md §6).
 import type { PrismaClient } from "@kararver/db";
 import { assertNoCommittedKey, findIdempotentResult, runIdempotent } from "../../http/idempotency.ts";
+import { writeRevision } from "../revisions/write.ts";
 import {
   PollLimitError,
   PollReferenceError,
@@ -295,12 +296,16 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
           select: { id: true },
         });
         await replaceTags(tx, created.id, poll.tagSlugs);
+        // Sürüm 1: ilk paylaşım (#66 içerik geçmişi).
+        await writeRevision(tx, "poll", created.id, poll.authorId, poll.opensAt);
         return created.id;
       }),
 
-    async updatePoll(id, patch) {
+    async updatePoll(id, patch, editor) {
       const { tagSlugs, options, ...fields } = patch;
       await prisma.$transaction(async (tx) => {
+        // Satır kilidi: aynı ankete eşzamanlı iki düzenleme sürüm numarasında çakışmaz.
+        await tx.$queryRaw`SELECT 1 FROM polls WHERE id = ${id}::uuid FOR UPDATE`;
         if (Object.keys(fields).length > 0) await tx.poll.update({ where: { id }, data: fields });
         if (tagSlugs) await replaceTags(tx, id, tagSlugs);
         if (options) {
@@ -312,6 +317,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
             data: options.map((o, position) => ({ ...(o.id ? { id: o.id } : {}), pollId: id, label: o.label, position })),
           });
         }
+        await writeRevision(tx, "poll", id, editor.id, editor.at);
       });
     },
 

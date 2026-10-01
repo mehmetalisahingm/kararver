@@ -65,11 +65,34 @@
 
 **Mutasyon kontrolü:** Tepkideki satır kilidi kaldırılınca eşzamanlılık testi kırılıyor (sayaç 5/4, tablo 15/7).
 
+## İçerik sürüm geçmişi: `GET /v1/admin/polls/:id/revisions`, `/v1/admin/comments/:id/revisions`
+
+Kaynak: V1_USER_FLOW "Yetkili admin içerik geçmişinden kimin ne paylaştığını ve hangi sürümü değiştirdiğini inceleyebilir."
+
+- **Yazım:** Her oluşturma ve düzenlemede, içeriğin o anki hali yeni sürüm olur.
+  - Sürüm 1 ilk paylaşımdır ("kim ne paylaştı"); editör ve zaman da yazılır.
+  - Yazım içerikle aynı transaction'da yapılır: reddedilen düzenleme (ör. ilk oydan sonra başlık) sürüm üretmez.
+  - Sürüm numarası, içerik satırının kilidiyle sıralanır. Eşzamanlı düzenlemeler 1, 2, 3 … diye boşluksuz ilerler (açık kilit kaldırılınca test kırılıyor).
+- **Anlık görüntü** (`snapshot`) biçimi tek yerde, DB fonksiyonlarında: `kv_poll_snapshot`, `kv_comment_snapshot`.
+  - Gönderi: tür, başlık, açıklama, kategori, topluluk, etiketler, fiyat, ek bilgi, yorum izni, sonuç görünürlüğü, kapanış, seçenekler, görseller.
+  - Yorum: tür, metin, üst yorum.
+  - Sayaçlar ve durum içerik değildir; onların izi `moderation_actions`'tadır.
+- **Okuma:**
+  - Yalnız ADMIN+ (`revision.read`). Moderatör, kullanıcı ve yazarın kendisi 403.
+  - En yeni sürüm önce, opak cursor.
+  - Kaldırılmış içeriğin geçmişi de açık (inceleme/itiraz).
+- **Değiştirilemez:** `poll_revisions` / `comment_revisions` append-only (`KV_REVISIONS_APPEND_ONLY`).
+- **Mevcut içerik:** Migration, şu anki hali sürüm 1 olarak yazar (editör = yazar).
+  - Zaman: anket için oluşturma anı, yorum için son düzenleme veya oluşturma anı.
+  - Migration'dan önceki düzenlemelerin ara sürümleri bilinmez; bu bilinçli bir sınır.
+- **Testler:** `apps/api/test/revisions.test.ts` (5).
+
 ## Kalan işler
 
 | Konu | İş |
 |---|---|
-| İçerik sürüm geçmişi (`admin.revisions.*`, `poll_revisions`, `comment_revisions`): V1_USER_FLOW "admin içerik geçmişini inceleyebilir" | #66'nın ikinci parçası, ayrı PR (Faruk) |
+| Geçmiş okumasının kendisinin audit kaydı ("log erişimi de izlenebilir") | KV-39 (#41, Utku) `audit_logs` gelince |
+| Saklama/silme süreleri ("yayından önce belirlenir") | Ürün kararı (Mehmet); şu an süresiz saklanıyor |
 | Yayın puanı (10 puan) ve bakiye kontrolü | #67, Mehmet |
 | Tartışma kartı ve tepki düğmeleri (UI) | Ümit (#20) |
 | Kullanıcı tepki/oy değişimi logları (V1_USER_FLOW "Kullanıcı ve admin logları") | Audit/olay altyapısı: KV-39 (#41, Utku); `reaction.changed` olayı outbox'la birlikte |
