@@ -163,10 +163,11 @@ export interface ProductClient extends EngagementClient, DiscoveryClient {
   current(): User | null;
   create(draft: Draft, requestId: string): Promise<Poll>;
   vote(id: string, optionId: string): Promise<Poll>;
-  getProfile(username: string): Promise<PublicProfile>;
-  updateProfile(input: { displayName?: string; bio?: string | null }): Promise<User>;
-  getProfilePolls(username: string, cursor?: string): Promise<PageResult<Poll>>;
-  getProfileComments(username: string, cursor?: string): Promise<PageResult<ProfileComment>>;
-  getBookmarks(cursor?: string): Promise<PageResult<Poll>>;
-  setBookmark(id: string, saved: boolean): Promise<boolean>;
+  // KV-22 gerçek API client'ta zorunludur; demo adapter bu modüller için placeholder gösterebilir.
+  getProfile?(username: string): Promise<PublicProfile>;
+  updateProfile?(input: { displayName?: string; bio?: string | null }): Promise<User>;
+  getProfilePolls?(username: string, cursor?: string): Promise<PageResult<Poll>>;
+  getProfileComments?(username: string, cursor?: string): Promise<PageResult<ProfileComment>>;
+  getBookmarks?(cursor?: string): Promise<PageResult<Poll>>;
+  setBookmark?(id: string, saved: boolean): Promise<boolean>;
 }
