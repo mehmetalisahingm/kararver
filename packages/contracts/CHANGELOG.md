@@ -3,6 +3,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.13.0 — 2026-10-02 (Mert, KV-38 yasaklı görsel listesi)
+
+Kırıcı değişiklik yok (yeni endpoint'ler, yeni şema ve yeni işlem minor).
+
+- **Eklendi:** `admin.media.bans.list` (`GET /admin/media/bans`), `admin.media.bans.create` (`POST /admin/media/bans`, 200 mevcut / 201 yeni) ve `admin.media.bans.delete` (`DELETE /admin/media/bans/:id`). Üçü de `ready`, ADMIN+.
+- **Eklendi:** `BannedMediaView`; KV-04 işlemi `media.ban.manage` (admin). İşlem kataloğu 102 endpoint.
+- **Davranış:** worker yasaklı görselin aynı dosyasını (sha256) REJECTED/`BANNED_HASH`, çok benzerini (dHash) QUARANTINED/`BANNED_SIMILAR` yapar; yasaklı görsel `admin.media.decide` ile APPROVE edilemez (409).
+
 ## 1.12.0 — 2026-10-02 (Faruk, KV-43 oy geçersiz sayma)
 
 Kırıcı değişiklik yok (yeni endpoint, yeni işlem ve yeni şemalar minor).

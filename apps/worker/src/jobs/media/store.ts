@@ -9,6 +9,8 @@ export type MediaFacts = {
   originalMimeType?: string;
   originalSizeBytes?: number;
   contentSha256?: string;
+  /** İşlenmiş kopyanın dHash'i (KV-38). */
+  perceptualHash?: string;
   width?: number;
   height?: number;
   processedSizeBytes?: number;
@@ -24,7 +26,15 @@ export type Outcome =
   | { status: "APPROVED"; publicObjectKey: string; facts: MediaFacts & { processedObjectKey: string } }
   | { status: "QUARANTINED" | "REJECTED"; error: string | null; facts: MediaFacts };
 
+/** Yasaklı görsel parmak izi (KV-38); sha256 birebir, dHash yakınlık için. */
+export type BannedHash = { contentSha256: string | null; perceptualHash: string | null };
+
 export interface MediaJobStore {
+  /**
+   * Yasaklı görsel listesi. V1'de liste küçüktür (elle eklenir); bellekte karşılaştırılır. Binlerce satıra çıkarsa
+   * dHash karşılaştırması SQL'e (bit_count) taşınmalıdır.
+   */
+  bannedHashes(): Promise<BannedHash[]>;
   /** Sadece PENDING kaydı alır ve deneme sayısını artırır; işlenmiş/olmayan kayıtta null. */
   claim(id: string): Promise<ClaimedMedia | null>;
   /** Sadece hâlâ PENDING ise yazar (başka bir iş sonuçlandırdıysa false). */
@@ -33,6 +43,10 @@ export interface MediaJobStore {
 
 export function createPrismaMediaJobStore(prisma: PrismaClient): MediaJobStore {
   return {
+    async bannedHashes() {
+      return prisma.bannedMediaHash.findMany({ select: { contentSha256: true, perceptualHash: true } });
+    },
+
     async claim(id) {
       try {
         return await prisma.mediaAsset.update({

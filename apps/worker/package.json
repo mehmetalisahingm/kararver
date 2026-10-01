@@ -7,6 +7,7 @@
     "dev": "node --watch src/main.ts",
     "start": "node src/main.ts",
     "test": "node --test --test-concurrency=1 \"test/*.test.ts\"",
+    "hash:eval": "node scripts/hash-eval.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

@@ -1,9 +1,11 @@
 // media.process — KV-16 (#18). Akış ve kurallar: docs/MEDIA_MODERATION.md §5–§7.
 // orijinal (private) → imza kontrolü → re-encode + EXIF temizleme → işlenmiş kopya (private)
 // → moderasyon → LOW: public bucket + APPROVED · MEDIUM/HIGH/model hatası: QUARANTINED · geçersiz: REJECTED
+// Yasaklı görsel (KV-38): sha256 birebir eşleşirse REJECTED (BANNED_HASH), dHash çok yakınsa QUARANTINED (BANNED_SIMILAR).
 // Fail-closed: hiçbir hata yolu görseli yayına almaz.
 import { createHash } from "node:crypto";
 import { InvalidImageError, reencodeImage, sniffImageType } from "./image.ts";
+import { dHash, hamming, NEAR_DUPLICATE_MAX_DISTANCE } from "./phash.ts";
 import { ModerationFailedError, ModerationTimeoutError, type Moderator } from "./moderator.ts";
 import { assessRisk, DEFAULT_THRESHOLDS, type RiskThresholds } from "./policy.ts";
 import { ObjectTooLargeError, type WorkerStorage } from "./storage.ts";
@@ -78,6 +80,10 @@ async function decide(id: string, originalKey: string, deps: MediaJobDeps): Prom
     originalSizeBytes: original.length,
     contentSha256: createHash("sha256").update(original).digest("hex"),
   };
+  // Daha önce kaldırılıp yasaklanan dosyanın aynısı: çözmeden, işlemeden reddedilir.
+  const banned = await deps.store.bannedHashes();
+  if (banned.some((b) => b.contentSha256 === facts.contentSha256)) return reject("BANNED_HASH", facts);
+
   const type = sniffImageType(original);
   if (!type) return reject("INVALID_IMAGE", facts);
   facts.originalMimeType = type;
@@ -92,6 +98,11 @@ async function decide(id: string, originalKey: string, deps: MediaJobDeps): Prom
   const processed = processedKey(id);
   await deps.storage.writePrivate(processed, image.data, image.contentType);
   Object.assign(facts, { width: image.width, height: image.height, processedSizeBytes: image.data.length, processedObjectKey: processed });
+
+  // Yasaklı görsele çok benzeyen (yeniden boyutlandırılmış/sıkıştırılmış/kırpılmış) kopya: yayına girmez, insan bakar.
+  facts.perceptualHash = await dHash(image.data);
+  const similar = banned.some((b) => b.perceptualHash && hamming(b.perceptualHash, facts.perceptualHash!) <= NEAR_DUPLICATE_MAX_DISTANCE);
+  if (similar) return done({ status: "QUARANTINED", error: "BANNED_SIMILAR", facts });
 
   let detections;
   try {

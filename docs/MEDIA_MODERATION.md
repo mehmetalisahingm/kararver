@@ -160,9 +160,12 @@ TECH_DECISIONS §3.6'daki iki-bucket akışı (presigned upload → private buck
 | `GET /admin/media`: karantina / bekleyen / reddedilen kuyruğu (en eski önce). MODERATOR yalnız atandığı toplulukların görselini görür (anket galerisi veya topluluk görseli üzerinden); topluluğu olmayan görsel (avatar, topluluksuz anket) yalnız ADMIN+ kuyruğundadır. Önizleme işlenmiş kopyanın 5 dk'lık signed URL'idir; reddedilmiş görselin önizlemesini yalnız ADMIN+ alır | `apps/api/src/modules/media/admin-routes.ts` | ✅ |
 | `POST /admin/media/:id/decision`: `APPROVE` (QUARANTINED/REJECTED → APPROVED) işlenmiş kopyayı public bucket'a kopyalar; `REJECT` (QUARANTINED/APPROVED → REJECTED) public nesneyi siler ve `public_object_key`'i aynı UPDATE'te boşaltır. Karar `moderation_actions`'a yazılır; reddedilen görselin açık raporları `ACTIONED` olur. PENDING 409, aynı karar tekrarı idempotent | aynı | ✅ |
 
+| Yasaklı görsel listesi: `GET/POST /admin/media/bans`, `DELETE /admin/media/bans/:id` (ADMIN+). Yalnız REJECTED görsel yasaklanır; parmak izi (sha256 + dHash) `banned_media_hashes`'a yazılır, cevapta dönmez. Yasaklı görsel `admin.media.decide` ile onaylanamaz | `media/admin-routes.ts` | ✅ |
+| Worker: sha256 birebir eşleşme → `REJECTED` / `BANNED_HASH` (çözülmeden); dHash uzaklığı ≤ 6 → `QUARANTINED` / `BANNED_SIMILAR` (işlenmiş kopya saklanır, moderatör önizler). Her işlenen görselin dHash'i `media_assets.perceptual_hash`'e yazılır | `apps/worker/src/jobs/media/phash.ts`, `job.ts` | ✅ |
+
 Nesne anahtarları: orijinal `uploads/<uuid>/original` (private, API belirler, DB'de saklanır); işlenmiş ve public anahtarları worker belirler ve DB'ye yazar. Böylece API ve worker anahtar biçimini paylaşmak zorunda kalmaz.
 
-Worker sonuç kodları (`media_assets.processing_error`): `INVALID_IMAGE`, `MISSING_ORIGINAL`, `TOO_LARGE` → `REJECTED`; `MODERATION_TIMEOUT`, `MODEL_ERROR`, `PROCESSING_FAILED` → `QUARANTINED`. Orta/yüksek risk hatasız `QUARANTINED`'dır (`risk_level` dolu).
+Worker sonuç kodları (`media_assets.processing_error`): `INVALID_IMAGE`, `MISSING_ORIGINAL`, `TOO_LARGE`, `BANNED_HASH` → `REJECTED`; `MODERATION_TIMEOUT`, `MODEL_ERROR`, `PROCESSING_FAILED`, `BANNED_SIMILAR` → `QUARANTINED`. Orta/yüksek risk hatasız `QUARANTINED`'dır (`risk_level` dolu).
 
 **Deploy için açık konular:**
 - Worker imajında Python 3 ve `apps/worker/python/requirements.txt` kurulu olmalı (`MODERATION_PYTHON`). Hosting kararı (TECH_DECISIONS §3.7) kesinleşince Dockerfile/Railway ayarı eklenmeli.
@@ -171,7 +174,36 @@ Worker sonuç kodları (`media_assets.processing_error`): `INVALID_IMAGE`, `MISS
 - **Audit:** signed preview erişimi ve reddedilmiş görsel erişimi (§7) `audit_logs` tablosu KV-39 (#41, Utku) ile gelince yazılacak; o zamana kadar kararın izi `moderation_actions`'tadır, erişim izlenmez.
 - Moderasyon eşikleri ve `media.maxBytes` şimdilik sözleşme varsayılanlarından okunuyor; sistem ayarları servisi (KV-40) gelince oradan okunacak.
 
-## 10. Referanslar
+## 10. Yasaklı görsel parmak izi (KV-38, #40)
+
+**Karar:** Kaldırılan (REJECTED) bir görselin tekrar yüklenmesini iki parmak izi engeller:
+
+| Parmak izi | Eşleşme | Sonuç | Gerekçe |
+|---|---|---|---|
+| SHA-256 (orijinal dosya) | birebir | `REJECTED` / `BANNED_HASH`, görsel çözülmeden | Aynı dosya kesin aynı içeriktir; yanlış pozitif yok |
+| dHash (işlenmiş kopya, 64 bit) | Hamming uzaklığı ≤ 6 | `QUARANTINED` / `BANNED_SIMILAR`, insan karar verir | Yeniden boyut/sıkıştırma/hafif kırpma yakalanır; algısal hash yanlış pozitif verebilir, bu yüzden otomatik red yok |
+
+dHash 9×8 gri tona indirilmiş görselde komşu piksel karşılaştırmasıdır (64 bit). Düz bölgelerde sıkıştırma gürültüsünün biti çevirmemesi için 3/255'lik ölü bölge vardır. Beyaz zemine düzleştirilir (saydam/opak sürüm yakın kalır).
+
+**Ölçüm** (`pnpm --filter @kararver/worker hash:eval`, 300 sentetik görsel, 44.850 negatif çift; gerçek işlem hattı `reencodeImage → dHash`):
+
+| Dönüşüm | Eşik 6'da yakalanan | p95 uzaklık |
+|---|---|---|
+| yeniden boyut %50 / %25 / büyütme %150 | %100 / %100 / %100 | 2 / 2 / 1 |
+| JPEG q40 / WebP q30 / PNG | %100 / %100 / %100 | 2 / 2 / 0 |
+| bulanıklık σ=1,5 | %100 | 1 |
+| doygunluk −%30 / parlaklık +%15 | %99,7 / %98,7 | 4 / 5 |
+| kenar kırpma %3 | %98,0 | 5 |
+| kenar kırpma %10 | %32,3 | 13 |
+| yatay çevirme / 90° döndürme | %0 / %0 | 28 / 29 |
+
+- **Yanlış pozitif:** eşik 6'da 0 çift (en yakın farklı görsel çifti 8, medyan 30).
+- **Yanlış negatifler (bilinen sınırlar):** büyük kırpma (≥ %10), yatay çevirme ve döndürme yakalanmaz; dHash yön ve büyük çerçeve değişimine dayanıklı değildir. Bunlar için sha256 + moderatör kuyruğu devrededir; gerekirse V1.1'de çevrilmiş/döndürülmüş hash'ler de saklanabilir.
+- **Sınır:** küme sentetik (şekil + bulanıklık). Gerçek fotoğraflarda ve ekran görüntülerinde mesafe dağılımı farklıdır (benzer sahneler yakın düşer); eşik 6 bilerek dardır ve §8 madde 1'deki etiketli doğrulama seti hazır olunca yeniden ölçülmelidir. Düz renk görselin dHash'i 0'dır: yasaklı düz renk görseli diğer düz renkleri de incelemeye düşürür (zararsız, kuyruk).
+- **Ölçek:** yasak listesi worker'da bellekte karşılaştırılır (V1'de elle eklenen küçük liste). Binlerce satıra çıkarsa dHash karşılaştırması SQL'e (`bit_count`) taşınmalıdır.
+- **Açık:** risk eşiklerinin admin ayarıyla değiştirilmesi ve her değişimin gerekçeyle kaydı `admin.settings.*` (KV-40, #42, Utku) ile gelecek; eşikler şimdilik `DEFAULT_THRESHOLDS`. Görsel operasyon ekranı (#16 layout) ayrı iş.
+
+## 11. Referanslar
 
 - [`scripts/media-moderation-spike/`](../scripts/media-moderation-spike/) — çalıştırılabilir kanıt (README, `requirements.txt`, `generate_samples.py`, `benchmark.py`, `results.json`)
 - [`docs/TECH_DECISIONS.md`](./TECH_DECISIONS.md) §3.6 (object storage), §3.7 (hosting), §10 açık konu 5

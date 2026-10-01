@@ -2,7 +2,7 @@
 import type { Prisma, PrismaClient } from "@kararver/db";
 import { communityOfMedia } from "../moderation/community-of.ts";
 import { publicObjectKeyFor } from "./storage.ts";
-import type { IdempotencyScope, IdempotentResult, MediaRecord, MediaStatus, MediaStore } from "./store.ts";
+import type { BanRecord, IdempotencyScope, IdempotentResult, MediaRecord, MediaStatus, MediaStore } from "./store.ts";
 
 const recordSelect = {
   id: true,
@@ -16,6 +16,37 @@ const recordSelect = {
   height: true,
   createdAt: true,
 } as const;
+
+const banSelect = {
+  id: true,
+  sourceMediaId: true,
+  reason: true,
+  contentSha256: true,
+  perceptualHash: true,
+  createdAt: true,
+  createdBy: { select: { id: true, username: true, displayName: true, avatarMedia: { select: { status: true, publicObjectKey: true } } } },
+} as const;
+
+function toBan(row: {
+  id: string;
+  sourceMediaId: string;
+  reason: string;
+  contentSha256: string | null;
+  perceptualHash: string | null;
+  createdAt: Date;
+  createdBy: { id: string; username: string; displayName: string; avatarMedia: { status: string; publicObjectKey: string | null } | null };
+}): BanRecord {
+  const { avatarMedia, ...creator } = row.createdBy;
+  return {
+    id: row.id,
+    sourceMediaId: row.sourceMediaId,
+    reason: row.reason,
+    matchesExact: row.contentSha256 !== null,
+    matchesSimilar: row.perceptualHash !== null,
+    createdBy: { ...creator, avatarPublicKey: avatarMedia?.status === "APPROVED" ? avatarMedia.publicObjectKey : null },
+    createdAt: row.createdAt,
+  };
+}
 
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
@@ -104,7 +135,12 @@ export function createPrismaMediaStore(prisma: PrismaClient): MediaStore {
 
     async findForReview(id) {
       const media = (await prisma.mediaAsset.findUnique({ where: { id }, select: recordSelect })) as MediaRecord | null;
-      return media ? { ...media, communityId: await communityOfMedia(prisma, id) } : null;
+      if (!media) return null;
+      const [communityId, banned] = await Promise.all([
+        communityOfMedia(prisma, id),
+        prisma.bannedMediaHash.count({ where: { sourceMediaId: id } }),
+      ]);
+      return { ...media, communityId, banned: banned > 0 };
     },
 
     async applyDecision({ id, actorId, decision, reason, now }) {
@@ -120,6 +156,10 @@ export function createPrismaMediaStore(prisma: PrismaClient): MediaStore {
 
         const from: MediaStatus[] = decision === "APPROVE" ? ["QUARANTINED", "REJECTED"] : ["QUARANTINED", "APPROVED"];
         if (!from.includes(current.status)) return { kind: "conflict" as const, status: current.status, reason: "not_reviewable" as const };
+        // Yasaklı görsel (KV-38) yasak kaldırılmadan yayına alınamaz.
+        if (decision === "APPROVE" && (await tx.bannedMediaHash.count({ where: { sourceMediaId: id } })) > 0) {
+          return { kind: "conflict" as const, status: current.status, reason: "banned" as const };
+        }
         if (decision === "APPROVE" && current.processed_object_key === null) {
           return { kind: "conflict" as const, status: current.status, reason: "no_processed_copy" as const };
         }
@@ -148,6 +188,50 @@ export function createPrismaMediaStore(prisma: PrismaClient): MediaStore {
         }
         return { kind: "applied" as const, media };
       });
+    },
+
+    async listBans(after, limit) {
+      const rows = await prisma.bannedMediaHash.findMany({
+        where: after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {},
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit,
+        select: banSelect,
+      });
+      return rows.map(toBan);
+    },
+
+    async createBan({ mediaId, actorId, reason }) {
+      const media = await prisma.mediaAsset.findUnique({
+        where: { id: mediaId },
+        select: { status: true, contentSha256: true, perceptualHash: true },
+      });
+      if (!media) return { kind: "not_found" };
+      const existing = () =>
+        prisma.bannedMediaHash.findFirst({
+          where: { OR: [{ sourceMediaId: mediaId }, ...(media.contentSha256 ? [{ contentSha256: media.contentSha256 }] : [])] },
+          select: banSelect,
+        });
+      const found = await existing();
+      if (found) return { kind: "existing", ban: toBan(found) };
+      if (media.status !== "REJECTED") return { kind: "conflict", reason: "not_rejected" };
+      if (!media.contentSha256 && !media.perceptualHash) return { kind: "conflict", reason: "no_fingerprint" };
+      try {
+        const created = await prisma.bannedMediaHash.create({
+          data: { sourceMediaId: mediaId, contentSha256: media.contentSha256, perceptualHash: media.perceptualHash, reason, createdById: actorId },
+          select: banSelect,
+        });
+        return { kind: "created", ban: toBan(created) };
+      } catch (err) {
+        // Eşzamanlı aynı yasak: kaybeden taraf kazananın kaydını okur.
+        if (!isUniqueViolation(err)) throw err;
+        const winner = await existing();
+        if (!winner) throw err;
+        return { kind: "existing", ban: toBan(winner) };
+      }
+    },
+
+    async deleteBan(id) {
+      await prisma.bannedMediaHash.deleteMany({ where: { id } });
     },
   };
 }

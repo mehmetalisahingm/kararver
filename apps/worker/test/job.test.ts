@@ -236,4 +236,83 @@ describe("media.process (postgres)", { skip: url ? false : "TEST_DATABASE_URL yo
     const r = await row(id);
     assert.deepEqual([r.status, r.publicObjectKey], ["REJECTED", null]);
   });
+
+  // ─── Yasaklı görsel parmak izi (KV-38) ─────────────────────
+
+  /** Düz renk dHash'i sıfırdır; testte gradyanlı, tanınabilir bir görsel kullanılır. */
+  const scene = (seed: number, size = 640) => {
+    const shapes = [0, 1, 2, 3, 4].map((i) => {
+      const v = (seed * 37 + i * 53) % 255;
+      return `<circle cx="${(seed * 91 + i * 117) % size}" cy="${(seed * 53 + i * 71) % (size * 0.75)}" r="${40 + ((seed + i * 29) % 90)}" fill="rgb(${v},${(v * 3) % 255},${(v * 7) % 255})"/>`;
+    });
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size * 0.75}"><rect width="100%" height="100%" fill="rgb(${seed % 255},120,200)"/>${shapes.join("")}</svg>`;
+    return sharp(Buffer.from(svg)).blur(2).jpeg({ quality: 92 }).toBuffer();
+  };
+
+  const clean = fakeModerator(async () => []);
+
+  async function ban(sourceBytes: Buffer, s: ReturnType<typeof fakeStorage>) {
+    // Kaldırılan görsel: yasak listesine kendi sha256 + dHash'iyle girer.
+    const sourceId = await pendingMedia(sourceBytes, s);
+    await processMedia(sourceId, deps(s, clean));
+    const source = await row(sourceId);
+    await db.mediaAsset.update({ where: { id: sourceId }, data: { status: "REJECTED", publicObjectKey: null } });
+    await db.bannedMediaHash.create({
+      data: { sourceMediaId: sourceId, contentSha256: source.contentSha256, perceptualHash: source.perceptualHash, reason: "Test yasağı", createdById: uploaderId },
+    });
+    return source;
+  }
+
+  test("her işlenen görselin dHash'i kaydedilir", async () => {
+    const s = fakeStorage();
+    const id = await pendingMedia(await scene(11), s);
+    assert.equal(await processMedia(id, deps(s, clean)), "APPROVED");
+    assert.match((await row(id)).perceptualHash ?? "", /^[0-9a-f]{16}$/);
+  });
+
+  test("yasaklı görselin birebir aynısı çözülmeden REJECTED/BANNED_HASH olur ve public'e çıkmaz", async () => {
+    const s = fakeStorage();
+    const bytes = await scene(21);
+    await ban(bytes, s);
+
+    const again = await pendingMedia(bytes, s);
+    assert.equal(await processMedia(again, deps(s, clean)), "REJECTED");
+    const r = await row(again);
+    assert.deepEqual([r.status, r.processingError, r.publicObjectKey, r.processedObjectKey], ["REJECTED", "BANNED_HASH", null, null]);
+    assert.equal(r.contentSha256, createHash("sha256").update(bytes).digest("hex"));
+    assert.equal(s.pub.has(`m/${again}.webp`), false);
+  });
+
+  test("yasaklı görselin yeniden boyutlandırılmış/sıkıştırılmış kopyası QUARANTINED/BANNED_SIMILAR olur", async () => {
+    const s = fakeStorage();
+    const bytes = await scene(31);
+    await ban(bytes, s);
+    s.pub.clear();
+
+    const variant = await sharp(bytes).resize(320).jpeg({ quality: 45 }).toBuffer();
+    const id = await pendingMedia(variant, s);
+    assert.equal(await processMedia(id, deps(s, clean)), "QUARANTINED");
+    const r = await row(id);
+    assert.deepEqual([r.status, r.processingError, r.publicObjectKey], ["QUARANTINED", "BANNED_SIMILAR", null]);
+    assert.ok(r.processedObjectKey, "moderatör önizleyebilsin diye işlenmiş kopya saklanır");
+    assert.equal(s.pub.size, 0);
+  });
+
+  test("ilgisiz görsel yasaktan etkilenmez ve normal akışla yayınlanır", async () => {
+    const s = fakeStorage();
+    await ban(await scene(41), s);
+    const id = await pendingMedia(await scene(97), s);
+    assert.equal(await processMedia(id, deps(s, clean)), "APPROVED");
+    assert.equal((await row(id)).processingError, null);
+  });
+
+  test("yasak kaldırılınca aynı dosya yeniden yayınlanabilir", async () => {
+    const s = fakeStorage();
+    const bytes = await scene(51);
+    const source = await ban(bytes, s);
+    await db.bannedMediaHash.deleteMany({ where: { sourceMediaId: source.id } });
+
+    const id = await pendingMedia(bytes, s);
+    assert.equal(await processMedia(id, deps(s, clean)), "APPROVED");
+  });
 });
