@@ -16,8 +16,10 @@ import { ModerationFailedError, ModerationTimeoutError, type Moderator } from ".
 import type { Detection } from "../src/jobs/media/policy.ts";
 import { ObjectTooLargeError, type WorkerStorage } from "../src/jobs/media/storage.ts";
 import { createPrismaMediaJobStore } from "../src/jobs/media/store.ts";
+import { testDatabaseUrl } from "./support/db.ts";
 
-const url = process.env.TEST_DATABASE_URL;
+// Seçim kuralı support/db.ts (TEST_DATABASE_URL, yoksa .env DATABASE_URL + "_test"); yoksa uyarıyla atlanır.
+const url = testDatabaseUrl() ?? undefined;
 
 function fakeStorage() {
   const priv = new Map<string, Buffer>();
