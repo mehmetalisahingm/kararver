@@ -18,6 +18,7 @@ import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
 import { createPrismaRbacStore } from "./modules/rbac/prisma-store.ts";
 import { createPrismaReportStore } from "./modules/reports/prisma-store.ts";
 import { createPrismaSearchStore } from "./modules/search/prisma-store.ts";
+import { createPrismaTrendStore } from "./modules/trends/prisma-store.ts";
 import { createPrismaVoteStore } from "./modules/votes/prisma-store.ts";
 
 // Local'de repo kökündeki .env okunur; staging/production'da değerler ortamdan gelir.
@@ -42,6 +43,7 @@ const app = buildApp({
   searchStore: createPrismaSearchStore(prisma),
   categoryAdminStore: createPrismaCategoryAdminStore(prisma),
   feedStore: createPrismaFeedStore(prisma),
+  trendStore: createPrismaTrendStore(prisma),
   voteStore: createPrismaVoteStore(prisma),
   communityStore: createPrismaCommunityStore(prisma),
   onboardingStore: createPrismaOnboardingStore(prisma),

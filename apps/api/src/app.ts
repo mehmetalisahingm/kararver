@@ -33,6 +33,8 @@ import type { ReportStore } from "./modules/reports/store.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
 import { registerSearchRoutes } from "./modules/search/routes.ts";
 import type { SearchStore } from "./modules/search/store.ts";
+import { registerTrendRoutes } from "./modules/trends/routes.ts";
+import type { TrendStore } from "./modules/trends/store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
 import { registerUserRoutes } from "./modules/users/routes.ts";
 import { registerVoteRoutes } from "./modules/votes/routes.ts";
@@ -59,6 +61,8 @@ export type AppDeps = {
   feedStore?: FeedStore;
   /** Keşif payı ve tekrar sınırları (KV-40, #42); ayar servisi gelene kadar DEFAULT_FEED_SETTINGS. */
   feedSettings?: () => Promise<FeedSettings>;
+  /** pollStore ile birlikte verilirse trend listeleri (trends.list, KV-28) kaydedilir. */
+  trendStore?: TrendStore;
   /** Verilmezse oy route'u kaydedilmez. */
   voteStore?: VoteStore;
   /** Verilmezse topluluk route'ları kaydedilmez. */
@@ -156,6 +160,15 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         ? { store: deps.feedStore, settings: deps.feedSettings ?? (async () => DEFAULT_FEED_SETTINGS) }
         : undefined,
     });
+    if (deps.trendStore) {
+      registerTrendRoutes(route, {
+        store: deps.trendStore,
+        polls: deps.pollStore,
+        now,
+        mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+        settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+      });
+    }
     if (deps.searchStore) {
       registerSearchRoutes(route, {
         store: deps.searchStore,
