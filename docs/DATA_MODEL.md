@@ -268,11 +268,14 @@ UPDATE poll_options SET vote_count = vote_count + 1 WHERE id = :new;
 Anket açık mı kontrolü (`opens_at <= now() < LEAST(closes_at, closed_at)` ve `status = ACTIVE`) aynı transaction'da, anket satırı okunarak yapılır (KV-11).
 
 ### 5.4 Geçersiz oy (KV-43)
-- `votes.invalidated_at` ve `votes.invalidation_reason` birlikte dolar veya birlikte boş kalır (`votes_invalidation_check`). İşlemi kimin yaptığı Utku'nun audit log'una yazılır.
+- `votes.invalidated_at` ve `votes.invalidation_reason` birlikte dolar veya birlikte boş kalır (`votes_invalidation_check`). İşlemi kimin yaptığı `vote_events.actor_id`'de tutulur (KV-43; `vote_events_actor_check`: INVALIDATE/RESTORE'da aktör ve gerekçe zorunlu, CAST/CHANGE'de aktör yok). Audit tablosu (KV-39, Utku) gelince işlem oraya da yazılır.
 - Geçersiz sayma adımları: `invalidated_at` dolar, `vote_events`'e `INVALIDATE` satırı eklenir ve iki sayaç (`poll_options.vote_count`, `polls.vote_count`) 1 azaltılır. Hepsi tek transaction'da yapılır. İşlem `WHERE invalidated_at IS NULL` ile yazılır, böylece aynı oyu ikinci kez geçersiz saymak çift düşüm yapmaz (KV-43 kabul koşulu).
 - **Geçersiz oy hiçbir yerde sayılmaz:** sayaçlar, sonuç yüzdeleri, trend puanları ve snapshot'lar sadece `invalidated_at IS NULL` olan oyları kullanır.
 - Unique kısıt `(poll_id, user_id)` olmaya devam eder. Oyu geçersiz sayılan kullanıcı o ankete yeniden oy veremez; bu bilinçli bir karardır.
 - Ban tek başına geçmiş oyları geçersiz yapmaz (KV-43). Geçersiz sayma her zaman ayrı ve gerekçeli bir işlemdir.
+- **Geri alma (RESTORE):** `invalidated_at` boşalır, `vote_events`'e aktörlü ve gerekçeli `RESTORE` eklenir, sayaçlar 1 artar. Geri gelen geçerli oy anketi kilitler (`first_valid_vote_at` boşsa dolar).
+- **Geçmiş düzeltmesi (KV-43):** İşlem `polls.snapshots_stale_since`'i etkilenen oyun ilk verildiği ana çeker. Worker (`trends.refresh` her 5 dk, `snapshots.daily`) o günden anketin kapanışına veya düne kadar günlük snapshot'ları `vote_events`'ten yeniden üretir ve işareti temizler. Satırın `calculation_version`'ı hesap formülünün sürümüdür ve değişmez; düzeltme `computed_at` ile ve nedeni `vote_events` INVALIDATE/RESTORE kaydıyla (aktör, gerekçe, zaman) açıklanır. Trendler bir sonraki çalıştırmada zaten geçersiz oyu saymaz.
+- API: `admin.votes.invalidate` / `admin.votes.restore` (ADMIN+). Ayrıntı: [`KV-43_VOTE_INVALIDATION.md`](./KV-43_VOTE_INVALIDATION.md).
 
 ---
 
@@ -364,7 +367,7 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
   - Job geç çalışsa bile sonuç o anın dağılımıdır.
   - Job tekrar çalışabilir; `(poll_id, local_date)` üzerine upsert yapar (KV-29: "tekrar çalışan job").
   - Oy değiştiren kişi bir kez sayılır, çünkü kullanıcı başına son olay alınır (KV-29: "tekrar oy değişimi kişi sayısını büyütmüyor").
-  - KV-43 bir oyu geçersiz sayarsa, ilgili günler `calculation_version` artırılarak yeniden üretilir.
+  - KV-43 bir oyu geçersiz sayarsa veya geri alırsa, ilgili günler yeniden üretilir (§5.4 "Geçmiş düzeltmesi").
 - **Eksik geçmiş uydurulmaz:** Bir gün için satır yoksa o gün hesaplanmamıştır; ara değer (interpolasyon) yapılmaz. Eksik gün `vote_events`'ten tam olarak yeniden hesaplanabiliyorsa bu uydurma sayılmaz. `vote_events`'ten önceki bir döneme (sistem öncesi) ait snapshot üretilmez.
 - **Zamanlama:** `snapshots.daily` job'u her gün 00:05 Europe/Istanbul'da (`DAILY_SNAPSHOT_CRON`) bir önceki İstanbul günü için çalışır. Açık olan ve son 24 saatte kapanmış anketleri işler.
 

@@ -6,6 +6,7 @@
 // açmasını engeller (pg-boss singleton kuyruğuna ek güvence).
 // Okuyucular her format için en son SUCCEEDED çalıştırmayı okur: yarım veya başarısız çalıştırma ekrana yansımaz.
 import type { PrismaClient } from "@kararver/db";
+import { recomputeStaleSnapshots } from "../snapshots/job.ts";
 import { COMPUTED_FORMATS, slotEnd, TREND_CONFIG, type ComputedFormat } from "./config.ts";
 import { scoreQuery, windowStart, type ScoreRow } from "./score.ts";
 
@@ -84,6 +85,8 @@ export async function pruneRuns(deps: TrendJobDeps): Promise<number> {
 
 /** Job gövdesi: bütün formatlar sırayla; bir formatın hatası diğerlerini durdurmaz. */
 export async function refreshTrends(deps: TrendJobDeps): Promise<FormatResult[]> {
+  // KV-43: oy düzeltmesinden etkilenen snapshot'lar önce yeniden üretilir; Haftanın Değişkenleri bu çalıştırmada düzelir.
+  await recomputeStaleSnapshots(deps);
   const windowEnd = slotEnd(deps.now());
   const results: FormatResult[] = [];
   for (const format of COMPUTED_FORMATS) {

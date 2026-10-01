@@ -135,6 +135,7 @@ export const actions = Object.freeze({
 
   // ── admin ──
   "revision.read": rule("admin", "İçerik sürüm geçmişi"),
+  "vote.invalidate": rule("admin", "Oyu gerekçeyle geçersiz sayma / geri alma (KV-43)"),
   "community.create": rule("admin", "Topluluk açma"),
   "community.update": rule("admin", "Topluluk düzenleme/kapatma"),
   "community.moderator.assign": rule("admin", "Topluluk moderatörü atama/kaldırma"),
@@ -232,6 +233,8 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.media.decide": "media.review",
   "admin.revisions.polls": "revision.read",
   "admin.revisions.comments": "revision.read",
+  "admin.votes.invalidate": "vote.invalidate",
+  "admin.votes.restore": "vote.invalidate",
 
   "communities.list": "content.read",
   "communities.get": "content.read",

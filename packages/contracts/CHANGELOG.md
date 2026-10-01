@@ -3,6 +3,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.12.0 — 2026-10-02 (Faruk, KV-43 oy geçersiz sayma)
+
+Kırıcı değişiklik yok (yeni endpoint, yeni işlem ve yeni şemalar minor).
+
+- **Eklendi:** `admin.votes.invalidate` (`POST /admin/votes/invalidate`; hedef `VOTES` veya `ACCOUNTS`, isteğe bağlı `pollId`) ve `admin.votes.restore` (`POST /admin/votes/restore`). İkisi de `ready`; gövde `reason` ister.
+- **Eklendi:** `InvalidateVotesBody`, `RestoreVotesBody`, `VoteCorrectionResult`; KV-04 işlemi `vote.invalidate` (admin).
+- **Değişti:** KV-04 işlem kataloğu 99 endpoint (belge ve test senkron).
+
 ## 1.11.0 — 2026-10-01 (Faruk, #66 içerik sürüm geçmişi)
 
 Kırıcı değişiklik yok (planlı endpoint'in hazır olması ve yeni DB hata eşlemesi minor).

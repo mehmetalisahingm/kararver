@@ -71,7 +71,7 @@ route("admin.reports.resolve", async ({ params, authorize }) => {
 
 ### 1.3 İşlem kataloğu
 
-97 endpoint'in her biri tam olarak bir işleme bağlıdır. Eşlemesi olmayan endpoint, registry'de olmayan eşleme, kullanılmayan işlem veya endpoint `auth` seviyesiyle uyuşmayan kural testte kırılır.
+99 endpoint'in her biri tam olarak bir işleme bağlıdır. Eşlemesi olmayan endpoint, registry'de olmayan eşleme, kullanılmayan işlem veya endpoint `auth` seviyesiyle uyuşmayan kural testte kırılır.
 
 | Seviye | İşlemler |
 |---|---|
@@ -80,7 +80,7 @@ route("admin.reports.resolve", async ({ params, authorize }) => {
 | verified | `poll.create` (kısıt: POSTING) · `vote.cast` (kural: selfVote) · `comment.create` (kısıt: COMMENTS) · `media.upload` (kısıt: POSTING, avatar hariç) |
 | owner | `poll.update` (kısıt: POSTING) · `poll.close` · `poll.delete` · `poll.addendum.create` (kısıt: POSTING) · `comment.update` (kısıt: COMMENTS) · `comment.delete` · `decision.set` (kısıt: POSTING) · `media.complete` (kısıt: POSTING, avatar hariç) · `media.read` |
 | moderator | `report.queue.read` (kapsam: queue) · `report.resolve` (kapsam: community) · `moderation.poll.apply` (kapsam: community) · `moderation.comment.apply` (kapsam: community) · `media.queue.read` (kapsam: queue) · `media.review` (kapsam: community) |
-| admin | `revision.read` · `community.create` · `community.update` · `community.moderator.assign` · `user.read` · `user.sanction` (kural: sanctionTarget) · `user.sanction.lift` (kural: sanctionTarget) · `settings.read` · `audit.read` · `points.adjust` · `metrics.read` · `featured.manage` · `announcement.manage` · `category.manage` |
+| admin | `revision.read` · `vote.invalidate` · `community.create` · `community.update` · `community.moderator.assign` · `user.read` · `user.sanction` (kural: sanctionTarget) · `user.sanction.lift` (kural: sanctionTarget) · `settings.read` · `audit.read` · `points.adjust` · `metrics.read` · `featured.manage` · `announcement.manage` · `category.manage` |
 | super_admin | `user.role.assign` (kural: roleAssignment) · `settings.update` · `emergency.update` |
 
 ---

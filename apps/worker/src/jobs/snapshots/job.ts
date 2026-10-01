@@ -6,7 +6,7 @@
 // - Kullanıcı başına son olay alındığı için oy değiştiren kişi bir kez sayılır.
 // - Job geç veya tekrar çalışsa sonuç aynıdır: (poll_id, local_date) üzerine upsert.
 // - Eksik geçmiş uydurulmaz: satır sadece vote_events'ten hesaplanabilen, bitmiş günler için yazılır.
-import type { PrismaClient } from "@kararver/db";
+import { Prisma, type PrismaClient } from "@kararver/db";
 
 export const SNAPSHOTS_QUEUE = "snapshots.daily";
 /** DATA_MODEL §8.2 "Zamanlama" (DAILY_SNAPSHOT_CRON), TECH_DECISIONS §3.5. */
@@ -37,10 +37,11 @@ function addDays(localDate: string, days: number): string {
 /**
  * Bir İstanbul günü için snapshot'ları yazar ve yazılan anket sayısını döner. Gün bitmemişse (cutoff > now)
  * hiçbir şey yazılmaz. İşlenen anketler: gün sonuna kadar açılmış ve gün başında hâlâ açık olanlar (açık
- * olanlar ve o gün kapananlar).
+ * olanlar ve o gün kapananlar). pollIds verilirse sadece o anketler (KV-43 düzeltmesi).
  */
-export async function snapshotDay(deps: SnapshotJobDeps, localDate: string): Promise<number> {
+export async function snapshotDay(deps: SnapshotJobDeps, localDate: string, pollIds?: string[]): Promise<number> {
   const now = deps.now().toISOString();
+  const only = (column: Prisma.Sql) => (pollIds ? Prisma.sql`AND ${column} = ANY(${pollIds}::uuid[])` : Prisma.empty);
   return deps.prisma.$transaction(async (tx) => {
     const days = await tx.$executeRaw`
       WITH bounds AS (
@@ -54,6 +55,7 @@ export async function snapshotDay(deps: SnapshotJobDeps, localDate: string): Pro
         WHERE b.cutoff_at <= ${now}::timestamptz
           AND p.opens_at < b.cutoff_at
           AND coalesce(p.closed_at, p.closes_at) > b.day_start
+          ${only(Prisma.sql`p.id`)}
       ),
       last_event AS (
         SELECT DISTINCT ON (e.poll_id, e.user_id) e.poll_id, e.vote_id, e.type, e.to_option_id
@@ -81,7 +83,7 @@ export async function snapshotDay(deps: SnapshotJobDeps, localDate: string): Pro
       WITH bounds AS (
         SELECT ${localDate}::date AS local_date, ((${localDate}::date + 1)::timestamp AT TIME ZONE ${SNAPSHOT_TIME_ZONE}) AS cutoff_at
       ),
-      day_rows AS (SELECT s.poll_id FROM poll_daily_snapshots s, bounds b WHERE s.local_date = b.local_date),
+      day_rows AS (SELECT s.poll_id FROM poll_daily_snapshots s, bounds b WHERE s.local_date = b.local_date ${only(Prisma.sql`s.poll_id`)}),
       last_event AS (
         SELECT DISTINCT ON (e.poll_id, e.user_id) e.poll_id, e.vote_id, e.type, e.to_option_id
         FROM vote_events e JOIN day_rows d ON d.poll_id = e.poll_id, bounds b
@@ -103,8 +105,42 @@ export async function snapshotDay(deps: SnapshotJobDeps, localDate: string): Pro
   }, { timeout: 120_000 });
 }
 
-/** Job gövdesi: dünden geriye CATCH_UP_DAYS bitmiş gün. */
+/** Bir çalıştırmada en fazla kaç düzeltme bekleyen anket işlenir (kalanlar sonraki çalıştırmada). */
+export const STALE_BATCH = 50;
+
+/**
+ * KV-43: Oy geçersiz sayıldı veya geri alındıysa (polls.snapshots_stale_since) etkilenen günler yeniden üretilir:
+ * işaretin İstanbul gününden düne kadar. vote_events'ten tam hesap olduğu için geçmiş uydurulmaz; satırın computed_at'i
+ * yenilenir, düzeltmenin nedeni vote_events INVALIDATE/RESTORE kaydındadır (aktör, gerekçe, zaman). İşaret, okunduğu
+ * değer değişmediyse temizlenir: arada yeni düzeltme geldiyse bir sonraki çalıştırma onu da işler.
+ */
+export async function recomputeStaleSnapshots(deps: SnapshotJobDeps): Promise<{ pollId: string; days: number }[]> {
+  const stale = await deps.prisma.poll.findMany({
+    where: { snapshotsStaleSince: { not: null } },
+    select: { id: true, snapshotsStaleSince: true, closedAt: true, closesAt: true },
+    orderBy: { snapshotsStaleSince: "asc" },
+    take: STALE_BATCH,
+  });
+  const yesterday = addDays(istanbulDate(deps.now()), -1);
+  const done = [];
+  for (const poll of stale) {
+    // Snapshot satırı sadece anketin açık olduğu günler için vardır: kapanış gününden sonrası taranmaz.
+    const end = poll.closedAt ?? poll.closesAt;
+    const last = end && istanbulDate(end) < yesterday ? istanbulDate(end) : yesterday;
+    let days = 0;
+    for (let d = istanbulDate(poll.snapshotsStaleSince!); d <= last; d = addDays(d, 1)) {
+      days += await snapshotDay(deps, d, [poll.id]);
+    }
+    await deps.prisma.poll.updateMany({ where: { id: poll.id, snapshotsStaleSince: poll.snapshotsStaleSince }, data: { snapshotsStaleSince: null } });
+    done.push({ pollId: poll.id, days });
+  }
+  if (done.length > 0) deps.log("info", "snapshots: oy düzeltmesi yeniden üretildi", { polls: done });
+  return done;
+}
+
+/** Job gövdesi: önce oy düzeltmeleri (KV-43), sonra dünden geriye CATCH_UP_DAYS bitmiş gün. */
 export async function runDailySnapshots(deps: SnapshotJobDeps): Promise<{ localDate: string; polls: number }[]> {
+  await recomputeStaleSnapshots(deps);
   const today = istanbulDate(deps.now());
   const results = [];
   for (let back = CATCH_UP_DAYS; back >= 1; back--) {

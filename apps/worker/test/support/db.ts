@@ -117,7 +117,7 @@ export function fixtures(db: PrismaClient) {
       select: { id: true },
     });
     await db.voteEvent.createMany({
-      data: events.map((e) => ({ voteId: vote.id, pollId, userId: userId!, type: e.type, fromOptionId: e.from, toOptionId: e.to, occurredAt: e.at, reason: e.type === "INVALIDATE" ? "test" : null })),
+      data: events.map((e) => ({ voteId: vote.id, pollId, userId: userId!, type: e.type, fromOptionId: e.from, toOptionId: e.to, occurredAt: e.at, reason: e.type === "INVALIDATE" || e.type === "RESTORE" ? "test" : null, actorId: e.type === "INVALIDATE" || e.type === "RESTORE" ? userId! : null })),
     });
     return userId!;
   }

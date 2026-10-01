@@ -42,6 +42,7 @@ import { registerTrendRoutes } from "./modules/trends/routes.ts";
 import type { TrendStore } from "./modules/trends/store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
 import { registerUserRoutes } from "./modules/users/routes.ts";
+import { registerVoteAdminRoutes } from "./modules/votes/admin-routes.ts";
 import { registerVoteRoutes } from "./modules/votes/routes.ts";
 import type { VoteStore } from "./modules/votes/store.ts";
 
@@ -197,7 +198,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   }
   if (deps.categoryAdminStore) registerCategoryAdminRoutes(route, { store: deps.categoryAdminStore, now });
   if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
-  if (deps.voteStore) registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
+  if (deps.voteStore) {
+    registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
+    registerVoteAdminRoutes(route, { store: deps.voteStore, now });
+  }
   if (deps.communityStore) registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
