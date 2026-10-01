@@ -63,7 +63,7 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
   }
 
   async function login(account: { email: string; password: string }) {
-    const response = await send("POST", "/auth/login", account);
+    const response = await send("POST", "/auth/login", { email: account.email, password: account.password });
     assert.equal(response.statusCode, 200, response.body);
     return { cookie: sessionCookie(response.headers["set-cookie"]), id: response.json().data.id as string };
   }

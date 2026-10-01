@@ -1,7 +1,7 @@
-import { Category, CommunityCard, Me, PollCard, PollDetail, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
+import { Category, CommentView, CommunityCard, Me, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
 import { UiError, safeReturnTo } from "./model.ts";
-import type { Draft, Poll, ProductClient, User } from "./model.ts";
+import type { Draft, PageResult, Poll, ProductClient, ProfileComment, PublicProfile, User } from "./model.ts";
 import { ApiEngagement } from "../features/social/api-engagement.ts";
 import type { CommentDraft, Reaction } from "../features/social/model.ts";
 import type { FeedTab, SearchType, SearchResult, TrendFormat, TrendPage } from "../features/discovery/model.ts";
@@ -46,7 +46,17 @@ export class ApiClient implements ProductClient {
   current() { return this.user; }
   private acceptUser(value: unknown) {
     const { data } = dataOf(Me).parse(value);
-    return this.setUser({ id: data.id, name: data.displayName, email: data.email, verified: data.emailVerified, balance: null })!;
+    return this.setUser({
+      id: data.id,
+      name: data.displayName,
+      email: data.email,
+      verified: data.emailVerified,
+      balance: null,
+      username: data.username,
+      bio: data.bio,
+      avatarUrl: data.avatarUrl,
+      createdAt: data.createdAt,
+    })!;
   }
   async restore() {
     try { return this.acceptUser(await this.http.request("me.get")); }
@@ -72,6 +82,38 @@ export class ApiClient implements ProductClient {
     const publicId = id.match(/-([A-Za-z0-9]{8})$/)?.[1];
     if (!uuid && !publicId) throw new UiError("NOT_FOUND", "İçerik bağlantısı geçersiz.");
     return mapPoll(dataOf(PollDetail).parse(await this.http.request(uuid ? "polls.get" : "polls.lookup", uuid ? { params: { id } } : { query: { publicId } })).data);
+  }
+  async getProfile(username: string): Promise<PublicProfile> {
+    return dataOf(WirePublicProfile).parse(await this.http.request("profiles.get", { params: { username } })).data;
+  }
+  async updateProfile(input: { displayName?: string; bio?: string | null }) {
+    return this.acceptUser(await this.http.request("me.update", { body: input }));
+  }
+  async getProfilePolls(username: string, cursor?: string): Promise<PageResult<Poll>> {
+    const page = pageOf(PollCard).parse(await this.http.request("profiles.polls", { params: { username }, query: { cursor } }));
+    return { ...page, data: page.data.map(mapPoll) };
+  }
+  async getProfileComments(username: string, cursor?: string): Promise<PageResult<ProfileComment>> {
+    const page = pageOf(CommentView).parse(await this.http.request("profiles.comments", { params: { username }, query: { cursor } }));
+    return {
+      ...page,
+      data: page.data.map((comment) => ({
+        id: comment.id,
+        pollId: comment.pollId,
+        body: comment.body ?? "",
+        createdAt: comment.createdAt,
+        likes: comment.reactions.likes,
+        dislikes: comment.reactions.dislikes,
+      })),
+    };
+  }
+  async getBookmarks(cursor?: string): Promise<PageResult<Poll>> {
+    const page = pageOf(PollCard).parse(await this.http.request("bookmarks.list", { query: { cursor } }));
+    return { ...page, data: page.data.map(mapPoll) };
+  }
+  async setBookmark(id: string, saved: boolean) {
+    const response = await this.http.request(saved ? "bookmarks.put" : "bookmarks.delete", { params: { id } }) as { data: { saved: boolean } };
+    return response.data.saved;
   }
   async publicationCategories() { return dataOf(Category.array()).parse(await this.http.request("categories.list")).data; }
   async interests() {

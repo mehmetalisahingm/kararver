@@ -194,6 +194,7 @@ describe("migration", () => {
         "comment_revisions_append_only",
         "comments_single_level",
         "moderation_actions_append_only",
+        "point_ledger_entries_append_only",
         "poll_options_check_kind",
         "poll_options_guard_locked",
         "poll_revisions_append_only",

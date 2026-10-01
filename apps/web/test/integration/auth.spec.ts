@@ -24,7 +24,9 @@ test("real auth HTTP: registration, fragment verification, cookie reload, reset 
   await expect(page.getByRole("button",{name:"Çıkış",exact:true})).toBeVisible();
   const cookies=await page.context().cookies();expect(cookies.find(c=>c.name==="kv_session")?.httpOnly).toBe(true);
   await page.goto("/hesap");await page.reload();
-  await expect(page.getByRole("heading",{name:"Merhaba, Ümit Test."})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Ümit Test",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Kaydedilenler",exact:true})).toBeVisible();
+  await expect(page.getByText("Henüz bir gönderi kaydetmedin.",{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>Object.keys(localStorage))).toEqual([]);
   await expect(page.locator(".balance")).toHaveCount(0);
   expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);

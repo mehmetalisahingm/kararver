@@ -12,6 +12,20 @@ model UserInterest {
   @@map("user_interests")
 }
 
+// KV-22 (#24) — kullanıcının private kaydetme listesi.
+// Çekirdek User/Poll modellerini modül sahipliği dışında büyütmemek için scalar kimliklerle tutulur.
+// Uygulama görünürlük/mevcut-kayıt kontrolünü transaction içinde yapar; ürün hard delete yerine soft-delete kullanır.
+model Bookmark {
+  userId    String   @map("user_id") @db.Uuid
+  pollId    String   @map("poll_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([userId, pollId])
+  @@index([userId, createdAt(sort: Desc), pollId(sort: Desc)])
+  @@index([pollId])
+  @@map("bookmarks")
+}
+
 // V1 #67 — yayın puanı, güven/itibar puanından tamamen ayrıdır.
 enum PointLedgerReason {
   INITIAL_GRANT
@@ -26,7 +40,9 @@ enum PointLedgerReason {
 model PointAccount {
   userId    String   @id @map("user_id") @db.Uuid
   balance   Int      @default(0)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@map("point_accounts")
 }
@@ -40,6 +56,8 @@ model PointLedgerEntry {
   referenceId    String?           @map("reference_id") @db.Uuid
   idempotencyKey String            @map("idempotency_key") @db.VarChar(200)
   createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
