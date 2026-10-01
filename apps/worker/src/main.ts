@@ -1,5 +1,5 @@
 // Worker giriş noktası: pnpm --filter @kararver/worker dev (TECH_DECISIONS §3.5).
-// media.process (Mert, KV-16) ve trends.refresh (Faruk, KV-28). Diğer job'lar (snapshots, notifications) kendi
+// media.process (Mert, KV-16), trends.refresh (Faruk, KV-28) ve snapshots.daily (Faruk, KV-29). Diğer job'lar (notifications) kendi
 // klasörlerinde eklenir ve burada kaydedilir.
 import path from "node:path";
 import { defaultSettings } from "@kararver/contracts";
@@ -10,6 +10,7 @@ import { MEDIA_PROCESS_QUEUE, MEDIA_QUEUE_OPTIONS, processMedia } from "./jobs/m
 import { createSubprocessModerator } from "./jobs/media/moderator.ts";
 import { createS3WorkerStorage } from "./jobs/media/storage.ts";
 import { createPrismaMediaJobStore } from "./jobs/media/store.ts";
+import { runDailySnapshots, SNAPSHOT_TIME_ZONE, SNAPSHOTS_CRON, SNAPSHOTS_QUEUE } from "./jobs/snapshots/job.ts";
 import { TRENDS_CRON, TRENDS_QUEUE } from "./jobs/trends/config.ts";
 import { refreshTrends } from "./jobs/trends/job.ts";
 
@@ -67,7 +68,15 @@ await boss.work(TRENDS_QUEUE, { batchSize: 1 }, async () => {
   await refreshTrends({ prisma, now: () => new Date(), log });
   log("info", "trends.refresh bitti", { ms: Date.now() - started });
 });
-log("info", "worker hazır", { queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE], concurrency: config.mediaConcurrency });
+// snapshots.daily: her gün 00:05 İstanbul; son günleri upsert eder (tekrar çalışması güvenli).
+await boss.createQueue(SNAPSHOTS_QUEUE, { policy: "singleton", retryLimit: 3, retryDelay: 300 });
+await boss.schedule(SNAPSHOTS_QUEUE, SNAPSHOTS_CRON, null, { tz: SNAPSHOT_TIME_ZONE });
+await boss.work(SNAPSHOTS_QUEUE, { batchSize: 1 }, async () => {
+  const started = Date.now();
+  await runDailySnapshots({ prisma, now: () => new Date(), log });
+  log("info", "snapshots.daily bitti", { ms: Date.now() - started });
+});
+log("info", "worker hazır", { queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE], concurrency: config.mediaConcurrency });
 
 async function shutdown(signal: string): Promise<void> {
   log("info", "kapanıyor", { signal });

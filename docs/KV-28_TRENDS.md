@@ -20,7 +20,7 @@ Pencereler kayandır ve pencere sonu 5 dakikalık dilime yuvarlanır. Günlük: 
 | `WEEKLY_RISING` Haftanın Yükselenleri | `yeni² / (önceki + yeni + 10)`; yeni = bu hafta oy veren, önceki = pencereden önceki geçerli oy | yeni ≥ 10 | "Toplam oya göre değil, artış hızına göre": aynı haftalık oyu alan iki anketten oyu yeni gelen öne geçer |
 | `WEEKLY_MOST_VOTED` En Çok Oy Verilenler | bu hafta oy veren benzersiz hesap | ≥ 1 | "Son 7 günde en fazla benzersiz oy" |
 | `WEEKLY_MOST_DISCUSSED` En Çok Konuşulanlar | yorum (sınırlı) + 2 × benzersiz yorumcu | yorumcu ≥ 1 | "Yorum + cevap + benzersiz yorumcu" |
-| `WEEKLY_MOVERS` Haftanın Değişkenleri | — | — | KV-29 (#31). O zamana kadar boş liste + `INSUFFICIENT_HISTORY` |
+| `WEEKLY_MOVERS` Haftanın Değişkenleri | en çok değişen seçeneğin yüzde puan farkı (günlük snapshot'lardan) | iki uçta ≥ 30 oy, ikinci pencerede ≥ 10 aktif hesap | KV-29 (#31): [KV-29_SNAPSHOTS_MOVERS.md](./KV-29_SNAPSHOTS_MOVERS.md) |
 
 - Eşitlikte yeni anket önce, sonra `id` (deterministik).
 - Aynı veride dört formatın dört farklı sırası testte doğrulanıyor (`apps/worker/test/trends.test.ts`, ilk test).
@@ -62,7 +62,7 @@ Her kural için bir test var. Mutasyon kontrolü: sınır, yazar hariç tutma, g
 - **Cursor** çalıştırma kimliğini ve sıralamadaki konumu taşır: kaydırma sırasında sıra değişmez. Yeni çalıştırma gelince eski cursor 400 `INVALID_CURSOR` (sözleşme notu). Filtre değişimi ve bozuk konum da 400.
 - Sayfalar arasında gizlenen anket yerini korur; gösterilmez, tekrar ve kayıp olmaz.
 - Kart `PollCard`; AFTER_VOTE anketin sonucu misafire gizli. Trend puanı ve bileşenleri API'de verilmez (sözleşme).
-- `movement` KV-28 formatlarında `null`.
+- `movement` sadece `WEEKLY_MOVERS`'ta dolu (KV-29), diğer formatlarda `null`.
 
 ## Performans
 
@@ -80,7 +80,7 @@ Dört format birlikte ~0,5 sn / 5 dk. Pencere oyları `votes_created_at_idx` ile
 ## Testler
 
 - `apps/worker/test/trends.test.ts` (8, PostgreSQL): dört formatın sırası, bileşenler, sürüm ve pencere; kötüye kullanım sınırları ve ham rapor; görünürlük ve trendden çıkarma; aynı dilim, eşzamanlı ve kilit bekleyen çalıştırma; bayat `RUNNING`; hata; saklama. Trend hesabı bütün veritabanına baktığı için her test rastgele ve uzak bir gelecek penceresine kendi verisini kurar.
-- `apps/api/test/trends.test.ts` (5, PostgreSQL): `WEEKLY_MOVERS` boş; güncel başarılı çalıştırma ve meta; kategori filtresi ve sıra numarası; AFTER_VOTE kartı; sayfalar arası gizleme; cursor'un çalıştırmaya bağlılığı.
+- `apps/api/test/trends.test.ts` (5, PostgreSQL): `WEEKLY_MOVERS` hareket kartı ve boş durum (KV-29); güncel başarılı çalıştırma ve meta; kategori filtresi ve sıra numarası; AFTER_VOTE kartı; sayfalar arası gizleme; cursor'un çalıştırmaya bağlılığı.
 
 ## Kalan işler
 
@@ -89,7 +89,6 @@ Dört format birlikte ~0,5 sn / 5 dk. Pencere oyları `votes_created_at_idx` ile
 | Katsayıların ürün teyidi | Mehmet |
 | Katsayıları admin'den değiştirme | KV-40 (#42), Utku |
 | `EXCLUDE_FROM_TRENDS` / `INCLUDE_IN_TRENDS` işlemi (sütunu yazan) | KV-37 (#39), Mert |
-| Haftanın Değişkenleri | KV-29 (#31), Faruk |
 | Geçersiz oy sonrası yeniden hesap (sürüm artırma) | KV-43 (#45), Faruk |
 | `poll.trending` olayı (listeye giren ankete bildirim) | Olay kataloğunda var (KV-04); bildirim altyapısı (KV-21, Utku) gelince job'dan üretilecek |
 | Kaydetme sinyali (plan formülündeki `saves`) | Bookmark tablosu (KV-22, Mehmet) gelince |

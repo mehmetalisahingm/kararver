@@ -11,7 +11,7 @@ import type { PrismaClient } from "@kararver/db";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
 const backend = prismaBackend();
-type Format = "DAILY_RISING" | "WEEKLY_RISING" | "WEEKLY_MOST_VOTED" | "WEEKLY_MOST_DISCUSSED";
+type Format = "DAILY_RISING" | "WEEKLY_RISING" | "WEEKLY_MOST_VOTED" | "WEEKLY_MOST_DISCUSSED" | "WEEKLY_MOVERS";
 
 describe("trend listeleri (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok (CI'da çalışır)" }, () => {
   let h: Harness;
@@ -114,10 +114,70 @@ describe("trend listeleri (postgres)", { skip: backend ? false : "TEST_DATABASE_
     await h?.close();
   });
 
-  test("Haftanın Değişkenleri KV-29'a kadar boş liste ve INSUFFICIENT_HISTORY", async () => {
-    const res = await get("/trends/WEEKLY_MOVERS");
-    assert.equal(res.statusCode, 200);
-    assert.deepEqual(TrendPage.parse(res.json()), { data: [], page: { nextCursor: null, hasMore: false }, meta: null, reason: "INSUFFICIENT_HISTORY" });
+  test("Haftanın Değişkenleri: hareket bileşenlerden gelir; eşiği geçen yoksa INSUFFICIENT_HISTORY", async () => {
+    const W = await nextWindowEnd();
+    const empty = await seedRun("WEEKLY_MOVERS", [], W);
+    const none = TrendPage.parse((await get("/trends/WEEKLY_MOVERS")).json());
+    assert.deepEqual([none.data, none.reason, none.meta?.windowEnd], [[], "INSUFFICIENT_HISTORY", empty.windowEnd.toISOString()]);
+
+    const cat = await newCategory();
+    const pollId = await createPoll(cat);
+    const optionId = (await db.pollOption.findFirstOrThrow({ where: { pollId, position: 0 }, select: { id: true } })).id;
+    const run = await db.trendRun.create({
+      data: {
+        format: "WEEKLY_MOVERS",
+        calculationVersion: 1,
+        status: "SUCCEEDED",
+        windowStart: W,
+        windowEnd: new Date(W.getTime() + 5 * 60_000),
+        startedAt: W,
+        finishedAt: new Date(W.getTime() + 6 * 60_000),
+        scores: {
+          create: [
+            {
+              pollId,
+              rank: 1,
+              score: 26.92,
+              // jsonb_build_object zamanı "+00:00" biçiminde yazar; API ISO-8601 (Z) döner.
+              components: {
+                optionId,
+                fromPercent: 75,
+                toPercent: 48.08,
+                deltaPoints: -26.92,
+                sampleFrom: 40,
+                sampleTo: 52,
+                windowFromEnd: "2031-01-07T21:00:00+00:00",
+                windowToEnd: "2031-01-14T21:00:00+00:00",
+                activeAccounts: 17,
+              },
+            },
+          ],
+        },
+      },
+    });
+    createdRuns.push(run.id);
+    const page = TrendPage.parse((await get(`/trends/WEEKLY_MOVERS?categoryId=${cat}`)).json());
+    assert.equal(page.reason, undefined);
+    assert.deepEqual(
+      page.data.map((d) => [d.rank, d.poll.id, d.movement]),
+      [
+        [
+          1,
+          pollId,
+          {
+            optionId,
+            fromPercent: 75,
+            toPercent: 48.08,
+            deltaPoints: -26.92,
+            sampleFrom: 40,
+            sampleTo: 52,
+            windowFromEnd: "2031-01-07T21:00:00.000Z",
+            windowToEnd: "2031-01-14T21:00:00.000Z",
+          },
+        ],
+      ],
+      "activeAccounts ve puan public değil",
+    );
   });
 
   test("güncel başarılı çalıştırma okunur; sonraki başarısız/süren çalıştırma ekrana yansımaz; meta dolu", async () => {

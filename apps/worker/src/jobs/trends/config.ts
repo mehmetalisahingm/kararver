@@ -4,14 +4,15 @@
 // trend_runs.calculation_version'a yazar; aynı sürüm aynı veriden aynı sıralamayı verir (açıklanabilirlik).
 // Değerler Faruk'un önerisidir (PRODUCT_TEAM_PLAN §8 formül mantığını verir, sayı vermez); Mehmet teyidi bekliyor.
 // Admin'den değiştirme KV-40 (#42) ayar servisiyle; o zaman sürüm ayar değişikliğiyle birlikte artar.
+import { defaultSettings } from "@kararver/contracts";
 
 export const TRENDS_QUEUE = "trends.refresh";
 /** Her 5 dakikada (TECH_DECISIONS §3.5). */
 export const TRENDS_CRON = "*/5 * * * *";
 export const SLOT_MINUTES = 5;
 
-/** KV-28'in hesapladığı formatlar. WEEKLY_MOVERS KV-29'da (#31). */
-export const COMPUTED_FORMATS = ["DAILY_RISING", "WEEKLY_RISING", "WEEKLY_MOST_VOTED", "WEEKLY_MOST_DISCUSSED"] as const;
+/** Hesaplanan formatlar: KV-28 dört format, KV-29 WEEKLY_MOVERS (günlük snapshot'lardan). */
+export const COMPUTED_FORMATS = ["DAILY_RISING", "WEEKLY_RISING", "WEEKLY_MOST_VOTED", "WEEKLY_MOST_DISCUSSED", "WEEKLY_MOVERS"] as const;
 export type ComputedFormat = (typeof COMPUTED_FORMATS)[number];
 
 export const TREND_CONFIG = {
@@ -21,7 +22,7 @@ export const TREND_CONFIG = {
   /** Bir hesabın bir ankete pencere içinde yazdığı yorumlardan en fazla kaçı sayılır. */
   commentCapPerUser: 3,
   /** Pencere uzunluğu (saat). */
-  windowHours: { DAILY_RISING: 24, WEEKLY_RISING: 168, WEEKLY_MOST_VOTED: 168, WEEKLY_MOST_DISCUSSED: 168 },
+  windowHours: { DAILY_RISING: 24, WEEKLY_RISING: 168, WEEKLY_MOST_VOTED: 168, WEEKLY_MOST_DISCUSSED: 168, WEEKLY_MOVERS: 168 },
   daily: {
     /** etkileşim = oy veren + commentWeight × yorum (sınırlı) + commenterWeight × yorumcu */
     commentWeight: 0.5,
@@ -42,6 +43,14 @@ export const TREND_CONFIG = {
     /** puan = yorum (sınırlı) + commenterWeight × benzersiz yorumcu */
     commenterWeight: 2,
     minCommenters: 1,
+  },
+  /**
+   * Haftanın Değişkenleri eşikleri: sistem ayarları (KV-04 kayıt defteri, DATA_MODEL §8.3). KV-40 gelene kadar
+   * kayıttaki resmî varsayılan: her iki pencere sonunda ≥ 30 geçerli oy, ikinci pencerede ≥ 10 benzersiz aktif hesap.
+   */
+  movers: {
+    minVotes: defaultSettings().values["trends.moversMinVotes"] as number,
+    minActiveAccounts: defaultSettings().values["trends.moversMinActiveAccounts"] as number,
   },
   /** RUNNING kalmış çalıştırma bu süreden sonra FAILED sayılır (çöken worker). */
   staleRunMinutes: 15,

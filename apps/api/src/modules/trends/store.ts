@@ -12,8 +12,8 @@ export type TrendRunMeta = {
   finishedAt: Date;
 };
 
-/** Çalıştırmadaki bir satır; visible: şu an herkese görünür ve trendden çıkarılmamış. */
-export type TrendEntry = { pollId: string; visible: boolean };
+/** Çalıştırmadaki bir satır; visible: şu an herkese görünür ve trendden çıkarılmamış. components: puan bileşenleri (public değil). */
+export type TrendEntry = { pollId: string; visible: boolean; components: Record<string, unknown> };
 
 export interface TrendStore {
   /** Formatın güncel (en yeni pencere) başarılı çalıştırması; yoksa null. */
