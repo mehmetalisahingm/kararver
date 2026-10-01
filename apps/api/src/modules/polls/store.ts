@@ -9,6 +9,8 @@ export type PollSettings = {
   minDurationHours: number;
   maxDurationHours: number;
   voteChangeAllowed: boolean;
+  /** V1 #67: başarılı anket/tartışma yayınının puan maliyeti. */
+  publishCostPoints: number;
   /** Yayın limitleri (KV-20, #22). Değerler ve kaynakları: contracts settings.ts → polls.* */
   newAccountPeriodDays: number;
   newAccountDailyLimit: number;
@@ -22,6 +24,7 @@ export const DEFAULT_POLL_SETTINGS: PollSettings = {
   minDurationHours: 1,
   maxDurationHours: 720,
   voteChangeAllowed: true,
+  publishCostPoints: 10,
   newAccountPeriodDays: 7,
   newAccountDailyLimit: 3,
   newAccountCooldownMinutes: 30,

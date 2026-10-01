@@ -1,5 +1,6 @@
 // AuthStore'un PostgreSQL/Prisma uygulaması. Tablolar: users, sessions, auth_tokens (DATA_MODEL.md).
 import type { PrismaClient } from "@kararver/db";
+import { grantInitialLoginPoints, PUBLISH_COST } from "../points/store.ts";
 import type { AuthStore, NewToken, UserRecord } from "./store.ts";
 
 const userSelect = {
@@ -82,10 +83,13 @@ export function createPrismaAuthStore(prisma: PrismaClient): AuthStore {
     },
 
     async createSession(session, now) {
-      await prisma.$transaction([
-        prisma.session.create({ data: { ...session, lastSeenAt: now } }),
-        prisma.user.update({ where: { id: session.userId }, data: { lastLoginAt: now } }),
-      ]);
+      await prisma.$transaction(async (tx) => {
+        // Login grant'i hesap başına tam bir kez: paralel loginleri kullanıcı satırı üzerinden sırala.
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${session.userId}::uuid FOR UPDATE`;
+        await tx.session.create({ data: { ...session, lastSeenAt: now } });
+        await tx.user.update({ where: { id: session.userId }, data: { lastLoginAt: now } });
+        await grantInitialLoginPoints(tx, session.userId, now);
+      });
     },
 
     findSession: (tokenHash) =>
@@ -132,6 +136,30 @@ export function createPrismaAuthStore(prisma: PrismaClient): AuthStore {
     async updateProfile(userId, patch) {
       const user = await prisma.user.update({ where: { id: userId }, data: patch, select: userSelect });
       return toRecord(user);
+    },
+
+    async getPointsSummary(userId) {
+      const account = await prisma.pointAccount.findUnique({ where: { userId }, select: { balance: true } });
+      return { balance: account?.balance ?? 0, publishCost: PUBLISH_COST };
+    },
+
+    async listPointLedger(userId, after, limit) {
+      return prisma.pointLedgerEntry.findMany({
+        where: {
+          userId,
+          ...(after
+            ? {
+                OR: [
+                  { createdAt: { lt: after.createdAt } },
+                  { createdAt: after.createdAt, id: { lt: after.id } },
+                ],
+              }
+            : {}),
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit,
+        select: { id: true, delta: true, balanceAfter: true, reason: true, referenceId: true, createdAt: true },
+      });
     },
   };
 }

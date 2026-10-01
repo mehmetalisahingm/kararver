@@ -1,7 +1,8 @@
 // AuthStore'un bellek içi uygulaması. Sadece test içindir; aynı senaryolar DB varken
 // PrismaAuthStore ile de koşar (test/auth.test.ts), iki uygulama arasındaki fark orada yakalanır.
 import { randomUUID } from "node:crypto";
-import type { AuthStore, NewToken, SessionRecord, UserRecord } from "../../src/modules/auth/store.ts";
+import { INITIAL_LOGIN_GRANT, PUBLISH_COST } from "../../src/modules/points/store.ts";
+import type { AuthStore, NewToken, PointLedgerRecord, SessionRecord, UserRecord } from "../../src/modules/auth/store.ts";
 
 type StoredUser = Omit<UserRecord, "avatarPublicKey"> & { usernameNormalized: string; avatarMediaId: string | null; lastLoginAt: Date | null };
 type StoredToken = NewToken & { userId: string; usedAt: Date | null };
@@ -12,6 +13,8 @@ export type MemoryAuthStore = AuthStore & {
   sessions: Map<string, SessionRecord & { tokenHash: string }>;
   tokens: StoredToken[];
   media: Map<string, StoredMedia>;
+  pointBalances: Map<string, number>;
+  pointLedger: Map<string, PointLedgerRecord[]>;
 };
 
 export function createMemoryAuthStore(): MemoryAuthStore {
@@ -19,6 +22,8 @@ export function createMemoryAuthStore(): MemoryAuthStore {
   const sessions = new Map<string, SessionRecord & { tokenHash: string }>();
   const tokens: StoredToken[] = [];
   const media = new Map<string, StoredMedia>();
+  const pointBalances = new Map<string, number>();
+  const pointLedger = new Map<string, PointLedgerRecord[]>();
 
   function toRecord(user: StoredUser): UserRecord {
     const { usernameNormalized: _u, avatarMediaId, lastLoginAt: _l, ...rest } = user;
@@ -38,6 +43,8 @@ export function createMemoryAuthStore(): MemoryAuthStore {
     sessions,
     tokens,
     media,
+    pointBalances,
+    pointLedger,
 
     async findUserByEmail(emailNormalized) {
       const user = [...users.values()].find((u) => u.emailNormalized === emailNormalized);
@@ -77,6 +84,13 @@ export function createMemoryAuthStore(): MemoryAuthStore {
       const id = randomUUID();
       sessions.set(id, { id, userId: session.userId, tokenHash: session.tokenHash, expiresAt: session.expiresAt, revokedAt: null, lastSeenAt: now });
       users.get(session.userId)!.lastLoginAt = now;
+      const ledger = pointLedger.get(session.userId) ?? [];
+      if (!ledger.some((entry) => entry.reason === "INITIAL_GRANT")) {
+        const balance = (pointBalances.get(session.userId) ?? 0) + INITIAL_LOGIN_GRANT;
+        pointBalances.set(session.userId, balance);
+        ledger.push({ id: randomUUID(), delta: INITIAL_LOGIN_GRANT, balanceAfter: balance, reason: "INITIAL_GRANT", referenceId: null, createdAt: now });
+        pointLedger.set(session.userId, ledger);
+      }
     },
     async findSession(tokenHash) {
       const session = [...sessions.values()].find((s) => s.tokenHash === tokenHash);
@@ -118,6 +132,19 @@ export function createMemoryAuthStore(): MemoryAuthStore {
       if (patch.bio !== undefined) user.bio = patch.bio;
       if (patch.avatarMediaId !== undefined) user.avatarMediaId = patch.avatarMediaId;
       return toRecord(user);
+    },
+    async getPointsSummary(userId) {
+      return { balance: pointBalances.get(userId) ?? 0, publishCost: PUBLISH_COST };
+    },
+    async listPointLedger(userId, after, limit) {
+      const entries = [...(pointLedger.get(userId) ?? [])].sort((a, b) => {
+        const byDate = b.createdAt.getTime() - a.createdAt.getTime();
+        return byDate || b.id.localeCompare(a.id);
+      });
+      const filtered = after
+        ? entries.filter((entry) => entry.createdAt < after.createdAt || (entry.createdAt.getTime() === after.createdAt.getTime() && entry.id < after.id))
+        : entries;
+      return filtered.slice(0, limit);
     },
   };
 }

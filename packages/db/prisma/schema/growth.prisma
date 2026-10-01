@@ -1,7 +1,4 @@
-// Sahip: Mehmet (@mehmetalisahingm) — KV-15 / KV-22 / KV-23 / KV-42
-// İlgi alanı, bookmark, karar güncellemesi, takip, öne çıkarma ve duyuru tabloları bu dosyada büyür.
-// UserInterest KV-15 (#17) tarafından sahiplenilir; KV-27 (#29) kişiselleştirilmiş feed bu veriyi tüketir.
-
+// Sahip: Mehmet — growth alanı. İlk tablo KV-15 (#17) onboarding/ilgi seçimi; KV-27 (#29) feed bu tabloyu salt-okur.
 model UserInterest {
   userId     String   @map("user_id") @db.Uuid
   categoryId String   @map("category_id") @db.Uuid
@@ -13,4 +10,38 @@ model UserInterest {
   @@id([userId, categoryId])
   @@index([categoryId])
   @@map("user_interests")
+}
+
+// V1 #67 — yayın puanı, güven/itibar puanından tamamen ayrıdır.
+enum PointLedgerReason {
+  INITIAL_GRANT
+  PUBLISH
+  ADMIN_ADJUSTMENT
+  MODERATION_REFUND
+
+  @@map("point_ledger_reason")
+}
+
+// Güncel bakiye hızlı okuma/atomik harcama için ayrı tutulur; gerçek hareket kaynağı append-only ledger'dır.
+model PointAccount {
+  userId    String   @id @map("user_id") @db.Uuid
+  balance   Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("point_accounts")
+}
+
+model PointLedgerEntry {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  userId         String            @map("user_id") @db.Uuid
+  delta          Int
+  balanceAfter   Int               @map("balance_after")
+  reason         PointLedgerReason
+  referenceId    String?           @map("reference_id") @db.Uuid
+  idempotencyKey String            @map("idempotency_key") @db.VarChar(200)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("point_ledger_entries")
 }

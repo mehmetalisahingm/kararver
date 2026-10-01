@@ -159,9 +159,10 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
   };
   const registrationEnabled = { value: true };
   // Yayın limitleri (KV-20) varsayılan olarak gevşek: aynı kullanıcıyla peş peşe anket açan senaryolar
-  // cooldown'a takılmasın. Limit testleri (feed-limits.test.ts) resmî değerleri açıkça kurar.
+  // cooldown'a takılmasın. Puan da 0: yalnız points.test.ts #67 maliyetini 10'a çeker.
   const pollSettings: PollSettings = {
     ...DEFAULT_POLL_SETTINGS,
+    publishCostPoints: 0,
     cooldownMinutes: 0,
     newAccountCooldownMinutes: 0,
     dailyLimit: 1000,

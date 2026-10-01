@@ -2,6 +2,7 @@
 // poll_media, poll_addenda, votes, poll_reactions, idempotency_keys (DATA_MODEL.md, API_CONTRACTS.md §6).
 import type { PrismaClient } from "@kararver/db";
 import { assertNoCommittedKey, findIdempotentResult, runIdempotent } from "../../http/idempotency.ts";
+import { spendPublishPoints } from "../points/store.ts";
 import { writeRevision } from "../revisions/write.ts";
 import {
   PollLimitError,
@@ -298,6 +299,13 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
         await replaceTags(tx, created.id, poll.tagSlugs);
         // Sürüm 1: ilk paylaşım (#66 içerik geçmişi).
         await writeRevision(tx, "poll", created.id, poll.authorId, poll.opensAt);
+        await spendPublishPoints(tx, {
+          userId: poll.authorId,
+          referenceId: created.id,
+          idempotencyKey: `publish:${scope.route}:${scope.key}`,
+          now: scope.now,
+          cost: limits.publishCostPoints,
+        });
         return created.id;
       }),
 
