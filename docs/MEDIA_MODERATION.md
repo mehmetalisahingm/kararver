@@ -157,7 +157,8 @@ TECH_DECISIONS §3.6'daki iki-bucket akışı (presigned upload → private buck
 | Sıkıştırma bombası koruması: 40 MP üstü girdi çözülmez (`INVALID_IMAGE`) | `image.ts` | ✅ |
 | Python moderasyon alt-süreci (NudeNet, satır başına JSON), 8 sn zaman aşımı, takılan süreç öldürülür ve yeniden başlar | `python/moderate.py`, `moderator.ts` | ✅ |
 | Geçici hata: pg-boss 3 kez yeniden dener; son denemede de olursa `QUARANTINED` / `PROCESSING_FAILED` (görsel beklemede kalmaz) | `job.ts` | ✅ |
-| `admin.media.list` / `admin.media.decide` | — | Router'da moderator yetki seviyesi gelince (KV-12, #14) |
+| `GET /admin/media`: karantina / bekleyen / reddedilen kuyruğu (en eski önce). MODERATOR yalnız atandığı toplulukların görselini görür (anket galerisi veya topluluk görseli üzerinden); topluluğu olmayan görsel (avatar, topluluksuz anket) yalnız ADMIN+ kuyruğundadır. Önizleme işlenmiş kopyanın 5 dk'lık signed URL'idir; reddedilmiş görselin önizlemesini yalnız ADMIN+ alır | `apps/api/src/modules/media/admin-routes.ts` | ✅ |
+| `POST /admin/media/:id/decision`: `APPROVE` (QUARANTINED/REJECTED → APPROVED) işlenmiş kopyayı public bucket'a kopyalar; `REJECT` (QUARANTINED/APPROVED → REJECTED) public nesneyi siler ve `public_object_key`'i aynı UPDATE'te boşaltır. Karar `moderation_actions`'a yazılır; reddedilen görselin açık raporları `ACTIONED` olur. PENDING 409, aynı karar tekrarı idempotent | aynı | ✅ |
 
 Nesne anahtarları: orijinal `uploads/<uuid>/original` (private, API belirler, DB'de saklanır); işlenmiş ve public anahtarları worker belirler ve DB'ye yazar. Böylece API ve worker anahtar biçimini paylaşmak zorunda kalmaz.
 
@@ -166,6 +167,8 @@ Worker sonuç kodları (`media_assets.processing_error`): `INVALID_IMAGE`, `MISS
 **Deploy için açık konular:**
 - Worker imajında Python 3 ve `apps/worker/python/requirements.txt` kurulu olmalı (`MODERATION_PYTHON`). Hosting kararı (TECH_DECISIONS §3.7) kesinleşince Dockerfile/Railway ayarı eklenmeli.
 - Public bucket'ın anonim okunması: R2'de custom domain/public erişim, local SeaweedFS'te anonim `Read` kimliği (`infra/seaweedfs/s3.json`). Bu PR'da değiştirilmedi; `MEDIA_PUBLIC_BASE_URL` bu erişime göre ayarlanır.
+- **Public bucket'a API de yazar (§7 ilkesinden sapma):** otomatik onayı worker yapar, moderatör onayı/kaldırması `admin.media.decide` ile API'den gelir (S3 `CopyObject`/`DeleteObject`, aynı deterministik anahtar `m/<id>.webp`). Bu yüzden API artık `S3_BUCKET_PUBLIC` ister (worker ile aynı değişken; staging/production'da zorunlu) ve hesabın public bucket'a yazma yetkisi olmalıdır. Sıra: onayda önce kopya sonra DB, kaldırmada önce silme sonra DB; yarım kalan işlem görseli yanlışlıkla yayında bırakmaz, tekrar denenebilir.
+- **Audit:** signed preview erişimi ve reddedilmiş görsel erişimi (§7) `audit_logs` tablosu KV-39 (#41, Utku) ile gelince yazılacak; o zamana kadar kararın izi `moderation_actions`'tadır, erişim izlenmez.
 - Moderasyon eşikleri ve `media.maxBytes` şimdilik sözleşme varsayılanlarından okunuyor; sistem ayarları servisi (KV-40) gelince oradan okunacak.
 
 ## 10. Referanslar

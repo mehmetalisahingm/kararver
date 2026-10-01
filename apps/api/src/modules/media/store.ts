@@ -1,5 +1,6 @@
 // Medya modülünün veri erişim arayüzü — KV-16 (#18). Üretim uygulaması: prisma-store.ts.
 import { defaultSettings } from "@kararver/contracts";
+import type { ModerationScope } from "../rbac/access.ts";
 
 export type MediaPurpose = "POLL" | "AVATAR" | "COMMUNITY";
 export type MediaStatus = "PENDING" | "APPROVED" | "QUARANTINED" | "REJECTED";
@@ -38,9 +39,38 @@ export type IdempotentResult =
 
 export type NewUpload = { uploaderId: string; purpose: MediaPurpose; originalObjectKey: string };
 
+export type ReviewStatus = "QUARANTINED" | "REJECTED" | "PENDING";
+/** Moderatör kararı için okunan kayıt; communityId yetki kapsamını belirler (yoksa yalnız ADMIN+). */
+export type ReviewableMedia = MediaRecord & { communityId: string | null };
+
+export type MediaDecisionInput = {
+  id: string;
+  actorId: string;
+  decision: "APPROVE" | "REJECT";
+  reason: string;
+  now: Date;
+};
+export type MediaDecisionResult =
+  | { kind: "applied" | "unchanged"; media: MediaRecord }
+  | { kind: "conflict"; status: MediaStatus; reason: "not_reviewable" | "no_processed_copy" }
+  | { kind: "not_found" };
+
 export interface MediaStore {
   createUpload(upload: NewUpload, scope: IdempotencyScope | null): Promise<IdempotentResult>;
   findMedia(id: string): Promise<MediaRecord | null>;
   /** Sadece hâlâ PENDING ise reddeder; worker'ın işlediği kayda dokunmaz. */
   rejectPending(id: string, reason: "TOO_LARGE" | "TYPE_NOT_ALLOWED"): Promise<void>;
+
+  /** Moderasyon kuyruğu (en eski önce). Moderatör yalnız atandığı toplulukların görsellerini görür. */
+  listForReview(
+    filter: { status: ReviewStatus; scope: ModerationScope; after: { createdAt: Date; id: string } | null },
+    limit: number,
+  ): Promise<MediaRecord[]>;
+  findForReview(id: string): Promise<ReviewableMedia | null>;
+  /**
+   * Kararı kilitli okumayla uygular ve `moderation_actions`'a yazar. APPROVE: QUARANTINED/REJECTED → APPROVED
+   * (işlenmiş kopya gerekir). REJECT: QUARANTINED/APPROVED → REJECTED, public anahtar aynı UPDATE'te boşalır ve
+   * görselin açık raporları ACTIONED olur. Zaten o durumdaysa "unchanged" (idempotent).
+   */
+  applyDecision(input: MediaDecisionInput): Promise<MediaDecisionResult>;
 }

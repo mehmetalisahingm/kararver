@@ -31,6 +31,7 @@ const s3Env = {
   S3_ACCESS_KEY_ID: "kararver-local",
   S3_SECRET_ACCESS_KEY: "kararver-local-only-not-a-secret",
   S3_BUCKET_PRIVATE: "kararver-uploads-private",
+  S3_BUCKET_PUBLIC: "kararver-media-public",
 };
 
 describe("medya yapılandırması", () => {
@@ -44,6 +45,7 @@ describe("medya yapılandırması", () => {
       accessKeyId: "kararver-local",
       secretAccessKey: "kararver-local-only-not-a-secret",
       privateBucket: "kararver-uploads-private",
+      publicBucket: "kararver-media-public",
     });
   });
 
