@@ -48,6 +48,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Frontend adapters against real API and PostgreSQL
+        run: pnpm --filter @kararver/web test
       - run: pnpm mock:test
   web:
     runs-on: ubuntu-latest

@@ -8,127 +8,8 @@ import type { Poll } from "../../lib/model";
 import { SocialPanel } from "../social/social-panel";
 import { PollGallery } from "./gallery";
 
-function PollCard({ poll }: { poll: Poll }) {
-  return (
-    <article className="kv-card poll-card">
-      <div className="kv-row kv-between">
-        <div className="kv-row">
-          <span className="avatar" aria-hidden="true">
-            {poll.author[0]}
-          </span>
-          <span className="author">
-            {poll.author}
-            <small>{poll.category}</small>
-          </span>
-        </div>
-        <span className="kv-badge kv-badge--neutral">
-          {poll.kind === "discussion"
-            ? "Tartışma"
-            : poll.status === "CLOSED"
-              ? "Kapandı"
-              : poll.status === "LOCKED"
-                ? "Kilitli"
-                : "Anket"}
-        </span>
-      </div>
-      <h2>
-        <Link href={poll.canonicalPath || `/karar/${poll.id}`}>{poll.title}</Link>
-      </h2>
-      <p className="kv-muted">{poll.description}</p>
-      {poll.options.some((o) => o.image) && (
-        <div className="photo-options">
-          {poll.options.map((o) => (
-            <div key={o.id}>
-              {o.image && <img src={o.image} alt="" width={800} height={530} />}
-              <span>{o.label}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="kv-row kv-between">
-        <span className="kv-help">{poll.commentCount ?? poll.comments.length} yorum / öneri</span>
-        <Link
-          className="kv-button kv-button--secondary"
-          href={poll.canonicalPath || `/karar/${poll.id}`}
-        >
-          {poll.kind === "discussion" ? "Tartışmayı oku" : "Anketi incele"}
-        </Link>
-      </div>
-    </article>
-  );
-}
-export function Feed({ title = "Senin için" }: { title?: string }) {
-  const { client, user } = useProduct();
-  const [polls, setPolls] = useState<Poll[] | null>(null);
-  const [error, setError] = useState("");
-  const [attempt, retry] = useState(0);
-  const [query, setQuery] = useState("");
-  useEffect(() => {
-    let active = true;
-    setPolls(null);
-    setError("");
-    client
-      .list()
-      .then((p) => {
-        if (active) setPolls(p);
-      })
-      .catch((e) => {
-        if (active) setError(e.message);
-      });
-    return () => {
-      active = false;
-    };
-  }, [client, user?.id, attempt]);
-  const filtered = polls?.filter((p) =>
-    `${p.title} ${p.category}`
-      .toLocaleLowerCase("tr")
-      .includes(query.toLocaleLowerCase("tr")),
-  );
-  return (
-    <div className="screen-stack">
-      <div>
-        <span className="eyebrow">HER FİKİR YENİ BİR BAKIŞ AÇISI</span>
-        <h1>{title}</h1>
-        <p className="kv-muted">Merak et, keşfet, birlikte karar ver.</p>
-      </div>
-      <label className="kv-field">
-        Akışta ara
-        <input
-          className="kv-input"
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Bir konu veya kategori…"
-        />
-      </label>
-      {error ? (
-        <div className="kv-card kv-state">
-          <ErrorMessage message={error} />
-          <button className="kv-button" onClick={() => retry((n) => n + 1)}>
-            Tekrar dene
-          </button>
-        </div>
-      ) : !polls ? (
-        <Loading label="Akış yükleniyor…" />
-      ) : filtered?.length ? (
-        filtered.map((p) => <PollCard poll={p} key={p.id} />)
-      ) : (
-        <div className="kv-card kv-state">
-          <h2>Henüz bir eşleşme yok.</h2>
-          <p className="kv-muted">Başka bir kelimeyle tekrar deneyebilirsin.</p>
-          <button
-            className="kv-button kv-button--secondary"
-            onClick={() => setQuery("")}
-          >
-            Aramayı temizle
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 export function PollDetail({ id }: { id: string }) {
-  const { client, demo, user, selections, select, requireUser, notify, syncUser } =
+  const { client, user, selections, select, requireUser, notify, syncUser } =
     useProduct();
   const [poll, setPoll] = useState<Poll | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -287,31 +168,7 @@ export function PollDetail({ id }: { id: string }) {
         )}
       </article>
       <PollGallery key={poll.id} poll={poll} />
-      {demo ? (
-        <SocialPanel key={`${poll.id}:${user?.id || "guest"}`} poll={poll} />
-      ) : (
-        <section
-          className="kv-card screen-stack"
-          aria-labelledby="comments-title"
-        >
-          <h2 id="comments-title">Yorumlar</h2>
-          {poll.comments.length ? (
-            poll.comments.map((c) => (
-              <div key={c.id} className="comment">
-                <strong>{c.author}</strong>
-                <p>{c.text}</p>
-              </div>
-            ))
-          ) : (
-            <p className="kv-muted">Henüz yorum yok.</p>
-          )}
-          <p className="kv-help">
-            {poll.commentsEnabled
-              ? "Gerçek sosyal etkileşim API entegrasyonu henüz tamamlanmadı."
-              : "Bu içerikte yorumlar kapalı."}
-          </p>
-        </section>
-      )}
+      <SocialPanel key={`${poll.id}:${user?.id || "guest"}`} poll={poll} />
     </div>
   );
 }

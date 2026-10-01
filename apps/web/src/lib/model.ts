@@ -1,10 +1,9 @@
-// Frontend view models. ApiClient validates the shared wire contract before mapping.
+// Frontend view models mapped from validated wire contracts.
 import type { EngagementClient } from "../features/social/model.ts";
-
+import type { DiscoveryClient } from "../features/discovery/model.ts";
 export type GalleryItem =
   | { id: string; status: "ready"; src: string; alt: string }
   | { id: string; status: "pending" | "removed"; alt: string };
-
 export type User = {
   id: string;
   name: string;
@@ -31,6 +30,7 @@ export type Poll = {
   category: string;
   status: "ACTIVE" | "LOCKED" | "CLOSED";
   closesAt: string;
+  createdAt?: string;
   options: { id: string; label: string; image?: string }[];
   visibility: "always" | "after_vote";
   results: Results;
@@ -123,7 +123,7 @@ export function safeReturnTo(value: string | null): string {
     ? value
     : "/";
 }
-export interface ProductClient extends EngagementClient {
+export interface ProductClient extends EngagementClient, DiscoveryClient {
   list(): Promise<Poll[]>;
   get(id: string): Promise<Poll>;
   login(email: string, password: string): Promise<User>;

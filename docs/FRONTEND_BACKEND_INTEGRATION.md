@@ -27,25 +27,24 @@ voteBlockedReason'dan gelir; gizli sonuçlar yalnızca `{visible:false}` olarak 
 
 ## Sağlayıcı durumu ve kalan doğrulama
 
-29 Eylül 2026, main `c0ff862` incelendi:
+1 Ekim 2026, main `5c3acea` ile birleştirildi:
 
-- Auth ve anket CRUD main'de. Auth adapter'ı gerçek Fastify route/Argon2/cookie
-  koduyla test edildi; testte bellek içi store ve mail yakalayıcı kullanıldı.
-- `/feed`, oy ve yorum route'ları artık main'de. `/categories` ve `/search`
-  uygulaması #91'de açık. Kategori
-  listesi gelmeden oluşturma formu yayın açmaz; UUID veya demo kategori göndermez.
-- Oy route'u main'e alındı. Frontend PUT sözleşmesi fixture ile doğrulandı; transaction,
-  PostgreSQL eşzamanlı oy ve staging doğrulaması bu testin kanıtı değildir.
-- Tartışma ve yayın puanı #66/#67, sosyal ve keşfet sağlayıcıları kendi işleriyle
-  tamamlanmalıdır. Sözleşmedeki `availability: ready`, route'un deploy edildiği
-  anlamına gelmez.
-- Utku'nun #82 mock API'si main'e alındı; mock API gerçek backend
-  kabul kanıtı değildir. Gerçek endpoint'ler tamamlanınca cookie/CORS, kayıt-mail,
-  yayın-tekrar istek, oy-gizlilik ve hesaplar arası görünürlük staging'de denenmeli.
+- #68 ve #74 birleştirilmiş durumda. Kalan sosyal HTTP adapter ve keşfet/trend
+  entegrasyonu açık #79 dalında toplanıyor. Main'deki ilgi alanları ekranı ve
+  onboarding API çağrıları korunmuştur.
+- Auth, anket CRUD, feed, oy, yorum, kategori, arama, trend, snapshot ve tepki
+  sağlayıcıları main'de. Auth adapter gerçek Fastify route/Argon2/cookie koduyla
+  test edildi; testte bellek içi store ve mail yakalayıcı kullanıldı.
+- Kategori listesi gelmeden oluşturma formu yayın açmaz; demo kategori göndermez.
+- HTTP sözleşme testleri PostgreSQL transaction, eşzamanlı oy veya staging
+  doğrulaması değildir. Kalıcı verilerle yayın, oy ve sosyal akışların kabul testi
+  ayrıca çalıştırılmalıdır.
+- Staging'de cookie/CORS, kayıt-mail, yayın-tekrar istek, oy-gizlilik ve hesaplar
+  arası görünürlük doğrulanmalıdır. Mock API bu kabulün kanıtı değildir.
 
 `pnpm --filter @kararver/web test` HTTP sözleşme ve auth entegrasyon testlerini;
 `pnpm --filter @kararver/web build` üretim/TypeScript kontrolünü çalıştırır.
-Frontend PR'ları ve ilgili issue'lar staging kabulü tamamlanmadan kapatılmaz.
+Bu yerel doğrulamalar staging kabulünün tamamlandığı anlamına gelmez.
 
 ## #74 ve #79: sosyal / keşfet
 
@@ -62,12 +61,23 @@ da yüklenir. Kart veya ayrıntı sonuçları gizliyse grafik açılmaz; hareket
 yalnızca herkese açık veya kapanmış anketlerde kullanılır. Bu ek detay istekleri
 gözlemlenmeli; gelecekte sağlayıcı kart DTO'suna etiket eklerse kaldırılabilir.
 
-Tepki sağlayıcısı ve trend üretimi henüz tamamlanmadığı için hata/boş durumları
-görünebilir. HTTP modunda yerel sıralama veya sentetik oy üretilmez. Tam yayına
-hazır kabulü için #91, ilgili trend/tepki işleri, PostgreSQL ve staging testi gerekir.
+Tepki ve trend sağlayıcıları main'e alınmıştır. HTTP modunda yerel sıralama veya
+sentetik oy üretilmez. Trend sonuçları worker üretimine ve mevcut verilere bağlıdır;
+boş sonuç ayrı bir durumdur. Tam kabul için PostgreSQL ve staging testi gerekir.
 
 `node node_modules/@playwright/test/cli.js test --config playwright.api.config.ts`
 gerçek auth route'larına ayrı yerel test portlarından bağlanır (web 3002, API 4011).
 Test sunucusu bellek içi store ve yalnızca yerel testte erişilen mail yakalayıcı
 kullanır; production/staging sunucusuna eklenmez. Docker/PostgreSQL bu ortamda
 bulunmadığından kalıcı veriyle yayın/oy/yorum smoke doğrulaması henüz yapılmadı.
+
+## KV-30 gerçek sağlayıcı kabul testi
+
+`TEST_DATABASE_URL` izole, adı `_test` ile biten PostgreSQL veritabanını göstermeli.
+`pnpm --filter @kararver/web test` içindeki `discovery-backend.test.mjs`, gerçek
+Fastify HTTP sunucusu ve Prisma store'larıyla kategori, üç feed sekmesi, cursor,
+Türkçe arama, beş ayrı trend sıralaması, tarih/örneklem, gizli sonuç ve yetersiz
+geçmiş davranışını sınar. Trend job çıktıları veritabanına test verisi olarak
+konur; worker hesaplama doğruluğu kendi testlerinin sorumluluğudur.
+Veritabanı yoksa bu test açıkça atlanır. Foundation checks database işi testi
+PostgreSQL ile çalıştırır; yerel skip sonucu kabul kanıtı değildir.

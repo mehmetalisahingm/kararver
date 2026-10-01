@@ -53,7 +53,9 @@ export function ProductProvider({
   const [sessionAttempt, retrySession] = useState(0);
   const [user, setUser] = useState<User | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [commentDrafts, setCommentDrafts] = useState<Record<string, CommentDraft>>({});
+  const [commentDrafts, setCommentDrafts] = useState<
+    Record<string, CommentDraft>
+  >({});
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [message, notify] = useState("");
   const [returnTo, setReturn] = useState("/");
@@ -246,6 +248,11 @@ export function ProductProvider({
                   ["comment", "Yorum gönderme"],
                   ["editComment", "Yorum düzenleme"],
                   ["deleteComment", "Yorum silme"],
+                  ["discovery", "Keşfet"],
+                  ["categories", "Kategori"],
+                  ["search", "Arama"],
+                  ["trends", "Trend"],
+                  ["discoveryMore", "Liste devamı"],
                 ].map(([operation, label]) => (
                   <button
                     key={operation}
@@ -260,6 +267,17 @@ export function ProductProvider({
                     {label} hatası
                   </button>
                 ))}
+                <button
+                  className="kv-button kv-button--ghost"
+                  onClick={() => {
+                    client.expireDiscoveryPages();
+                    notify(
+                      "Demo liste imleçleri sıfırlandı. Devamını yüklerken yenileme istenecek.",
+                    );
+                  }}
+                >
+                  Liste süresini doldur
+                </button>
               </details>
             )}
           </aside>

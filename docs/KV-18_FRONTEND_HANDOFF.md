@@ -1,3 +1,5 @@
+> 29 Eylül güncellemesi: HTTP entegrasyonu ve güncel kalan bağımlılıklar için [Frontend/backend entegrasyonu](FRONTEND_BACKEND_INTEGRATION.md) belgesine bakın. Aşağıdaki demo teslim notları ilk sürümü anlatır.
+
 # KV-18 — Galeri, sonuç ve sosyal etkileşim arayüzü
 
 Sahip: Ümit (@umitefe0) · Görev: #20 · Önkoşul: KV-13 UI, PR #68.

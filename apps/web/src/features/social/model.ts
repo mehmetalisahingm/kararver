@@ -27,8 +27,9 @@ export type Comment = {
   canEdit: boolean;
   reaction: ReactionSummary;
 };
-export type Engagement = { reaction: ReactionSummary; comments: Comment[] };
+export type Engagement = { reaction: ReactionSummary; comments: Comment[]; hasMore?: boolean };
 export interface EngagementClient {
+  loadMoreEngagement?(pollId: string): Promise<Engagement>;
   getEngagement(pollId: string, signal?: AbortSignal): Promise<Engagement>;
   react(
     pollId: string,

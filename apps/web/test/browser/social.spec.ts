@@ -51,7 +51,7 @@ test("guest comment survives cancel/login; failed optimistic create rolls back; 
   await fail(page, "Yorum gönderme hatası");
   await page.getByRole("button", { name: "Paylaş", exact: true }).click();
   await expect(page.locator("main").getByRole("alert")).toContainText(
-    "geri alındı",
+    "Görünüm yenilenmedi",
   );
   await expect(
     page.getByRole("article", { name: "Ümit yorumu", exact: true }),
@@ -84,7 +84,7 @@ test("post/comment reaction rollback, one-level replies, edit and delete failure
     .getByRole("button", { name: "Beğenme 0", exact: true })
     .click();
   await expect(page.locator("main").getByRole("alert")).toContainText(
-    "geri alındı",
+    "Görünüm yenilenmedi",
   );
   await expect(
     reactions.getByRole("button", { name: "Beğen 1", exact: true }),
@@ -136,7 +136,7 @@ test("post/comment reaction rollback, one-level replies, edit and delete failure
   await fail(page, "Yorum düzenleme hatası");
   await page.getByRole("button", { name: "Değişikliği kaydet" }).click();
   await expect(page.locator("main").getByRole("alert")).toContainText(
-    "geri alındı",
+    "Görünüm yenilenmedi",
   );
   await expect(page.getByLabel("Yorumu düzenle", { exact: true })).toHaveValue(
     "Uzun bir test sürüşü yap.",
@@ -160,7 +160,7 @@ test("post/comment reaction rollback, one-level replies, edit and delete failure
   await edited.getByRole("button", { name: "Sil", exact: true }).click();
   await page.getByRole("button", { name: "Yorumu sil", exact: true }).click();
   await expect(page.locator("main").getByRole("alert")).toContainText(
-    "geri alındı",
+    "Görünüm yenilenmedi",
   );
   await expect(edited).toBeVisible();
   await edited.getByRole("button", { name: "Sil", exact: true }).click();
