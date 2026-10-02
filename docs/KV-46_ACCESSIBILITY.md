@@ -8,6 +8,8 @@ medya/beta bağımlılıkları (#20 → #18, #47), fiziksel cihaz ve staging kab
 - Sayfa hatasında Next 16.3 `retry` ile yeniden veri istenir; root/provider hatası
   context veya global CSS gerektirmeyen Türkçe global hata belgesiyle karşılanır.
 - Ortak route skeleton/status ekranı bulunur. Ham hata/stack kullanıcıya açılmaz.
+- Demo formları da hydration tamamlanınca açılır; WebKit'te ilk alanın erken
+  yazılıp sıfırlanması engellenir. Geciktirilmiş JavaScript regresyonu bunu doğrular.
 - Profil ilk yükleme için tekrar deneme ve ayrı 404 durumu sunar. Gönderi/yorum
   sayfalama hatası mevcut içeriği ve cursor'ı korur; eşzamanlı tıklama engellenir.
 - Kaydedilenler yükleme hatasını boş liste gibi göstermez; yeniden yüklenebilir.
