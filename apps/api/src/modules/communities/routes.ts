@@ -1,9 +1,10 @@
 // Topluluk endpoint'leri — KV-31 (#33). Sözleşme: packages/contracts/src/domains/communities.ts
-// Kapsam dışı: admin.communities.* (KV-32, #34) moderator/admin yetki seviyesi gelince (KV-12, #14).
+// Admin tarafı (admin.communities.*, KV-32): admin-routes.ts.
 import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
 import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
 import type { CommunityRecord, CommunityRole, CommunityStore, MemberRecord, MembersVisibility } from "./store.ts";
+import { publicUrl, toCard, toDetail } from "./view.ts";
 
 export type CommunityDeps = { store: CommunityStore; now: () => Date; mediaPublicBaseUrl: string };
 
@@ -18,16 +19,8 @@ export function canSeeMembers(visibility: MembersVisibility, viewerRole: Communi
 
 export function registerCommunityRoutes(route: Route, deps: CommunityDeps): void {
   const { store, now } = deps;
-  const url = (key: string | null) => (key ? `${deps.mediaPublicBaseUrl}/${key}` : null);
-
-  const card = (c: CommunityRecord) => ({
-    id: c.id,
-    slug: c.slug,
-    name: c.name,
-    description: c.description,
-    imageUrl: url(c.imagePublicKey),
-    memberCount: c.memberCount,
-  });
+  const url = (key: string | null) => publicUrl(deps.mediaPublicBaseUrl, key);
+  const card = (c: CommunityRecord) => toCard(c, deps.mediaPublicBaseUrl);
 
   const member = (m: MemberRecord) => ({
     user: { id: m.user.id, username: m.user.username, displayName: m.user.displayName, avatarUrl: url(m.user.avatarPublicKey) },
@@ -48,17 +41,7 @@ export function registerCommunityRoutes(route: Route, deps: CommunityDeps): void
     const community = await store.findActiveBySlug(params.slug);
     if (!community) throw notFound();
     const role = viewer ? await store.roleOf(community.id, viewer.id) : null;
-    return {
-      status: 200,
-      body: {
-        data: {
-          ...card(community),
-          membersVisibility: community.membersVisibility,
-          createdAt: community.createdAt.toISOString(),
-          viewer: viewer ? { role } : null,
-        },
-      },
-    };
+    return { status: 200, body: { data: toDetail(community, viewer ? { role } : null, deps.mediaPublicBaseUrl) } };
   });
 
   route("communities.members", async ({ params, query, viewer }) => {

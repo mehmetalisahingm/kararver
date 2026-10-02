@@ -10,6 +10,7 @@ import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import type { PasswordHasher } from "./modules/auth/crypto.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
+import { registerCommunityAdminRoutes } from "./modules/communities/admin-routes.ts";
 import { registerCommunityRoutes } from "./modules/communities/routes.ts";
 import type { CommunityStore } from "./modules/communities/store.ts";
 import type { MediaQueue } from "./modules/media/queue.ts";
@@ -202,7 +203,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
     registerVoteAdminRoutes(route, { store: deps.voteStore, now });
   }
-  if (deps.communityStore) registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  if (deps.communityStore) {
+    registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+    registerCommunityAdminRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  }
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
   if (deps.commentStore) {

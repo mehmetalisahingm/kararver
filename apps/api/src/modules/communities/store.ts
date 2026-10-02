@@ -40,4 +40,37 @@ export interface CommunityStore {
   join(communityId: string, userId: string, now: Date): Promise<CommunityRole>;
   /** Satır silindiyse sayaç aynı transaction'da azalır; üye değilse hiçbir şey yapmaz. */
   leave(communityId: string, userId: string): Promise<void>;
+
+  // ── Admin (KV-32, #34) ──
+  /** Durumdan bağımsız; yönetici kapatılmış topluluğu da görür. */
+  findAnyById(id: string): Promise<CommunityRecord | null>;
+  createCommunity(
+    scope: IdempotencyScope | null,
+    input: CommunityInput,
+    createdById: string,
+  ): Promise<
+    | { kind: "created" | "replayed"; id: string }
+    | { kind: "key_reused" }
+    | { kind: "rejected"; reason: CommunityRejection }
+  >;
+  updateCommunity(id: string, patch: CommunityPatch): Promise<"OK" | "NOT_FOUND" | CommunityRejection>;
+  /**
+   * Üyelik yoksa oluşturur (sayaç aynı transaction'da artar), varsa rolü MODERATOR yapar. Askıdaki hesap da
+   * atanabilir: yetkili işlem ACTIVE hesap ister (KV-04), rol hesap açılınca geçerli olur.
+   */
+  assignModerator(communityId: string, userId: string): Promise<"OK" | "COMMUNITY_NOT_FOUND" | "USER_NOT_FOUND">;
+  /** MODERATOR → MEMBER; üyelik ve sayaç korunur. Moderatör değilse hiçbir şey yapmaz. */
+  removeModerator(communityId: string, userId: string): Promise<"OK" | "COMMUNITY_NOT_FOUND">;
 }
+
+export type CommunityRejection = "slug_taken" | "image_unusable";
+export type CommunityInput = {
+  slug: string;
+  name: string;
+  description: string | null;
+  imageMediaId: string | null;
+  membersVisibility: MembersVisibility;
+};
+/** ACTIVE ↔ HIDDEN: kapatma topluluğu public listeden ve katılımdan çıkarır; üyelikler silinmez. */
+export type CommunityPatch = Partial<CommunityInput> & { status?: "ACTIVE" | "HIDDEN" };
+export type IdempotencyScope = import("../../http/idempotency.ts").IdempotencyScope;

@@ -1,6 +1,13 @@
 // CommunityStore'un PostgreSQL uygulaması — communities, community_memberships (DATA_MODEL.md §9).
-import type { PrismaClient } from "@kararver/db";
-import type { CommunityRecord, CommunityRole, CommunityStore, MemberRecord } from "./store.ts";
+import type { Prisma, PrismaClient } from "@kararver/db";
+import { runIdempotent } from "../../http/idempotency.ts";
+import type { CommunityRecord, CommunityRejection, CommunityRole, CommunityStore, MemberRecord } from "./store.ts";
+
+const isUniqueViolation = (err: unknown) => typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
+
+/** Topluluk görseli: COMMUNITY amaçlı ve yayınlanmış (APPROVED) olmalı; karantinadaki görsel sayfaya bağlanamaz. */
+const isUsableImage = async (tx: Prisma.TransactionClient, id: string) =>
+  (await tx.mediaAsset.count({ where: { id, purpose: "COMMUNITY", status: "APPROVED" } })) === 1;
 
 const approvedKey = (media: { status: string; publicObjectKey: string | null } | null) =>
   media?.status === "APPROVED" ? media.publicObjectKey : null;
@@ -117,6 +124,79 @@ export function createPrismaCommunityStore(prisma: PrismaClient): CommunityStore
           await tx.community.update({ where: { id: communityId }, data: { memberCount: { decrement: 1 } } });
         }
       });
+    },
+
+    async findAnyById(id) {
+      const row = await prisma.community.findUnique({ where: { id }, select: communitySelect });
+      return row ? toRecord(row) : null;
+    },
+
+    async createCommunity(scope, input, createdById) {
+      try {
+        const result = await runIdempotent<CommunityRejection>(prisma, scope, 201, async (tx) => {
+          if (input.imageMediaId && !(await isUsableImage(tx, input.imageMediaId))) return { ok: false, reason: "image_unusable" };
+          if ((await tx.community.count({ where: { slug: input.slug } })) > 0) return { ok: false, reason: "slug_taken" };
+          const created = await tx.community.create({ data: { ...input, createdById }, select: { id: true } });
+          return { ok: true, value: created.id };
+        });
+        if (result.kind === "created" || result.kind === "replayed") return { kind: result.kind, id: result.resourceId };
+        return result;
+      } catch (err) {
+        // Eşzamanlı aynı slug: kaybeden taraf unique index'te çakışır.
+        if (isUniqueViolation(err)) return { kind: "rejected", reason: "slug_taken" };
+        throw err;
+      }
+    },
+
+    async updateCommunity(id, patch) {
+      const { slug, name, description, imageMediaId, membersVisibility, status } = patch;
+      try {
+        return await prisma.$transaction(async (tx) => {
+          if ((await tx.community.count({ where: { id } })) === 0) return "NOT_FOUND" as const;
+          if (imageMediaId && !(await isUsableImage(tx, imageMediaId))) return "image_unusable" as const;
+          if (slug && (await tx.community.count({ where: { slug, id: { not: id } } })) > 0) return "slug_taken" as const;
+          await tx.community.update({
+            where: { id },
+            data: {
+              ...(slug !== undefined && { slug }),
+              ...(name !== undefined && { name }),
+              ...(description !== undefined && { description }),
+              ...(imageMediaId !== undefined && { imageMediaId }),
+              ...(membersVisibility !== undefined && { membersVisibility }),
+              ...(status !== undefined && { status }),
+            },
+          });
+          return "OK" as const;
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) return "slug_taken";
+        throw err;
+      }
+    },
+
+    // ON CONFLICT DO NOTHING + sayaç: join ile aynı kural; mevcut üyeyse rol yükseltilir, sayaç değişmez.
+    async assignModerator(communityId, userId) {
+      return prisma.$transaction(async (tx) => {
+        if ((await tx.community.count({ where: { id: communityId } })) === 0) return "COMMUNITY_NOT_FOUND" as const;
+        const user = await tx.user.findUnique({ where: { id: userId }, select: { deletedAt: true } });
+        if (!user || user.deletedAt) return "USER_NOT_FOUND" as const;
+        const inserted = await tx.$executeRaw`
+          INSERT INTO community_memberships (community_id, user_id, role, created_at, updated_at)
+          VALUES (${communityId}::uuid, ${userId}::uuid, 'MODERATOR', now(), now())
+          ON CONFLICT DO NOTHING`;
+        if (inserted === 1) {
+          await tx.community.update({ where: { id: communityId }, data: { memberCount: { increment: 1 } } });
+        } else {
+          await tx.communityMembership.update({ where: { communityId_userId: { communityId, userId } }, data: { role: "MODERATOR" } });
+        }
+        return "OK" as const;
+      });
+    },
+
+    async removeModerator(communityId, userId) {
+      if ((await prisma.community.count({ where: { id: communityId } })) === 0) return "COMMUNITY_NOT_FOUND";
+      await prisma.communityMembership.updateMany({ where: { communityId, userId, role: "MODERATOR" }, data: { role: "MEMBER" } });
+      return "OK";
     },
   };
 }
