@@ -261,6 +261,9 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "config.get": "content.read",
   "admin.users.list": "user.read",
   "admin.users.get": "user.read",
+  "admin.users.sanctions": "user.read",
+  "admin.users.reports": "user.read",
+  "admin.users.activity": "user.read",
   "admin.sanctions.create": "user.sanction",
   "admin.sanctions.lift": "user.sanction.lift",
   "admin.roles.put": "user.role.assign",
@@ -316,6 +319,22 @@ export function restrictionsFromSanctions(sanctions: readonly ActorSanction[], n
       ),
     ),
   ];
+}
+
+/**
+ * `users.status`'un yaptırımlardan türetilen değeri (DATA_MODEL §9.1): BAN > SUSPEND > RESTRICT_* → RESTRICTED > ACTIVE.
+ * WARNING durumu değiştirmez; `endsAt <= now` olan yaptırım sayılmaz. Yaptırım ekleme/kaldırma aynı transaction'da
+ * ve süre dolumu job'ı (KV-33 PR-C) bunu yazar; `sanctions` kaldırılmamış satırlardır.
+ */
+export function statusFromSanctions(sanctions: readonly ActorSanction[], now: Date): z.infer<typeof UserStatus> {
+  const at = instant(now, "now");
+  const active = new Set(
+    sanctions.filter((s) => s.endsAt === null || instant(s.endsAt, "sanction.endsAt") > at).map((s) => s.type),
+  );
+  if (active.has("BAN")) return "BANNED";
+  if (active.has("SUSPEND")) return "SUSPENDED";
+  if (active.has("RESTRICT_COMMENTS") || active.has("RESTRICT_POSTING")) return "RESTRICTED";
+  return "ACTIVE";
 }
 
 const rank: Record<Role, number> = { USER: 0, MODERATOR: 1, ADMIN: 2, SUPER_ADMIN: 3 };

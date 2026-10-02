@@ -182,7 +182,7 @@ const report = { id: REPORT, target: { type: "COMMENT", id: COMMENT }, reason: "
 const communityCard = { ...communityRef, description: "Kampüs, yemekhane, ulaşım.", imageUrl: null, memberCount: 128 };
 const communityDetail = { ...communityCard, membersVisibility: "MEMBERS", createdAt: T0, viewer: { role: "MEMBER" } };
 const notification = { id: NOTIF, type: "COMMENT_ON_POLL", subject: { type: "POLL", id: POLL }, actor: umit, data: {}, readAt: null, createdAt: T1 };
-const sanction = { id: SANCTION, type: "SUSPEND", reason: "Tekrarlayan spam", startsAt: T1, endsAt: T_CLOSE, liftedAt: null, createdBy: deniz };
+const sanction = { id: SANCTION, type: "SUSPEND", reason: "Tekrarlayan spam", startsAt: T1, endsAt: T_CLOSE, liftedAt: null, createdBy: deniz, liftedBy: null, liftReason: null };
 const adminUser = { ...umit, email: "umit@example.test", status: "ACTIVE", roles: ["USER"], createdAt: T0, reportCount: 0 };
 const setting = { key: "polls.voteChangeAllowed", value: true, version: 3, updatedAt: T1, updatedBy: deniz };
 const featured = { id: FEATURED, pollId: POLL, surface: "HOME_SPOTLIGHT", scopeId: null, priority: 10, badge: "Editörün Seçimi", startsAt: T0, endsAt: T_CLOSE };
@@ -351,9 +351,13 @@ export const examples: Example[] = [
   { endpoint: "config.get", name: "ok", status: 200, body: data(publicConfig) },
   { endpoint: "admin.users.list", name: "ok", request: { query: { q: "umit" } }, status: 200, body: page([adminUser]) },
   { endpoint: "admin.users.get", name: "ok", request: { params: { id: U2 } }, status: 200, body: data({ ...adminUser, emailVerified: true, lastLoginAt: T1, stats: { pollCount: 1, commentCount: 5, voteCount: 12 }, activeSanctions: [] }) },
+  { endpoint: "admin.users.sanctions", name: "ok", request: { params: { id: U2 } }, status: 200, body: page([sanction]) },
+  { endpoint: "admin.users.reports", name: "against", request: { params: { id: U2 }, query: { side: "against" } }, status: 200, body: page([{ id: REPORT, target: { type: "COMMENT", id: COMMENT }, reason: "SPAM", status: "OPEN", createdAt: T1, resolvedAt: null }]) },
+  { endpoint: "admin.users.activity", name: "ok", request: { params: { id: U2 } }, status: 200, body: page([{ kind: "COMMENT", id: COMMENT, pollId: POLL, excerpt: "Bence ikinci seçenek daha mantıklı.", status: "ACTIVE", createdAt: T1 }]) },
+  { endpoint: "admin.sanctions.create", name: "conflict", request: { params: { id: U2 }, body: { type: "SUSPEND", reason: "Tekrarlayan spam", endsAt: T_CLOSE } }, status: 409, body: error("CONFLICT", "Bu kullanıcıda aynı tipte aktif bir yaptırım var.", [{ code: "already_active" }]) },
   { endpoint: "admin.sanctions.create", name: "suspend", request: { params: { id: U2 }, body: { type: "SUSPEND", reason: "Tekrarlayan spam", endsAt: T_CLOSE } }, status: 201, body: data(sanction) },
-  { endpoint: "admin.sanctions.lift", name: "ok", request: { params: { id: U2, sanctionId: SANCTION }, body: { reason: "İtiraz kabul edildi" } }, status: 200, body: data({ ...sanction, liftedAt: T1 }) },
-  { endpoint: "admin.roles.put", name: "ok", request: { params: { id: U2 }, body: { role: "MODERATOR", reason: "Topluluk moderatörü" } }, status: 200, body: data({ userId: U2, roles: ["USER", "MODERATOR"] }) },
+  { endpoint: "admin.sanctions.lift", name: "ok", request: { params: { id: U2, sanctionId: SANCTION }, body: { reason: "İtiraz kabul edildi" } }, status: 200, body: data({ ...sanction, liftedAt: T1, liftedBy: deniz, liftReason: "İtiraz kabul edildi" }) },
+  { endpoint: "admin.roles.put", name: "ok", request: { params: { id: U2 }, body: { role: "MODERATOR", reason: "Topluluk moderatörü" } }, status: 200, body: data({ userId: U2, roles: ["MODERATOR"] }) },
   { endpoint: "admin.settings.list", name: "ok", status: 200, body: data([setting]) },
   { endpoint: "admin.settings.update", name: "ok", request: { params: { key: "polls.voteChangeAllowed" }, body: { value: false, version: 3, reason: "Beta kararı" } }, status: 200, body: data({ ...setting, value: false, version: 4 }) },
   { endpoint: "admin.settings.update", name: "stale", request: { params: { key: "polls.voteChangeAllowed" }, body: { value: false, version: 2, reason: "Beta kararı" } }, status: 409, body: error("VERSION_CONFLICT", "Ayar başka biri tarafından değiştirildi; yenileyin.") },

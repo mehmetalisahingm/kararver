@@ -5,7 +5,9 @@ import { z } from "zod";
 import { Category } from "./discovery.ts";
 import { Announcement, LedgerEntry } from "./growth.ts";
 import { AllowedMimeType } from "./media.ts";
+import { ReportReason, ReportStatus, ReportTargetType } from "./moderation.ts";
 import {
+  ContentStatus,
   Count,
   CursorQuery,
   dataOf,
@@ -58,6 +60,9 @@ export const Sanction = z.strictObject({
   endsAt: Timestamp.nullable(),
   liftedAt: Timestamp.nullable(),
   createdBy: PublicUser,
+  /** Kaldıran yönetici ve gerekçesi; kaldırılmamışsa null (KV-33). */
+  liftedBy: PublicUser.nullable(),
+  liftReason: z.string().nullable(),
 });
 
 export const AdminUserSummary = z.strictObject({
@@ -74,6 +79,27 @@ export const AdminUserDetail = z.strictObject({
   lastLoginAt: Timestamp.nullable(),
   stats: z.strictObject({ pollCount: Count, commentCount: Count, voteCount: Count }),
   activeSanctions: z.array(Sanction),
+});
+
+/** Kullanıcının hesabına/içeriğine yapılan veya kullanıcının yaptığı rapor (KV-33). Raporlayan kimliği dönmez. */
+export const AdminUserReport = z.strictObject({
+  id: Id,
+  target: z.strictObject({ type: ReportTargetType, id: Id }),
+  reason: ReportReason,
+  status: ReportStatus,
+  createdAt: Timestamp,
+  resolvedAt: Timestamp.nullable(),
+});
+
+/** Kullanıcının anket ve yorumları; gizli/kaldırılmış içerik dahil (KV-33). Oylar yalnız sayı olarak (`stats`). */
+export const AdminUserActivity = z.strictObject({
+  kind: z.enum(["POLL", "COMMENT"]),
+  id: Id,
+  pollId: Id,
+  /** Anket başlığı veya yorumun ilk 140 karakteri. */
+  excerpt: z.string(),
+  status: ContentStatus,
+  createdAt: Timestamp,
 });
 
 export const Setting = z.strictObject({
@@ -280,11 +306,22 @@ export const adminEndpoints = [
     consumers: utkuUi,
     unblocks: ["#35"],
     availability: { status: "ready" },
-    request: { query: z.strictObject({ ...CursorQuery.shape, q: z.string().trim().max(100).optional(), status: UserStatus.optional() }) },
+    request: {
+      query: z.strictObject({
+        ...CursorQuery.shape,
+        // En az 3 karakter: kullanıcı adı/görünen ad araması trigram index'i kullanır (KV-26).
+        q: z.string().trim().min(3).max(100).optional(),
+        status: UserStatus.optional(),
+      }),
+    },
     responses: { 200: pageOf(AdminUserSummary) },
     errors: ["INVALID_CURSOR"],
     idempotency: "none",
     cache: "private",
+    notes: [
+      "q: kullanıcı adı ve görünen adda içerir araması; '@' içeriyorsa e-postada tam eşleşme. Silinmiş hesaplar durumlarıyla listelenir.",
+      "roles tek elemanlıdır (kullanıcı başına tek global rol); rol satırı yoksa [\"USER\"].",
+    ],
   }),
   defineEndpoint({
     id: "admin.users.get",
@@ -303,6 +340,35 @@ export const adminEndpoints = [
     idempotency: "none",
     cache: "private",
   }),
+  ...(["sanctions", "reports", "activity"] as const).map((sub) =>
+    defineEndpoint({
+      id: `admin.users.${sub}`,
+      domain: "admin",
+      method: "GET",
+      path: `/admin/users/:id/${sub}`,
+      summary: {
+        sanctions: "Kullanıcının bütün yaptırım geçmişi (kaldırılan ve süresi dolanlar dahil)",
+        reports: "Kullanıcıya (hesap veya içerik) yapılan ya da kullanıcının yaptığı raporlar",
+        activity: "Kullanıcının anket ve yorumları (gizli/kaldırılmış dahil)",
+      }[sub],
+      auth: "admin",
+      provider: adminUsers,
+      consumers: utkuUi,
+      unblocks: ["#35"],
+      availability: { status: "ready" },
+      request: {
+        params: IdParams,
+        query:
+          sub === "reports"
+            ? z.strictObject({ ...CursorQuery.shape, side: z.enum(["against", "filed"]).default("against") })
+            : CursorQuery,
+      },
+      responses: { 200: pageOf({ sanctions: Sanction, reports: AdminUserReport, activity: AdminUserActivity }[sub]) },
+      errors: ["INVALID_CURSOR"],
+      idempotency: "none",
+      cache: "private",
+    }),
+  ),
   defineEndpoint({
     id: "admin.sanctions.create",
     domain: "admin",
@@ -320,15 +386,20 @@ export const adminEndpoints = [
         .strictObject({ type: SanctionType, reason: Reason, endsAt: Timestamp.nullable().default(null) })
         .refine((b) => b.type !== "SUSPEND" || b.endsAt !== null, { message: "SUSPEND için endsAt zorunlu", path: ["endsAt"] })
         // BAN kalıcıdır; DB de reddeder (sanctions_ban_permanent_check, DATA_MODEL §9.1).
-        .refine((b) => b.type !== "BAN" || b.endsAt === null, { message: "BAN için endsAt null olmalı", path: ["endsAt"] }),
+        .refine((b) => b.type !== "BAN" || b.endsAt === null, { message: "BAN için endsAt null olmalı", path: ["endsAt"] })
+        // WARNING bir kayıttır, süresi yoktur (KV-33).
+        .refine((b) => b.type !== "WARNING" || b.endsAt === null, { message: "WARNING için endsAt null olmalı", path: ["endsAt"] }),
     },
     responses: { 201: dataOf(Sanction) },
-    errors: [],
+    errors: ["CONFLICT"],
     idempotency: "key-optional",
     cache: "private",
     notes: [
       "SUSPEND/BAN açık oturumları aynı transaction'da iptal eder.",
       "Admin sadece USER/MODERATOR hesaplara yaptırım uygular; admin hedefler SUPER_ADMIN gerektirir (KV-04).",
+      "users.status aynı transaction'da aktif yaptırımlardan yeniden hesaplanır (statusFromSanctions).",
+      "409 CONFLICT details[0].code: already_active (aynı tipte aktif yaptırım; WARNING hariç), user_deleted, last_super_admin. Farklı tipe geçiş (ör. SUSPEND aktifken BAN) serbesttir.",
+      "endsAt geçmişte ise 400 VALIDATION_ERROR.",
     ],
   }),
   defineEndpoint({
@@ -344,9 +415,13 @@ export const adminEndpoints = [
     availability: { status: "ready" },
     request: { params: z.strictObject({ id: Id, sanctionId: Id }), body: z.strictObject({ reason: Reason }) },
     responses: { 200: dataOf(Sanction) },
-    errors: [],
-    idempotency: "natural",
+    errors: ["CONFLICT"],
+    idempotency: "none",
     cache: "private",
+    notes: [
+      "409 CONFLICT details[0].code: already_lifted (zaten kaldırılmış), expired (süresi dolmuş). İkisi de audit yazmaz.",
+      "Silinmiş hesabın yaptırımı kaldırılabilir. users.status kalan aktif yaptırımlardan yeniden hesaplanır.",
+    ],
   }),
   defineEndpoint({
     id: "admin.roles.put",
@@ -364,7 +439,11 @@ export const adminEndpoints = [
     errors: ["CONFLICT"],
     idempotency: "natural",
     cache: "private",
-    notes: ["Kendi rolünü değiştirme ve son aktif SUPER_ADMIN'i düşürme 409 CONFLICT."],
+    notes: [
+      "Kendi rolünü değiştirme ve son aktif SUPER_ADMIN'i düşürme 409 CONFLICT.",
+      "role: USER rol satırını kaldırır (revoke). Mevcut rolle aynı rol 200, değişiklik ve audit yok.",
+      "roles tek elemanlıdır (kullanıcı başına tek global rol). Audit: user.role.assign / grant | revoke | change.",
+    ],
   }),
   defineEndpoint({
     id: "admin.settings.list",

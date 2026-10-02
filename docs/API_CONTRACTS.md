@@ -172,8 +172,11 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `GET /config`<br>Public limitler, puan maliyeti, özellik anahtarları · `config.get` | G | 200 | — | Utku `settings` | Ümit (web), herkes | #42 #15 #18 | hazır |
 | `GET /admin/users`<br>Kullanıcı arama · `admin.users.list` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id`<br>Kullanıcı detayı, aktivite ve yaptırımlar · `admin.users.get` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
+| `GET /admin/users/:id/sanctions`<br>Kullanıcının bütün yaptırım geçmişi (kaldırılan ve süresi dolanlar dahil) · `admin.users.sanctions` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
+| `GET /admin/users/:id/reports`<br>Kullanıcıya (hesap veya içerik) yapılan ya da kullanıcının yaptığı raporlar · `admin.users.reports` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
+| `GET /admin/users/:id/activity`<br>Kullanıcının anket ve yorumları (gizli/kaldırılmış dahil) · `admin.users.activity` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `POST /admin/users/:id/sanctions`<br>Uyarı / kısıt / suspend / ban · `admin.sanctions.create` | A | 201 | key (ops.) | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
-| `POST /admin/users/:id/sanctions/:sanctionId/lift`<br>Yaptırımı kaldır · `admin.sanctions.lift` | A | 200 | doğal | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
+| `POST /admin/users/:id/sanctions/:sanctionId/lift`<br>Yaptırımı kaldır · `admin.sanctions.lift` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `PUT /admin/users/:id/role`<br>Rol ata · `admin.roles.put` | SA | 200 | doğal | Utku `rbac` | Utku (admin UI) | #14 #35 | hazır |
 | `GET /admin/settings`<br>Bütün sistem ayarları (sürümlü) · `admin.settings.list` | A | 200 | — | Utku `settings` | Utku (admin UI) | #42 | hazır |
 | `PATCH /admin/settings/:key`<br>Tek ayarı değiştir (iyimser kilit) · `admin.settings.update` | SA | 200 | doğal | Utku `settings` | Utku (admin UI) | #42 | hazır |
@@ -225,7 +228,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #32 | `GET /polls/:id/history`, `GET /feed`, `GET /search`, `GET /trends/:format` |
 | #33 | `GET /feed`, `GET /communities`, `GET /communities/:slug`, `GET /communities/:id/members`, `PUT /communities/:id/membership`, `DELETE /communities/:id/membership` |
 | #34 | `POST /admin/communities`, `PATCH /admin/communities/:id`, `PUT /admin/communities/:id/moderators/:userId`, `DELETE /admin/communities/:id/moderators/:userId` |
-| #35 | `GET /admin/users`, `GET /admin/users/:id`, `POST /admin/users/:id/sanctions`, `POST /admin/users/:id/sanctions/:sanctionId/lift`, `PUT /admin/users/:id/role` |
+| #35 | `GET /admin/users`, `GET /admin/users/:id`, `GET /admin/users/:id/sanctions`, `GET /admin/users/:id/reports`, `GET /admin/users/:id/activity`, `POST /admin/users/:id/sanctions`, `POST /admin/users/:id/sanctions/:sanctionId/lift`, `PUT /admin/users/:id/role` |
 | #36 | `GET /notifications/preferences`, `PATCH /notifications/preferences`, `PUT /notifications/mutes/:pollId`, `DELETE /notifications/mutes/:pollId` |
 | #37 | `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/read`, `GET /notifications/preferences`, `PATCH /notifications/preferences` |
 | #38 | `GET /admin/metrics` |
