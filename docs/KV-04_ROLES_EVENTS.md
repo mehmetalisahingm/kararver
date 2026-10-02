@@ -192,6 +192,8 @@ Yönetici seviyesi işlemler yalnız `ACTIVE` hesapla yapılır; aksi 403. **Ger
 ### 4.4 Audit kaydı mutation ile aynı transaction'da yazılır
 Audit bir olay tüketicisi değildir. **Gerekçe:** Olay teslimi en az bir kezdir ve gecikebilir; audit kaydı işlemle atomik olmalıdır (işlem varsa kayıt var, işlem geri alındıysa kayıt yok). Olay kataloğunda `audit` tüketicisi bu yüzden yoktur (KV-39).
 
+**Uygulama (KV-39):** `writeAudit(tx, entry)` (`apps/api/src/modules/audit/write.ts`) çağıranın transaction'ında yazar; kayıt önce contracts `assertAuditEntry` ile doğrulanır (`packages/contracts/src/audit.ts`). `action` bu belgedeki işlem kimliğidir (§1.3) veya aktörsüz sistem işlemidir (`systemAuditActions`: `user.status.sync`); işlem kataloğu ve `authorize` audit için değişmez. Aynı işlemin türleri (ör. `vote.invalidate` → `invalidate` | `restore`) ayrı `operation` sütununda tutulur (`auditOperations`). Gerekçesi zorunlu işlemler `reasonRequiredActions`'tadır; gerekçesiz çağrı TypeError'dur ve işlemi de geri alır. Tablo ve kurallar: DATA_MODEL §9.2.
+
 ### 4.5 `createEvent` / `eventEnvelope` ayrımı
 `eventEnvelope` (#64) geriye uyumluluk için değişmeden kalır: yalnız zarfı doğrular (payload serbest, `id`/`subject` biçimi gevşek). **Yeni kod `createEvent` kullanır**: outbox'a yazma anında payload şeması, UUIDv7, konu tipi ve aktör kuralı katı doğrulanır. Tüketici girişinde aynı katılıkta `parseEvent` çalışır. **Gerekçe:** Zehirli mesaj (tüketicide sürekli hata veren olay) kuyruğa hiç girmemeli; `eventEnvelope`'u sıkılaştırmak mevcut çağıranlar için kırıcı olurdu. Test: katalogdaki her örnek olay hem `eventEnvelope`'tan hem `parseEvent`/`createEvent`'ten geçer; `eventEnvelope`'un kabul ettiği gevşek olaylar `createEvent`'te reddedilir.
 
@@ -209,7 +211,7 @@ Issue numaraları mevcut eşlemeye göredir (KV-N → #N+2).
 
 | # | Konu | Sahip | Issue |
 |---|---|---|---|
-| 1 | **İtiraz endpoint'i**: yaptırımlı kullanıcının itiraz kanalı yok. Public okuma gibi yaptırım durumundan ayrı olmalı (FOUNDATION); SUSPENDED/BANNED kullanıcı oturum açamadığı için oturumsuz bir akış gerekir. | Utku | KV-33 (#35) kapsamında açılacak |
+| 1 | **İtiraz endpoint'i**: yaptırımlı kullanıcının itiraz kanalı yok. Public okuma gibi yaptırım durumundan ayrı olmalı (FOUNDATION); SUSPENDED/BANNED kullanıcı oturum açamadığı için oturumsuz bir akış gerekir. | Utku | KV-33 (#35)'ten ertelendi; ayrı iş olarak açılacak |
 | 2 | **`moderators.put` ön koşulu**: hedefte global `MODERATOR` rolünü aramalı, yoksa hata dönmeli (ör. 409 `CONFLICT`); aksi hâlde atama sessizce etkisiz kalır (§4.6). | Mert | KV-32 ([#34](https://github.com/mehmetalisahingm/kararver/issues/34)) |
 | 3 | **`community.featured` gerekli mi?** Genel öne çıkarma `featured.applied` ile taşınıyor; `community.featured` yalnız topluluk yüzeyi + `COMMUNITY_FEATURED` bildirimi için kaldı. Anlam daraltmak sonradan kırıcı olacağı için dar tutuldu. | Mehmet | KV-42 (#44) |
 | 4 | **Milestone eşikleri**: `poll.milestone` hangi oy sayılarında üretilir? Hiçbir belgede değer yok. | Faruk (üretici), Utku (bildirim) | KV-21 (#23) |

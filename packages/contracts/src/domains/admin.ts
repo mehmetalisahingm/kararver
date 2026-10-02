@@ -84,10 +84,16 @@ export const Setting = z.strictObject({
   updatedBy: PublicUser.nullable(),
 });
 
+/** Audit kaydını kim üretti: API isteği (aktör dolu), CLI veya worker (aktör null). KV-39 */
+export const AuditSource = z.enum(["API", "CLI", "WORKER"]);
 export const AuditEntry = z.strictObject({
   id: Id,
   actor: PublicUser.nullable(),
+  source: AuditSource,
+  /** KV-04 işlem kimliği (`actions`) veya sistem işlemi (`systemAuditActions`). */
   action: z.string(),
+  /** İşlemin türü (ör. vote.invalidate → invalidate | restore); izinli değerler `auditOperations`. */
+  operation: z.string(),
   target: z.strictObject({ type: z.string(), id: z.string() }),
   before: z.unknown().nullable(),
   after: z.unknown().nullable(),
@@ -446,6 +452,8 @@ export const adminEndpoints = [
         targetType: z.string().max(40).optional(),
         targetId: z.string().max(64).optional(),
         action: z.string().max(80).optional(),
+        operation: z.string().max(40).optional(),
+        source: AuditSource.optional(),
         from: Timestamp.optional(),
         to: Timestamp.optional(),
       }),

@@ -20,7 +20,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 | `media.prisma` | **Mert** | `MediaAsset`: nesne anahtarları, işlenmiş kopya metadata'sı, moderasyon sonucu ([MEDIA_MODERATION.md](./MEDIA_MODERATION.md)) | ✅ KV-16 (şema) |
 | `community.prisma` | **Mert** | `Community` (slug, ad, görsel, üye sayısı, oluşturan), `CommunityMembership` (üyelik + topluluk rolü) | ✅ KV-31 (şema) |
 | `moderation.prisma` | Mert | `Report`, `ModerationAction` (append-only). Engelli görsel hash listesi KV-38'de eklenecek | ✅ KV-24 (şema) |
-| `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi). Audit, ayarlar, bildirimler sonra | ✅ KV-12 (şema) · ⏳ KV-21 / KV-39 / KV-40 |
+| `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi), `AuditLog` (değiştirilemez audit). Ayarlar, bildirimler sonra | ✅ KV-12 (şema) · ✅ KV-39 (şema + yazıcı) · ⏳ KV-21 / KV-40 |
 | `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ✅ `UserInterest` (KV-15) · ⏳ KV-22 / KV-23 / KV-42 |
 
 **İskelet tablolar neden var:** Çekirdek tablolar Mert'in iki tablosuna FK veriyor: `polls.community_id → communities` ve `users.avatar_media_id`, `poll_media.media_id → media_assets`. FK'nin hedefi olmadan ilk migration çalışmaz. Bu yüzden iki tablo sadece `id`, `status` ve `created_at` alanlarıyla açıldı. Geri kalan alanları, enum değerlerini ve indexleri sahibi belirler. İskeletteki `id` alanı ve "core ilişkileri" bölümü kaldırılmamalıdır.
@@ -393,7 +393,7 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 | Mert | `banned_media_hashes` (KV-38) | Reddedilmiş görselin sha256 + dHash'i, kanıt görsel `source_media_id` (Restrict; görsel silinemez). En az bir parmak izi ve biçim CHECK'leri; sha256 ve kanıt görsel başına tek kayıt. `media_assets.perceptual_hash` worker tarafından yazılır | Worker birebir eşleşmeyi reddeder, yakın eşleşmeyi incelemeye alır (docs/MEDIA_MODERATION.md §10) |
 | Mert | `reports`, `moderation_actions` (KV-24) | Hedef başına ayrı nullable FK: `poll_id`, `comment_id`, `media_id`, `reported_user_id` / `target_user_id`, ve "tam olarak biri dolu" CHECK'i | Tek `target_type`/`target_id` çifti FK bütünlüğünü kaybettirdiği için önerilmez. Kullanıcı + hedef başına tek satır (unique); kapanmış raporun sahibi yeniden raporlarsa aynı satır `OPEN`'a döner (`reports.create` sözleşmesi). `moderation_actions` append-only (trigger), gerekçe zorunlu. Karar güncellemesi raporu için FK, KV-23 tablosu açılınca eklenir |
 | Utku | `user_roles`, `sanctions` (KV-12) | `user_id`, `granted_by_id`, `created_by_id`, `lifted_by_id → users.id`, hepsi `RESTRICT` | Ayrıntı ve servis kuralları §9.1. Yaptırım `users.status`'u da günceller (§7.2) |
-| Utku | `audit_logs` | `actor_id → users.id`; hedef `target_type` + `target_id` | Append-only (KV-39); polimorfik hedef burada kabul edilir |
+| Utku | `audit_logs` (KV-39) | `actor_id → users.id` (`RESTRICT`, NULL = sistem); hedef `target_type` + `target_id` | Append-only (trigger); polimorfik hedef burada kabul edilir. Ayrıntı §9.2 |
 | Utku | `system_settings` | — | Oy değiştirme izni, trend katsayıları, snapshot eşikleri buradan okunur |
 | Utku | `notifications`, `notification_preferences` | `users.id` | Olayları çekirdek modüller üretir (KV-04 olay zarfı) |
 | Mehmet | `bookmarks` | `(user_id, poll_id)` PK | `polls.save_count`'u aynı transaction'da günceller |
@@ -435,6 +435,42 @@ Aktif yaptırım: `lifted_at IS NULL AND (ends_at IS NULL OR ends_at > now())`; 
 - **Lift idempotency:** `admin.sanctions.lift` "natural" idempotent'tir; zaten kaldırılmış yaptırımda servis mevcut satırı döner, DB'ye ikinci kaldırma yazmaz (yazarsa `KV_SANCTIONS_IMMUTABLE`).
 
 **Sözleşme (contracts 1.8.0):** `dbErrorMap`'te `KV_SANCTIONS_IMMUTABLE → INTERNAL_ERROR` (kod hatası: loglanır, 500). `admin.sanctions.create` gövdesi `SUSPEND` için `endsAt` ister, `BAN` için `endsAt: null` ister; DB kısıtlarıyla (`sanctions_suspend_ends_check`, `sanctions_ban_permanent_check`) aynıdır.
+
+### 9.2 Audit (Utku, KV-39)
+
+Şema `admin.prisma` (`AuditLog`, enum `audit_source`), kısıtlar ve trigger `…_utku_kv39_audit_logs` migration'ının elle yazılan bölümündedir. Sözleşme: `packages/contracts/src/audit.ts`. Yazıcı: `apps/api/src/modules/audit/write.ts` (`writeAudit(tx, entry)`).
+
+**Aynı transaction (KV-04 §4.4):** Kritik işlem audit kaydını kendi transaction'ının içinden yazar; olay tüketicisi veya ayrı transaction yoktur. İşlem geri alınırsa kayıt da yoktur; kayıt doğrulanamazsa (ör. gerekçesiz) `writeAudit` TypeError fırlatır ve işlem de geri alınır.
+
+| Kolon | Anlamı |
+|---|---|
+| `actor_id` | İşlemi yapan kullanıcı (`users`, `RESTRICT`). NULL = sistem (CLI/worker) |
+| `source` | `API` (aktör + `request_id` dolu), `CLI`, `WORKER` (aktör NULL) |
+| `action` | KV-04 işlem kimliği (`actions`, ör. `user.sanction`) veya sistem işlemi (`systemAuditActions`: `user.status.sync`). Yalnız `auditOperations` haritasındaki katalog işlemleri audit'e yazılabilir. Katalog ve `authorize` audit için değişmez |
+| `operation` | İşlemin türü, ayrı sorgulanır: `user.role.assign` → `grant` (USER'a rol verme) \| `revoke` (rolü kaldırıp USER'a düşürme) \| `change` (rolden role geçiş), `vote.invalidate` → `invalidate` \| `restore`, `community.moderator.assign` → `assign` \| `remove`, `category.manage` → `create` \| `update`, moderasyon → `hide`, `restore`, … Audit'li her katalog işleminin izinli değerleri `auditOperations`'ta açıkça yazılıdır; tek değerli işlemde `operation` verilmezse o değer yazılır, çok değerlide zorunludur. Kimliğin son parçası varsayılanı yalnız sistem işlemleri içindir (`user.status.sync` → `sync`). Contracts testi, gerekçesi zorunlu her işlemin ve değiştiren her yönetici endpoint'inin işleminin haritada olduğunu zorlar |
+| `target_type`, `target_id` | Polimorfik hedef (`auditTargetTypes`: `USER`, `POLL`, `VOTE`, `SETTING`, …). FK yoktur; `SETTING`'de id ayar anahtarıdır |
+| `reason` | `reasonRequiredActions` için zorunlu (servis); varsa en az 3 anlamlı karakter (CHECK) |
+| `before`, `after` | Kısa özet: JSON nesnesi veya SQL NULL. Hassas alan yazılmaz (e-posta, parola, token, ip, user agent, oturum, oy seçimi: `…OptionId`); en fazla 4096 karakter (servis) |
+| `request_id` | API'de `X-Request-Id` (hata gövdesindeki `requestId` ile aynı) |
+| `created_at` | İşlemin zamanı (çağıranın saati; CLI'da DB saati) |
+
+**DB'nin zorladığı kurallar**
+
+| Kural | Kısıt |
+|---|---|
+| API kaydı aktörlü, CLI/WORKER kaydı aktörsüz | `audit_logs_actor_source_check` |
+| API kaydında `request_id` var; boş metin yok | `audit_logs_request_id_check` |
+| İşlem kimliği, tür ve hedef tipi biçimi | `audit_logs_action_check`, `audit_logs_operation_check`, `audit_logs_target_check` |
+| Gerekçe varsa en az 3 anlamlı karakter; özet nesne veya NULL | `audit_logs_reason_check`, `audit_logs_summary_check` |
+| Kayıt silinemez, güncellenemez, tablo boşaltılamaz (SUPER_ADMIN ve uygulama dahil) | trigger `audit_logs_append_only` (UPDATE/DELETE), `audit_logs_no_truncate` → `KV_AUDIT_LOGS_APPEND_ONLY` (`dbErrorMap`: `INTERNAL_ERROR`) |
+
+Hangi işlemin gerekçe istediği, izinli türler ve hassas alan yasağı işleme bağlı olduğu için DB'de değil, contracts `assertAuditEntry`'dedir (API ve worker aynı fonksiyonu kullanır).
+
+**Index'ler:** `(target_type, target_id, created_at)` hedefin geçmişi; `(actor_id, created_at)` yöneticinin işlemleri; `(action, operation, created_at)` işlem türü filtresi; `(created_at)` zaman sıralı liste. Okuma: `AuditStore.list` (keyset, en yeni önce). `admin.audit.list` endpoint'i ayrı PR'dadır (KV-39, PR-B'den sonra).
+
+**Şu an yazanlar:** `admin:bootstrap` (KV-12): `source = CLI`, aktör NULL, `user.role.assign` / `grant` (yeni rol satırı) veya `change` (MODERATOR/ADMIN satırının yükseltilmesi), sabit gerekçe. Diğer kritik işlemler (kategori, moderasyon, medya kararı ve önizleme erişimi, rapor sonuçlandırma, oy geçersiz sayma, sürüm geçmişi okuma) kendi sahiplerinin modüllerinde `writeAudit` ile eklenir; KV-33 admin kullanıcı işlemleri PR-B'de gelir.
+
+**Gerekçe alanı olmayan endpoint'ler:** `community.create`, `community.moderator.assign` (DELETE), `featured.manage`, `announcement.manage` ve `media.ban.manage` (DELETE) gövdede gerekçe istemediği için `reasonRequiredActions`'ta değildir; sözleşmeye gerekçe eklenirse listeye alınır (contracts testi ikisini karşılaştırır).
 
 ---
 
@@ -490,7 +526,7 @@ pnpm db:test
   ```
 - **Sunucu çalışmıyorsa:** Test `PostgreSQL'e bağlanılamadı (...). Sunucu çalışıyor mu?` mesajıyla durur.
 
-### 11.2 Test kapsamı (46 test)
+### 11.2 Test kapsamı (61 test)
 
 | Grup | Ne doğrulanır |
 |---|---|
@@ -504,6 +540,7 @@ pnpm db:test
 | `reports` / `moderation_actions` (KV-24, +7 test) | Rapor tam olarak bir hedefe bağlanır; aynı kullanıcı aynı hedefi iki kez raporlayamaz; kendini raporlayamaz; sonuçlanan rapor sonuçlandıranı taşır, açık rapor taşımaz; raporlanan anket hard delete edilemez; işlem gerekçesiz/hedefsiz yazılamaz; moderasyon geçmişi `KV_MODERATION_ACTIONS_APPEND_ONLY` ile korunur |
 | `communities` / `community_memberships` (KV-31, +5 test) | Aynı kullanıcı ikinci kez katılamaz, ayrılıp yeniden katılabilir; slug benzersiz ve URL biçiminde, ad boş olamaz; üye sayısı negatif olamaz; moderatör rolü üyelikte tutulur ve kaldırılabilir; anketi olan topluluk silinemez, kapatmak anketleri etkilemez |
 | Enum hizalaması (+1 test) | `media_purpose`, `report_reason` ve `moderation_action_type` değerleri API sözleşmesindeki (KV-03) adlarla aynı |
+| `audit_logs` (KV-39, +6 test) | Aktör FK'si `RESTRICT`, olmayan aktöre yazılamaz; API kaydı aktörlü ve `request_id`'li, CLI/WORKER aktörsüz; işlem, tür, hedef, gerekçe ve özet biçim CHECK'leri; `KV_AUDIT_LOGS_APPEND_ONLY` (UPDATE, değer değiştirmeyen UPDATE, DELETE, TRUNCATE); hedef/aktör/işlem türü/zaman index'leri; `audit_source` contracts `AuditSource` ile birebir |
 | `user_roles` / `sanctions` (KV-12, +9 test) | Tek rol, `USER` satırı yok, kendine rol yok, verensiz sadece SUPER_ADMIN; var olmayan kullanıcıya FK hatası; `users`'a giden 5 FK `RESTRICT` ve izi olan kullanıcı silinemez; süre, `SUSPEND` süreli / `BAN` kalıcı; kendine yaptırım ve kendi yaptırımını kaldırma yok; gerekçe ve kaldırma alanları; `KV_SANCTIONS_IMMUTABLE` (tek izinli geçiş kaldırma, ikinci kaldırma yok); aktif yaptırım sorgusu ve index; `user_role`/`sanction_type` contracts `Role`/`SanctionType` ile birebir |
 
 ### 11.3 Bu PR'daki kanıt
@@ -525,4 +562,4 @@ pnpm db:test
 | 3 | Hesap silmede KVKK kapsamı: hangi alanlar anonimleşir, oylar ne olur | Faruk + Utku |
 | 4 | Kullanıcı adında izinli karakterler (Türkçe harf olacak mı?) | KV-09 |
 | 5 | Mert, Utku ve Mehmet tablolarının §9'daki FK yönleriyle uyumu | İlgili sahipler, PR review'unda |
-| 6 | **İlk SUPER_ADMIN nasıl oluşur?** **Çözüldü (KV-12):** tek seferlik CLI `pnpm --filter @kararver/api admin:bootstrap --email … [--apply]` (varsayılan dry-run; mantık `apps/api/src/modules/rbac/bootstrap.ts`). Transaction + sabit anahtarlı advisory lock; herhangi bir SUPER_ADMIN satırı varsa reddeder; hedef var olan, silinmemiş, e-postası doğrulanmış, `ACTIVE` kullanıcı olmalı; mevcut rol satırını (ör. MODERATOR) yükseltir, yoksa ekler; `granted_by_id = NULL` ile yazar (`user_roles_bootstrap_check` bunu sadece SUPER_ADMIN'e izin verir); audit tablosu gelene kadar stdout'a tek satır yazar, KV-39 gelince audit'e de yazar. Reddedilenler: `SUPER_ADMIN_EMAIL` env ile açılışta yükseltme (kalıcı yükseltme yolu), seed migration (ortama özel veri). Kullanım, çıkış kodları ve kurtarma: [`KV-12_ADMIN_BOOTSTRAP.md`](./KV-12_ADMIN_BOOTSTRAP.md) | Tamamlandı |
+| 6 | **İlk SUPER_ADMIN nasıl oluşur?** **Çözüldü (KV-12):** tek seferlik CLI `pnpm --filter @kararver/api admin:bootstrap --email … [--apply]` (varsayılan dry-run; mantık `apps/api/src/modules/rbac/bootstrap.ts`). Transaction + sabit anahtarlı advisory lock; herhangi bir SUPER_ADMIN satırı varsa reddeder; hedef var olan, silinmemiş, e-postası doğrulanmış, `ACTIVE` kullanıcı olmalı; mevcut rol satırını (ör. MODERATOR) yükseltir, yoksa ekler; `granted_by_id = NULL` ile yazar (`user_roles_bootstrap_check` bunu sadece SUPER_ADMIN'e izin verir); rol satırıyla aynı transaction'da `audit_logs`'a da yazar (KV-39, §9.2; stdout'a tek satır ayrıca). Reddedilenler: `SUPER_ADMIN_EMAIL` env ile açılışta yükseltme (kalıcı yükseltme yolu), seed migration (ortama özel veri). Kullanım, çıkış kodları ve kurtarma: [`KV-12_ADMIN_BOOTSTRAP.md`](./KV-12_ADMIN_BOOTSTRAP.md) | Tamamlandı |

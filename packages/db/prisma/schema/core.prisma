@@ -121,6 +121,8 @@ model User {
   sanctions                Sanction[]            @relation("SanctionTarget")
   sanctionsIssued          Sanction[]            @relation("SanctionIssuer")
   sanctionsLifted          Sanction[]            @relation("SanctionLifter")
+  // Utku — admin.prisma (KV-39)
+  auditLogs                AuditLog[]            @relation("AuditActor")
   // Mehmet — growth.prisma (KV-15/#17, V1 #67)
   interests                UserInterest[]
   pointAccount             PointAccount?

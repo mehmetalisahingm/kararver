@@ -37,7 +37,7 @@ Yazmak için aynı komutu --apply ile çalıştırın.
   ```json
   {"event":"rbac.super_admin_bootstrap","userId":"…","username":"kisi","previousRole":null,"role":"SUPER_ADMIN","database":"localhost:5432/kararver","at":"2026-09-30T12:00:00.000Z"}
   ```
-- **Audit:** `audit_logs` tablosu henüz yok (KV-39). KV-39 gelince aynı kayıt, aynı transaction'da audit'e de yazılacak (`actor_id` NULL = sistem/CLI, hedef = kullanıcı). O zamana kadar tek iz bu stdout satırıdır.
+- **Audit (KV-39):** `--apply` rol satırıyla **aynı transaction'da** `audit_logs`'a bir kayıt yazar: `source = CLI`, `actor_id` NULL (sistem/CLI), `action = user.role.assign`, `operation = grant` (rol satırı yoksa) veya `change` (mevcut MODERATOR/ADMIN satırı yükseltiliyorsa), hedef `USER`/kullanıcı id'si, sabit gerekçe (`BOOTSTRAP_AUDIT_REASON`, CLI gerekçe argümanı almaz), `before` = önceki rol (`USER`/`MODERATOR`/`ADMIN`), `after` = `SUPER_ADMIN` ve `grantedBy: null`. Rol yazılırsa kayıt da vardır; kayıt yazılamazsa rol de geri alınır. Dry-run (READ ONLY), "zaten" ve ret audit yazmaz. Stdout satırı operatör çıktısı olarak kalır; kalıcı iz audit kaydıdır (DATA_MODEL §9.2).
 
 ## Kurallar ve sonuçlar
 
@@ -81,7 +81,7 @@ CLI reddeder (`SUPER_ADMIN_EXISTS`), çünkü satır hâlâ vardır. Panelden de
 3. Yeni hedef için CLI'ı önce dry-run, sonra `--apply` ile çalıştırın.
 
 **Riskler:**
-- Silinen satırın izi kalmaz (audit KV-39'dan önce yok). Eski SUPER_ADMIN'in verdiği roller (`granted_by_id`) ve yaptırımlar etkilenmez; FK'ler `users`'a gider.
+- Elle silinen rol satırının audit kaydı olmaz (SQL ile yapılan işlem `writeAudit`'ten geçmez); yapılan işlemi değişiklik kaydına yazın. Bootstrap'ın kendi audit kaydı silinmez (append-only). Eski SUPER_ADMIN'in verdiği roller (`granted_by_id`) ve yaptırımlar etkilenmez; FK'ler `users`'a gider.
 - DB'ye yazma yetkisi olan herkes aynı yolla herhangi birini SUPER_ADMIN yapabilir. Bu yüzden adım 2'de tek satırı `user_id` ile hedefleyin, `WHERE role = 'SUPER_ADMIN'` ile toplu silmeyin ve SELECT sonucu beklenenden farklıysa `ROLLBACK` yapın.
 - Banlı eski SUPER_ADMIN'in yaptırımı ve `users.status`'u bu adımda değişmez; gerekirse yeni SUPER_ADMIN panelden yönetir.
 

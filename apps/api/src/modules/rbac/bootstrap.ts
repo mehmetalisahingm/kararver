@@ -4,6 +4,7 @@
 // DB `user_roles_bootstrap_check` ile verensiz (granted_by_id NULL) satırı her SUPER_ADMIN'e izin verir;
 // "hiç SUPER_ADMIN yokken, tek bir kez" kuralını DB korumaz, tamamı buradadır.
 import type { PrismaClient, Role } from "@kararver/db";
+import { writeAudit } from "../audit/write.ts";
 import { normalizeEmail } from "../auth/routes.ts";
 
 /**
@@ -11,6 +12,12 @@ import { normalizeEmail } from "../auth/routes.ts";
  * eşzamanlı iki bootstrap bu kilitle sıraya girer, ikincisi birincinin yazdığı satırı görüp reddeder.
  */
 export const BOOTSTRAP_LOCK_KEY = "kararver.rbac.super_admin_bootstrap";
+
+/**
+ * Audit gerekçesi (KV-39). `user.role.assign` gerekçe ister; CLI'da operatörden gerekçe alınmaz (karar: sabit metin),
+ * kaynak CLI ve aktör NULL olduğu için kaydın bootstrap'tan geldiği zaten bellidir.
+ */
+export const BOOTSTRAP_AUDIT_REASON = "admin:bootstrap: ilk SUPER_ADMIN ataması (CLI)";
 
 export type BootstrapRejection =
   | "USER_NOT_FOUND"
@@ -68,6 +75,19 @@ export async function bootstrapSuperAdmin(prisma: PrismaClient, opts: BootstrapO
         where: { userId: user.id },
         create: { userId: user.id, role: "SUPER_ADMIN", grantedById: null },
         update: { role: "SUPER_ADMIN", grantedById: null },
+      });
+      // Aynı transaction: rol yazıldıysa audit de var; audit yazılamazsa rol de geri alınır (KV-04 §4.4).
+      await writeAudit(tx, {
+        source: "CLI",
+        actorId: null,
+        action: "user.role.assign",
+        // USER'a rol verme grant; mevcut MODERATOR/ADMIN satırının yükseltilmesi rolden role geçiş (change).
+        operation: previousRole === null ? "grant" : "change",
+        target: { type: "USER", id: user.id },
+        reason: BOOTSTRAP_AUDIT_REASON,
+        before: { role: previousRole ?? "USER" },
+        after: { role: "SUPER_ADMIN", grantedBy: null },
+        requestId: null,
       });
       return { ...target, kind: "applied", previousRole };
     },
