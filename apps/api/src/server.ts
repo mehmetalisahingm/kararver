@@ -17,6 +17,7 @@ import { createPrismaOnboardingStore } from "./modules/onboarding/prisma-store.t
 import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
 import { createPrismaProfileStore } from "./modules/profiles/prisma-store.ts";
 import { createPrismaRbacStore } from "./modules/rbac/prisma-store.ts";
+import { createPrismaModerationStore } from "./modules/moderation/prisma-store.ts";
 import { createPrismaReportStore } from "./modules/reports/prisma-store.ts";
 import { createPrismaSearchStore } from "./modules/search/prisma-store.ts";
 import { createPrismaTrendStore } from "./modules/trends/prisma-store.ts";
@@ -52,6 +53,7 @@ const app = buildApp({
   communityStore: createPrismaCommunityStore(prisma),
   onboardingStore: createPrismaOnboardingStore(prisma),
   reportStore: createPrismaReportStore(prisma),
+  moderationStore: createPrismaModerationStore(prisma),
   commentStore: createPrismaCommentStore(prisma),
   hasher: createArgon2Hasher(),
   mailer: createMailer(config.mail.transport, config.mail.from),

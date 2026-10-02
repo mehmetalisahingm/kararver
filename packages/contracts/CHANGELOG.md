@@ -3,13 +3,11 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
-## 1.13.0 — 2026-10-02 (Mert, KV-38 yasaklı görsel listesi)
+## 1.12.1 — 2026-10-02 (Mert, KV-32 topluluk yönetimi)
 
-Kırıcı değişiklik yok (yeni endpoint'ler, yeni şema ve yeni işlem minor).
+Kırıcı değişiklik yok (şema hatası düzeltmesi, istek biçimi aynı).
 
-- **Eklendi:** `admin.media.bans.list` (`GET /admin/media/bans`), `admin.media.bans.create` (`POST /admin/media/bans`, 200 mevcut / 201 yeni) ve `admin.media.bans.delete` (`DELETE /admin/media/bans/:id`). Üçü de `ready`, ADMIN+.
-- **Eklendi:** `BannedMediaView`; KV-04 işlemi `media.ban.manage` (admin). İşlem kataloğu 102 endpoint.
-- **Davranış:** worker yasaklı görselin aynı dosyasını (sha256) REJECTED/`BANNED_HASH`, çok benzerini (dHash) QUARANTINED/`BANNED_SIMILAR` yapar; yasaklı görsel `admin.media.decide` ile APPROVE edilemez (409).
+- **Düzeltildi:** `admin.communities.update` gövdesinde `membersVisibility` zod 4 `partial()` yüzünden varsayılanı (`MEMBERS`) koruyordu; alan gönderilmese de görünürlük `MEMBERS`'a sıfırlanır ve "en az bir alan" kuralı hep geçerdi. Alan artık gerçekten isteğe bağlı.
 
 ## 1.12.0 — 2026-10-02 (Faruk, KV-43 oy geçersiz sayma)
 

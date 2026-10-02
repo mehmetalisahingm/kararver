@@ -95,8 +95,8 @@ pnpm test
    `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`
 4. **`docker compose up -d`:** PostgreSQL ve SeaweedFS'i başlatır. `docker compose ps` çıktısında postgres `healthy` olana kadar DB komutları "Can't reach database server" verir.
 5. **`pnpm db:migrate`:** Dev veritabanına (`kararver`) migration'ları uygular. Kategori seed'i yok; kategoriler admin endpoint'i ile eklenir (KV-26).
-6. **`pnpm check:setup`:** Bu noktada `[HATA]` kalmamalıdır. `TEST_DATABASE_URL` uyarısı bir sonraki adımda kapanır.
-7. **`TEST_DATABASE_URL`:** Aşağıdaki §3'e bakın. Yalnız o terminal penceresi için geçerlidir; yeni pencerede tekrar set edin.
+6. **`pnpm check:setup`:** Bu noktada `[HATA]` kalmamalıdır.
+7. **Test veritabanı:** `.env`'de `DATABASE_URL` varsa ayrıca bir şey gerekmez; testler `<db>_test`'i kullanır. Farklı bir test veritabanı için §3'e bakın.
 8. **`pnpm test`:** contracts → db → api → worker testlerini sırayla koşar. Her paketin özetinde `ℹ fail 0` olmalıdır. API özetinde `ℹ skipped 0` görmelisiniz (bkz. §4.5). Worker'da 1 skip beklenir: gerçek moderasyon modeli testi `MODERATION_PYTHON yok` ile atlanır (Python ortamı: [`MEDIA_MODERATION.md`](./MEDIA_MODERATION.md)). Contracts'ta 1 `todo` test `✖ failing tests:` başlığı altında `⚠` ile listelenir; `fail 0` olduğu sürece bu hata değildir.
 
 ## 3. Test veritabanı
@@ -104,10 +104,10 @@ pnpm test
 | Test | Hangi DB | Nereden okur |
 |---|---|---|
 | `pnpm db:test` | `TEST_DATABASE_URL`, yoksa `.env`'deki `DATABASE_URL` + `_test` → `kararver_test` | ortam, sonra `.env` |
-| `pnpm api:test`, `pnpm worker:test` (PostgreSQL senaryoları) | yalnız `TEST_DATABASE_URL` | **yalnız ortam**; `.env` okunmaz |
+| `pnpm api:test`, `pnpm worker:test` (PostgreSQL senaryoları) | `TEST_DATABASE_URL`, yoksa `.env`'deki `TEST_DATABASE_URL`, o da yoksa `DATABASE_URL` + `_test` | ortam, sonra `.env` (`db:test` ile aynı kural) |
 
-- API ve worker test harness'i `TEST_DATABASE_URL`'i `.env`'den **okumaz**. Değer terminalde tanımlı değilse PostgreSQL senaryoları hata vermeden **atlanır** ve `pnpm test` yine yeşil görünür. Bu yüzden değeri `.env`'ye yazmak yetmez: yukarıdaki `set` / `$env:` / `export` satırını kullanın. `.env.example`'daki yorumlu satır yalnız hatırlatmadır.
-- Kalıcı yapmak isterseniz: Windows'ta `setx TEST_DATABASE_URL postgresql://kararver:kararver_local@localhost:5432/kararver_test` (yalnız **yeni** açılan terminallerde geçerli olur), macOS/Linux'ta `export …` satırını `~/.zshrc` veya `~/.bashrc`'ye ekleyin.
+- API ve worker test harness'i de `.env`'yi okur: `.env`'de `DATABASE_URL` varsa terminalde ayrıca bir şey set etmek gerekmez, testler `<db>_test`'e bağlanır. Başka bir test veritabanı isterseniz `.env`'ye `TEST_DATABASE_URL` yazın veya terminalde set edin (terminaldeki değer önceliklidir).
+- Hiçbiri yoksa PostgreSQL senaryoları atlanır, ama sessizce değil: her test dosyası `⚠ Postgres testleri ATLANDI …` uyarısı yazar.
 - Veritabanı adı `_test` ile bitmek zorundadır; bitmezse testler hiçbir şeye dokunmadan durur.
 - **Sıfırlama:** `pnpm test` içindeki `db:test` adımı `kararver_test`'i her koşuda `prisma migrate reset --force` ile sıfırlar. Bu yüzden tam `pnpm test` her zaman temiz DB'de koşar. `pnpm api:test` veya `pnpm worker:test`'i **tek başına** tekrar tekrar koşarsanız veri birikir ve bazı senaryolar (ör. topluluk listeleri) kırılabilir. Önce şunu çalıştırın:
 
