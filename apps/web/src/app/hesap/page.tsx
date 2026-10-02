@@ -15,6 +15,8 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [attempt, retry] = useState(0);
 
   useEffect(() => {
     setDisplayName(user?.name ?? "");
@@ -22,6 +24,7 @@ export default function Page() {
     if (!user || !user.username || !client.getProfile || !client.getBookmarks) return;
     let active = true;
     setLoading(true);
+    setLoadError("");
     setError("");
     Promise.all([client.getProfile(user.username), client.getBookmarks()])
       .then(([nextProfile, bookmarks]) => {
@@ -30,10 +33,10 @@ export default function Page() {
         setSaved(bookmarks.data);
         setCursor(bookmarks.page.nextCursor);
       })
-      .catch((e) => active && setError((e as Error).message))
+      .catch((e) => active && setLoadError((e as Error).message))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [client, user?.id, user?.username, user?.name, user?.bio]);
+  }, [client, user?.id, user?.username, user?.name, user?.bio, attempt]);
 
   if (!user) {
     return (
@@ -66,19 +69,21 @@ export default function Page() {
   }
 
   async function removeBookmark(poll: Poll) {
-    if (!client.setBookmark) return;
+    if (busy || !client.setBookmark) return;
+    setBusy(true); setError("");
     try {
       await client.setBookmark(poll.id, false);
       setSaved((items) => items.filter((item) => item.id !== poll.id));
       notify("Kayıt kaldırıldı.");
     } catch (e) {
       setError((e as Error).message);
-    }
+    } finally { setBusy(false); }
   }
 
   async function loadMore() {
-    if (!cursor || !client.getBookmarks) return;
+    if (busy || !cursor || !client.getBookmarks) return;
     setBusy(true);
+    setError("");
     try {
       const page = await client.getBookmarks(cursor);
       setSaved((items) => [...items, ...page.data]);
@@ -145,7 +150,9 @@ export default function Page() {
             </div>
             <span className="kv-help">Private liste</span>
           </div>
-          {loading ? <Loading label="Kaydedilenler yükleniyor…" /> : saved.length === 0 ? (
+          {loading ? <Loading label="Kaydedilenler yükleniyor…" /> : loadError ? (
+            <div><ErrorMessage message={loadError} /><button className="kv-button" onClick={() => retry(n => n + 1)}>Kaydedilenleri tekrar yükle</button></div>
+          ) : saved.length === 0 ? (
             <p className="kv-muted">Henüz bir gönderi kaydetmedin.</p>
           ) : saved.map((poll) => (
             <article className="kv-card" key={poll.id}>
@@ -155,7 +162,7 @@ export default function Page() {
                   <h3><Link href={poll.canonicalPath ?? `/karar/${poll.id}`}>{poll.title}</Link></h3>
                   <p className="kv-muted">{poll.author}</p>
                 </div>
-                <button className="kv-button kv-button--ghost" onClick={() => void removeBookmark(poll)}>Kaydı kaldır</button>
+                <button className="kv-button kv-button--ghost" disabled={busy} onClick={() => void removeBookmark(poll)}>Kaydı kaldır</button>
               </div>
             </article>
           ))}

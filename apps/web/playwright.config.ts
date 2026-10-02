@@ -4,6 +4,7 @@ export default defineConfig({
   workers: 1,
   timeout: 60000,
   use: {
+    browserName: (process.env.KV_BROWSER || "chromium") as "chromium" | "firefox" | "webkit",
     baseURL: "http://127.0.0.1:3000",
     viewport: { width: 1440, height: 1000 },
     launchOptions: process.env.KV_BROWSER_PATH
