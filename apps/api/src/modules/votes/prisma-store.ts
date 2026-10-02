@@ -1,5 +1,6 @@
 // VoteStore'un PostgreSQL/Prisma uygulaması. Tablolar: polls, poll_options, votes, vote_events.
 import type { PrismaClient } from "@kararver/db";
+import { writeAudit } from "../audit/write.ts";
 import type { CastVoteResult, PollTally, VoteCorrection, VoteStore } from "./store.ts";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
@@ -79,7 +80,7 @@ export function createPrismaVoteStore(prisma: PrismaClient): VoteStore {
         return { kind: "changed", vote, tally: await tally(tx, pollId, poll, now) };
       }),
 
-    invalidateVotes: (target, { reason, actorId, now }) =>
+    invalidateVotes: (target, { reason, actorId, requestId, now }) =>
       prisma.$transaction(async (tx) => {
         const candidates =
           target.type === "VOTES"
@@ -98,11 +99,11 @@ export function createPrismaVoteStore(prisma: PrismaClient): VoteStore {
             updated_at = ${now.toISOString()}::timestamptz
           WHERE id = ANY(${candidates.map((c) => c.id)}::uuid[]) AND invalidated_at IS NULL
           RETURNING id::text, poll_id::text, user_id::text, option_id::text, created_at`;
-        await applyCorrection(tx, changed, -1, { type: "INVALIDATE", reason, actorId, now });
+        await applyCorrection(tx, changed, -1, { type: "INVALIDATE", reason, actorId, requestId, now, by: target.type });
         return summary(changed, candidates.length, notFound);
       }),
 
-    restoreVotes: (voteIds, { reason, actorId, now }) =>
+    restoreVotes: (voteIds, { reason, actorId, requestId, now }) =>
       prisma.$transaction(async (tx) => {
         const candidates = await tx.vote.findMany({ where: { id: { in: voteIds } }, select: { id: true, pollId: true } });
         const notFound = missing(voteIds, candidates);
@@ -113,7 +114,7 @@ export function createPrismaVoteStore(prisma: PrismaClient): VoteStore {
           UPDATE votes SET invalidated_at = NULL, invalidation_reason = NULL, updated_at = ${now.toISOString()}::timestamptz
           WHERE id = ANY(${candidates.map((c) => c.id)}::uuid[]) AND invalidated_at IS NOT NULL
           RETURNING id::text, poll_id::text, user_id::text, option_id::text, created_at`;
-        await applyCorrection(tx, changed, +1, { type: "RESTORE", reason, actorId, now });
+        await applyCorrection(tx, changed, +1, { type: "RESTORE", reason, actorId, requestId, now, by: "VOTES" });
         // Geri gelen geçerli oy anketi kilitler (geçersiz oy kilitlemez; kilit kalıcıdır, DATA_MODEL §6).
         const polls = [...new Set(changed.map((c) => c.poll_id))];
         if (polls.length > 0) {
@@ -154,7 +155,7 @@ async function applyCorrection(
   tx: Tx,
   changed: Changed[],
   delta: 1 | -1,
-  event: { type: "INVALIDATE" | "RESTORE"; reason: string; actorId: string; now: Date },
+  event: { type: "INVALIDATE" | "RESTORE"; reason: string; actorId: string; requestId: string; now: Date; by: "VOTES" | "ACCOUNTS" },
 ): Promise<void> {
   if (changed.length === 0) return;
   await tx.voteEvent.createMany({
@@ -183,5 +184,26 @@ async function applyCorrection(
       UPDATE polls SET vote_count = vote_count + ${delta * n},
         snapshots_stale_since = LEAST(coalesce(snapshots_stale_since, ${since.toISOString()}::timestamptz), ${since.toISOString()}::timestamptz)
       WHERE id = ${id}::uuid`;
+  }
+  // Audit (KV-39): etkilenen anket başına bir kayıt, aynı transaction'da (audit yazılamazsa düzeltme de geri alınır).
+  // Oy ve seçenek kimlikleri özete yazılmaz (oy seçimi hassas, KV-04); oy başına iz vote_events'tedir.
+  const valid = await tx.poll.findMany({ where: { id: { in: [...byPoll.keys()] } }, select: { id: true, voteCount: true } });
+  const validById = new Map(valid.map((p) => [p.id, p.voteCount]));
+  const accounts = new Map<string, Set<string>>();
+  for (const c of changed) accounts.set(c.poll_id, (accounts.get(c.poll_id) ?? new Set()).add(c.user_id));
+  for (const [pollId, { n }] of [...byPoll].sort(([a], [b]) => a.localeCompare(b))) {
+    const after = validById.get(pollId)!;
+    await writeAudit(tx, {
+      source: "API",
+      actorId: event.actorId,
+      action: "vote.invalidate",
+      operation: event.type === "INVALIDATE" ? "invalidate" : "restore",
+      target: { type: "POLL", id: pollId },
+      reason: event.reason,
+      before: { validVotes: after - delta * n },
+      after: { validVotes: after, changedVotes: n, accounts: accounts.get(pollId)!.size, by: event.by },
+      requestId: event.requestId,
+      at: event.now,
+    });
   }
 }

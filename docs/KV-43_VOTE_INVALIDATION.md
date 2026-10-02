@@ -85,11 +85,19 @@ Ban veya askı **tek başına** oyları geçersiz saymaz; oylar ve sayaçlar ayn
 
 **Yazarken bulunan hata:** Yeniden üretim döngüsü "dün"e kadar gidiyordu. Kapanmış bir anket için on binlerce boş gün taranabiliyordu (test 10 dk'da bitmedi). Döngü artık anketin kapanış gününe sınırlı.
 
+## Audit (KV-39)
+
+Geçersiz sayma ve geri alma, düzeltmeyle **aynı transaction'da** `audit_logs`'a yazılır. Audit yazılamazsa düzeltme de geri alınır.
+
+- **Kayıt:** Etkilenen her anket için bir kayıt. `action = vote.invalidate`, `operation = invalidate | restore`, hedef `POLL`, gerekçe, aktör, `request_id` (X-Request-Id).
+- **Özet:** `before: { validVotes }`, `after: { validVotes, changedVotes, accounts, by: VOTES | ACCOUNTS }`. Oy ve seçenek kimlikleri özete yazılmaz, çünkü oy seçimi hassas veridir (KV-04). Oy başına iz `vote_events`'te durur.
+- **Durum değişmezse kayıt yok:** Tekrar istek ve zaten geçersiz oylar audit kaydı üretmez.
+- **Test:** `votes-admin.test.ts` kayıt içeriğini, istek kimliğini, tekrar istekte kayıt olmamasını ve eşzamanlı iki yöneticide toplam düşümü kontrol eder. Audit yazımı kaldırılınca 3 test düşüyor.
+
 ## Kalan işler ve kapanış
 
 | Konu | İş |
 |---|---|
-| Audit kaydı (`audit_logs`) | KV-39 (#41, Utku). O zamana kadar iz `vote_events`'te |
 | `vote.invalidated` olayı (trends/metrics tüketicileri) | Olay outbox'ı gelince (KV-04); şu an worker DB işaretiyle çalışıyor |
 | Yönetici arayüzü | Mert (KV-37, #39) / Utku (KV-33, #35): "sahte hesap ağı" tespiti ve bu endpoint'i çağıran ekran |
 | **#45'in kapanışı** | İş tanımına göre gerçek bağımlılıklarla (#35 yaptırımlar, #39 moderasyon) doğrulanmadan tamamlanmış sayılmaz. Bu PR backend'i hazırlıyor, issue'yu kapatmıyor |

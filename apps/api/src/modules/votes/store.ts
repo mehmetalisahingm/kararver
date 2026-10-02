@@ -37,7 +37,8 @@ export type CastVoteResult =
 /** KV-43 hedef: tek tek oylar veya hesapların oyları (pollId verilirse sadece o ankette). */
 export type InvalidationTarget = { type: "VOTES"; voteIds: string[] } | { type: "ACCOUNTS"; userIds: string[]; pollId?: string };
 
-export type VoteCorrectionInput = { reason: string; actorId: string; now: Date };
+/** requestId: audit kaydının istekle eşlenmesi (X-Request-Id, KV-39). */
+export type VoteCorrectionInput = { reason: string; actorId: string; requestId: string; now: Date };
 
 /** changed: durumu değişen; unchanged: zaten istenen durumda (tekrar istek); notFound: bulunamayan oy kimlikleri. */
 export type VoteCorrection = { changed: number; unchanged: number; notFound: string[]; affectedPollIds: string[] };

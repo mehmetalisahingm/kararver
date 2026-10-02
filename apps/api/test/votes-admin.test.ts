@@ -102,6 +102,9 @@ describe("oy geçersiz sayma (postgres)", { skip: backend ? false : "TEST_DATABA
     await h?.close();
   });
 
+  const auditFor = (pollId: string) =>
+    db.auditLog.findMany({ where: { action: "vote.invalidate", targetType: "POLL", targetId: pollId }, orderBy: [{ createdAt: "asc" }, { operation: "asc" }] });
+
   test("tek oy: sayaçlar ve sonuç düşer, olay aktör ve gerekçeyle yazılır, snapshot işaretlenir; tekrar çift düşüm yapmaz", async () => {
     const poll = await createPoll();
     const [a, b] = [await signUp(), await signUp()];
@@ -110,7 +113,8 @@ describe("oy geçersiz sayma (postgres)", { skip: backend ? false : "TEST_DATABA
     assert.deepEqual(await counts(poll.id), { total: 2, options: [1, 1] });
 
     const missing = randomUUID();
-    assert.deepEqual(result(await invalidate({ type: "VOTES", voteIds: [va, missing] })), { changed: 1, unchanged: 0, notFound: [missing], affectedPollIds: [poll.id] });
+    const res = await invalidate({ type: "VOTES", voteIds: [va, missing] });
+    assert.deepEqual(result(res), { changed: 1, unchanged: 0, notFound: [missing], affectedPollIds: [poll.id] });
     assert.deepEqual(await counts(poll.id), { total: 1, options: [0, 1] });
 
     const row = await db.vote.findUniqueOrThrow({ where: { id: va } });
@@ -123,10 +127,20 @@ describe("oy geçersiz sayma (postgres)", { skip: backend ? false : "TEST_DATABA
     const stale = await db.poll.findUniqueOrThrow({ where: { id: poll.id }, select: { snapshotsStaleSince: true } });
     assert.equal(stale.snapshotsStaleSince?.getTime(), row.createdAt.getTime(), "snapshot'lar oyun ilk verildiği andan itibaren yeniden üretilecek");
 
-    // Tekrar istek: değişiklik yok, ikinci olay yok.
+    // Audit (KV-39): aynı transaction'da, anket başına bir kayıt; istekle eşlenir, oy/seçenek kimliği içermez.
+    const logs = await auditFor(poll.id);
+    assert.deepEqual(
+      logs.map((l) => [l.source, l.actorId, l.action, l.operation, l.targetType, l.reason, l.before, l.after, l.requestId, l.createdAt.toISOString()]),
+      [["API", admin.id, "vote.invalidate", "invalidate", "POLL", "Sahte hesap ağı doğrulandı", { validVotes: 2 },
+        { validVotes: 1, changedVotes: 1, accounts: 1, by: "VOTES" }, res.headers["x-request-id"], h.clock.now.toISOString()]],
+    );
+    assert.doesNotMatch(JSON.stringify(logs), new RegExp([va, ...poll.options.map((o) => o.id)].join("|")));
+
+    // Tekrar istek: değişiklik yok, ikinci olay ve ikinci audit kaydı yok.
     assert.deepEqual(result(await invalidate({ type: "VOTES", voteIds: [va] })), { changed: 0, unchanged: 1, notFound: [], affectedPollIds: [] });
     assert.deepEqual(await counts(poll.id), { total: 1, options: [0, 1] });
     assert.equal(await db.voteEvent.count({ where: { voteId: va, type: "INVALIDATE" } }), 1);
+    assert.equal((await auditFor(poll.id)).length, 1);
 
     // Kullanıcı aynı ankete yeniden oy veremez (bilinçli karar, §5.4); detayda görünür.
     assertError(await send("PUT", `/polls/${poll.id}/vote`, { optionId: poll.options[1]!.id }, a.cookie), 409, "VOTE_INVALIDATED");
@@ -153,6 +167,15 @@ describe("oy geçersiz sayma (postgres)", { skip: backend ? false : "TEST_DATABA
     const events = await db.voteEvent.findMany({ where: { voteId: f1 }, orderBy: { occurredAt: "asc" }, select: { type: true, actorId: true, toOptionId: true } });
     assert.deepEqual(events.map((e) => e.type), ["CAST", "INVALIDATE", "RESTORE"]);
     assert.deepEqual([events[2]!.actorId, events[2]!.toOptionId], [admin.id, p1.options[0]!.id]);
+    const audit = async (id: string) => (await auditFor(id)).map((l) => [l.operation, l.before, l.after]);
+    assert.deepEqual(await audit(p1.id), [
+      ["invalidate", { validVotes: 2 }, { validVotes: 1, changedVotes: 1, accounts: 1, by: "ACCOUNTS" }],
+      ["restore", { validVotes: 1 }, { validVotes: 2, changedVotes: 1, accounts: 1, by: "VOTES" }],
+    ]);
+    assert.deepEqual(await audit(p2.id), [
+      ["invalidate", { validVotes: 1 }, { validVotes: 0, changedVotes: 1, accounts: 1, by: "ACCOUNTS" }],
+      ["restore", { validVotes: 0 }, { validVotes: 1, changedVotes: 1, accounts: 1, by: "VOTES" }],
+    ]);
     // Geri gelen oy yine değiştirilebilir.
     assert.equal((await send("PUT", `/polls/${p1.id}/vote`, { optionId: p1.options[1]!.id }, fake.cookie)).statusCode, 200);
   });
@@ -202,6 +225,10 @@ describe("oy geçersiz sayma (postgres)", { skip: backend ? false : "TEST_DATABA
     assert.equal(a.changed + b.changed, 4, "her oy bir kez düşer");
     assert.deepEqual(await counts(poll.id), { total: 2, options: [1, 1] });
     assert.equal(await db.voteEvent.count({ where: { pollId: poll.id, type: "INVALIDATE" } }), 4);
+    // Değişiklik yapan her istek bir audit kaydı yazar; toplam düşüm 4.
+    const logs = await auditFor(poll.id);
+    assert.equal(logs.length, [a, b].filter((r) => r.changed > 0).length);
+    assert.equal(logs.reduce((sum, l) => sum + (l.after as { changedVotes: number }).changedVotes, 0), 4);
   });
 
   test("veritabanı: geçersiz sayma/geri alma olayı aktörsüz veya gerekçesiz yazılamaz; oy olayı aktör taşımaz", async () => {
