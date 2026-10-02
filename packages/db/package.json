@@ -12,7 +12,12 @@
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "typecheck": "tsc -p tsconfig.json",
-    "test:db": "node --test --test-concurrency=1 test/db.integration.test.ts"
+    "test:db": "node --test --test-concurrency=1 test/db.integration.test.ts test/ops.test.ts",
+    "db:backup": "node ops/backup.ts",
+    "db:restore": "node ops/restore.ts",
+    "db:verify": "node ops/verify.ts",
+    "db:check-migrations": "node ops/check-migrations.ts",
+    "test:ops": "node --test --test-concurrency=1 test/ops.test.ts"
   },
   "devDependencies": {
     "@types/node": "24.19.0",
