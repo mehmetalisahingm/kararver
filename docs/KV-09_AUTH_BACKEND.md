@@ -14,7 +14,7 @@ pnpm --filter @kararver/api dev   # http://localhost:4000, sağlık: GET /health
 pnpm api:test                     # DB'siz senaryolar; TEST_DATABASE_URL varsa aynıları PostgreSQL ile de koşar
 ```
 
-Local'de `MAIL_TRANSPORT=console`: doğrulama ve sıfırlama mailleri API'nin stdout'una yazılır. Staging/production'da console mailer'a izin verilmez. SMTP sağlayıcısı seçilene kadar (TECH_DECISIONS §10 #2) servis staging'de açılmaz.
+Local'de `MAIL_TRANSPORT=console`: doğrulama ve sıfırlama mailleri API'nin stdout'una yazılır. Staging/production'da console mailer'a izin verilmez. Staging/production'da `MAIL_TRANSPORT=smtp` ve `SMTP_URL` (smtp:// STARTTLS veya smtps://) zorunludur; TLS zorunluluğu adresle kapatılamaz. Sağlayıcı seçimi: TECH_DECISIONS §10 #2.
 
 ## Uygulanan endpointler
 

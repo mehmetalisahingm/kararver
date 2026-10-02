@@ -28,6 +28,9 @@ importers:
       fastify:
         specifier: 5.12.5
         version: 5.12.5
+      nodemailer:
+        specifier: 10.0.13
+        version: 10.0.13
       pg-boss:
         specifier: 12.35.0
         version: 12.35.0
@@ -1145,6 +1148,10 @@ packages:
         optional: true
       sass:
         optional: true
+
+  nodemailer@10.0.13:
+    resolution: {integrity: sha512-SzG86OlvcW/NNhUFC6uROMwRTL4n7MswfQqC/T8mhkmnY1YVa23zUEMYi4ijSeXSl9GLz9ZeTJDUatEDuY5FeQ==}
+    engines: {node: '>=20.0.0'}
 
   non-error@0.1.0:
     resolution: {integrity: sha512-TMB1uHiGsHRGv1uYclfhivcnf0/PdFp2pNqRxXjncaAsjYMoisaQJI+SSZCqRq+VliwRTC8tsMQfmrWjDMhkPQ==}
@@ -2520,6 +2527,8 @@ snapshots:
       - '@babel/core'
       - '@types/node'
       - babel-plugin-macros
+
+  nodemailer@10.0.13: {}
 
   non-error@0.1.0: {}
 

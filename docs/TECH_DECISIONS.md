@@ -296,7 +296,7 @@ Amaç: kimse kimseyi kilitlemesin, ama ortak dosyalar kimseye sürpriz olmasın.
 | Amaç | Geliştirme | Entegrasyon + kabul testleri (iki gerçek hesapla) | Kullanıcılar |
 | Postgres | Docker `postgres:17.11-alpine` | Railway Postgres (ayrı instance) | Railway Postgres (ayrı instance, PITR/backup) |
 | Storage | SeaweedFS (Docker) | R2 `kararver-staging-*` bucket'ları | R2 `kararver-prod-*` bucket'ları |
-| E-posta | `console` (API loguna yazılır) | SMTP sağlayıcısı (açık konu) | SMTP sağlayıcısı |
+| E-posta | `console` (API loguna yazılır) | `smtp` + `SMTP_URL` (sağlayıcı hosting kararıyla) | `smtp` + `SMTP_URL` |
 | Env kaynağı | `.env` (`.env.example` kopyası) | Railway/Vercel paneli | Railway/Vercel paneli |
 | Migration | `prisma migrate dev` | `prisma migrate deploy` (deploy adımında) | `prisma migrate deploy` |
 | Seed | Demo/seed içerik (`actor_type=seed`) | Sadece kategoriler + işaretli seed | Sadece kategoriler |
@@ -394,7 +394,7 @@ Bir kararı değiştirmek için bu dosyayı güncelleyen bir PR açılır. PR'da
 | # | Konu | Sahip | Bloke ettiği iş |
 |---|---|---|---|
 | 1 | Hosting (Vercel + Railway) ekip onayı ve fiyat kontrolü | Ekip | Staging kurulumu |
-| 2 | Staging e-posta sağlayıcısı (SMTP) seçimi | Faruk | Staging'de e-posta doğrulama |
+| 2 | Staging e-posta sağlayıcısı (SMTP) seçimi | Faruk | **Kod hazır:** API sağlayıcıdan bağımsız SMTP ile gönderir (`MAIL_TRANSPORT=smtp`, `SMTP_URL`; staging/production'da TLS zorunlu). Kalan iş yalnız sağlayıcı hesabı ve alan adı doğrulaması (SPF/DKIM); hosting kararıyla birlikte. |
 | 3 | Branch protection ("code owner onayı zorunlu" açık mı?) | Repo sahibi (Mehmet) | — |
 | 4 | `docker-compose.yml` bu PR'ı hazırlayan makinede çalıştırılamadı (Docker kurulu değil) | Docker'ı olan bir reviewer | Local kurulumun doğrulanması |
 | 5 | ~~Görsel moderasyon modelinin çalışma ortamı (Node mu, Python servisi mi)~~ | Mert | **Kapatıldı (KV-08):** NudeNet (ONNX, MIT), `apps/worker` içinde havuzlanan Python alt-süreç olarak çalıştırılır — ayrı bir servis/host değil. Ayrıntı ve kanıt: [`docs/MEDIA_MODERATION.md`](./MEDIA_MODERATION.md). |

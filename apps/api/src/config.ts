@@ -17,6 +17,8 @@ const Env = z.object({
   AUTH_TOKEN_PEPPER: z.string().min(32, "en az 32 karakter olmalı"),
   MAIL_TRANSPORT: z.enum(["console", "smtp"]).default("console"),
   MAIL_FROM: z.string().min(3),
+  // MAIL_TRANSPORT=smtp iken zorunlu: smtp://kullanici:parola@host:587 (STARTTLS) veya smtps://...:465 (TLS).
+  SMTP_URL: z.string().default(""),
   MEDIA_PUBLIC_BASE_URL: z.url(),
   // Object storage (TECH_DECISIONS §3.6). Local'de verilmezse medya endpoint'leri kapalıdır.
   S3_ENDPOINT: z.url().optional(),
@@ -39,6 +41,11 @@ export type StorageConfig = {
   publicBucket: string;
 };
 
+export type MailConfig =
+  | { transport: "console"; from: string }
+  /** requireTls: staging/production'da smtp:// bağlantısı STARTTLS'siz gönderim yapmaz (parola ve token açıkta gitmez). */
+  | { transport: "smtp"; from: string; smtpUrl: string; requireTls: boolean };
+
 export type Config = {
   appEnv: "local" | "test" | "staging" | "production";
   logLevel: string;
@@ -48,13 +55,15 @@ export type Config = {
   allowedOrigins: string[];
   session: { cookieName: string; cookieDomain: string | null; secure: boolean; ttlMs: number };
   authTokenPepper: string;
-  mail: { transport: "console" | "smtp"; from: string };
+  mail: MailConfig;
   mediaPublicBaseUrl: string;
   /** null: S3 değişkenleri yok (sadece local/test); medya endpoint'leri kaydedilmez. */
   storage: StorageConfig | null;
 };
 
 const STORAGE_KEYS = ["S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_BUCKET_PRIVATE", "S3_BUCKET_PUBLIC"] as const;
+
+const TLS_OVERRIDES = ["requireTLS", "ignoreTLS", "opportunisticTLS", "secure", "tls"];
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = Env.safeParse(env);
@@ -70,6 +79,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (deployed && e.MAIL_TRANSPORT === "console") {
     // Console mailer doğrulama/sıfırlama bağlantısını loga yazar; sadece local ve test içindir.
     throw new Error("API yapılandırması geçersiz → MAIL_TRANSPORT=console sadece local/test ortamında kullanılabilir");
+  }
+  if (e.MAIL_TRANSPORT === "smtp") {
+    // Değer yazılmaz: parola içerir.
+    let url: URL | null = null;
+    try {
+      url = new URL(e.SMTP_URL);
+    } catch {}
+    if (!url || (url.protocol !== "smtp:" && url.protocol !== "smtps:")) {
+      throw new Error("API yapılandırması geçersiz → SMTP_URL: MAIL_TRANSPORT=smtp iken smtp:// veya smtps:// adresi olmalı");
+    }
+    // Adresteki sorgu parametreleri nodemailer seçeneklerini ezer; staging/production'da TLS zorunluluğu kapatılamaz.
+    if (deployed && TLS_OVERRIDES.some((k) => url.searchParams.has(k))) {
+      throw new Error(`API yapılandırması geçersiz → SMTP_URL: staging/production'da ${TLS_OVERRIDES.join(", ")} parametreleri kullanılamaz`);
+    }
   }
   const missingStorage = STORAGE_KEYS.filter((k) => !e[k]);
   if (missingStorage.length > 0 && (deployed || missingStorage.length < STORAGE_KEYS.length)) {
@@ -89,7 +112,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ttlMs: e.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
     },
     authTokenPepper: e.AUTH_TOKEN_PEPPER,
-    mail: { transport: e.MAIL_TRANSPORT, from: e.MAIL_FROM },
+    mail:
+      e.MAIL_TRANSPORT === "smtp"
+        ? { transport: "smtp", from: e.MAIL_FROM, smtpUrl: e.SMTP_URL, requireTls: deployed }
+        : { transport: "console", from: e.MAIL_FROM },
     mediaPublicBaseUrl: e.MEDIA_PUBLIC_BASE_URL.replace(/\/$/, ""),
     storage:
       missingStorage.length > 0
