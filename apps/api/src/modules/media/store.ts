@@ -41,7 +41,7 @@ export type NewUpload = { uploaderId: string; purpose: MediaPurpose; originalObj
 
 export type ReviewStatus = "QUARANTINED" | "REJECTED" | "PENDING";
 /** Moderatör kararı için okunan kayıt; communityId yetki kapsamını belirler (yoksa yalnız ADMIN+). */
-export type ReviewableMedia = MediaRecord & { communityId: string | null };
+export type ReviewableMedia = MediaRecord & { communityId: string | null; /** Yasaklı görsel listesinde mi (KV-38)? */ banned: boolean };
 
 export type MediaDecisionInput = {
   id: string;
@@ -52,7 +52,7 @@ export type MediaDecisionInput = {
 };
 export type MediaDecisionResult =
   | { kind: "applied" | "unchanged"; media: MediaRecord }
-  | { kind: "conflict"; status: MediaStatus; reason: "not_reviewable" | "no_processed_copy" }
+  | { kind: "conflict"; status: MediaStatus; reason: "not_reviewable" | "no_processed_copy" | "banned" }
   | { kind: "not_found" };
 
 export interface MediaStore {
@@ -73,4 +73,25 @@ export interface MediaStore {
    * görselin açık raporları ACTIONED olur. Zaten o durumdaysa "unchanged" (idempotent).
    */
   applyDecision(input: MediaDecisionInput): Promise<MediaDecisionResult>;
+
+  // ── Yasaklı görsel listesi (KV-38, #40) ──
+  listBans(after: { createdAt: Date; id: string } | null, limit: number): Promise<BanRecord[]>;
+  /** Reddedilmiş görselin parmak izini listeye ekler; zaten listedeyse mevcut kaydı döner. */
+  createBan(input: { mediaId: string; actorId: string; reason: string }): Promise<BanResult>;
+  /** Olmayan kayıt için sessizce döner (idempotent). */
+  deleteBan(id: string): Promise<void>;
 }
+
+export type BanRecord = {
+  id: string;
+  sourceMediaId: string;
+  reason: string;
+  matchesExact: boolean;
+  matchesSimilar: boolean;
+  createdBy: { id: string; username: string; displayName: string; avatarPublicKey: string | null };
+  createdAt: Date;
+};
+export type BanResult =
+  | { kind: "created" | "existing"; ban: BanRecord }
+  | { kind: "conflict"; reason: "not_rejected" | "no_fingerprint" }
+  | { kind: "not_found" };

@@ -13,12 +13,20 @@ import { ApiError } from "../../http/errors.ts";
 import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
 import type { Route } from "../../http/route.ts";
 import { publicObjectKeyFor, type MediaStorage } from "./storage.ts";
-import type { MediaStore } from "./store.ts";
+import type { BanRecord, MediaStore } from "./store.ts";
 import { toMediaView } from "./view.ts";
 
 export type MediaAdminDeps = { store: MediaStore; storage: MediaStorage; now: () => Date; mediaPublicBaseUrl: string };
 
 const notFound = () => new ApiError("NOT_FOUND", "Görsel bulunamadı.");
+
+const conflict = (message: string, code: string) => new ApiError("CONFLICT", message, [{ code }]);
+
+const CONFLICT_MESSAGES = {
+  no_processed_copy: "Görselin işlenmiş kopyası yok.",
+  not_reviewable: "Görselin durumu bu kararı uygulamaya elverişli değil.",
+  banned: "Yasaklı görsel onaylanamaz; önce yasağı kaldırın.",
+} as const;
 
 export function registerMediaAdminRoutes(route: Route, deps: MediaAdminDeps): void {
   const { store, storage, mediaPublicBaseUrl } = deps;
@@ -44,9 +52,9 @@ export function registerMediaAdminRoutes(route: Route, deps: MediaAdminDeps): vo
     if (!media) throw notFound();
     await authorize({ communityId: media.communityId });
 
-    const conflict = (message: string, code: string) => new ApiError("CONFLICT", message, [{ code }]);
     if (media.status === "PENDING") throw conflict("Görsel henüz işleniyor.", "still_processing");
     const publicKey = publicObjectKeyFor(media.id);
+    if (body.decision === "APPROVE" && media.banned) throw conflict("Yasaklı görsel onaylanamaz; önce yasağı kaldırın.", "banned");
 
     if (body.decision === "APPROVE" && media.status !== "APPROVED") {
       if (media.processedObjectKey === null) throw conflict("Görselin işlenmiş kopyası yok.", "no_processed_copy");
@@ -72,10 +80,7 @@ export function registerMediaAdminRoutes(route: Route, deps: MediaAdminDeps): vo
     }
     if (result.kind === "conflict") {
       if (body.decision === "APPROVE") await storage.deletePublic(publicKey).catch(() => undefined);
-      throw conflict(
-        result.reason === "no_processed_copy" ? "Görselin işlenmiş kopyası yok." : "Görselin durumu bu kararı uygulamaya elverişli değil.",
-        result.reason,
-      );
+      throw conflict(CONFLICT_MESSAGES[result.reason], result.reason);
     }
 
     // Kritik yarış koruması: REJECT kararı kilidi aldıktan önce/sonra eşzamanlı APPROVE public'e kopyalamış olabilir.
@@ -84,5 +89,47 @@ export function registerMediaAdminRoutes(route: Route, deps: MediaAdminDeps): vo
 
     const scope = await moderationScope();
     return { status: 200, body: { data: await toMediaView(result.media, storage, mediaPublicBaseUrl, deps.now(), { previewRejected: scope.all }) } };
+  });
+
+  // ── Yasaklı görsel listesi (KV-38, #40): yetki media.ban.manage (ADMIN+), kaynağa bağlı kural yoktur ──
+  const banView = (b: BanRecord) => ({
+    id: b.id,
+    sourceMediaId: b.sourceMediaId,
+    reason: b.reason,
+    matchesExact: b.matchesExact,
+    matchesSimilar: b.matchesSimilar,
+    createdBy: {
+      id: b.createdBy.id,
+      username: b.createdBy.username,
+      displayName: b.createdBy.displayName,
+      avatarUrl: b.createdBy.avatarPublicKey ? `${mediaPublicBaseUrl}/${b.createdBy.avatarPublicKey}` : null,
+    },
+    createdAt: b.createdAt.toISOString(),
+  });
+
+  route("admin.media.bans.list", async ({ query }) => {
+    const at = decodeCursor(query.cursor, "admin.media.bans.list");
+    const rows = await store.listBans(at ? { createdAt: new Date(at.keys[0] as string), id: at.id } : null, query.limit + 1);
+    const page = rows.slice(0, query.limit);
+    const last = page.at(-1);
+    const nextCursor = rows.length > query.limit && last ? encodeCursor("admin.media.bans.list", [last.createdAt.toISOString()], last.id) : null;
+    return { status: 200, body: { data: page.map(banView), page: { nextCursor, hasMore: nextCursor !== null } } };
+  });
+
+  route("admin.media.bans.create", async ({ body, viewer }) => {
+    const result = await store.createBan({ mediaId: body.mediaId, actorId: viewer!.id, reason: body.reason });
+    if (result.kind === "not_found") throw notFound();
+    if (result.kind === "conflict") {
+      throw conflict(
+        result.reason === "not_rejected" ? "Yalnız reddedilmiş görsel yasaklanabilir; önce reddedin." : "Görselin parmak izi yok; yasaklanamaz.",
+        result.reason,
+      );
+    }
+    return { status: result.kind === "created" ? 201 : 200, body: { data: banView(result.ban) } };
+  });
+
+  route("admin.media.bans.delete", async ({ params }) => {
+    await store.deleteBan(params.id);
+    return { status: 204, body: null };
   });
 }

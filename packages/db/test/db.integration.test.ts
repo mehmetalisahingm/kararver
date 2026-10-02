@@ -510,6 +510,66 @@ describe("media_assets (KV-16)", () => {
   });
 });
 
+// ─── 6b. Yasaklı görsel parmak izleri (KV-38) ─────────────────
+
+describe("banned_media_hashes (KV-38)", () => {
+  const sha = () => randomUUID().replaceAll("-", "").repeat(2);
+  const dhash = () => randomUUID().replaceAll("-", "").slice(0, 16);
+
+  async function rejectedMedia(uploaderId: string): Promise<string> {
+    const id = randomUUID();
+    await db.$executeRaw`
+      INSERT INTO media_assets (id, uploader_id, purpose, status, original_object_key, updated_at)
+      VALUES (${id}::uuid, ${uploaderId}::uuid, 'POLL', 'REJECTED', ${"test/" + id + "/original"}, now())`;
+    return id;
+  }
+
+  const ban = (mediaId: string, adminId: string, fields: { sha?: string | null; phash?: string | null; reason?: string } = {}) =>
+    db.$executeRaw`
+      INSERT INTO banned_media_hashes (id, content_sha256, perceptual_hash, source_media_id, reason, created_by_id)
+      VALUES (${randomUUID()}::uuid, ${fields.sha === undefined ? sha() : fields.sha}, ${fields.phash === undefined ? dhash() : fields.phash},
+              ${mediaId}::uuid, ${fields.reason ?? "Kural ihlali"}, ${adminId}::uuid)`;
+
+  test("yasak kaydı en az bir parmak izi, geçerli biçim ve gerekçe ister", async () => {
+    const admin = await createUser();
+    const media = await rejectedMedia(admin);
+    await expectDbError(ban(media, admin, { sha: null, phash: null }), CHECK_VIOLATION);
+    await expectDbError(ban(media, admin, { sha: "büyük-harf-ve-kısa" }), CHECK_VIOLATION);
+    await expectDbError(ban(media, admin, { phash: "ZZZZZZZZZZZZZZZZ" }), CHECK_VIOLATION);
+    await expectDbError(ban(media, admin, { phash: "abc" }), CHECK_VIOLATION);
+    await expectDbError(ban(media, admin, { reason: "   " }), CHECK_VIOLATION);
+    await ban(media, admin);
+    await ban(await rejectedMedia(admin), admin, { sha: null });
+  });
+
+  test("aynı görsel ve aynı sha256 ikinci kez yasaklanamaz", async () => {
+    const admin = await createUser();
+    const media = await rejectedMedia(admin);
+    const fingerprint = sha();
+    await ban(media, admin, { sha: fingerprint });
+    await expectDbError(ban(media, admin), UNIQUE_VIOLATION);
+    await expectDbError(ban(await rejectedMedia(admin), admin, { sha: fingerprint }), UNIQUE_VIOLATION);
+  });
+
+  test("kanıt görseli ve yasağı koyan hesap silinemez; olmayan referans reddedilir", async () => {
+    const admin = await createUser();
+    const media = await rejectedMedia(admin);
+    await ban(media, admin);
+    await expectDbError(db.$executeRaw`DELETE FROM media_assets WHERE id = ${media}::uuid`, FK_VIOLATION);
+    await expectDbError(db.$executeRaw`DELETE FROM users WHERE id = ${admin}::uuid`, FK_VIOLATION);
+    await expectDbError(ban(randomUUID(), admin), FK_VIOLATION);
+    await expectDbError(ban(await rejectedMedia(admin), randomUUID()), FK_VIOLATION);
+  });
+
+  test("media_assets.perceptual_hash 16 haneli küçük harf hex olmak zorunda", async () => {
+    const user = await createUser();
+    const media = await rejectedMedia(user);
+    await db.$executeRaw`UPDATE media_assets SET perceptual_hash = ${dhash()} WHERE id = ${media}::uuid`;
+    await expectDbError(db.$executeRaw`UPDATE media_assets SET perceptual_hash = 'XYZ' WHERE id = ${media}::uuid`, CHECK_VIOLATION);
+    await expectDbError(db.$executeRaw`UPDATE media_assets SET perceptual_hash = 'ABCDEF0123456789' WHERE id = ${media}::uuid`, CHECK_VIOLATION);
+  });
+});
+
 // ─── 7. Rapor ve moderasyon (KV-24) ───────────────────────────
 
 describe("reports ve moderation_actions (KV-24)", () => {

@@ -47,8 +47,11 @@ model MediaAsset {
   // Worker'ın dosya imzasından tespit ettiği tür; istemcinin beyanı değil.
   originalMimeType   String? @map("original_mime_type") @db.VarChar(100)
   originalSizeBytes  Int?    @map("original_size_bytes")
-  // Orijinalin sha256'sı (hex). Tekrar yükleme kontrolü KV-38'de bunu kullanır.
+  // Orijinalin sha256'sı (hex). Yasaklı görsel kontrolü (KV-38) bununla birebir eşleşir.
   contentSha256      String? @map("content_sha256") @db.Char(64)
+  // İşlenmiş kopyanın 64 bit dHash'i (16 hane hex); yeniden boyutlandırma/sıkıştırma/EXIF farkına dayanıklı yakınlık
+  // kontrolü (KV-38). Eski kayıtlarda boş olabilir.
+  perceptualHash     String? @map("perceptual_hash") @db.Char(16)
   width              Int?
   height             Int?
   processedSizeBytes Int?    @map("processed_size_bytes")
@@ -76,6 +79,7 @@ model MediaAsset {
   reports           Report[]
   moderationActions ModerationAction[]
   communityImages   Community[]
+  bannedHash        BannedMediaHash?
 
   // ── Core ilişkileri (Faruk) — kaldırmayın ──
   avatarOfUsers User[]      @relation("UserAvatar")
@@ -86,4 +90,24 @@ model MediaAsset {
   @@index([uploaderId, createdAt(sort: Desc)])
   @@index([contentSha256])
   @@map("media_assets")
+}
+
+// Yasaklı görsel listesi (KV-38, #40). Kaldırılmış (REJECTED) bir görselin parmak izi buraya eklenince aynı dosya
+// yeniden yüklendiğinde worker doğrudan reddeder (sha256 birebir), çok benzer olanı incelemeye alır (dHash yakınlığı).
+// Satır kanıt görselini (source_media_id) tutar; görsel private bucket'ta kalır (docs/MEDIA_MODERATION.md §7).
+// "En az bir parmak izi" ve biçim CHECK'leri migration'da elle yazılıdır.
+model BannedMediaHash {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  contentSha256  String?  @unique @map("content_sha256") @db.Char(64)
+  perceptualHash String?  @map("perceptual_hash") @db.Char(16)
+  sourceMediaId  String   @unique @map("source_media_id") @db.Uuid
+  reason         String   @db.VarChar(500)
+  createdById    String   @map("created_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  sourceMedia MediaAsset @relation(fields: [sourceMediaId], references: [id], onDelete: Restrict)
+  createdBy   User       @relation("BannedHashCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([perceptualHash])
+  @@map("banned_media_hashes")
 }

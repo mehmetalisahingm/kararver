@@ -105,6 +105,7 @@ model User {
   // Mert — media.prisma (KV-16)
   uploadedMedia            MediaAsset[]          @relation("MediaUploader")
   reviewedMedia            MediaAsset[]          @relation("MediaReviewer")
+  bannedMediaHashes        BannedMediaHash[]     @relation("BannedHashCreator")
   // Mert — moderation.prisma (KV-24)
   reportsFiled             Report[]              @relation("ReportReporter")
   reportsAgainst           Report[]              @relation("ReportTargetUser")

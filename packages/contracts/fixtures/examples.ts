@@ -55,6 +55,7 @@ const me = {
 const categoryRef = { id: CAT, slug: "otomobil", name: "Otomobil" };
 const category = { ...categoryRef, description: null, iconKey: "car", sortOrder: 2 };
 const communityRef = { id: COMM, slug: "samsun-universitesi", name: "Samsun Üniversitesi" };
+const bannedMedia = { id: id(51), sourceMediaId: MEDIA, reason: "Tekrar yüklenen uygunsuz görsel", matchesExact: true, matchesSimilar: true, createdBy: deniz, createdAt: T0 };
 const mediaRef = { id: MEDIA, url: "https://cdn.kararver.test/m/araba.webp", width: 1280, height: 960 };
 const noReactions = { likes: 0, dislikes: 0, viewer: null };
 const hidden = { visible: false };
@@ -316,6 +317,11 @@ export const examples: Example[] = [
   { endpoint: "admin.moderation.comments", name: "remove", request: { params: { id: COMMENT }, body: { action: "REMOVE", reason } }, status: 200, body: data({ id: COMMENT, status: "REMOVED", trendExcluded: null }) },
   { endpoint: "admin.media.list", name: "ok", status: 200, body: page([mediaView("QUARANTINED")]) },
   { endpoint: "admin.media.decide", name: "ok", request: { params: { id: MEDIA }, body: { decision: "APPROVE", reason: "Uygun içerik" } }, status: 200, body: data(mediaView("APPROVED", { url: mediaRef.url, preview: null })) },
+  { endpoint: "admin.media.bans.list", name: "ok", status: 200, body: page([bannedMedia]) },
+  { endpoint: "admin.media.bans.create", name: "ok", request: { body: { mediaId: MEDIA, reason: "Tekrar yüklenen uygunsuz görsel" } }, status: 201, body: data(bannedMedia) },
+  { endpoint: "admin.media.bans.create", name: "zaten-yasakli", request: { body: { mediaId: MEDIA, reason: "Tekrar yüklenen uygunsuz görsel" } }, status: 200, body: data(bannedMedia) },
+  { endpoint: "admin.media.bans.create", name: "reddedilmemis", request: { body: { mediaId: MEDIA, reason: "Henüz karara bağlanmadı" } }, status: 409, body: error("CONFLICT", "Yalnız reddedilmiş görsel yasaklanabilir.", [{ code: "not_rejected" }]) },
+  { endpoint: "admin.media.bans.delete", name: "ok", request: { params: { id: id(51) } }, status: 204, body: null },
   { endpoint: "admin.revisions.polls", name: "ok", request: { params: pollParams }, status: 200, body: page([{ version: 1, editor: deniz, editedAt: T0, snapshot: { title: "Bu araba bu fiyata alınır mı?" } }]) },
   { endpoint: "admin.revisions.comments", name: "ok", request: { params: { id: COMMENT } }, status: 200, body: page([{ version: 1, editor: umit, editedAt: T1, snapshot: { body: "Boyalı parça fiyatı düşürür." } }]) },
   { endpoint: "admin.votes.invalidate", name: "hesaplar", request: { body: { target: { type: "ACCOUNTS", userIds: [U2], pollId: POLL }, reason: "Sahte hesap ağı doğrulandı" } }, status: 200, body: data({ changed: 1, unchanged: 0, notFound: [], affectedPollIds: [POLL] }) },

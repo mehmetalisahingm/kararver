@@ -135,6 +135,9 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `GET /admin/comments/:id/revisions`<br>İçerik sürüm geçmişi · `admin.revisions.comments` | A | 200 | — | Faruk `comments` | Mert (moderasyon, KV-37), Utku (audit, KV-39) | #39 #41 | hazır |
 | `POST /admin/votes/invalidate`<br>Doğrulanmış manipülasyon oylarını gerekçeyle geçersiz sayar (KV-43) · `admin.votes.invalidate` | A | 200 | doğal | Faruk `votes` | Mert (moderasyon UI, KV-37), Utku (admin users, KV-33) | #45 | hazır |
 | `POST /admin/votes/restore`<br>Yanlışlıkla geçersiz sayılan oyları gerekçeyle geri alır (KV-43) · `admin.votes.restore` | A | 200 | doğal | Faruk `votes` | Mert (moderasyon UI, KV-37) | #45 | hazır |
+| `GET /admin/media/bans`<br>Yasaklı görsel listesi · `admin.media.bans.list` | A | 200 | — | Mert `media` | Mert (admin moderasyon UI, KV-37) | #40 | hazır |
+| `POST /admin/media/bans`<br>Reddedilmiş görseli yasakla · `admin.media.bans.create` | A | 200/201 | doğal | Mert `media` | Mert (admin moderasyon UI, KV-37) | #40 | hazır |
+| `DELETE /admin/media/bans/:id`<br>Görsel yasağını kaldır · `admin.media.bans.delete` | A | 204 | doğal | Mert `media` | Mert (admin moderasyon UI, KV-37) | #40 | hazır |
 
 ### Topluluklar
 
@@ -227,7 +230,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #37 | `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/read`, `GET /notifications/preferences`, `PATCH /notifications/preferences` |
 | #38 | `GET /admin/metrics` |
 | #39 | `GET /admin/reports`, `POST /admin/polls/:id/moderation`, `POST /admin/comments/:id/moderation`, `GET /admin/polls/:id/revisions`, `GET /admin/comments/:id/revisions` |
-| #40 | `GET /admin/media`, `POST /admin/media/:id/decision` |
+| #40 | `GET /admin/media`, `POST /admin/media/:id/decision`, `GET /admin/media/bans`, `POST /admin/media/bans`, `DELETE /admin/media/bans/:id` |
 | #41 | `GET /admin/polls/:id/revisions`, `GET /admin/comments/:id/revisions`, `GET /admin/audit` |
 | #42 | `GET /config`, `GET /admin/settings`, `PATCH /admin/settings/:key`, `PUT /admin/emergency` |
 | #43 | `GET /admin/categories`, `POST /admin/categories`, `PATCH /admin/categories/:id` |

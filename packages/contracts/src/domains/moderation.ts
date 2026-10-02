@@ -2,7 +2,7 @@
 // KV-24 (#26), KV-37 (#39), KV-38 (#40); içerik sürüm geçmişi sağlayıcısı Faruk (#66)
 import { z } from "zod";
 import { MediaView } from "./media.ts";
-import { ContentStatus, Count, CursorQuery, dataOf, Id, IdParams, pageOf, PublicUser, Timestamp } from "../common.ts";
+import { ContentStatus, Count, CursorQuery, dataOf, Empty, Id, IdParams, pageOf, PublicUser, Timestamp } from "../common.ts";
 import { defineEndpoint } from "../endpoint.ts";
 
 export const ReportTargetType = z.enum(["POLL", "COMMENT", "MEDIA", "USER"]);
@@ -28,6 +28,20 @@ export const ReportView = z.strictObject({
   communityId: Id.nullable(),
   createdAt: Timestamp,
   resolvedAt: Timestamp.nullable(),
+});
+
+/**
+ * Yasaklı görsel kaydı (KV-38). Parmak izinin kendisi (sha256/dHash) dönmez; kanıt görsel `sourceMediaId`'dir.
+ * `matchesExact` / `matchesSimilar`: kayıtta hangi eşleşme türünün bulunduğu.
+ */
+export const BannedMediaView = z.strictObject({
+  id: Id,
+  sourceMediaId: Id,
+  reason: z.string(),
+  matchesExact: z.boolean(),
+  matchesSimilar: z.boolean(),
+  createdBy: PublicUser,
+  createdAt: Timestamp,
 });
 
 export const ModerationAction = z.enum([
@@ -269,5 +283,63 @@ export const moderationEndpoints = [
     idempotency: "natural",
     cache: "private",
     notes: ["Sadece geçersiz sayılmış oylar geri gelir; geçerli olanlar unchanged'de sayılır. Anket kapanmış olsa da geri alınır."],
+  }),
+  defineEndpoint({
+    id: "admin.media.bans.list",
+    domain: "moderation",
+    method: "GET",
+    path: "/admin/media/bans",
+    summary: "Yasaklı görsel listesi",
+    auth: "admin",
+    provider: media,
+    consumers: adminUi,
+    unblocks: ["#40"],
+    availability: { status: "ready" },
+    request: { query: CursorQuery },
+    responses: { 200: pageOf(BannedMediaView) },
+    errors: ["INVALID_CURSOR"],
+    idempotency: "none",
+    cache: "private",
+    notes: ["En yeni önce. Parmak izi değerleri dönmez."],
+  }),
+  defineEndpoint({
+    id: "admin.media.bans.create",
+    domain: "moderation",
+    method: "POST",
+    path: "/admin/media/bans",
+    summary: "Reddedilmiş görseli yasakla",
+    auth: "admin",
+    provider: media,
+    consumers: adminUi,
+    unblocks: ["#40"],
+    availability: { status: "ready" },
+    request: { body: z.strictObject({ mediaId: Id, reason: Reason }) },
+    responses: { 200: dataOf(BannedMediaView), 201: dataOf(BannedMediaView) },
+    errors: ["CONFLICT"],
+    idempotency: "natural",
+    cache: "private",
+    notes: [
+      "Görsel REJECTED olmalı (önce admin.media.decide ile reddedilir), aksi 409 CONFLICT (details[0].code='not_rejected'). Parmak izi yoksa 409 'no_fingerprint'.",
+      "Aynı görsel zaten yasaklıysa 200 ile mevcut kayıt. Worker aynı dosyayı (sha256) REJECTED/BANNED_HASH, çok benzerini (dHash) QUARANTINED/BANNED_SIMILAR yapar.",
+      "Yasaklı görsel admin.media.decide ile APPROVE edilemez (409 'banned'); önce yasak kaldırılır.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.media.bans.delete",
+    domain: "moderation",
+    method: "DELETE",
+    path: "/admin/media/bans/:id",
+    summary: "Görsel yasağını kaldır",
+    auth: "admin",
+    provider: media,
+    consumers: adminUi,
+    unblocks: ["#40"],
+    availability: { status: "ready" },
+    request: { params: IdParams },
+    responses: { 204: Empty },
+    errors: [],
+    idempotency: "natural",
+    cache: "private",
+    notes: ["Olmayan kayıt 204 (idempotent). Kaldırılan yasak daha önce reddedilmiş yüklemeleri geri getirmez."],
   }),
 ];
