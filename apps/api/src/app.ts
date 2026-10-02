@@ -135,7 +135,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   });
 
   registerErrorHandling(app);
-  registerSecurity(app, config.allowedOrigins);
+  // HSTS sadece HTTPS ortamında: güvenli cookie staging/production'da zorunlu (config.ts), local/test'te kapalı.
+  registerSecurity(app, config.allowedOrigins, { hsts: config.session.secure });
 
   const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper };
   const route = createRouter(app, {
