@@ -56,7 +56,7 @@ const app = buildApp({
   moderationStore: createPrismaModerationStore(prisma),
   commentStore: createPrismaCommentStore(prisma),
   hasher: createArgon2Hasher(),
-  mailer: createMailer(config.mail.transport, config.mail.from),
+  mailer: createMailer(config.mail),
   media:
     config.storage && mediaQueue
       ? { store: createPrismaMediaStore(prisma), storage: createS3MediaStorage(config.storage), queue: mediaQueue }

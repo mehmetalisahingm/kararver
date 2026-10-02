@@ -72,7 +72,7 @@ describe("medya yapılandırması", () => {
   });
 
   test("staging'de S3 zorunlu", () => {
-    const staging = { ...baseEnv, APP_ENV: "staging", SESSION_COOKIE_SECURE: "true", MAIL_TRANSPORT: "smtp" };
+    const staging = { ...baseEnv, APP_ENV: "staging", SESSION_COOKIE_SECURE: "true", MAIL_TRANSPORT: "smtp", SMTP_URL: "smtp://u:p@smtp.test:587" };
     assert.throws(() => loadConfig(staging), /S3_ENDPOINT/);
     assert.ok(loadConfig({ ...staging, ...s3Env }).storage);
   });
