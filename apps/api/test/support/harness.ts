@@ -26,6 +26,7 @@ import { createPrismaSearchStore } from "../../src/modules/search/prisma-store.t
 import { DEFAULT_POLL_SETTINGS, type PollSettings } from "../../src/modules/polls/store.ts";
 import { createPrismaRbacStore } from "../../src/modules/rbac/prisma-store.ts";
 import type { RbacStore } from "../../src/modules/rbac/store.ts";
+import { createPrismaModerationStore } from "../../src/modules/moderation/prisma-store.ts";
 import { createPrismaReportStore } from "../../src/modules/reports/prisma-store.ts";
 import { createPrismaTrendStore } from "../../src/modules/trends/prisma-store.ts";
 import { createPrismaRevisionStore } from "../../src/modules/revisions/prisma-store.ts";
@@ -207,6 +208,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     communityStore: backend.prisma ? createPrismaCommunityStore(backend.prisma) : undefined,
     onboardingStore: backend.prisma ? createPrismaOnboardingStore(backend.prisma) : undefined,
     reportStore: backend.prisma ? createPrismaReportStore(backend.prisma) : undefined,
+    moderationStore: backend.prisma ? createPrismaModerationStore(backend.prisma) : undefined,
     pollSettings: async () => pollSettings,
     commentStore: backend.prisma ? createPrismaCommentStore(backend.prisma) : undefined,
     isCommentsEnabled: async () => commentsEnabled.value,
