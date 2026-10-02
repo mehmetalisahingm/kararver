@@ -1,15 +1,38 @@
-// Worker'ın PostgreSQL testleri için düzenek: TEST_DATABASE_URL varsa migration'ları uygular ve client döner.
+// Worker'ın PostgreSQL testleri için düzenek: test veritabanını seçer, migration'ları uygular ve client döner.
+// Seçim kuralı API ile aynı: TEST_DATABASE_URL, yoksa .env'deki DATABASE_URL + "_test"; hiçbiri yoksa uyarıyla atlanır.
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { createPrismaClient, type PrismaClient } from "@kararver/db";
 
+let warned = false;
+
 export function testDatabaseUrl(): string | null {
-  const url = process.env.TEST_DATABASE_URL;
-  if (!url) return null;
+  if (!process.env.TEST_DATABASE_URL) {
+    try {
+      process.loadEnvFile(path.resolve(import.meta.dirname, "../../../../.env"));
+    } catch {
+      // .env yok
+    }
+  }
+  let url = process.env.TEST_DATABASE_URL;
+  if (!url && process.env.DATABASE_URL) {
+    const derived = new URL(process.env.DATABASE_URL);
+    derived.pathname = `${derived.pathname.replace(/^\//, "")}_test`;
+    url = derived.toString();
+  }
+  if (!url) {
+    if (!warned) {
+      warned = true;
+      console.warn("⚠ Postgres testleri ATLANDI: TEST_DATABASE_URL yok ve .env'de DATABASE_URL yok (bkz. docs/KV-06_LOCAL_SETUP.md).");
+    }
+    return null;
+  }
   const dbName = decodeURIComponent(new URL(url).pathname.replace(/^\//, ""));
   if (!dbName.endsWith("_test")) throw new Error(`Güvenlik: test veritabanının adı "_test" ile bitmeli (şu an: "${dbName}")`);
+  // Değişkeni doğrudan okuyan testler (ör. pg-boss, sorgu sayacı) aynı veritabanını kullansın.
+  process.env.TEST_DATABASE_URL = url;
   return url;
 }
 

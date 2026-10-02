@@ -116,14 +116,25 @@ else {
   }
 }
 
-// 9. TEST_DATABASE_URL (API/worker PostgreSQL testleri yalnız ortamdan okur, .env'den değil)
-const testUrl = process.env.TEST_DATABASE_URL;
+// 9. Test veritabanı. API/worker harness'i ve db:test aynı kuralı izler: ortamdaki TEST_DATABASE_URL, yoksa .env'deki
+//    TEST_DATABASE_URL, o da yoksa DATABASE_URL + "_test" (apps/api/test/support/test-db.ts).
+const derivedTestUrl = (() => {
+  const base = process.env.DATABASE_URL ?? env?.DATABASE_URL;
+  if (!base) return undefined;
+  try {
+    const u = new URL(base);
+    u.pathname = `${u.pathname.replace(/^\//, '')}_test`;
+    return u.toString();
+  } catch {
+    return undefined;
+  }
+})();
+const testUrl = process.env.TEST_DATABASE_URL ?? env?.TEST_DATABASE_URL ?? derivedTestUrl;
 const exampleTestUrl = 'postgresql://kararver:kararver_local@localhost:5432/kararver_test';
 const setFix = byOs(`set TEST_DATABASE_URL=${exampleTestUrl}   (PowerShell: $env:TEST_DATABASE_URL = "${exampleTestUrl}")`,
   `export TEST_DATABASE_URL=${exampleTestUrl}`);
 if (!testUrl) {
-  warn('TEST_DATABASE_URL bu terminalde tanımlı değil: API/worker PostgreSQL testleri sessizce ATLANIR', setFix);
-  if (env?.TEST_DATABASE_URL) warn('.env içinde TEST_DATABASE_URL var ama test harness\'i .env okumaz; terminalde set edin', null);
+  warn('Test veritabanı belirlenemedi (TEST_DATABASE_URL yok, .env\'de DATABASE_URL yok): API/worker PostgreSQL testleri ATLANIR (uyarıyla)', setFix);
 } else {
   let parsed = null;
   try { parsed = new URL(testUrl); } catch { /* aşağıda raporlanır */ }

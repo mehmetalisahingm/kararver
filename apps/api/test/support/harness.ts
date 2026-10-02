@@ -33,6 +33,7 @@ import { createPrismaVoteStore } from "../../src/modules/votes/prisma-store.ts";
 import { createFakeQueue, createFakeStorage, type FakeStorage } from "./fake-storage.ts";
 import { createMemoryRbacStore } from "./memory-rbac-store.ts";
 import { createMemoryAuthStore } from "./memory-store.ts";
+import { resolveTestDatabaseUrl } from "./test-db.ts";
 
 export const WEB_ORIGIN = "http://localhost:3000";
 export const PEPPER = "test-pepper-0123456789-abcdefghijklmnop";
@@ -95,12 +96,13 @@ export const memoryBackend: BackendFactory = {
   },
 };
 
-/** TEST_DATABASE_URL varsa (CI) gerçek PostgreSQL. Migration'lar `prisma migrate deploy` ile uygulanır. */
+/**
+ * Gerçek PostgreSQL: TEST_DATABASE_URL, yoksa .env'deki DATABASE_URL + "_test" (support/test-db.ts).
+ * Migration'lar `prisma migrate deploy` ile uygulanır.
+ */
 export function prismaBackend(): BackendFactory | null {
-  const url = process.env.TEST_DATABASE_URL;
+  const url = resolveTestDatabaseUrl(path.resolve(import.meta.dirname, "../../../.."));
   if (!url) return null;
-  const dbName = decodeURIComponent(new URL(url).pathname.replace(/^\//, ""));
-  if (!dbName.endsWith("_test")) throw new Error(`Güvenlik: test veritabanının adı "_test" ile bitmeli (şu an: "${dbName}")`);
 
   return {
     name: "postgres",
