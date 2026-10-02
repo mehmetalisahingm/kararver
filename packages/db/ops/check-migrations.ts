@@ -35,12 +35,14 @@ const RULES: { name: string; re: RegExp }[] = [
 
 const ADD_COLUMN = /\bADD\s+COLUMN\s+(IF\s+NOT\s+EXISTS\s+)?("?\w+"?)([^,;]*)/gi;
 
-/** SQL yorumlarını ve fonksiyon gövdelerini ($$ … $$) atar: trigger gövdesindeki "DELETE" ifadesi bulgu değildir. */
+/** SQL yorumlarını, trigger tanımlarını ve fonksiyon gövdelerini ($$ … $$) atar. Trigger'ın BEFORE TRUNCATE/DELETE
+ * olay adı veri silme ifadesi değildir; gerçek TRUNCATE/DELETE trigger fonksiyon gövdesinde ise o gövde de zaten
+ * denetim dışıdır. Satır sonları korunur ki bulgu numaraları özgün dosyayla aynı kalsın. */
 export function stripSql(sql: string): string {
-  // Satır sonları korunur: bulgunun satır numarası dosyadakiyle aynı kalsın.
   const blank = (m: string) => m.replace(/[^\n]/g, "");
   return sql
     .replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, blank)
+    .replace(/\bCREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\b[\s\S]*?;/gi, blank)
     .replace(/\/\*[\s\S]*?\*\//g, blank)
     .replace(/--[^\n]*/g, "");
 }
