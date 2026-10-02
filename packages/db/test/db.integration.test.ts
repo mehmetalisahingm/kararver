@@ -16,7 +16,7 @@ import { after, before, describe, test } from "node:test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
 // Enum hizalaması sözleşmenin kendisiyle karşılaştırılır (workspace bağımlılığı eklemeden, kaynaktan).
-import { SanctionType } from "../../contracts/src/domains/admin.ts";
+import { AuditSource, SanctionType } from "../../contracts/src/domains/admin.ts";
 import { roles } from "../../contracts/src/helpers.ts";
 
 const packageDir = path.resolve(import.meta.dirname, "..");
@@ -191,6 +191,8 @@ describe("migration", () => {
     assert.deepEqual(
       triggers.map((t) => t.tgname),
       [
+        "audit_logs_append_only",
+        "audit_logs_no_truncate",
         "comment_revisions_append_only",
         "comments_single_level",
         "moderation_actions_append_only",
@@ -952,6 +954,125 @@ describe("user_roles ve sanctions (KV-12)", () => {
       SELECT v::text AS label FROM unnest(enum_range(NULL::sanction_type)) WITH ORDINALITY AS r(v, i) ORDER BY i`;
     assert.deepEqual(userRoles.map((r) => r.label), [...roles]);
     assert.deepEqual(sanctionTypes.map((r) => r.label), [...SanctionType.options]);
+  });
+});
+
+// ─── 9.2 Audit (KV-39) ────────────────────────────────────────
+
+describe("audit_logs (KV-39)", () => {
+  const APPEND_ONLY = /KV_AUDIT_LOGS_APPEND_ONLY/;
+
+  type AuditInput = {
+    source?: string;
+    action?: string;
+    operation?: string;
+    targetType?: string;
+    targetId?: string;
+    reason?: string | null;
+    /** JSON metni */
+    before?: string | null;
+    requestId?: string | null;
+  };
+
+  /** Varsayılan: geçerli bir API kaydı. */
+  async function audit(actorId: string | null, a: AuditInput = {}): Promise<string> {
+    const id = randomUUID();
+    await db.$executeRaw`
+      INSERT INTO audit_logs (id, actor_id, source, action, operation, target_type, target_id, reason, before, request_id)
+      VALUES (${id}::uuid, ${actorId}::uuid, ${a.source ?? "API"}::audit_source, ${a.action ?? "user.sanction"},
+              ${a.operation ?? "apply"}, ${a.targetType ?? "USER"}, ${a.targetId ?? randomUUID()},
+              ${a.reason === undefined ? "test: spam" : a.reason}, ${a.before ?? null}::jsonb,
+              ${a.requestId === undefined ? "req_test_0001" : a.requestId})`;
+    return id;
+  }
+
+  test("aktör FK'si RESTRICT; audit izi olan kullanıcı silinemez, olmayan aktöre yazılamaz", async () => {
+    const fk = await one(db.$queryRaw<{ onDelete: string }[]>`
+      SELECT confdeltype::text AS "onDelete" FROM pg_constraint WHERE conname = 'audit_logs_actor_id_fkey'`);
+    assert.equal(fk.onDelete, "r");
+    const admin = await createUser();
+    await audit(admin);
+    await expectDbError(db.$executeRaw`DELETE FROM users WHERE id = ${admin}::uuid`, FK_VIOLATION);
+    await expectDbError(audit(randomUUID()), FK_VIOLATION);
+  });
+
+  test("kaynak ve aktör tutarlı: API aktörlü ve request_id'li, CLI/WORKER aktörsüz", async () => {
+    const admin = await createUser();
+    await expectDbError(audit(null), CHECK_VIOLATION);
+    await expectDbError(audit(admin, { source: "CLI", requestId: null }), CHECK_VIOLATION);
+    await expectDbError(audit(admin, { requestId: null }), CHECK_VIOLATION);
+    await expectDbError(audit(admin, { requestId: "" }), CHECK_VIOLATION);
+    await audit(null, { source: "CLI", action: "user.role.assign", operation: "assign", requestId: null });
+    await audit(null, { source: "WORKER", action: "user.status.sync", operation: "sync", reason: null, requestId: null });
+  });
+
+  test("biçim kısıtları: işlem, tür, hedef, gerekçe ve özet", async () => {
+    const admin = await createUser();
+    for (const bad of [
+      { action: "UserSanction" },
+      { action: "sanction" },
+      { operation: "Apply" },
+      { operation: "" },
+      { targetType: "user" },
+      { targetId: "" },
+      { reason: "  a " },
+      { before: "[1, 2]" },
+      { before: "null" },
+      { before: '"ACTIVE"' },
+    ]) {
+      await expectDbError(audit(admin, bad), CHECK_VIOLATION);
+    }
+    // Gerekçesiz kayıt DB'de geçerlidir; hangi işlemin gerekçe istediğini contracts zorlar.
+    await audit(admin, { action: "revision.read", operation: "read", targetType: "POLL", reason: null });
+    await audit(admin, { action: "account.verifyEmail", operation: "verify_email", before: '{"status": "ACTIVE"}' });
+    await audit(admin, { action: "settings.update", operation: "update", targetType: "SETTING", targetId: "polls.maxOptions" });
+  });
+
+  test("append-only: UPDATE, DELETE ve TRUNCATE reddedilir", async () => {
+    const admin = await createUser();
+    const id = await audit(admin, { before: '{"status": "ACTIVE"}' });
+    for (const change of [
+      () => db.$executeRaw`UPDATE audit_logs SET reason = 'test: değişti' WHERE id = ${id}::uuid`,
+      () => db.$executeRaw`UPDATE audit_logs SET before = NULL WHERE id = ${id}::uuid`,
+      // Değer değiştirmeyen güncelleme de reddedilir.
+      () => db.$executeRaw`UPDATE audit_logs SET created_at = created_at WHERE id = ${id}::uuid`,
+      () => db.$executeRaw`DELETE FROM audit_logs WHERE id = ${id}::uuid`,
+      () => db.$executeRaw`TRUNCATE audit_logs`,
+    ]) {
+      await expectDbError(change(), APPEND_ONLY);
+    }
+    const row = await one(db.$queryRaw<{ reason: string }[]>`SELECT reason FROM audit_logs WHERE id = ${id}::uuid`);
+    assert.equal(row.reason, "test: spam");
+  });
+
+  test("hedef, aktör, işlem türü ve zaman sorguları index kullanır", async () => {
+    const admin = await createUser();
+    const target = randomUUID();
+    await audit(admin, { targetId: target });
+    const plans = await db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SET LOCAL enable_seqscan = off");
+      const explain = async (q: Promise<{ "QUERY PLAN": string }[]>) => (await q).map((r) => r["QUERY PLAN"]).join("\n");
+      return {
+        target: await explain(tx.$queryRaw`
+          EXPLAIN SELECT * FROM audit_logs WHERE target_type = 'USER' AND target_id = ${target} ORDER BY created_at DESC`),
+        actor: await explain(tx.$queryRaw`
+          EXPLAIN SELECT * FROM audit_logs WHERE actor_id = ${admin}::uuid ORDER BY created_at DESC`),
+        operation: await explain(tx.$queryRaw`
+          EXPLAIN SELECT * FROM audit_logs WHERE action = 'vote.invalidate' AND operation = 'restore' ORDER BY created_at DESC`),
+        time: await explain(tx.$queryRaw`
+          EXPLAIN SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 20`),
+      };
+    });
+    assert.match(plans.target, /audit_logs_target_type_target_id_created_at_idx/);
+    assert.match(plans.actor, /audit_logs_actor_id_created_at_idx/);
+    assert.match(plans.operation, /audit_logs_action_operation_created_at_idx/);
+    assert.match(plans.time, /audit_logs_created_at_idx/);
+  });
+
+  test("audit_source enum'u contracts AuditSource ile aynı", async () => {
+    const labels = await db.$queryRaw<{ label: string }[]>`
+      SELECT v::text AS label FROM unnest(enum_range(NULL::audit_source)) WITH ORDINALITY AS r(v, i) ORDER BY i`;
+    assert.deepEqual(labels.map((r) => r.label), [...AuditSource.options]);
   });
 });
 

@@ -3,7 +3,7 @@
 // bu tablolardan okunur (TrustedActor, packages/contracts/src/permissions.ts).
 // Kurallar: docs/DATA_MODEL.md §9.1 · Yetki matrisi: docs/FOUNDATION_CONTRACTS.md, docs/KV-04_ROLES_EVENTS.md
 //
-// Audit (KV-39), sistem ayarları (KV-40) ve bildirimler (KV-21) bu dosyaya sonra eklenir.
+// Audit (KV-39) bu dosyada; sistem ayarları (KV-40) ve bildirimler (KV-21) sonra eklenir.
 // users'a giden bütün FK'ler RESTRICT'tir: kullanıcı soft delete edilir, rol ve yaptırım izi korunur.
 // Prisma'nın ifade edemediği CHECK kısıtları ve trigger migration SQL'inde elle yazılıdır.
 
@@ -75,4 +75,49 @@ model Sanction {
   @@index([createdById])
   @@index([liftedById])
   @@map("sanctions")
+}
+
+// ─── Audit (KV-39, #41) ───────────────────────────────────────────────
+// Kurallar: docs/DATA_MODEL.md §9.2 · sözleşme: packages/contracts/src/audit.ts
+
+// Kaydı kim üretti. Değerler contracts AuditSource ile birebir aynıdır (test).
+// API: aktör dolu + request_id; CLI/WORKER: aktör NULL (CHECK).
+enum AuditSource {
+  API
+  CLI
+  WORKER
+
+  @@map("audit_source")
+}
+
+// Değiştirilemez yönetim geçmişi. Kayıt, işlemle aynı transaction'da yazılır (KV-04 §4.4): işlem geri alınırsa
+// kayıt da yoktur. Silinemez ve güncellenemez (trigger audit_logs_append_only, TRUNCATE da reddedilir).
+// action: KV-04 işlem kimliği veya sistem işlemi; operation: işlemin türü (ör. invalidate | restore), ayrı sorgulanır.
+// Hedef polimorfiktir (target_type + target_id, FK yok; DATA_MODEL §9); SETTING hedefinde id ayar anahtarıdır.
+model AuditLog {
+  id         String      @id @default(uuid(7)) @db.Uuid
+  // NULL = sistem (CLI/worker).
+  actorId    String?     @map("actor_id") @db.Uuid
+  source     AuditSource
+  action     String      @db.VarChar(80)
+  operation  String      @db.VarChar(40)
+  targetType String      @map("target_type") @db.VarChar(40)
+  targetId   String      @map("target_id") @db.VarChar(64)
+  // Zorunluluğu işleme bağlıdır (contracts reasonRequiredActions); DB yalnız biçimi zorlar.
+  reason     String?     @db.VarChar(500)
+  // Önce/sonra özeti: JSON nesnesi, hassas alan yok (contracts assertAuditEntry).
+  before     Json?
+  after      Json?
+  // API'de X-Request-Id.
+  requestId  String?     @map("request_id") @db.VarChar(128)
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  // Hedefin geçmişi, aktörün işlemleri, işlem/tür filtresi ve zaman sıralı liste (admin.audit.list).
+  @@index([targetType, targetId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, operation, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

@@ -75,8 +75,8 @@ try {
       break;
     }
     case "applied":
-      // KV-39: audit_logs gelince bu kayıt aynı transaction'da audit'e de yazılacak
-      // (actor_id NULL = sistem/CLI, target_type = user, target_id = userId). O zamana kadar tek iz bu satırdır.
+      // Aynı kayıt rol yazımıyla aynı transaction'da audit_logs'a da yazıldı (KV-39: source CLI, actor NULL,
+      // action user.role.assign, hedef USER). Bu satır operatörün çıktısıdır; kalıcı iz audit kaydıdır.
       console.log(
         JSON.stringify({
           event: "rbac.super_admin_bootstrap",

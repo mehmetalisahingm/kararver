@@ -29,6 +29,7 @@ export {
 } from "./helpers.ts";
 export type { ErrorResponseBody, EventEnvelope, PageBody, ResultsProjection } from "./helpers.ts";
 
+export * from "./audit.ts";
 export * from "./common.ts";
 export * from "./errors.ts";
 export * from "./endpoint.ts";

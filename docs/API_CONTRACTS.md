@@ -337,7 +337,7 @@ Endpoint tanımındaki `errors` sadece o endpoint'e özgü kodlardır.
 |---|---|---|
 | `KV_POLL_CONTENT_LOCKED` (P0001) | 409 `POLL_CONTENT_LOCKED` | İlk oy kilidi trigger'ı |
 | `KV_COMMENT_DEPTH` (P0001) | 400 `COMMENT_DEPTH_EXCEEDED` | `details[0].field = "parentId"` |
-| `KV_VOTE_EVENTS_APPEND_ONLY`, `KV_VOTE_IDENTITY_IMMUTABLE` | 500 `INTERNAL_ERROR` | Kod hatası; loglanır, istemciye ayrıntı verilmez |
+| `KV_VOTE_EVENTS_APPEND_ONLY`, `KV_VOTE_IDENTITY_IMMUTABLE`, `KV_AUDIT_LOGS_APPEND_ONLY` | 500 `INTERNAL_ERROR` | Kod hatası; loglanır, istemciye ayrıntı verilmez |
 | `23505` `votes (poll_id,user_id)` | — (hata değil) | Doğal idempotency: mevcut oy okunur (§4.5) |
 | `23505` `users.username_normalized` | 409 `USERNAME_TAKEN` | |
 | `23505` `users.email_normalized` | — | Kayıt yine 202 döner, hesap varlığı sızmaz |

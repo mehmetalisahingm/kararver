@@ -3,6 +3,16 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.14.0 — 2026-10-02 (Utku, KV-39 audit kaydı)
+
+Kırıcı değişiklik yok (henüz uygulanmamış `admin.audit.list` cevabına alan ve sorguya isteğe bağlı filtre eklenmesi, yeni yardımcılar ve DB hata eşlemesi minor).
+
+- **Eklendi:** `src/audit.ts`: `assertAuditEntry` (yazmadan önce doğrulama ve normalleştirme; API ve worker aynı kuralı kullanır), `auditOperations` / `allowedAuditOperations` (audit'li her KV-04 işleminin izinli `operation` değerleri açıkça; ör. `user.role.assign` → `grant` | `revoke` | `change`, `vote.invalidate` → `invalidate` | `restore`; tek değerlide verilmezse o değer, çok değerlide zorunlu; haritada olmayan katalog işlemi audit'e yazılamaz, kimliğin son parçası varsayılanı yalnız `systemAuditActions` için), `reasonRequiredActions` (gerekçesi zorunlu KV-04 işlemleri), `systemAuditActions` (`user.status.sync`), `auditTargetTypes`, `AUDIT_SUMMARY_MAX_CHARS`. KV-04 işlem kataloğu ve `authorize` değişmedi.
+- **Eklendi:** `AuditSource` (`API` | `CLI` | `WORKER`). `AuditEntry`'ye `source` ve `operation`; `admin.audit.list` sorgusuna isteğe bağlı `operation` ve `source` filtreleri. Endpoint hâlâ uygulanmadı (ayrı KV-39 PR'ı); tüketici etkisi yok.
+- **Eklendi:** `dbErrorMap`: `KV_AUDIT_LOGS_APPEND_ONLY` → `INTERNAL_ERROR`.
+- **Düzeltildi:** `admin.audit.list` fixture'ı `action` olarak olay adını (`sanction.applied`) kullanıyordu; artık KV-04 işlem kimliği `user.sanction` + `operation: "apply"` + `source: "API"`.
+- **Test:** `audit.test.ts`: gerekçesi zorunlu her işlem ve değiştiren her yönetici endpoint'inin işlemi `auditOperations`'ta olmalı (haritada olmayan audit'li işlem testi kırar); gerekçe listesi endpoint gövdeleriyle iki yönlü karşılaştırılır (gerekçesiz DELETE'i olan `featured.manage`, `announcement.manage`, `community.moderator.assign`, `media.ban.manage` bilinçli istisna), tür biçimi, `assertAuditEntry` kuralları.
+
 ## 1.12.1 — 2026-10-02 (Mert, KV-32 topluluk yönetimi)
 
 Kırıcı değişiklik yok (şema hatası düzeltmesi, istek biçimi aynı).

@@ -11,7 +11,13 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, beforeEach, describe, test } from "node:test";
 import type { PrismaClient } from "@kararver/db";
-import { BOOTSTRAP_LOCK_KEY, bootstrapSuperAdmin, describeDatabase, redactSecrets } from "../src/modules/rbac/bootstrap.ts";
+import {
+  BOOTSTRAP_AUDIT_REASON,
+  BOOTSTRAP_LOCK_KEY,
+  bootstrapSuperAdmin,
+  describeDatabase,
+  redactSecrets,
+} from "../src/modules/rbac/bootstrap.ts";
 import { prismaBackend } from "./support/harness.ts";
 
 describe("bootstrap çıktı yardımcıları", () => {
@@ -74,6 +80,13 @@ describe("admin:bootstrap (PostgreSQL)", { skip: factory ? false : "TEST_DATABAS
   const superAdmins = () =>
     prisma.userRole.findMany({ where: { role: "SUPER_ADMIN" }, select: { userId: true, grantedById: true } });
 
+  /** audit_logs append-only ve test DB'si sıfırlanmaz; kayıtlar her testin yeni kullanıcısına göre okunur (KV-39). */
+  const auditsFor = (userId: string) =>
+    prisma.auditLog.findMany({
+      where: { targetType: "USER", targetId: userId },
+      select: { actorId: true, source: true, action: true, operation: true, reason: true, before: true, after: true, requestId: true },
+    });
+
   for (const [name, seed, reason] of [
     ["doğrulanmamış e-posta", { verified: false }, "EMAIL_NOT_VERIFIED"],
     ["ACTIVE olmayan (SUSPENDED)", { status: "SUSPENDED" }, "USER_NOT_ACTIVE"],
@@ -84,6 +97,7 @@ describe("admin:bootstrap (PostgreSQL)", { skip: factory ? false : "TEST_DATABAS
       const u = await seedUser(seed);
       assert.deepEqual(await bootstrapSuperAdmin(prisma, { email: u.input, apply: true }), { kind: "rejected", reason });
       assert.equal(await prisma.userRole.count({ where: { userId: u.id } }), 0);
+      assert.deepEqual(await auditsFor(u.id), []);
     });
   }
 
@@ -98,6 +112,23 @@ describe("admin:bootstrap (PostgreSQL)", { skip: factory ? false : "TEST_DATABAS
     const result = await bootstrapSuperAdmin(prisma, { email: u.input, apply: true });
     assert.deepEqual(result, { kind: "applied", userId: u.id, username: u.username, previousRole: null });
     assert.deepEqual(await superAdmins(), [{ userId: u.id, grantedById: null }]);
+  });
+
+  test("başarılı atama aynı transaction'da tek audit kaydı yazar: CLI, aktör NULL, user.role.assign", async () => {
+    const u = await seedUser();
+    await bootstrapSuperAdmin(prisma, { email: u.input, apply: true });
+    assert.deepEqual(await auditsFor(u.id), [
+      {
+        actorId: null,
+        source: "CLI",
+        action: "user.role.assign",
+        operation: "grant",
+        reason: BOOTSTRAP_AUDIT_REASON,
+        before: { role: "USER" },
+        after: { role: "SUPER_ADMIN", grantedBy: null },
+        requestId: null,
+      },
+    ]);
   });
 
   test("ikinci çalıştırma: farklı kullanıcı reddedilir, aynı kullanıcı 'zaten' ve satır değişmez", async () => {
@@ -118,6 +149,9 @@ describe("admin:bootstrap (PostgreSQL)", { skip: factory ? false : "TEST_DATABAS
       username: first.username,
     });
     assert.deepEqual(await prisma.userRole.findUniqueOrThrow({ where: { userId: first.id } }), before);
+    // Ret ve "zaten" audit yazmaz: ilk atamanın tek kaydı kalır.
+    assert.equal((await auditsFor(first.id)).length, 1);
+    assert.deepEqual(await auditsFor(other.id), []);
   });
 
   test("ret: SUPER_ADMIN sahibi silinmiş/banlı olsa da satırı sayılır", async () => {
@@ -162,6 +196,8 @@ describe("admin:bootstrap (PostgreSQL)", { skip: factory ? false : "TEST_DATABAS
       previousRole: "MODERATOR",
     });
     assert.deepEqual(await snapshot(), before);
+    // READ ONLY transaction: audit de yazılmaz.
+    assert.deepEqual([...(await auditsFor(fresh.id)), ...(await auditsFor(mod.id))], []);
   });
 
   test("MODERATOR SUPER_ADMIN'e yükseltilir, veren NULL olur", async () => {
@@ -172,6 +208,10 @@ describe("admin:bootstrap (PostgreSQL)", { skip: factory ? false : "TEST_DATABAS
     const result = await bootstrapSuperAdmin(prisma, { email: mod.input, apply: true });
     assert.deepEqual(result, { kind: "applied", userId: mod.id, username: mod.username, previousRole: "MODERATOR" });
     assert.deepEqual(await superAdmins(), [{ userId: mod.id, grantedById: null }]);
+    assert.deepEqual(
+      (await auditsFor(mod.id)).map((a) => [a.operation, a.before, a.after]),
+      [["change", { role: "MODERATOR" }, { role: "SUPER_ADMIN", grantedBy: null }]],
+    );
   });
 
   test("eşzamanlı iki bootstrap (farklı kullanıcı): tam olarak biri başarılı", async () => {
@@ -185,6 +225,7 @@ describe("admin:bootstrap (PostgreSQL)", { skip: factory ? false : "TEST_DATABAS
     const rejected = results.find((r) => r.kind === "rejected");
     assert.deepEqual(rejected, { kind: "rejected", reason: "SUPER_ADMIN_EXISTS" });
     assert.equal((await superAdmins()).length, 1);
+    assert.equal((await auditsFor(a.id)).length + (await auditsFor(b.id)).length, 1);
   });
 
   /** Kilit bekleyen bir oturum pg_locks'ta görünene kadar yoklar; zamanlamaya değil DB durumuna bakar. */
