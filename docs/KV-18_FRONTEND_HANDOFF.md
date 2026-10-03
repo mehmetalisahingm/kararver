@@ -1,4 +1,45 @@
-> 29 Eylül güncellemesi: HTTP entegrasyonu ve güncel kalan bağımlılıklar için [Frontend/backend entegrasyonu](FRONTEND_BACKEND_INTEGRATION.md) belgesine bakın. Aşağıdaki demo teslim notları ilk sürümü anlatır.
+> 3 Ekim: Güncel teslim ve kabul kapsamı aşağıdadır. "İlk demo teslimi" altındaki notlar tarihsel kayıttır; o tarihteki bekleyen bağımlılıkları anlatır.
+
+## 3 Ekim — Gerçek medya ve sosyal API kabulü
+
+#15, #18 ve #19 kapalıdır. Sosyal HTTP adapter'ı #79, bağımsız UI düzeltmeleri
+#110 ile ana daldadır. Kalan yükleme akışı gerçek `media.uploads.create` → signed
+PUT → `media.complete` → `media.get` üzerinden çalışır. Aynı dosyanın PUT hatasında
+aynı idempotency anahtarı kullanılır; complete hatasında PUT tekrarlanmaz.
+
+Doğrulanmış hesap en fazla 10 JPEG/PNG/WebP ekleyebilir (dosya başına 8 MB).
+Sunucu limit ve sahiplik kontrolünün otoritesidir. Seçimler yayın hatasında korunur,
+sıralanabilir ve taslaktan çıkarılabilir. Sayfadan ayrılınca dosyaları yeniden seçmek
+gerektiği açıklanır. PENDING sınırlı aralıklarla kontrol edilir; ağ hatası ve uzun
+incelemede manuel tekrar deneme vardır. QUARANTINED açıkça incelemede gösterilir;
+REJECTED öğe kaldırılmadan yayınlanmaz. Yalnız onaylı medya public galeride görünür;
+sahibine dönen private preview adresi DOM'a veya storage PUT isteğinin cookie'sine taşınmaz.
+
+Galeri resim yüklenmesini, bozuk resim retry'ını, boş medya ve kaldırılan öğe sonrası
+geçerli seçimi ele alır. Fiyat/ek bilgi, gizli/açık/kapalı/kilitli sonuç, yorum/yanıt/
+alternatif, like-dislike, sahiplik ve iyimser geri alma önceki teslimlerle korunur.
+
+### Doğrulama kaynakları
+
+- `test/media/upload.spec.ts`: 1440px ve 360px'te üç senaryo (6 test); PUT/complete/
+  publish hatası, aynı yükleme anahtarı, sıralı mediaIds, dosya doğrulama, pending/
+  karantina/reddetme, status retry, private URL yokluğu, galeri loading/retry/klavye,
+  axe ve taşma. API sözleşme fixture'larıyla UI testi; gerçek backend değildir.
+- `test/social-backend.test.mjs`: gerçek HTTP ve PostgreSQL; iki hesap, medya
+  upload/complete/owner kontrolü, bekleyen medyanın gizlenmesi, onaylı sıralama,
+  reddedilenin kaldırılması, yorum/tek seviye cevap/alternatif, iki tür tepki,
+  düzenle/sil/sahiplik ve gizli/kapalı/kilitli sonuç. Storage ve moderasyon geçişleri
+  bu testte kontrollü test verisidir; worker veya gerçek S3 çalıştırıldığı iddia edilmez.
+- `test/browser/social.spec.ts`: başarısız sosyal mutasyonlarda geri alma, taslak
+  koruma, hesap ayrımı, galeri, mobil/açık tema ve reduced-motion regresyonu.
+- Foundation CI: database işinde gerçek HTTP/PostgreSQL; integration işinde medya
+  UI matrisi; web işinde sosyal regresyonlar. S3 ve worker kendi CI testlerinde doğrulanır.
+
+Gerçek deployment S3 CORS/public bucket/worker ayarları #18 deploy notlarına bağlıdır.
+Fiziksel cihaz, ekran okuyucu ve staging/beta kabulü #48/#47 altında kalır; #48 bu
+teslimle kapatılmaz. Kapanışta son PR/CI bağlantısı #20'ye eklenir.
+
+## İlk demo teslimi (tarihsel)
 
 # KV-18 — Galeri, sonuç ve sosyal etkileşim arayüzü
 

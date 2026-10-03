@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
 import { ApiClient } from "../../lib/api-client";
 import { ErrorMessage, Field } from "../../components/fields";
+import { MediaUpload } from "./media-upload";
+import type { MediaSelection } from "./media-upload";
 import {
   categories,
   emptyDraft,
@@ -29,6 +31,7 @@ export function Composer() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [media, setMedia] = useState<MediaSelection>({ids:[],blocked:false});
   const dialog = useRef<HTMLDialogElement>(null);
   const previewButton = useRef<HTMLButtonElement>(null);
   const lock = useRef(false);
@@ -40,6 +43,7 @@ export function Composer() {
   };
   function review(event: FormEvent) {
     event.preventDefault();
+    if (media.blocked) { setError("Görsel yüklemelerini tamamla veya sorunlu görselleri listeden kaldır."); return; }
     const next = validateDraft(draft);
     if (!demo && !remoteCategories.some(c => c.id === draft.categoryId)) next.category = "Geçerli bir kategori seçmelisin.";
     setErrors(next);
@@ -58,11 +62,11 @@ export function Composer() {
     lock.current = true;
     setBusy(true);
     setError("");
-    const fingerprint = JSON.stringify([user?.id, draft]);
+    const fingerprint = JSON.stringify([user?.id, draft, media.ids]);
     if (request.current.fingerprint !== fingerprint)
       request.current = { fingerprint, key: crypto.randomUUID() };
     try {
-      const poll = await client.create(draft, request.current.key);
+      const poll = await client.create({...draft,mediaIds:media.ids}, request.current.key);
       syncUser();
       setDraft(emptyDraft());
       dialog.current?.close();
@@ -279,10 +283,7 @@ export function Composer() {
           />
           Yorumlara izin ver
         </label>
-        <p className="kv-help">
-          Fotoğraf zorunlu değil. Güvenli görsel yükleme medya modülü hazır
-          olduğunda eklenecek.
-        </p>
+        {client instanceof ApiClient && user?.verified ? <MediaUpload client={client.media} disabled={busy} onChange={setMedia}/> : <p className="kv-help">Fotoğraf zorunlu değil. {demo ? "Görsel yükleme gerçek API modunda kullanılabilir." : "Görsel eklemek için doğrulanmış hesabınla giriş yap."}</p>}
         {demo && <div className="cost-summary">
           <span>
             Yayın maliyeti <strong>10 puan</strong>
@@ -303,7 +304,7 @@ export function Composer() {
         <button
           ref={previewButton}
           className="kv-button"
-          disabled={busy || Boolean(user && user.balance !== null && user.balance < 10) || (!demo && !remoteCategories.length)}
+          disabled={busy || media.blocked || Boolean(user && user.balance !== null && user.balance < 10) || (!demo && !remoteCategories.length)}
         >
           {busy ? "Yayımlanıyor…" : "Yayın önizlemesi"}
         </button>

@@ -144,6 +144,10 @@ jobs:
       - run: pnpm --filter @kararver/web exec playwright test -c playwright.api.config.ts
         env:
           CI: 'true'
+      - name: Media upload and gallery UI states (desktop/mobile)
+        run: pnpm --filter @kararver/web exec playwright test -c playwright.media.config.ts
+        env:
+          CI: 'true'
       - name: Logs
         if: always()
         run: |

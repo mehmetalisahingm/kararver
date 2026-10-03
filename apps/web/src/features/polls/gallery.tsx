@@ -2,9 +2,11 @@
 import { useState } from "react";
 import type { Poll } from "../../lib/model";
 export function PollGallery({ poll }: { poll: Poll }) {
-  const [selected, setSelected] = useState(0);
+  const [selection, setSelected] = useState(0);
   const [broken, setBroken] = useState<Record<string, boolean>>({});
+  const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const items = poll.gallery || [];
+  const selected = Math.min(selection, Math.max(0, items.length - 1));
   const current = items[selected];
   if (!items.length && !poll.price && !poll.details?.length) return null;
   return (
@@ -16,12 +18,15 @@ export function PollGallery({ poll }: { poll: Poll }) {
       {current && (
         <>
           <figure className="gallery-stage">
+            {current.status === "ready" && !broken[current.id] && !loaded[current.id] && <p role="status">Görsel yükleniyor…</p>}
             {current.status === "ready" && !broken[current.id] ? (
               <img
+                key={current.id}
                 src={current.src}
                 alt={current.alt}
                 width={800}
                 height={530}
+                onLoad={() => setLoaded(old => ({...old,[current.id]:true}))}
                 onError={() =>
                   setBroken((old) => ({ ...old, [current.id]: true }))
                 }
@@ -61,7 +66,7 @@ export function PollGallery({ poll }: { poll: Poll }) {
               className="reaction-button"
               aria-label="Önceki görsel"
               disabled={selected === 0}
-              onClick={() => setSelected((n) => n - 1)}
+              onClick={() => setSelected(selected - 1)}
             >
               ←
             </button>
@@ -86,7 +91,7 @@ export function PollGallery({ poll }: { poll: Poll }) {
               className="reaction-button"
               aria-label="Sonraki görsel"
               disabled={selected === items.length - 1}
-              onClick={() => setSelected((n) => n + 1)}
+              onClick={() => setSelected(selected + 1)}
             >
               →
             </button>
