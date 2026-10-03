@@ -21,12 +21,14 @@ test("frontend adapter integrates register, email token, login, cookie restore, 
     await client.register("Ümit", "umit.integration@example.test", "a-secure-password", "umit_integration");
     await client.verify("",tokenFrom(h.mails.at(-1)));
     const user = await client.login("umit.integration@example.test","a-secure-password");
-    assert.equal(user.verified,true); assert.equal(user.balance,null); assert.ok(cookie.startsWith("kv_session="));
-    assert.equal((await new ApiClient("http://api.test",fetcher).restore())?.id,user.id);
+    assert.equal(user.verified,true); assert.equal(user.balance,20); assert.equal(user.publishCost,10); assert.ok(cookie.startsWith("kv_session="));
+    const restored = await new ApiClient("http://api.test",fetcher).restore();
+    assert.equal(restored?.id,user.id); assert.equal(restored?.balance,20); assert.equal(restored?.publishCost,10);
     await client.requestReset("umit.integration@example.test");
     await client.reset("",tokenFrom(h.mails.at(-1)),"a-new-secure-password");
     assert.equal(client.current(),null); assert.equal(await client.restore(),null);
-    await client.login("umit.integration@example.test","a-new-secure-password");
+    const relogged = await client.login("umit.integration@example.test","a-new-secure-password");
+    assert.equal(relogged.balance,20);
     await client.logout(); assert.equal(await client.restore(),null);
   } finally { await h.close(); }
 });
