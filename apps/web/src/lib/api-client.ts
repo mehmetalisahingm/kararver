@@ -1,5 +1,6 @@
 import { Category, CommentView, CommunityCard, Me, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
+import { MediaClient } from "./media-client.ts";
 import { UiError, safeReturnTo } from "./model.ts";
 import type { Draft, PageResult, Poll, ProductClient, ProfileComment, PublicProfile, User } from "./model.ts";
 import { ApiEngagement } from "../features/social/api-engagement.ts";
@@ -32,12 +33,14 @@ export function mapPoll(wire: ReturnType<typeof PollCard.parse> | ReturnType<typ
   };
 }
 export class ApiClient implements ProductClient {
+  readonly media: MediaClient;
   private social: ApiEngagement;
   protected http: HttpClient;
   private user: User | null = null;
   private listeners = new Set<() => void>();
-  constructor(baseUrl: string, fetcher?: typeof fetch) {
+  constructor(baseUrl: string, fetcher?: typeof fetch, uploadFetcher?: typeof fetch) {
     this.http = new HttpClient(baseUrl, fetcher);
+    this.media = new MediaClient(this.http, uploadFetcher);
     this.social = new ApiEngagement(this.http);
     this.http.onUnauthorized = () => this.setUser(null);
   }
@@ -159,7 +162,7 @@ export class ApiClient implements ProductClient {
     return {...page,data};
   }
   async create(draft: Draft, key: string) {
-    const common = { title: draft.title.trim(), description: draft.description.trim(), categoryId: draft.categoryId, allowComments: draft.commentsEnabled };
+    const common = { title: draft.title.trim(), description: draft.description.trim(), categoryId: draft.categoryId, allowComments: draft.commentsEnabled, mediaIds: draft.mediaIds };
     const body = draft.kind === "discussion" ? { ...common, kind: "DISCUSSION" } : {
       ...common, kind: "POLL", durationHours: draft.hours, resultsVisibility: draft.visibility === "always" ? "ALWAYS" : "AFTER_VOTE",
       options: draft.options.map((label) => ({ label: label.trim() })),
