@@ -1,4 +1,4 @@
-import { Category, CommentView, CommunityCard, Me, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
+import { Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
 import { UiError, safeReturnTo } from "./model.ts";
 import type { Draft, PageResult, Poll, ProductClient, ProfileComment, PublicProfile, User } from "./model.ts";
@@ -52,23 +52,36 @@ export class ApiClient implements ProductClient {
   current() { return this.user; }
   private acceptUser(value: unknown) {
     const { data } = dataOf(Me).parse(value);
+    const previous = this.user?.id === data.id ? this.user : null;
     return this.setUser({
       id: data.id,
       name: data.displayName,
       email: data.email,
       verified: data.emailVerified,
-      balance: null,
+      balance: previous?.balance ?? null,
+      publishCost: previous?.publishCost ?? null,
       username: data.username,
       bio: data.bio,
       avatarUrl: data.avatarUrl,
       createdAt: data.createdAt,
     })!;
   }
+  private async refreshPoints() {
+    if (!this.user) return null;
+    const { data } = dataOf(PointsSummary).parse(await this.http.request("points.get"));
+    return this.setUser({ ...this.user, balance: data.balance, publishCost: data.publishCost });
+  }
   async restore() {
-    try { return this.acceptUser(await this.http.request("me.get")); }
+    try {
+      this.acceptUser(await this.http.request("me.get"));
+      return (await this.refreshPoints())!;
+    }
     catch (error) { if (error instanceof UiError && error.code === "UNAUTHENTICATED") return this.setUser(null); throw error; }
   }
-  async login(email: string, password: string) { return this.acceptUser(await this.http.request("auth.login", { body: { email, password } })); }
+  async login(email: string, password: string) {
+    this.acceptUser(await this.http.request("auth.login", { body: { email, password } }));
+    return (await this.refreshPoints())!;
+  }
   async register(name: string, email: string, password: string, username?: string) {
     await this.http.request("auth.register", { body: { displayName: name, email, password, username } });
   }
@@ -164,7 +177,14 @@ export class ApiClient implements ProductClient {
       ...common, kind: "POLL", durationHours: draft.hours, resultsVisibility: draft.visibility === "always" ? "ALWAYS" : "AFTER_VOTE",
       options: draft.options.map((label) => ({ label: label.trim() })),
     };
-    return mapPoll(dataOf(PollDetail).parse(await this.http.request("polls.create", { body, key })).data);
+    try {
+      const poll = mapPoll(dataOf(PollDetail).parse(await this.http.request("polls.create", { body, key })).data);
+      if (this.user) await this.refreshPoints().catch(() => null);
+      return poll;
+    } catch (error) {
+      if (this.user && error instanceof UiError && error.code === "INSUFFICIENT_POINTS") await this.refreshPoints().catch(() => null);
+      throw error;
+    }
   }
   async vote(id: string, optionId: string) {
     const poll = await this.get(id);
