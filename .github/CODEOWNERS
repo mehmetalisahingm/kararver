@@ -55,6 +55,7 @@
 /apps/mock-api/                             @Utkuuzun14
 /.github/workflows/                         @Utkuuzun14
 /docs/KV-06_LOCAL_SETUP.md                  @Utkuuzun14
+/docs/KV-21_NOTIFICATIONS.md                @Utkuuzun14
 /scripts/check-setup.mjs                    @Utkuuzun14
 /scripts/smoke.mjs                          @Utkuuzun14
 /scripts/test-reset.mjs                     @Utkuuzun14 @farukkemree

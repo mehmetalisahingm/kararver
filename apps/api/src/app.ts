@@ -38,6 +38,8 @@ import { registerProfileRoutes } from "./modules/profiles/routes.ts";
 import type { ProfileStore } from "./modules/profiles/store.ts";
 import { registerModerationRoutes } from "./modules/moderation/routes.ts";
 import type { ModerationStore } from "./modules/moderation/store.ts";
+import { registerNotificationRoutes } from "./modules/notifications/routes.ts";
+import type { NotificationStore } from "./modules/notifications/store.ts";
 import { registerReportRoutes } from "./modules/reports/routes.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
 import { registerRoleRoutes } from "./modules/rbac/roles-routes.ts";
@@ -99,6 +101,8 @@ export type AppDeps = {
   adminUserStore?: AdminUserStore;
   /** Verilmezse admin içerik moderasyonu (anket/yorum) route'ları kaydedilmez. */
   moderationStore?: ModerationStore;
+  /** Verilmezse bildirim okuma route'ları (notifications.*; KV-21) kaydedilmez. */
+  notificationStore?: NotificationStore;
   /** Verilmezse yorum route'u kaydedilmez. */
   commentStore?: CommentStore;
   /** Acil durum anahtarı features.comments (KV-40, #42); verilmezse açık. */
@@ -229,6 +233,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
   if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now });
+  if (deps.notificationStore) {
+    registerNotificationRoutes(route, { store: deps.notificationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  }
   if (deps.adminUserStore) {
     registerAdminUserRoutes(route, { store: deps.adminUserStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
     registerRoleRoutes(route, { store: deps.adminUserStore, now });

@@ -123,6 +123,9 @@ model User {
   sanctionsLifted          Sanction[]            @relation("SanctionLifter")
   // Utku — admin.prisma (KV-39)
   auditLogs                AuditLog[]            @relation("AuditActor")
+  // Utku — admin.prisma (KV-21)
+  notifications            Notification[]        @relation("NotificationRecipient")
+  notificationsCaused      Notification[]        @relation("NotificationActor")
   // Mehmet — growth.prisma (KV-15/#17, V1 #67)
   interests                UserInterest[]
   pointAccount             PointAccount?
@@ -272,6 +275,8 @@ model Poll {
   // Mert — moderation.prisma (KV-24)
   reports           Report[]
   moderationActions ModerationAction[]
+  // Utku — admin.prisma (KV-21)
+  notifications     Notification[]
 
   @@index([status, createdAt(sort: Desc)])
   @@index([categoryId, status, createdAt(sort: Desc)])
