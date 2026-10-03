@@ -8,6 +8,8 @@ import { registerErrorHandling } from "./http/errors.ts";
 import { createRouter } from "./http/route.ts";
 import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
+import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import type { AdminUserStore } from "./modules/admin-users/store.ts";
 import type { PasswordHasher } from "./modules/auth/crypto.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerCommunityAdminRoutes } from "./modules/communities/admin-routes.ts";
@@ -38,6 +40,7 @@ import { registerModerationRoutes } from "./modules/moderation/routes.ts";
 import type { ModerationStore } from "./modules/moderation/store.ts";
 import { registerReportRoutes } from "./modules/reports/routes.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
+import { registerRoleRoutes } from "./modules/rbac/roles-routes.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
 import { registerRevisionRoutes } from "./modules/revisions/routes.ts";
 import type { RevisionStore } from "./modules/revisions/store.ts";
@@ -92,6 +95,8 @@ export type AppDeps = {
   onboardingStore?: OnboardingStore;
   /** Verilmezse rapor route'u kaydedilmez. */
   reportStore?: ReportStore;
+  /** Verilmezse admin kullanıcı, yaptırım ve rol route'ları (admin.users.*, admin.sanctions.*, admin.roles.put; KV-33) kaydedilmez. */
+  adminUserStore?: AdminUserStore;
   /** Verilmezse admin içerik moderasyonu (anket/yorum) route'ları kaydedilmez. */
   moderationStore?: ModerationStore;
   /** Verilmezse yorum route'u kaydedilmez. */
@@ -143,7 +148,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   });
 
   registerErrorHandling(app);
-  // HSTS sadece HTTPS ortamında: güvenli cookie staging/production'da zorunlu (config.ts), local/test'te kapalı.
   registerSecurity(app, config.allowedOrigins, { hsts: config.session.secure });
 
   const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper };
@@ -225,6 +229,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
   if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now });
+  if (deps.adminUserStore) {
+    registerAdminUserRoutes(route, { store: deps.adminUserStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+    registerRoleRoutes(route, { store: deps.adminUserStore, now });
+  }
   if (deps.commentStore) {
     registerCommentRoutes(route, {
       store: deps.commentStore,

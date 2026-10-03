@@ -3,6 +3,19 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.15.0 — 2026-10-02 (Utku, KV-33 admin kullanıcılar ve yaptırımlar)
+
+Kırıcı değişiklik yok: değişen endpoint'ler henüz uygulanmamıştı (KV-33 ile ilk kez uygulanıyor); cevaba alan eklemek ve yeni endpoint minor.
+
+- **Eklendi:** `admin.users.sanctions` (`GET /admin/users/:id/sanctions`, bütün yaptırım geçmişi), `admin.users.reports` (`GET /admin/users/:id/reports?side=against|filed`), `admin.users.activity` (`GET /admin/users/:id/activity`); üçü de `user.read` (ADMIN+), cursor'lı. Şemalar `AdminUserReport`, `AdminUserActivity`.
+- **Eklendi:** `statusFromSanctions(sanctions, now)`: `users.status`'un yaptırımlardan türetilen değeri (BAN > SUSPEND > RESTRICT_* → RESTRICTED > ACTIVE; WARNING etkisiz). API ve süre dolumu job'ı (KV-33 PR-C) aynı fonksiyonu kullanır.
+- **Değişti:** `Sanction`'a `liftedBy` (PublicUser | null) ve `liftReason` (string | null). DB'de alanlar zaten vardı (`lifted_by_id`, `lift_reason`).
+- **Değişti:** `admin.users.list` `q` en az 3 karakter (trigram index'i); daha kısa 400 `VALIDATION_ERROR`. Notlar: e-postada yalnız tam eşleşme; `roles` tek elemanlı.
+- **Değişti:** `admin.sanctions.create`: `errors: ["CONFLICT"]` (`already_active`, `user_deleted`, `last_super_admin`); WARNING için `endsAt` null olmalı.
+- **Değişti:** `admin.sanctions.lift`: `errors: ["CONFLICT"]` (`already_lifted`, `expired`), `idempotency: none` (zaten kaldırılmış yaptırım artık mevcut satırı değil 409 döner; KV-33 kararı).
+- **Düzeltildi:** `admin.roles.put` fixture'ı `roles: ["USER", "MODERATOR"]` diyordu; kullanıcı başına tek rol olduğu için `["MODERATOR"]`.
+- **Değişti:** KV-04 işlem kataloğu 105 endpoint (belge ve test senkron).
+
 ## 1.14.0 — 2026-10-02 (Utku, KV-39 audit kaydı)
 
 Kırıcı değişiklik yok (henüz uygulanmamış `admin.audit.list` cevabına alan ve sorguya isteğe bağlı filtre eklenmesi, yeni yardımcılar ve DB hata eşlemesi minor).

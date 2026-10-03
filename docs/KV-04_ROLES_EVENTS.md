@@ -71,7 +71,7 @@ route("admin.reports.resolve", async ({ params, authorize }) => {
 
 ### 1.3 İşlem kataloğu
 
-102 endpoint'in her biri tam olarak bir işleme bağlıdır. Eşlemesi olmayan endpoint, registry'de olmayan eşleme, kullanılmayan işlem veya endpoint `auth` seviyesiyle uyuşmayan kural testte kırılır.
+105 endpoint'in her biri tam olarak bir işleme bağlıdır. Eşlemesi olmayan endpoint, registry'de olmayan eşleme, kullanılmayan işlem veya endpoint `auth` seviyesiyle uyuşmayan kural testte kırılır.
 
 | Seviye | İşlemler |
 |---|---|

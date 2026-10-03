@@ -14,6 +14,7 @@ import {
   permissionForEndpoint,
   preauthorize,
   restrictionsFromSanctions,
+  statusFromSanctions,
   type ActionId,
   type ActorSanction,
   type ResourceContext,
@@ -566,5 +567,27 @@ describe("preauthorize", () => {
   test("bilinmeyen işlem ve geçersiz zaman hata verir", () => {
     assert.throws(() => preauthorize(user, "admin.everything" as ActionId, NOW), /Bilinmeyen işlem/);
     assert.throws(() => preauthorize(user, "content.read", new Date("x")), /Geçersiz zaman: now/);
+  });
+});
+
+describe("statusFromSanctions (users.status senkronu, KV-33)", () => {
+  const at = (type: ActorSanction["type"], endsAt: string | null = null): ActorSanction => ({ type, endsAt });
+
+  test("öncelik BAN > SUSPEND > RESTRICT_* → RESTRICTED > ACTIVE; WARNING durumu değiştirmez", () => {
+    assert.equal(statusFromSanctions([], NOW), "ACTIVE");
+    assert.equal(statusFromSanctions([at("WARNING")], NOW), "ACTIVE");
+    assert.equal(statusFromSanctions([at("RESTRICT_COMMENTS")], NOW), "RESTRICTED");
+    assert.equal(statusFromSanctions([at("RESTRICT_POSTING", FUTURE), at("WARNING")], NOW), "RESTRICTED");
+    assert.equal(statusFromSanctions([at("RESTRICT_COMMENTS"), at("SUSPEND", FUTURE)], NOW), "SUSPENDED");
+    assert.equal(statusFromSanctions([at("SUSPEND", FUTURE), at("BAN")], NOW), "BANNED");
+  });
+
+  test("süresi dolan yaptırım sayılmaz: BAN kalkınca kalan SUSPEND, o da dolunca kalan kısıt", () => {
+    assert.equal(statusFromSanctions([at("SUSPEND", FUTURE)], NOW), "SUSPENDED");
+    assert.equal(statusFromSanctions([at("SUSPEND", PAST), at("RESTRICT_POSTING")], NOW), "RESTRICTED");
+    assert.equal(statusFromSanctions([at("SUSPEND", PAST)], NOW), "ACTIVE");
+    // endsAt == now etkisizdir (restrictionsFromSanctions ile aynı sınır).
+    assert.equal(statusFromSanctions([at("SUSPEND", NOW.toISOString())], NOW), "ACTIVE");
+    assert.throws(() => statusFromSanctions([at("SUSPEND", "bozuk")], NOW), /Geçersiz zaman/);
   });
 });
