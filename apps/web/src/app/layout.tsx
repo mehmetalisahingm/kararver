@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { ProductProvider } from "../components/product-provider";
+import { SourceAttribution } from "../components/source-attribution";
 import "./globals.css";
 
 const webUrl = new URL(process.env.WEB_URL ?? "http://localhost:3000");
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="tr">
       <body>
         <ProductProvider demo={process.env.NEXT_PUBLIC_KV_DATA_MODE === "demo"}>
+          <SourceAttribution />
           {children}
         </ProductProvider>
       </body>
