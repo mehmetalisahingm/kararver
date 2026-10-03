@@ -14,6 +14,7 @@ import { createPrismaCategoryAdminStore } from "./modules/categories/prisma-stor
 import { createPrismaFeedStore } from "./modules/feed/prisma-store.ts";
 import { createPrismaCommentStore } from "./modules/comments/prisma-store.ts";
 import { createPrismaOnboardingStore } from "./modules/onboarding/prisma-store.ts";
+import { createPrismaPointAdminStore } from "./modules/points/admin-store.ts";
 import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
 import { createPrismaProfileStore } from "./modules/profiles/prisma-store.ts";
 import { createPrismaRbacStore } from "./modules/rbac/prisma-store.ts";
@@ -46,6 +47,7 @@ const app = buildApp({
   pollStore: createPrismaPollStore(prisma),
   profileStore: createPrismaProfileStore(prisma),
   shareStore: createPrismaShareStore(prisma),
+  pointAdminStore: createPrismaPointAdminStore(prisma),
   searchStore: createPrismaSearchStore(prisma),
   revisionStore: createPrismaRevisionStore(prisma),
   categoryAdminStore: createPrismaCategoryAdminStore(prisma),
