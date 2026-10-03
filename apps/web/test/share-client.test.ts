@@ -16,10 +16,10 @@ describe("KV-25 share client", () => {
     process.env.NEXT_PUBLIC_API_URL = "https://api.example.test";
     const pollId = "019b1234-5678-7abc-8def-0123456789ab";
     const shareId = "019b2234-5678-7abc-8def-0123456789ab";
-    let seen: { url: string; init?: RequestInit } | null = null;
+    const calls: { url: string; init?: RequestInit }[] = [];
 
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-      seen = { url: String(input), init };
+      calls.push({ url: String(input), init });
       return new Response(JSON.stringify({
         data: {
           shareId,
@@ -31,9 +31,10 @@ describe("KV-25 share client", () => {
     const result = await createShareLink(pollId, "whatsapp");
     assert.equal(result.shareId, shareId);
     assert.equal(result.url, `https://kararver.example/karar/ornek-anket-abcd1234?src=${shareId}`);
-    assert.ok(seen);
-    assert.equal(seen!.url, `https://api.example.test/v1/polls/${pollId}/shares`);
-    assert.equal(seen!.init?.method, "POST");
-    assert.deepEqual(JSON.parse(String(seen!.init?.body)), { channel: "whatsapp" });
+    assert.equal(calls.length, 1);
+    const call = calls[0]!;
+    assert.equal(call.url, `https://api.example.test/v1/polls/${pollId}/shares`);
+    assert.equal(call.init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(call.init?.body)), { channel: "whatsapp" });
   });
 });
