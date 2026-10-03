@@ -31,6 +31,8 @@ import { registerFeedRoutes } from "./modules/feed/routes.ts";
 import { registerOnboardingRoutes } from "./modules/onboarding/routes.ts";
 import type { OnboardingStore } from "./modules/onboarding/store.ts";
 import type { FeedStore } from "./modules/feed/store.ts";
+import { registerPointAdminRoutes } from "./modules/points/admin-routes.ts";
+import type { PointAdminStore } from "./modules/points/admin-store.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
 import { registerProfileRoutes } from "./modules/profiles/routes.ts";
 import type { ProfileStore } from "./modules/profiles/store.ts";
@@ -69,6 +71,8 @@ export type AppDeps = {
   profileStore?: ProfileStore;
   /** KV-25 kaynak ölçümlü paylaşım linkleri; public route olduğu için oturum gerekmez. */
   shareStore?: ShareStore;
+  /** V1 #67 gerekçeli admin puan düzeltmesi; verilmezse admin.points.adjust kaydedilmez. */
+  pointAdminStore?: PointAdminStore;
   /** Sistem ayarları (KV-40, #42); ayar servisi gelene kadar DEFAULT_POLL_SETTINGS. */
   pollSettings?: () => Promise<PollSettings>;
   /** pollStore ile birlikte verilirse kategori ve arama route'ları kaydedilir. */
@@ -95,7 +99,7 @@ export type AppDeps = {
   adminUserStore?: AdminUserStore;
   /** Verilmezse admin içerik moderasyonu (anket/yorum) route'ları kaydedilmez. */
   moderationStore?: ModerationStore;
-  /** Verilmezse yorum route'ları kaydedilmez. */
+  /** Verilmezse yorum route'u kaydedilmez. */
   commentStore?: CommentStore;
   /** Acil durum anahtarı features.comments (KV-40, #42); verilmezse açık. */
   isCommentsEnabled?: () => Promise<boolean>;
@@ -144,7 +148,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   });
 
   registerErrorHandling(app);
-  // HSTS sadece HTTPS ortamında: güvenli cookie staging/production'da zorunlu (config.ts), local/test'te kapalı.
   registerSecurity(app, config.allowedOrigins, { hsts: config.session.secure });
 
   const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper };
@@ -167,6 +170,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     isRegistrationEnabled: deps.isRegistrationEnabled ?? (async () => true),
   });
   registerUserRoutes(route, { store: deps.authStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  if (deps.pointAdminStore) registerPointAdminRoutes(route, { store: deps.pointAdminStore, now });
   if (deps.pollStore) {
     registerPollRoutes(route, {
       store: deps.pollStore,
