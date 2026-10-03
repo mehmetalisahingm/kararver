@@ -1,18 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useProduct } from "../../components/product-provider";
+import type { Poll } from "../../lib/model";
 import { createShareLink, type ShareChannel } from "../../lib/share-client";
 
 export function ShareActions({ routeId }: { routeId: string }) {
   const { client, notify } = useProduct();
+  const [poll, setPoll] = useState<Poll | null>(null);
+  const [available, setAvailable] = useState(true);
   const [busy, setBusy] = useState<ShareChannel | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    setPoll(null);
+    setAvailable(true);
+    client.get(routeId).then((value) => {
+      if (active) setPoll(value);
+    }).catch(() => {
+      if (active) setAvailable(false);
+    });
+    return () => { active = false; };
+  }, [client, routeId]);
+
   async function share(channel: ShareChannel) {
-    if (busy) return;
+    if (!poll || busy) return;
     setBusy(channel);
     try {
-      const poll = await client.get(routeId);
       const { url } = await createShareLink(poll.id, channel);
       if (channel === "copy") {
         await navigator.clipboard.writeText(url);
@@ -38,6 +52,7 @@ export function ShareActions({ routeId }: { routeId: string }) {
     }
   }
 
+  if (!available || !poll) return null;
   return (
     <section className="kv-card kv-stack" aria-labelledby="share-title">
       <div>
