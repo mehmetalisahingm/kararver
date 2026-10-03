@@ -121,3 +121,55 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// ─── Bildirimler (KV-21, #23) ───────────────────────────────────────────────
+
+// Değerler contracts NotificationType ile birebir ve aynı sıradadır (test).
+enum NotificationType {
+  COMMENT_ON_POLL
+  REPLY_TO_COMMENT
+  ALTERNATIVE_ON_POLL
+  POLL_MILESTONE
+  POLL_TRENDING
+  POLL_CLOSED
+  DECISION_UPDATED
+  MODERATION_APPLIED
+  COMMUNITY_FEATURED
+
+  @@map("notification_type")
+}
+
+// Uygulama içi bildirim: alıcı başına bir satır. Satırı yalnız teslim job'u (worker, KV-21 PR-3) yazar; API yalnız
+// alıcının kendi satırlarını okur ve read_at'i doldurur. Tekrarlanan olay (UNIQUE recipient_id + dedupe_key) tek
+// satır üretir; anahtar kuralı contracts dedupeKey/naturalKey (docs/KV-21_NOTIFICATIONS.md §2).
+// type ve poll_id KV-34 tercih/sessize alma filtresi içindir. Kısıtlar ve okunmamış index'i migration SQL'inde elle.
+model Notification {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  recipientId String           @map("recipient_id") @db.Uuid
+  type        NotificationType
+  // Kaynak domain olayı (outbox, KV-21 PR-2). FK yok: outbox satırları 30 gün sonra temizlenir.
+  eventId     String           @map("event_id") @db.Uuid
+  // NULL = sistem (milestone, trend, süre dolumu). Alıcıyla aynı olamaz (CHECK).
+  actorId     String?          @map("actor_id") @db.Uuid
+  // POLL | COMMENT | COMMUNITY | USER (contracts NotificationView.subject, CHECK).
+  subjectType String           @map("subject_type") @db.VarChar(20)
+  subjectId   String           @map("subject_id") @db.Uuid
+  // Bildirimin ait olduğu anket (sessize alma, KV-34); anketsiz bildirimde NULL.
+  pollId      String?          @map("poll_id") @db.Uuid
+  // Tipe göre küçük özet; oy seçimi, serbest metin veya kişisel veri içermez. JSON nesnesi (CHECK).
+  data        Json             @default("{}")
+  dedupeKey   String           @map("dedupe_key") @db.VarChar(250)
+  readAt      DateTime?        @map("read_at") @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+  actor     User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  poll      Poll? @relation(fields: [pollId], references: [id], onDelete: Restrict)
+
+  @@unique([recipientId, dedupeKey])
+  // Liste: alıcının bildirimleri yeniden eskiye (cursor created_at + id).
+  @@index([recipientId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([pollId])
+  @@index([actorId])
+  @@map("notifications")
+}

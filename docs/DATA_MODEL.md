@@ -20,7 +20,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 | `media.prisma` | **Mert** | `MediaAsset`: nesne anahtarları, işlenmiş kopya metadata'sı, moderasyon sonucu ([MEDIA_MODERATION.md](./MEDIA_MODERATION.md)) | ✅ KV-16 (şema) |
 | `community.prisma` | **Mert** | `Community` (slug, ad, görsel, üye sayısı, oluşturan), `CommunityMembership` (üyelik + topluluk rolü) | ✅ KV-31 (şema) |
 | `moderation.prisma` | Mert | `Report`, `ModerationAction` (append-only). Engelli görsel hash listesi KV-38'de eklenecek | ✅ KV-24 (şema) |
-| `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi), `AuditLog` (değiştirilemez audit). Ayarlar, bildirimler sonra | ✅ KV-12 (şema) · ✅ KV-39 (şema + yazıcı) · ⏳ KV-21 / KV-40 |
+| `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi), `AuditLog` (değiştirilemez audit), `Notification` (uygulama içi bildirim). Ayarlar sonra | ✅ KV-12 (şema) · ✅ KV-39 (şema + yazıcı) · ✅ KV-21 PR-1 (bildirim tablosu) · ⏳ KV-40 |
 | `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ✅ `UserInterest` (KV-15) · ⏳ KV-22 / KV-23 / KV-42 |
 
 **İskelet tablolar neden var:** Çekirdek tablolar Mert'in iki tablosuna FK veriyor: `polls.community_id → communities` ve `users.avatar_media_id`, `poll_media.media_id → media_assets`. FK'nin hedefi olmadan ilk migration çalışmaz. Bu yüzden iki tablo sadece `id`, `status` ve `created_at` alanlarıyla açıldı. Geri kalan alanları, enum değerlerini ve indexleri sahibi belirler. İskeletteki `id` alanı ve "core ilişkileri" bölümü kaldırılmamalıdır.
@@ -395,7 +395,7 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 | Utku | `user_roles`, `sanctions` (KV-12) | `user_id`, `granted_by_id`, `created_by_id`, `lifted_by_id → users.id`, hepsi `RESTRICT` | Ayrıntı ve servis kuralları §9.1. Yaptırım `users.status`'u da günceller (§7.2) |
 | Utku | `audit_logs` (KV-39) | `actor_id → users.id` (`RESTRICT`, NULL = sistem); hedef `target_type` + `target_id` | Append-only (trigger); polimorfik hedef burada kabul edilir. Ayrıntı §9.2 |
 | Utku | `system_settings` | — | Oy değiştirme izni, trend katsayıları, snapshot eşikleri buradan okunur |
-| Utku | `notifications`, `notification_preferences` | `users.id` | Olayları çekirdek modüller üretir (KV-04 olay zarfı) |
+| Utku | `notifications` (KV-21), `notification_preferences` (KV-34) | `recipient_id`, `actor_id → users.id`, `poll_id → polls.id` (hepsi `RESTRICT`) | Olayları çekirdek modüller üretir (KV-04 olay zarfı); satırı yalnız teslim job'u yazar. Ayrıntı §9.3 |
 | Mehmet | `bookmarks` | `(user_id, poll_id)` PK | `polls.save_count`'u aynı transaction'da günceller |
 | Mehmet | `decision_updates`, `poll_follows` | `polls.id`; seçim için `(poll_id, option_id) → poll_options(poll_id, id)` bileşik FK | Seçenek başka ankete ait olamaz |
 | Mehmet | `featured_placements`, `announcements` | `polls.id` | Öne çıkarma organik trend puanını değiştirmez |
@@ -471,6 +471,34 @@ Hangi işlemin gerekçe istediği, izinli türler ve hassas alan yasağı işlem
 **Şu an yazanlar:** `admin:bootstrap` (KV-12): `source = CLI`, aktör NULL, `user.role.assign` / `grant` (yeni rol satırı) veya `change` (MODERATOR/ADMIN satırının yükseltilmesi), sabit gerekçe. Diğer kritik işlemler (kategori, moderasyon, medya kararı ve önizleme erişimi, rapor sonuçlandırma, oy geçersiz sayma, sürüm geçmişi okuma) kendi sahiplerinin modüllerinde `writeAudit` ile eklenir; KV-33 admin kullanıcı işlemleri PR-B'de gelir.
 
 **Gerekçe alanı olmayan endpoint'ler:** `community.create`, `community.moderator.assign` (DELETE), `featured.manage`, `announcement.manage` ve `media.ban.manage` (DELETE) gövdede gerekçe istemediği için `reasonRequiredActions`'ta değildir; sözleşmeye gerekçe eklenirse listeye alınır (contracts testi ikisini karşılaştırır).
+
+### 9.3 Bildirimler (Utku, KV-21)
+
+Şema `admin.prisma` (`Notification`, enum `notification_type` = contracts `NotificationType`, sıra dahil; test), kısıtlar ve okunmamış index'i `…_utku_kv21_notifications` migration'ının elle yazılan bölümündedir. Akış ve kararlar: [`KV-21_NOTIFICATIONS.md`](./KV-21_NOTIFICATIONS.md).
+
+| Kolon | Anlamı |
+|---|---|
+| `recipient_id` | Alıcı (`users`, `RESTRICT`). API'nin her sorgusu bununla sınırlıdır |
+| `type` | `notification_type`; KV-34 tip tercihi buna bakar |
+| `event_id` | Kaynak domain olayı (outbox, KV-21 PR-2). FK yok: outbox satırları işlendikten 30 gün sonra silinir |
+| `actor_id` | Olayı yapan kullanıcı; NULL = sistem (milestone, trend, süre dolumu). Alıcıyla aynı olamaz |
+| `subject_type`, `subject_id` | Bildirimin hedefi: `POLL` \| `COMMENT` \| `COMMUNITY` \| `USER` (contracts `NotificationView.subject`) |
+| `poll_id` | Bildirimin ait olduğu anket (`polls`, `RESTRICT`); KV-34 sessize alma buna bakar. Anketsiz bildirimde NULL |
+| `data` | Tipe göre küçük özet nesnesi; oy seçimi, serbest metin, kişisel veri yok (KV-04 §2.1) |
+| `dedupe_key` | Tekrar anahtarı: `notifications:<event.id>` veya olayın `naturalKey`'i varsa `notifications:<naturalKey>` (contracts `dedupeKey`/`naturalKey`) |
+| `read_at` | Okunma zamanı; NULL = okunmamış. Okunmamışa geri dönüş endpoint'i yoktur |
+
+**DB'nin zorladığı kurallar**
+
+| Kural | Kısıt |
+|---|---|
+| Tekrarlanan olay alıcı başına tek bildirim | UNIQUE `(recipient_id, dedupe_key)`; teslim `ON CONFLICT DO NOTHING` |
+| Kimse kendi işlemi için bildirim almaz | `notifications_actor_not_recipient_check` |
+| Konu tipi sözleşmedeki küme; `data` JSON nesnesi; anahtar boş değil; `read_at ≥ created_at` | `notifications_subject_type_check`, `notifications_data_object_check`, `notifications_dedupe_key_check`, `notifications_read_after_created_check` |
+
+**Index'ler:** `(recipient_id, created_at ↓, id ↓)` liste ve cursor; partial `notifications_unread_idx (recipient_id) WHERE read_at IS NULL` okunmamış sayısı ve "hepsini okundu yap" (§10.4, emsal KV-43); `poll_id` ve `actor_id` FK.
+
+**Saklama (karar):** okunmuş bildirim 90 gün sonra silinir (temizlik job'u KV-21 PR-3). Okunmamış bildirim silinmez.
 
 ---
 
