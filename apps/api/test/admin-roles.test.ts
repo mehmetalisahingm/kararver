@@ -144,7 +144,7 @@ describe("admin rol ataması (postgres)", { skip: backend ? false : "TEST_DATABA
   test("yarış: iki SUPER_ADMIN birbirini aynı anda düşürür → tam olarak biri başarılı, en az bir aktif SUPER_ADMIN kalır", async () => {
     await withOnlyTwoSuperAdmins(async (a, b) => {
       const results = await Promise.all([put(b.id, "ADMIN", a.cookie), put(a.id, "ADMIN", b.cookie)]);
-      assert.deepEqual(results.map((r) => r.statusCode).sort(), [200, 403], failure(results));
+      assert.deepEqual(results.map((r) => r.statusCode).sort(), [200, 409], failure(results));
       assert.equal(await activeSuperAdmins(), 1);
     });
   });
