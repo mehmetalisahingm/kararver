@@ -4,6 +4,7 @@ node_modules/
 dist/
 build/
 coverage/
+state-report/
 *.tsbuildinfo
 
 # Ortam dosyaları: sadece *.example commit edilir
