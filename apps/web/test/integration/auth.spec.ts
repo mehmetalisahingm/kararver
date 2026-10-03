@@ -26,7 +26,10 @@ test("real auth HTTP: registration, fragment verification, cookie reload, reset 
   await page.goto("/hesap");await page.reload();
   await expect(page.getByRole("heading",{name:"Ümit Test",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"Kaydedilenler",exact:true})).toBeVisible();
-  await expect(page.getByText("Henüz bir gönderi kaydetmedin.",{exact:true})).toBeVisible();
+  // This server mounts auth only; unavailable profile/bookmark routes must not look empty.
+  await expect(page.getByRole("button",{name:"Kaydedilenleri tekrar yükle"})).toBeVisible();
+  await expect(page.locator("main").getByRole("alert")).toBeVisible();
+  await expect(page.getByText("Henüz bir gönderi kaydetmedin.",{exact:true})).toHaveCount(0);
   expect(await page.evaluate(()=>Object.keys(localStorage))).toEqual([]);
   await expect(page.locator(".balance")).toHaveCount(0);
   expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
