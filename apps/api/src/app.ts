@@ -41,6 +41,8 @@ import { registerRevisionRoutes } from "./modules/revisions/routes.ts";
 import type { RevisionStore } from "./modules/revisions/store.ts";
 import { registerSearchRoutes } from "./modules/search/routes.ts";
 import type { SearchStore } from "./modules/search/store.ts";
+import { registerShareRoutes } from "./modules/shares/routes.ts";
+import type { ShareStore } from "./modules/shares/store.ts";
 import { registerTrendRoutes } from "./modules/trends/routes.ts";
 import type { TrendStore } from "./modules/trends/store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
@@ -62,6 +64,8 @@ export type AppDeps = {
   pollStore?: PollStore;
   /** KV-22 public profil/private bookmark store'u; pollStore ile birlikte route'ları açar. */
   profileStore?: ProfileStore;
+  /** KV-25 kaynak ölçümlü paylaşım linkleri; public route olduğu için oturum gerekmez. */
+  shareStore?: ShareStore;
   /** Sistem ayarları (KV-40, #42); ayar servisi gelene kadar DEFAULT_POLL_SETTINGS. */
   pollSettings?: () => Promise<PollSettings>;
   /** pollStore ile birlikte verilirse kategori ve arama route'ları kaydedilir. */
@@ -202,6 +206,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       });
     }
   }
+  if (deps.shareStore) registerShareRoutes(route, { store: deps.shareStore, webUrl: config.webUrl });
   if (deps.categoryAdminStore) registerCategoryAdminRoutes(route, { store: deps.categoryAdminStore, now });
   if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.voteStore) {

@@ -26,6 +26,19 @@ model Bookmark {
   @@map("bookmarks")
 }
 
+// KV-25 (#27) — paylaşım kaynağı. pollId bilinçli olarak scalar: ortak Poll modeline
+// growth modülünden ters ilişki eklemiyoruz. Store, görünür poll satırını FOR SHARE ile doğrular.
+model ShareLink {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  pollId    String   @map("poll_id") @db.Uuid
+  channel   String   @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([pollId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("share_links")
+}
+
 // V1 #67 — yayın puanı, güven/itibar puanından tamamen ayrıdır.
 enum PointLedgerReason {
   INITIAL_GRANT
