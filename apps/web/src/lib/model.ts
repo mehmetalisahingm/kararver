@@ -69,6 +69,7 @@ export type Poll = {
   price?: { amount: string; currency: "TRY"; note: string };
 };
 export type Draft = {
+  mediaIds?: string[];
   categoryId?: string;
   kind: "poll" | "discussion";
   title: string;
