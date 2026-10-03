@@ -36,6 +36,7 @@ export function Composer() {
   const previewButton = useRef<HTMLButtonElement>(null);
   const lock = useRef(false);
   const request = useRef({ fingerprint: "", key: "" });
+  const publishCost = user?.publishCost ?? 10;
   const update = (change: Partial<typeof draft>) => {
     setDraft({ ...draft, ...change });
     setErrors({});
@@ -70,11 +71,12 @@ export function Composer() {
       syncUser();
       setDraft(emptyDraft());
       dialog.current?.close();
-      notify(demo ? "Demo içerik yayımlandı. Bakiyenden 10 örnek puan düşüldü." : "İçeriğin yayımlandı.");
+      notify(`İçeriğin yayımlandı. Bakiyenden ${publishCost} puan düşüldü.`);
       router.push(poll.canonicalPath || `/karar/${poll.id}`);
     } catch (e) {
       setError((e as Error).message);
       if (e instanceof UiError) setErrors(e.fields);
+      syncUser();
       dialog.current?.close();
     } finally {
       lock.current = false;
@@ -284,17 +286,17 @@ export function Composer() {
           Yorumlara izin ver
         </label>
         {client instanceof ApiClient && user?.verified ? <MediaUpload client={client.media} disabled={busy} onChange={setMedia}/> : <p className="kv-help">Fotoğraf zorunlu değil. {demo ? "Görsel yükleme gerçek API modunda kullanılabilir." : "Görsel eklemek için doğrulanmış hesabınla giriş yap."}</p>}
-        {demo && <div className="cost-summary">
+        <div className="cost-summary">
           <span>
-            Yayın maliyeti <strong>10 puan</strong>
+            Yayın maliyeti <strong>{publishCost} puan</strong>
           </span>
           <span>
             {user
-              ? `Bakiyen: ${user.balance} puan`
-              : "İlk başarılı demo girişinde: 20 puan"}
+              ? `Bakiyen: ${user.balance ?? "…"} puan`
+              : "İlk başarılı girişinde: 20 puan"}
           </span>
-        </div>}
-        {user && user.balance !== null && user.balance < 10 && (
+        </div>
+        {user && user.balance !== null && user.balance < publishCost && (
           <p className="error-message" role="status">
             Bakiyen yetersiz. Taslağın korunuyor; okumaya ve oy vermeye devam
             edebilirsin.
@@ -304,7 +306,7 @@ export function Composer() {
         <button
           ref={previewButton}
           className="kv-button"
-          disabled={busy || media.blocked || Boolean(user && user.balance !== null && user.balance < 10) || (!demo && !remoteCategories.length)}
+          disabled={busy || media.blocked || Boolean(user && user.balance !== null && user.balance < publishCost) || (!demo && !remoteCategories.length)}
         >
           {busy ? "Yayımlanıyor…" : "Yayın önizlemesi"}
         </button>
@@ -321,17 +323,17 @@ export function Composer() {
         <div className="screen-stack">
           <h2 id="publish-title">Yayımlamaya hazır mısın?</h2>
           <p>{draft.title}</p>
-          {demo && <p>
-            Bu demo yayın <strong>10 puan</strong> kullanır. İşlemden sonra{" "}
-            <strong>{(user?.balance || 0) - 10} puanın</strong> kalır.
-          </p>}
+          <p>
+            Bu yayın <strong>{publishCost} puan</strong> kullanır. İşlemden sonra{" "}
+            <strong>{Math.max(0, (user?.balance ?? 0) - publishCost)} puanın</strong> kalır.
+          </p>
           <button
             className="kv-button"
             onClick={publish}
             disabled={busy}
             aria-busy={busy}
           >
-            {busy ? "Yayımlanıyor…" : (demo ? "10 puan ile yayımla" : "Yayımla")}
+            {busy ? "Yayımlanıyor…" : `${publishCost} puan ile yayımla`}
           </button>
           <button
             autoFocus

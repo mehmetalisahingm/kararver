@@ -28,7 +28,7 @@ test("real auth HTTP: registration, fragment verification, cookie reload, reset 
   await expect(page.getByRole("heading",{name:"Kaydedilenler",exact:true})).toBeVisible();
   await expect(page.getByText("Henüz bir gönderi kaydetmedin.",{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>Object.keys(localStorage))).toEqual([]);
-  await expect(page.locator(".balance")).toHaveCount(0);
+  await expect(page.locator(".balance")).toContainText("20");
   expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   await page.goto("/sifremi-unuttum");
   await page.getByLabel("E-posta",{exact:true}).fill("umit.browser@example.test");

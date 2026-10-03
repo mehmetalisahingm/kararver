@@ -49,7 +49,7 @@ test("media upload/complete retry, ordered publication and failed publish retain
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   for(let n=0;n<2;n++) {
-    await page.getByRole("button",{name:"Yayın önizlemesi"}).click();await page.getByRole("button",{name:"Yayımla",exact:true}).click();
+    await page.getByRole("button",{name:"Yayın önizlemesi"}).click();await page.getByRole("button",{name:/puan ile yayımla$/i}).click();
     if(n===0){await expect(page.locator("main").getByRole("alert")).toBeVisible();await expect(page.getByText("Görsel onaylandı.",{exact:true})).toHaveCount(2);}
   }
   await expect(page).toHaveURL(/\/karar\//);

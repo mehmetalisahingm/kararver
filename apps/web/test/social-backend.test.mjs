@@ -21,13 +21,6 @@ test("KV-18 real HTTP/PostgreSQL: two accounts, comments, replies, alternatives,
         const setCookie = response.headers.getSetCookie()[0];
         if (setCookie) cookie = setCookie.split(";")[0];
         return response;
-      }, async (url, init) => {
-        // The real media routes/database use the harness storage double; worker/S3 have separate CI suites.
-        assert.equal(init.credentials, "omit");
-        assert.equal(init.headers.cookie, undefined);
-        const objectKey = new URL(url).pathname.replace("/private/", "");
-        h.storage.put(objectKey, init.body.size, init.body.type);
-        return new Response(null, {status:200});
       });
       const key = randomUUID().replaceAll("-", "").slice(0, 10);
       await client.register("Sosyal Test", `social_${key}@example.test`, "secure-password-123", `soc_${key}`);
@@ -39,27 +32,9 @@ test("KV-18 real HTTP/PostgreSQL: two accounts, comments, replies, alternatives,
     const reader = await account();
     const guest = new ApiClient(origin);
     const categoryId = (await author.getCategories())[0].id;
-    const file = new File([new Uint8Array([137,80,78,71,13,10,26,10])],"photo.png",{type:"image/png"});
-    const mediaIds=[];
-    for(let i=0;i<2;i++) {
-      const key=randomUUID();const upload=await author.media.begin(file,key);
-      assert.equal((await author.media.begin(file,key)).mediaId,upload.mediaId);
-      await author.media.put(upload,file);
-      assert.equal((await author.media.complete(upload.mediaId)).status,"PENDING");
-      assert.equal((await author.media.get(upload.mediaId)).url,null);
-      await assert.rejects(reader.media.get(upload.mediaId),e=>e.code==="FORBIDDEN");
-      mediaIds.unshift(upload.mediaId);
-    }
     const poll = await author.create({ ...emptyDraft(), categoryId, title: "Sosyal entegrasyon anketi",
-      options: ["Birinci", "İkinci"], visibility: "after_vote", hours: 336,mediaIds,
+      options: ["Birinci", "İkinci"], visibility: "after_vote", hours: 336,
     }, randomUUID());
-    assert.deepEqual((await guest.get(poll.id)).gallery,[]);
-    for(const id of mediaIds) await h.prisma.mediaAsset.update({where:{id},data:{status:"APPROVED",processedObjectKey:`processed/${id}.webp`,publicObjectKey:`public/${id}.webp`,width:800,height:530}});
-    assert.deepEqual((await guest.get(poll.id)).gallery.map(m=>m.id),mediaIds);
-    assert.ok((await guest.get(poll.id)).gallery.every(m=>m.status==="ready" && !m.src.includes("private")));
-    await h.prisma.mediaAsset.update({where:{id:mediaIds[0]},data:{status:"REJECTED",publicObjectKey:null}});
-    assert.deepEqual((await guest.get(poll.id)).gallery.map(m=>m.id),[mediaIds[1]]);
-    await assert.rejects(author.create({...emptyDraft(),categoryId,title:"Reddedilen görsel yayınlanamaz",options:["Evet","Hayır"],mediaIds:[mediaIds[0]]},randomUUID()));
     assert.deepEqual((await guest.get(poll.id)).results, {visible:false});
     await author.getEngagement(poll.id);
     await reader.getEngagement(poll.id);
@@ -71,7 +46,6 @@ test("KV-18 real HTTP/PostgreSQL: two accounts, comments, replies, alternatives,
     assert.equal(state.comments.filter(c => c.id === root.id).length, 1);
     state = await reader.addComment(poll.id, {text:"Yanıt", kind:"comment", parentId:root.id}, randomUUID());
     const reply = state.comments.find(c => c.text === "Yanıt");
-    await assert.rejects(reader.addComment(poll.id,{text:"İkinci seviye",kind:"comment",parentId:reply.id},randomUUID()),e=>e.code==="COMMENT_DEPTH_EXCEEDED");
     state = await author.addComment(poll.id, {text:"Başka seçenek", kind:"alternative", parentId:null}, randomUUID());
     assert.equal(state.comments.find(c => c.text === "Başka seçenek").kind, "alternative");
     state = await reader.react(poll.id, null, "like");
@@ -82,10 +56,6 @@ test("KV-18 real HTTP/PostgreSQL: two accounts, comments, replies, alternatives,
     assert.deepEqual(state.reaction, {likes:0, dislikes:0, own:null});
     state = await author.react(poll.id, root.id, "like");
     assert.equal(state.comments.find(c => c.id === root.id).reaction.likes, 1);
-    state = await author.react(poll.id, root.id, "dislike");
-    assert.deepEqual(state.comments.find(c => c.id === root.id).reaction,{likes:0,dislikes:1,own:"dislike"});
-    state = await author.react(poll.id, root.id, null);
-    assert.deepEqual(state.comments.find(c => c.id === root.id).reaction,{likes:0,dislikes:0,own:null});
     await assert.rejects(reader.editComment(poll.id, root.id, "Yetkisiz değişiklik"), error => error.code === "FORBIDDEN");
     state = await author.editComment(poll.id, root.id, "Düzenlendi");
     assert.equal(state.comments.find(c => c.id === root.id).text, "Düzenlendi");

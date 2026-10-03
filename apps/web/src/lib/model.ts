@@ -10,6 +10,7 @@ export type User = {
   email: string;
   verified: boolean;
   balance: number | null;
+  publishCost?: number | null;
   username?: string;
   bio?: string | null;
   avatarUrl?: string | null;
