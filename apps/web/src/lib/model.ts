@@ -10,6 +10,7 @@ export type User = {
   email: string;
   verified: boolean;
   balance: number | null;
+  publishCost?: number | null;
   username?: string;
   bio?: string | null;
   avatarUrl?: string | null;
@@ -68,6 +69,7 @@ export type Poll = {
   price?: { amount: string; currency: "TRY"; note: string };
 };
 export type Draft = {
+  mediaIds?: string[];
   categoryId?: string;
   kind: "poll" | "discussion";
   title: string;

@@ -1,5 +1,6 @@
-import { Category, CommentView, CommunityCard, Me, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
+import { Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
+import { MediaClient } from "./media-client.ts";
 import { UiError, safeReturnTo } from "./model.ts";
 import type { Draft, PageResult, Poll, ProductClient, ProfileComment, PublicProfile, User } from "./model.ts";
 import { ApiEngagement } from "../features/social/api-engagement.ts";
@@ -32,12 +33,14 @@ export function mapPoll(wire: ReturnType<typeof PollCard.parse> | ReturnType<typ
   };
 }
 export class ApiClient implements ProductClient {
+  readonly media: MediaClient;
   private social: ApiEngagement;
   protected http: HttpClient;
   private user: User | null = null;
   private listeners = new Set<() => void>();
-  constructor(baseUrl: string, fetcher?: typeof fetch) {
+  constructor(baseUrl: string, fetcher?: typeof fetch, uploadFetcher?: typeof fetch) {
     this.http = new HttpClient(baseUrl, fetcher);
+    this.media = new MediaClient(this.http, uploadFetcher);
     this.social = new ApiEngagement(this.http);
     this.http.onUnauthorized = () => this.setUser(null);
   }
@@ -52,23 +55,36 @@ export class ApiClient implements ProductClient {
   current() { return this.user; }
   private acceptUser(value: unknown) {
     const { data } = dataOf(Me).parse(value);
+    const previous = this.user?.id === data.id ? this.user : null;
     return this.setUser({
       id: data.id,
       name: data.displayName,
       email: data.email,
       verified: data.emailVerified,
-      balance: null,
+      balance: previous?.balance ?? null,
+      publishCost: previous?.publishCost ?? null,
       username: data.username,
       bio: data.bio,
       avatarUrl: data.avatarUrl,
       createdAt: data.createdAt,
     })!;
   }
+  private async refreshPoints() {
+    if (!this.user) return null;
+    const { data } = dataOf(PointsSummary).parse(await this.http.request("points.get"));
+    return this.setUser({ ...this.user, balance: data.balance, publishCost: data.publishCost });
+  }
   async restore() {
-    try { return this.acceptUser(await this.http.request("me.get")); }
+    try {
+      this.acceptUser(await this.http.request("me.get"));
+      return (await this.refreshPoints())!;
+    }
     catch (error) { if (error instanceof UiError && error.code === "UNAUTHENTICATED") return this.setUser(null); throw error; }
   }
-  async login(email: string, password: string) { return this.acceptUser(await this.http.request("auth.login", { body: { email, password } })); }
+  async login(email: string, password: string) {
+    this.acceptUser(await this.http.request("auth.login", { body: { email, password } }));
+    return (await this.refreshPoints())!;
+  }
   async register(name: string, email: string, password: string, username?: string) {
     await this.http.request("auth.register", { body: { displayName: name, email, password, username } });
   }
@@ -84,7 +100,6 @@ export class ApiClient implements ProductClient {
   async list() { return pageOf(PollCard).parse(await this.http.request("feed.list")).data.map(mapPoll); }
   async get(id: string) {
     const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id);
-    // KV-10 generates eight alphanumeric public IDs; legacy demo slugs never reach the API.
     const publicId = id.match(/-([A-Za-z0-9]{8})$/)?.[1];
     if (!uuid && !publicId) throw new UiError("NOT_FOUND", "İçerik bağlantısı geçersiz.");
     return mapPoll(dataOf(PollDetail).parse(await this.http.request(uuid ? "polls.get" : "polls.lookup", uuid ? { params: { id } } : { query: { publicId } })).data);
@@ -147,8 +162,6 @@ export class ApiClient implements ProductClient {
   }
   async getTrends(format: TrendFormat, categoryId?: string, cursor?: string, signal?: AbortSignal): Promise<TrendPage> {
     const page=WireTrendPage.parse(await this.http.request("trends.list",{params:{format},query:{categoryId,cursor},signal}));
-    // Card payloads intentionally omit option labels. Hydrate only displayed trend
-    // cards using viewer-aware detail requests, never reconstruct hidden results.
     const data=await Promise.all(page.data.map(async item=>{
       const detail=dataOf(PollDetail).parse(await this.http.request("polls.get",{params:{id:item.poll.id},signal})).data;
       const poll=mapPoll(detail);
@@ -159,12 +172,19 @@ export class ApiClient implements ProductClient {
     return {...page,data};
   }
   async create(draft: Draft, key: string) {
-    const common = { title: draft.title.trim(), description: draft.description.trim(), categoryId: draft.categoryId, allowComments: draft.commentsEnabled };
+    const common = { title: draft.title.trim(), description: draft.description.trim(), categoryId: draft.categoryId, allowComments: draft.commentsEnabled, mediaIds: draft.mediaIds };
     const body = draft.kind === "discussion" ? { ...common, kind: "DISCUSSION" } : {
       ...common, kind: "POLL", durationHours: draft.hours, resultsVisibility: draft.visibility === "always" ? "ALWAYS" : "AFTER_VOTE",
       options: draft.options.map((label) => ({ label: label.trim() })),
     };
-    return mapPoll(dataOf(PollDetail).parse(await this.http.request("polls.create", { body, key })).data);
+    try {
+      const poll = mapPoll(dataOf(PollDetail).parse(await this.http.request("polls.create", { body, key })).data);
+      if (this.user) await this.refreshPoints().catch(() => null);
+      return poll;
+    } catch (error) {
+      if (this.user && error instanceof UiError && error.code === "INSUFFICIENT_POINTS") await this.refreshPoints().catch(() => null);
+      throw error;
+    }
   }
   async vote(id: string, optionId: string) {
     const poll = await this.get(id);

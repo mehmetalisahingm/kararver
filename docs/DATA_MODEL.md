@@ -20,7 +20,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 | `media.prisma` | **Mert** | `MediaAsset`: nesne anahtarları, işlenmiş kopya metadata'sı, moderasyon sonucu ([MEDIA_MODERATION.md](./MEDIA_MODERATION.md)) | ✅ KV-16 (şema) |
 | `community.prisma` | **Mert** | `Community` (slug, ad, görsel, üye sayısı, oluşturan), `CommunityMembership` (üyelik + topluluk rolü) | ✅ KV-31 (şema) |
 | `moderation.prisma` | Mert | `Report`, `ModerationAction` (append-only). Engelli görsel hash listesi KV-38'de eklenecek | ✅ KV-24 (şema) |
-| `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi), `AuditLog` (değiştirilemez audit), `Notification` (uygulama içi bildirim). Ayarlar sonra | ✅ KV-12 (şema) · ✅ KV-39 (şema + yazıcı) · ✅ KV-21 PR-1 (bildirim tablosu) · ⏳ KV-40 |
+| `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi), `AuditLog` (değiştirilemez audit). Ayarlar, bildirimler sonra | ✅ KV-12 (şema) · ✅ KV-39 (şema + yazıcı) · ⏳ KV-21 / KV-40 |
 | `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ✅ `UserInterest` (KV-15) · ⏳ KV-22 / KV-23 / KV-42 |
 
 **İskelet tablolar neden var:** Çekirdek tablolar Mert'in iki tablosuna FK veriyor: `polls.community_id → communities` ve `users.avatar_media_id`, `poll_media.media_id → media_assets`. FK'nin hedefi olmadan ilk migration çalışmaz. Bu yüzden iki tablo sadece `id`, `status` ve `created_at` alanlarıyla açıldı. Geri kalan alanları, enum değerlerini ve indexleri sahibi belirler. İskeletteki `id` alanı ve "core ilişkileri" bölümü kaldırılmamalıdır.
@@ -395,7 +395,7 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 | Utku | `user_roles`, `sanctions` (KV-12) | `user_id`, `granted_by_id`, `created_by_id`, `lifted_by_id → users.id`, hepsi `RESTRICT` | Ayrıntı ve servis kuralları §9.1. Yaptırım `users.status`'u da günceller (§7.2) |
 | Utku | `audit_logs` (KV-39) | `actor_id → users.id` (`RESTRICT`, NULL = sistem); hedef `target_type` + `target_id` | Append-only (trigger); polimorfik hedef burada kabul edilir. Ayrıntı §9.2 |
 | Utku | `system_settings` | — | Oy değiştirme izni, trend katsayıları, snapshot eşikleri buradan okunur |
-| Utku | `notifications` (KV-21), `notification_preferences` (KV-34) | `recipient_id`, `actor_id → users.id`, `poll_id → polls.id` (hepsi `RESTRICT`) | Olayları çekirdek modüller üretir (KV-04 olay zarfı); satırı yalnız teslim job'u yazar. Ayrıntı §9.3 |
+| Utku | `notifications`, `notification_preferences` | `users.id` | Olayları çekirdek modüller üretir (KV-04 olay zarfı) |
 | Mehmet | `bookmarks` | `(user_id, poll_id)` PK | `polls.save_count`'u aynı transaction'da günceller |
 | Mehmet | `decision_updates`, `poll_follows` | `polls.id`; seçim için `(poll_id, option_id) → poll_options(poll_id, id)` bileşik FK | Seçenek başka ankete ait olamaz |
 | Mehmet | `featured_placements`, `announcements` | `polls.id` | Öne çıkarma organik trend puanını değiştirmez |
@@ -427,12 +427,12 @@ Aktif yaptırım: `lifted_at IS NULL AND (ends_at IS NULL OR ends_at > now())`; 
 **Servis kuralları (DB'de korunamaz; RBAC katmanı KV-12 PR-B, yaptırım servisi KV-33)**
 - **Okuma:** API her istekte rolü ve aktif yaptırımları bu tablolardan, topluluk moderatörlüğünü `community_memberships`'ten okur (`apps/api/src/modules/rbac`); önbellek yoktur. Rol/yaptırım değişikliği açık oturumda bir sonraki istekte etkilidir. `SUSPEND`/`BAN` etkisi `users.status`'tan gelir (tek otorite); `RESTRICT_*` satırdan gelir.
 - **`starts_at` her zaman yazma anıdır;** ileri tarihli yaptırım yoktur (sözleşmede alan yok). Aktiflik bu yüzden `starts_at`'e bakmaz.
-- **`users.status` senkronu:** Yaptırım ekleme ve kaldırma aynı transaction'da `users.status`'u kalan aktif yaptırımlardan yeniden hesaplar: `BAN` > `SUSPEND` > `RESTRICT_*` → `RESTRICTED` > `ACTIVE` (`WARNING` durumu değiştirmez). `SUSPEND`/`BAN` açık oturumları iptal eder (§7.2). Süre dolumu zamana bağlı olduğu için trigger yakalayamaz; süresi dolan `SUSPEND`/`RESTRICT_*` için durumu yeniden hesaplayan bir job gerekir (KV-33, Utku). `authorize` süresi dolan `RESTRICT_*`'ı zaten yok sayar, ama `users.status = SUSPENDED` job çalışana kadar kalır. **Bilinen sonuç:** giriş kontrolü (`auth.login`) de `users.status`'a baktığı için job olmadan süresi dolan SUSPEND'li kullanıcı giriş yapamaz ve açık oturumu da 403 alır. Yaptırım endpoint'leri de KV-33'te geldiği için bu durum şu an oluşamaz; job KV-33'te birlikte gelir.
+- **`users.status` senkronu:** Yaptırım ekleme ve kaldırma aynı transaction'da `users.status`'u kalan aktif yaptırımlardan yeniden hesaplar: `BAN` > `SUSPEND` > `RESTRICT_*` → `RESTRICTED` > `ACTIVE` (`WARNING` durumu değiştirmez). `SUSPEND`/`BAN` açık oturumları iptal eder (§7.2). Süre dolumu zamana bağlı olduğu için trigger yakalayamaz; süresi dolan `SUSPEND`/`RESTRICT_*` için durumu yeniden hesaplayan bir job gerekir (KV-33, Utku). `authorize` süresi dolan `RESTRICT_*`'ı zaten yok sayar, ama `users.status = SUSPENDED` job çalışana kadar kalır. **Bilinen sonuç:** giriş kontrolü (`auth.login`) de `users.status`'a baktığı için job olmadan süresi dolan SUSPEND'li kullanıcı giriş yapamaz ve açık oturumu da 403 alır. Yaptırım endpoint'leri KV-33 PR-B ile geldi; job KV-33 PR-C'dedir. **PR-C merge olana kadar** süresi dolan SUSPEND'li kullanıcı `SUSPENDED` kalır ve yönetici bunu kaldıramaz (süresi dolmuş yaptırımı kaldırma 409 `expired`, KV-33 kararı); bu yüzden PR-C, PR-B'nin hemen ardından merge edilmelidir. Hesaplama contracts `statusFromSanctions`'tadır (API ve job aynı fonksiyonu kullanır). Ayrıntı: [`KV-33_ADMIN_USERS.md`](./KV-33_ADMIN_USERS.md).
 - **İlk SUPER_ADMIN:** Hiç SUPER_ADMIN yokken yalnız `admin:bootstrap` CLI'ı yazar; "tek bir kez" kuralı DB'de değil CLI'dadır (`user_roles_bootstrap_check` verensiz satırı her SUPER_ADMIN'e izin verir). Ayrıntı: [`KV-12_ADMIN_BOOTSTRAP.md`](./KV-12_ADMIN_BOOTSTRAP.md), §11.4/6.
-- **Son aktif SUPER_ADMIN:** Aktiflik `users.status`'a bağlı olduğu ve eşzamanlı iki işlem (iki SUPER_ADMIN'in birbirini aynı anda düşürmesi veya yaptırıma bağlaması) sayımı birlikte geçebileceği için DB kuralı değildir. `admin.roles.put` ve SUPER_ADMIN hedefli `SUSPEND`/`BAN`, transaction içinde önce `SELECT … FROM user_roles WHERE role = 'SUPER_ADMIN' FOR UPDATE` ile kilit alır, sonra `users.status = 'ACTIVE'` olanları sayar.
+- **Son aktif SUPER_ADMIN:** Aktiflik `users.status`'a bağlı olduğu ve eşzamanlı iki işlem (iki SUPER_ADMIN'in birbirini aynı anda düşürmesi veya yaptırıma bağlaması) sayımı birlikte geçebileceği için DB kuralı değildir. `admin.roles.put` ve ACTIVE SUPER_ADMIN hedefli `SUSPEND`/`BAN`, transaction içinde hedefin `users` satırını `FOR NO KEY UPDATE`, ardından `SELECT … FROM user_roles WHERE role = 'SUPER_ADMIN' ORDER BY user_id FOR UPDATE` ile kilitler, sonra `users.status = 'ACTIVE'` ve silinmemiş olanları sayar ve aktörün yetkisini taze veriyle yeniden doğrular (KV-33). Hedef satırında `FOR UPDATE` kullanılmaz: aktörün satırına giden FK kontrolleri (`created_by_id`, `granted_by_id`, `audit_logs.actor_id`) `FOR KEY SHARE` ister ve karşılıklı işlemde deadlock olur (testli).
 - **Yetki:** Admin hedefe yaptırımın SUPER_ADMIN gerektirmesi, rol atamanın sadece SUPER_ADMIN'e açık olması `authorize` kuralıdır (KV-04), DB'de değildir.
 - **Aynı tipte birden çok aktif yaptırım** DB'de engellenmez (unique index süresi dolmuş ama kaldırılmamış satırlar yüzünden yanlış reddederdi); servis mevcut aktif yaptırımı kontrol eder.
-- **Lift idempotency:** `admin.sanctions.lift` "natural" idempotent'tir; zaten kaldırılmış yaptırımda servis mevcut satırı döner, DB'ye ikinci kaldırma yazmaz (yazarsa `KV_SANCTIONS_IMMUTABLE`).
+- **Kaldırma (KV-33 kararı):** Zaten kaldırılmış yaptırım 409 `already_lifted`, süresi dolmuş yaptırım 409 `expired` döner; ikisi de DB'ye yazmaz ve audit üretmez (DB de ikinci kaldırmayı `KV_SANCTIONS_IMMUTABLE` ile reddeder). Bu yüzden `admin.sanctions.lift` idempotent değildir (`idempotency: none`): ağ hatasından sonra tekrar deneyen istemci 409 `already_lifted` alırsa işlemi başarılı sayar. Silinmiş hesabın yaptırımı kaldırılabilir; yeni yaptırım 409 `user_deleted`.
 
 **Sözleşme (contracts 1.8.0):** `dbErrorMap`'te `KV_SANCTIONS_IMMUTABLE → INTERNAL_ERROR` (kod hatası: loglanır, 500). `admin.sanctions.create` gövdesi `SUSPEND` için `endsAt` ister, `BAN` için `endsAt: null` ister; DB kısıtlarıyla (`sanctions_suspend_ends_check`, `sanctions_ban_permanent_check`) aynıdır.
 
@@ -471,34 +471,6 @@ Hangi işlemin gerekçe istediği, izinli türler ve hassas alan yasağı işlem
 **Şu an yazanlar:** `admin:bootstrap` (KV-12): `source = CLI`, aktör NULL, `user.role.assign` / `grant` (yeni rol satırı) veya `change` (MODERATOR/ADMIN satırının yükseltilmesi), sabit gerekçe. Diğer kritik işlemler (kategori, moderasyon, medya kararı ve önizleme erişimi, rapor sonuçlandırma, oy geçersiz sayma, sürüm geçmişi okuma) kendi sahiplerinin modüllerinde `writeAudit` ile eklenir; KV-33 admin kullanıcı işlemleri PR-B'de gelir.
 
 **Gerekçe alanı olmayan endpoint'ler:** `community.create`, `community.moderator.assign` (DELETE), `featured.manage`, `announcement.manage` ve `media.ban.manage` (DELETE) gövdede gerekçe istemediği için `reasonRequiredActions`'ta değildir; sözleşmeye gerekçe eklenirse listeye alınır (contracts testi ikisini karşılaştırır).
-
-### 9.3 Bildirimler (Utku, KV-21)
-
-Şema `admin.prisma` (`Notification`, enum `notification_type` = contracts `NotificationType`, sıra dahil; test), kısıtlar ve okunmamış index'i `…_utku_kv21_notifications` migration'ının elle yazılan bölümündedir. Akış ve kararlar: [`KV-21_NOTIFICATIONS.md`](./KV-21_NOTIFICATIONS.md).
-
-| Kolon | Anlamı |
-|---|---|
-| `recipient_id` | Alıcı (`users`, `RESTRICT`). API'nin her sorgusu bununla sınırlıdır |
-| `type` | `notification_type`; KV-34 tip tercihi buna bakar |
-| `event_id` | Kaynak domain olayı (outbox, KV-21 PR-2). FK yok: outbox satırları işlendikten 30 gün sonra silinir |
-| `actor_id` | Olayı yapan kullanıcı; NULL = sistem (milestone, trend, süre dolumu). Alıcıyla aynı olamaz |
-| `subject_type`, `subject_id` | Bildirimin hedefi: `POLL` \| `COMMENT` \| `COMMUNITY` \| `USER` (contracts `NotificationView.subject`) |
-| `poll_id` | Bildirimin ait olduğu anket (`polls`, `RESTRICT`); KV-34 sessize alma buna bakar. Anketsiz bildirimde NULL |
-| `data` | Tipe göre küçük özet nesnesi; oy seçimi, serbest metin, kişisel veri yok (KV-04 §2.1) |
-| `dedupe_key` | Tekrar anahtarı: `notifications:<event.id>` veya olayın `naturalKey`'i varsa `notifications:<naturalKey>` (contracts `dedupeKey`/`naturalKey`) |
-| `read_at` | Okunma zamanı; NULL = okunmamış. Okunmamışa geri dönüş endpoint'i yoktur |
-
-**DB'nin zorladığı kurallar**
-
-| Kural | Kısıt |
-|---|---|
-| Tekrarlanan olay alıcı başına tek bildirim | UNIQUE `(recipient_id, dedupe_key)`; teslim `ON CONFLICT DO NOTHING` |
-| Kimse kendi işlemi için bildirim almaz | `notifications_actor_not_recipient_check` |
-| Konu tipi sözleşmedeki küme; `data` JSON nesnesi; anahtar boş değil; `read_at ≥ created_at` | `notifications_subject_type_check`, `notifications_data_object_check`, `notifications_dedupe_key_check`, `notifications_read_after_created_check` |
-
-**Index'ler:** `(recipient_id, created_at ↓, id ↓)` liste ve cursor; partial `notifications_unread_idx (recipient_id) WHERE read_at IS NULL` okunmamış sayısı ve "hepsini okundu yap" (§10.4, emsal KV-43); `poll_id` ve `actor_id` FK.
-
-**Saklama (karar):** okunmuş bildirim 90 gün sonra silinir (temizlik job'u KV-21 PR-3). Okunmamış bildirim silinmez.
 
 ---
 

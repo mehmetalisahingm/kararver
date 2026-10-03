@@ -44,10 +44,16 @@ test("vote calls PUT on server id and accepts first vote and change responses", 
 });
 test("session expiration clears current user and notifies subscribers", async () => {
   let expired = false; let changes = 0;
-  const client = new ApiClient("http://api.test", async () => expired ? reply("votes.put", "guest") : reply("auth.login", "ok"));
+  const client = new ApiClient("http://api.test", async (url) => {
+    if (expired) return reply("votes.put", "guest");
+    if (String(url).endsWith("/v1/me/points")) {
+      return new Response(JSON.stringify({ data: { balance: 20, publishCost: 10 } }), { status: 200 });
+    }
+    return reply("auth.login", "ok");
+  });
   client.subscribe(() => changes++);
-  await client.login("umit@example.test", "password"); assert.equal(client.current()?.balance, null);
-  expired = true; assert.equal(await client.restore(), null); assert.equal(changes,2);
+  await client.login("umit@example.test", "password"); assert.equal(client.current()?.balance, 20);
+  expired = true; assert.equal(await client.restore(), null); assert.equal(changes,3);
 });
 test("transport rejects unavailable, malformed and aborted responses without demo fallback", async () => {
   await assert.rejects(new HttpClient("").request("me.get"), (e: UiError) => e.code === "API_UNCONFIGURED");

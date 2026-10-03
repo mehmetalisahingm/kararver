@@ -11,6 +11,7 @@ import { buildApp } from "../../src/app.ts";
 import { loadConfig } from "../../src/config.ts";
 import type { Mail } from "../../src/mail/mailer.ts";
 import { createArgon2Hasher } from "../../src/modules/auth/crypto.ts";
+import { createPrismaAdminUserStore } from "../../src/modules/admin-users/prisma-store.ts";
 import { createPrismaAuthStore } from "../../src/modules/auth/prisma-store.ts";
 import { createPrismaCategoryAdminStore } from "../../src/modules/categories/prisma-store.ts";
 import { createPrismaCommunityStore } from "../../src/modules/communities/prisma-store.ts";
@@ -209,6 +210,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     onboardingStore: backend.prisma ? createPrismaOnboardingStore(backend.prisma) : undefined,
     reportStore: backend.prisma ? createPrismaReportStore(backend.prisma) : undefined,
     moderationStore: backend.prisma ? createPrismaModerationStore(backend.prisma) : undefined,
+    adminUserStore: backend.prisma ? createPrismaAdminUserStore(backend.prisma) : undefined,
     pollSettings: async () => pollSettings,
     commentStore: backend.prisma ? createPrismaCommentStore(backend.prisma) : undefined,
     isCommentsEnabled: async () => commentsEnabled.value,

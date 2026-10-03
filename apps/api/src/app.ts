@@ -8,6 +8,8 @@ import { registerErrorHandling } from "./http/errors.ts";
 import { createRouter } from "./http/route.ts";
 import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
+import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import type { AdminUserStore } from "./modules/admin-users/store.ts";
 import type { PasswordHasher } from "./modules/auth/crypto.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerCommunityAdminRoutes } from "./modules/communities/admin-routes.ts";
@@ -29,15 +31,18 @@ import { registerFeedRoutes } from "./modules/feed/routes.ts";
 import { registerOnboardingRoutes } from "./modules/onboarding/routes.ts";
 import type { OnboardingStore } from "./modules/onboarding/store.ts";
 import type { FeedStore } from "./modules/feed/store.ts";
+import { registerPointAdminRoutes } from "./modules/points/admin-routes.ts";
+import type { PointAdminStore } from "./modules/points/admin-store.ts";
 import { registerPollRoutes } from "./modules/polls/routes.ts";
 import { registerProfileRoutes } from "./modules/profiles/routes.ts";
 import type { ProfileStore } from "./modules/profiles/store.ts";
 import { registerModerationRoutes } from "./modules/moderation/routes.ts";
+import type { ModerationStore } from "./modules/moderation/store.ts";
 import { registerNotificationRoutes } from "./modules/notifications/routes.ts";
 import type { NotificationStore } from "./modules/notifications/store.ts";
-import type { ModerationStore } from "./modules/moderation/store.ts";
 import { registerReportRoutes } from "./modules/reports/routes.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
+import { registerRoleRoutes } from "./modules/rbac/roles-routes.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
 import { registerRevisionRoutes } from "./modules/revisions/routes.ts";
 import type { RevisionStore } from "./modules/revisions/store.ts";
@@ -68,6 +73,8 @@ export type AppDeps = {
   profileStore?: ProfileStore;
   /** KV-25 kaynak ölçümlü paylaşım linkleri; public route olduğu için oturum gerekmez. */
   shareStore?: ShareStore;
+  /** V1 #67 gerekçeli admin puan düzeltmesi; verilmezse admin.points.adjust kaydedilmez. */
+  pointAdminStore?: PointAdminStore;
   /** Sistem ayarları (KV-40, #42); ayar servisi gelene kadar DEFAULT_POLL_SETTINGS. */
   pollSettings?: () => Promise<PollSettings>;
   /** pollStore ile birlikte verilirse kategori ve arama route'ları kaydedilir. */
@@ -90,11 +97,13 @@ export type AppDeps = {
   onboardingStore?: OnboardingStore;
   /** Verilmezse rapor route'u kaydedilmez. */
   reportStore?: ReportStore;
+  /** Verilmezse admin kullanıcı, yaptırım ve rol route'ları (admin.users.*, admin.sanctions.*, admin.roles.put; KV-33) kaydedilmez. */
+  adminUserStore?: AdminUserStore;
   /** Verilmezse admin içerik moderasyonu (anket/yorum) route'ları kaydedilmez. */
   moderationStore?: ModerationStore;
-  /** Verilmezse bildirim route'ları (KV-21: liste, okunmamış sayısı, okundu) kaydedilmez. */
+  /** Verilmezse bildirim okuma route'ları (notifications.*; KV-21) kaydedilmez. */
   notificationStore?: NotificationStore;
-  /** Verilmezse yorum route'ları kaydedilmez. */
+  /** Verilmezse yorum route'u kaydedilmez. */
   commentStore?: CommentStore;
   /** Acil durum anahtarı features.comments (KV-40, #42); verilmezse açık. */
   isCommentsEnabled?: () => Promise<boolean>;
@@ -143,7 +152,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   });
 
   registerErrorHandling(app);
-  // HSTS sadece HTTPS ortamında: güvenli cookie staging/production'da zorunlu (config.ts), local/test'te kapalı.
   registerSecurity(app, config.allowedOrigins, { hsts: config.session.secure });
 
   const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper };
@@ -166,6 +174,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     isRegistrationEnabled: deps.isRegistrationEnabled ?? (async () => true),
   });
   registerUserRoutes(route, { store: deps.authStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  if (deps.pointAdminStore) registerPointAdminRoutes(route, { store: deps.pointAdminStore, now });
   if (deps.pollStore) {
     registerPollRoutes(route, {
       store: deps.pollStore,
@@ -226,6 +235,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now });
   if (deps.notificationStore) {
     registerNotificationRoutes(route, { store: deps.notificationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  }
+  if (deps.adminUserStore) {
+    registerAdminUserRoutes(route, { store: deps.adminUserStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+    registerRoleRoutes(route, { store: deps.adminUserStore, now });
   }
   if (deps.commentStore) {
     registerCommentRoutes(route, {
