@@ -69,7 +69,7 @@ Her değiştiren işlem tek transaction'dadır ve sabit kilit sırası izler:
 ## 5. Bilinen açıklar ve sonraki işler
 
 - **Süre dolumu gecikmesi:** süresi dolan yaptırım `users.status`'a en geç ~90 sn içinde yansır (§6); o arada kullanıcı giriş yapamaz ve açık oturumu 403 alır. Yönetici süresi dolmuş yaptırımı kaldıramaz (409 `expired`); beklemesi yeterlidir. PR-C, PR-B'den sonra ve onunla birlikte merge edilmelidir.
-- **Olaylar:** `sanction.applied`, `sanction.lifted`, `role.changed` üretilmez (olay outbox'ı henüz yok, KV-04).
+- **Olaylar (KV-21 PR-2):** `sanction.applied`, `sanction.lifted` ve `role.changed` (yalnız rol değiştiğinde) store'da, audit'in yanında aynı transaction'da outbox'a yazılır; reddedilen işlem olay yazmaz. Olay INSERT'i kilitlerden sonradır ve FK'sizdir, yukarıdaki kilit sırasını değiştirmez. Şu an kayıtlı tüketicileri yoktur (abonesiz dağıtılır). Süre dolumu (§6) olay üretmez: katalogda karşılığı yok, süre dolması kaldırma değildir. Ayrıntı: [`KV-21_NOTIFICATIONS.md`](./KV-21_NOTIFICATIONS.md) §5.
 - **İtiraz endpoint'i:** ertelendi, ayrı iş (KV-04 §5/1).
 - **`admin.audit.list`:** ayrı PR (KV-39).
 

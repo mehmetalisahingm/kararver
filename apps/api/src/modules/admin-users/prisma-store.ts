@@ -12,11 +12,25 @@
 // Bizim yazdığımız sanctions.created_by_id, user_roles.granted_by_id ve audit_logs.actor_id FK kontrolleri aktörün
 // users satırında FOR KEY SHARE ister; FOR UPDATE bununla çakışır ve iki işlem birbirini bekler (40P01, yarış testi).
 // FOR NO KEY UPDATE KEY SHARE ile çakışmaz; anahtar sütunu değiştirmediğimiz için yeterlidir.
-import { authorize, statusFromSanctions, type ActionId, type ResourceContext, type TrustedActor } from "@kararver/contracts";
+//
+// Domain olayları (KV-21 PR-2): sanction.applied, sanction.lifted ve role.changed (yalnız rol değiştiğinde) audit'in
+// yanında aynı transaction'da outbox'a yazılır. Olay INSERT'i bütün kilitlerden sonradır ve domain_events'in FK'si
+// yoktur; yukarıdaki kilit sırasına yeni bir kilit eklemez.
+import {
+  authorize,
+  createEvent,
+  newEventId,
+  statusFromSanctions,
+  type ActionId,
+  type EventPayload,
+  type ResourceContext,
+  type TrustedActor,
+} from "@kararver/contracts";
 import { Prisma, type PrismaClient, type Role, type SanctionType, type UserStatus } from "@kararver/db";
 import { assertNoCommittedKey, runIdempotent } from "../../http/idempotency.ts";
 import { writeAudit } from "../audit/write.ts";
 import { normalizeEmail } from "../auth/routes.ts";
+import { writeEvent } from "../events/write.ts";
 import { likeLiteral } from "../search/prisma-store.ts";
 import {
   superAdminCountForRoleRule,
@@ -101,6 +115,13 @@ async function lockTarget(tx: Tx, userId: string): Promise<LockedTarget | null> 
 /** Son aktif SUPER_ADMIN kuralı için: eşzamanlı iki işlem (birbirini düşüren/banlayan iki SUPER_ADMIN) burada sıraya girer. */
 async function lockSuperAdmins(tx: Tx): Promise<void> {
   await tx.$queryRaw`SELECT user_id FROM user_roles WHERE role = 'SUPER_ADMIN' ORDER BY user_id FOR UPDATE`;
+}
+
+type UserEventType = "sanction.applied" | "sanction.lifted" | "role.changed";
+
+/** Yönetici işleminin olayı: konu hedef kullanıcı, aktör yönetici, zaman işlemin anı (audit `at` ile aynı). */
+function userEvent<T extends UserEventType>(type: T, actorId: string, userId: string, now: Date, payload: EventPayload<T>) {
+  return createEvent({ id: newEventId(now), type, occurredAt: now.toISOString(), actorId, subject: { type: "USER", id: userId }, payload });
 }
 
 async function countActiveSuperAdmins(tx: Tx | PrismaClient): Promise<number> {
@@ -318,6 +339,7 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
           requestId: input.requestId,
           at: now,
         });
+        await writeEvent(tx, userEvent("sanction.applied", actorId, userId, now, { sanctionId: sanction.id, type, endsAt: input.endsAt?.toISOString() ?? null }));
         return { ok: true, value: sanction.id };
       });
     },
@@ -351,6 +373,7 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
           requestId: input.requestId,
           at: now,
         });
+        await writeEvent(tx, userEvent("sanction.lifted", actorId, userId, now, { sanctionId, type: sanction.type }));
         return { kind: "lifted" } as const;
       }, { maxWait: 10_000, timeout: 30_000 });
     },
@@ -396,6 +419,8 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
           requestId: input.requestId,
           at: now,
         });
+        // Rol gösterimi API cevabıyla aynı: tek elemanlı dizi, satırsız kullanıcı USER.
+        await writeEvent(tx, userEvent("role.changed", actorId, userId, now, { previousRoles: [before], roles: [role] }));
         return { kind: "changed", role } as const;
       }, { maxWait: 10_000, timeout: 30_000 });
     },
