@@ -5,8 +5,9 @@
 // kendine yaptırım yok). Handler hedefin rolünü DB'den okuyup ctx.authorize çağırır; store aynı kararı transaction
 // içinde kilitlerden sonra taze veriyle yeniden verir (eşzamanlı rol/yaptırım değişikliği).
 //
-// Kapsam dışı: sanction.applied / sanction.lifted olayları (olay outbox'ı henüz yok, KV-04); süresi dolan SUSPEND'in
-// users.status senkronu (KV-33 PR-C worker job'ı); itiraz endpoint'i (KV-04 §5/1, ertelendi).
+// sanction.applied / sanction.lifted olayları store'da, mutation ile aynı transaction'da outbox'a yazılır (KV-21 PR-2).
+// Süresi dolan SUSPEND'in users.status senkronu worker'dadır (KV-33 PR-C, sanctions.expire).
+// Kapsam dışı: itiraz endpoint'i (KV-04 §5/1, ertelendi).
 import type { SanctionType } from "@kararver/db";
 import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
 import { ApiError } from "../../http/errors.ts";

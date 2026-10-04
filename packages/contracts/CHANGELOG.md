@@ -3,6 +3,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.16.0 — 2026-10-04 (Utku, KV-21 PR-2 olay outbox'ı)
+
+Kırıcı değişiklik yok (yeni yardımcı ve DB hata eşlemesi minor; zarf, katalog, `createEvent` ve `parseEvent` değişmedi).
+
+- **Eklendi:** `newEventId(now?)`: producer'ın olay kimliği (UUIDv7, RFC 9562; ilk 48 bit milisaniye zamanı, 74 bit rastgele). Node'da ve PostgreSQL 17'de UUIDv7 üreteci olmadığı için sözleşmede; API ve worker aynı fonksiyonu kullanır. Kimlik mutation transaction'ında bir kez üretilir ve `domain_events.id` olur (docs/DATA_MODEL.md §9.4).
+- **Eklendi:** `dbErrorMap`: `KV_DOMAIN_EVENTS_IMMUTABLE` → `INTERNAL_ERROR` (outbox satırının zarfı değiştirilemez).
+- **Test:** `events.test.ts`: UUIDv7 biçimi ve `parseEvent` kabulü, zaman bitleri ve sıralama, tekillik, geçersiz zaman.
+
 ## 1.15.0 — 2026-10-02 (Utku, KV-33 admin kullanıcılar ve yaptırımlar)
 
 Kırıcı değişiklik yok: değişen endpoint'ler henüz uygulanmamıştı (KV-33 ile ilk kez uygulanıyor); cevaba alan eklemek ve yeni endpoint minor.

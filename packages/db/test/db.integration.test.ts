@@ -195,6 +195,7 @@ describe("migration", () => {
         "audit_logs_no_truncate",
         "comment_revisions_append_only",
         "comments_single_level",
+        "domain_events_immutable",
         "moderation_actions_append_only",
         "point_ledger_entries_append_only",
         "poll_options_check_kind",

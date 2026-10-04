@@ -1,11 +1,22 @@
 // Worker giriş noktası: pnpm --filter @kararver/worker dev (TECH_DECISIONS §3.5).
-// media.process (Mert, KV-16), trends.refresh (Faruk, KV-28), snapshots.daily (Faruk, KV-29) ve sanctions.expire (Utku, KV-33).
-// Diğer job'lar (notifications) kendi klasörlerinde eklenir ve burada kaydedilir.
+// media.process (Mert, KV-16), trends.refresh (Faruk, KV-28), snapshots.daily (Faruk, KV-29), sanctions.expire (Utku, KV-33)
+// ve olay outbox'ı events.dispatch / events.cleanup (Utku, KV-21). Diğer job'lar kendi klasörlerinde eklenir ve burada kaydedilir.
 import path from "node:path";
 import { defaultSettings } from "@kararver/contracts";
 import { createPrismaClient } from "@kararver/db";
 import { PgBoss } from "pg-boss";
 import { loadWorkerConfig } from "./config.ts";
+import { cleanupEvents } from "./jobs/events/cleanup.ts";
+import { productionConsumers } from "./jobs/events/consumers.ts";
+import { runDispatchLoop } from "./jobs/events/dispatch.ts";
+import {
+  DISPATCH_LOOP_MS,
+  EVENTS_CLEANUP_CRON,
+  EVENTS_CLEANUP_QUEUE,
+  EVENTS_DISPATCH_CRON,
+  EVENTS_DISPATCH_QUEUE,
+  EVENTS_DISPATCH_QUEUE_OPTIONS,
+} from "./jobs/events/job.ts";
 import { MEDIA_PROCESS_QUEUE, MEDIA_QUEUE_OPTIONS, processMedia } from "./jobs/media/job.ts";
 import { createSubprocessModerator } from "./jobs/media/moderator.ts";
 import { createS3WorkerStorage } from "./jobs/media/storage.ts";
@@ -85,13 +96,28 @@ await boss.work(SANCTIONS_EXPIRE_QUEUE, { batchSize: 1 }, async () => {
   const result = await expireSanctions({ prisma, now: () => new Date(), log });
   if (result.candidates > 0) log("info", "sanctions.expire bitti", { ...result, ms: Date.now() - started });
 });
+// events.dispatch: outbox dağıtıcısı; stately kuyruk, dakikalık cron, her job 90 sn boşaltma döngüsü (jobs/events/job.ts).
+const stopEvents = new AbortController();
+await boss.createQueue(EVENTS_DISPATCH_QUEUE, EVENTS_DISPATCH_QUEUE_OPTIONS);
+await boss.schedule(EVENTS_DISPATCH_QUEUE, EVENTS_DISPATCH_CRON, null, { tz: "Europe/Istanbul" });
+await boss.work(EVENTS_DISPATCH_QUEUE, { batchSize: 1 }, async () => {
+  const result = await runDispatchLoop({ prisma, consumers: productionConsumers, now: () => new Date(), log, signal: stopEvents.signal, maxMs: DISPATCH_LOOP_MS });
+  if (result.dispatched > 0) log("info", "events.dispatch turu bitti", result);
+});
+// events.cleanup: her gün 03:30 İstanbul; işlenmiş olaylar 30 gün sonra silinir, diğerleri asla (jobs/events/cleanup.ts).
+await boss.createQueue(EVENTS_CLEANUP_QUEUE, { policy: "singleton", retryLimit: 0 });
+await boss.schedule(EVENTS_CLEANUP_QUEUE, EVENTS_CLEANUP_CRON, null, { tz: "Europe/Istanbul" });
+await boss.work(EVENTS_CLEANUP_QUEUE, { batchSize: 1 }, async () => {
+  await cleanupEvents({ prisma, now: () => new Date(), log });
+});
 log("info", "worker hazır", {
-  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE],
+  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE],
   concurrency: config.mediaConcurrency,
 });
 
 async function shutdown(signal: string): Promise<void> {
   log("info", "kapanıyor", { signal });
+  stopEvents.abort(); // dağıtım döngüsü turunu bitirip çıkar; graceful stop onu bekler
   await boss.stop({ graceful: true });
   await moderator.close();
   await prisma.$disconnect();

@@ -409,6 +409,24 @@ export const eventDelivery = Object.freeze({
 const uuidV7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const uuid = Id;
 
+/**
+ * Producer'ın olay kimliği (UUIDv7, RFC 9562): ilk 48 bit milisaniye cinsinden zaman, kalan 74 bit rastgele.
+ * Kimlik mutation transaction'ında bir kez üretilir ve retry boyunca değişmez (eventDelivery.idStableAcrossRetries).
+ * Farklı milisaniyelerde üretilen kimlikler zaman sırasıyla artar; aynı milisaniye içinde sıra rastgeledir
+ * (sıralama garantisi zaten yok, eventDelivery.ordering).
+ */
+export function newEventId(now: Date = new Date()): string {
+  const ms = now.getTime();
+  if (!Number.isInteger(ms) || ms < 0 || ms > 0xffff_ffff_ffff) throw new TypeError("Invalid event time");
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  for (let i = 0; i < 6; i++) bytes[i] = Math.floor(ms / 2 ** (8 * (5 - i))) % 256;
+  bytes[6] = (bytes[6]! & 0x0f) | 0x70; // sürüm 7
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80; // RFC 9562 varyantı
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function isEventType(value: unknown): value is EventType {
   return typeof value === "string" && Object.hasOwn(eventCatalog, value);
 }

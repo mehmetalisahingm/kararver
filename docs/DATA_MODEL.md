@@ -20,7 +20,7 @@ Kaynak dosyalar: `packages/db/prisma/schema/*.prisma` ve `packages/db/prisma/mig
 | `media.prisma` | **Mert** | `MediaAsset`: nesne anahtarları, işlenmiş kopya metadata'sı, moderasyon sonucu ([MEDIA_MODERATION.md](./MEDIA_MODERATION.md)) | ✅ KV-16 (şema) |
 | `community.prisma` | **Mert** | `Community` (slug, ad, görsel, üye sayısı, oluşturan), `CommunityMembership` (üyelik + topluluk rolü) | ✅ KV-31 (şema) |
 | `moderation.prisma` | Mert | `Report`, `ModerationAction` (append-only). Engelli görsel hash listesi KV-38'de eklenecek | ✅ KV-24 (şema) |
-| `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi), `AuditLog` (değiştirilemez audit). Ayarlar, bildirimler sonra | ✅ KV-12 (şema) · ✅ KV-39 (şema + yazıcı) · ⏳ KV-21 / KV-40 |
+| `admin.prisma` | Utku | `UserRole` (kullanıcı başına tek global rol), `Sanction` (değişmez yaptırım geçmişi), `AuditLog` (değiştirilemez audit), `Notification` (uygulama içi bildirim), `DomainEvent` + `EventDelivery` (olay outbox'ı). Ayarlar sonra | ✅ KV-12 (şema) · ✅ KV-39 (şema + yazıcı) · ✅ KV-21 PR-1 (bildirim), PR-2 (outbox) · ⏳ KV-40 |
 | `growth.prisma` | Mehmet | Bookmark, karar güncellemesi, takip, öne çıkarma, duyuru, ilgi alanı, ürün olayları | ✅ `UserInterest` (KV-15) · ⏳ KV-22 / KV-23 / KV-42 |
 
 **İskelet tablolar neden var:** Çekirdek tablolar Mert'in iki tablosuna FK veriyor: `polls.community_id → communities` ve `users.avatar_media_id`, `poll_media.media_id → media_assets`. FK'nin hedefi olmadan ilk migration çalışmaz. Bu yüzden iki tablo sadece `id`, `status` ve `created_at` alanlarıyla açıldı. Geri kalan alanları, enum değerlerini ve indexleri sahibi belirler. İskeletteki `id` alanı ve "core ilişkileri" bölümü kaldırılmamalıdır.
@@ -395,7 +395,8 @@ Haftanın Değişkenleri (KV-29) için pencereler **anketin açılışından iti
 | Utku | `user_roles`, `sanctions` (KV-12) | `user_id`, `granted_by_id`, `created_by_id`, `lifted_by_id → users.id`, hepsi `RESTRICT` | Ayrıntı ve servis kuralları §9.1. Yaptırım `users.status`'u da günceller (§7.2) |
 | Utku | `audit_logs` (KV-39) | `actor_id → users.id` (`RESTRICT`, NULL = sistem); hedef `target_type` + `target_id` | Append-only (trigger); polimorfik hedef burada kabul edilir. Ayrıntı §9.2 |
 | Utku | `system_settings` | — | Oy değiştirme izni, trend katsayıları, snapshot eşikleri buradan okunur |
-| Utku | `notifications`, `notification_preferences` | `users.id` | Olayları çekirdek modüller üretir (KV-04 olay zarfı) |
+| Utku | `notifications` (KV-21 PR-1), `notification_preferences` (KV-34) | `recipient_id`, `actor_id → users.id`, `poll_id → polls.id` (`RESTRICT`) | Satırı yalnız teslim job'u yazar. Ayrıntı §9.3 |
+| Utku | `domain_events`, `domain_event_deliveries` (KV-21 PR-2) | FK yok (olay bir mesajdır); teslim → olay `CASCADE` | Olayı çekirdek modüller mutation ile aynı transaction'da yazar (KV-04 olay zarfı). Ayrıntı §9.4 |
 | Mehmet | `bookmarks` | `(user_id, poll_id)` PK | `polls.save_count`'u aynı transaction'da günceller |
 | Mehmet | `decision_updates`, `poll_follows` | `polls.id`; seçim için `(poll_id, option_id) → poll_options(poll_id, id)` bileşik FK | Seçenek başka ankete ait olamaz |
 | Mehmet | `featured_placements`, `announcements` | `polls.id` | Öne çıkarma organik trend puanını değiştirmez |
@@ -471,6 +472,53 @@ Hangi işlemin gerekçe istediği, izinli türler ve hassas alan yasağı işlem
 **Şu an yazanlar:** `admin:bootstrap` (KV-12): `source = CLI`, aktör NULL, `user.role.assign` / `grant` (yeni rol satırı) veya `change` (MODERATOR/ADMIN satırının yükseltilmesi), sabit gerekçe. Diğer kritik işlemler (kategori, moderasyon, medya kararı ve önizleme erişimi, rapor sonuçlandırma, oy geçersiz sayma, sürüm geçmişi okuma) kendi sahiplerinin modüllerinde `writeAudit` ile eklenir; KV-33 admin kullanıcı işlemleri PR-B'de gelir.
 
 **Gerekçe alanı olmayan endpoint'ler:** `community.create`, `community.moderator.assign` (DELETE), `featured.manage`, `announcement.manage` ve `media.ban.manage` (DELETE) gövdede gerekçe istemediği için `reasonRequiredActions`'ta değildir; sözleşmeye gerekçe eklenirse listeye alınır (contracts testi ikisini karşılaştırır).
+
+### 9.3 Bildirimler (Utku, KV-21)
+
+Şema `admin.prisma` (`Notification`, enum `notification_type`), kısıtlar ve okunmamış index'i `…_utku_kv21_notifications` migration'ının elle yazılan bölümündedir. Davranış ve API: [`KV-21_NOTIFICATIONS.md`](./KV-21_NOTIFICATIONS.md).
+
+| Kural | Kısıt |
+|---|---|
+| Tekrarlanan olay tek bildirim (alıcı başına) | UNIQUE `(recipient_id, dedupe_key)`; teslim `ON CONFLICT DO NOTHING`. `dedupe_key` = `notifications:<event.id>` veya olayın doğal anahtarı varsa `notifications:<naturalKey>` |
+| Kimse kendi işlemi için bildirim almaz | `notifications_actor_not_recipient_check` |
+| Konu tipi contracts `NotificationView.subject` kümesi; `data` JSON nesnesi; okunma oluşturmadan önce olamaz | `notifications_subject_type_check`, `notifications_data_object_check`, `notifications_read_after_created_check` |
+
+- **FK'ler:** `recipient_id`, `actor_id → users`, `poll_id → polls`, hepsi `RESTRICT`. `event_id`'nin FK'si yoktur: outbox satırı 30 gün sonra silinir (§9.4).
+- **Index'ler:** `(recipient_id, created_at DESC, id DESC)` liste ve cursor; partial `notifications_unread_idx (recipient_id) WHERE read_at IS NULL` okunmamış sayısı; `poll_id` (KV-34 sessize alma), `actor_id`.
+- **Yazan:** yalnız teslim job'u (worker, KV-21 PR-3). API yalnız alıcının kendi satırlarını okur ve `read_at`'i doldurur.
+
+### 9.4 Olay outbox'ı (Utku, KV-21 PR-2)
+
+Şema `admin.prisma` (`DomainEvent`, `EventDelivery`, enum `event_delivery_status`), kısıtlar, partial index'ler ve trigger `…_utku_kv21_domain_events` migration'ının elle yazılan bölümündedir. Yazıcı: `apps/api/src/modules/events/write.ts` (`writeEvent(tx, event)`). Dağıtıcı: `apps/worker/src/jobs/events/`. Sözleşme: contracts `createEvent`, `parseEvent`, `naturalKey`, `newEventId`.
+
+**Aynı transaction:** Producer olayı mutation'ın transaction'ında yazar (audit ile aynı kalıp, §9.2): işlem commit olursa olay vardır, geri alınırsa yoktur. `writeEvent` olayı `parseEvent` ile yeniden doğrular; geçersiz olay TypeError'dur ve işlem de geri alınır.
+
+| Kolon | Anlamı |
+|---|---|
+| `domain_events.id` | Olay kimliği: UUIDv7, producer üretir (`newEventId(now)`), retry boyunca değişmez |
+| `type`, `version`, `occurred_at`, `actor_id`, `subject_type`, `subject_id`, `payload` | KV-04 zarfı. `actor_id` NULL = sistem olayı. `subject_id` `SETTING`'de ayar anahtarıdır |
+| `natural_key` | contracts `naturalKey(event)`; tanımsızsa NULL. UNIQUE: aynı iş olgusu ikinci kez yazılmaz (`writeEvent` → `written: false`) |
+| `dispatched_at`, `dispatch_error` | Dağıtıcı doldurur. `dispatch_error` = satır olaya ayrıştırılamadı (teslim açılmaz, satır silinmez) |
+| `domain_event_deliveries (event_id, consumer)` | Tüketici başına teslim; PK contracts `dedupeKey(event, consumer)` kapsamı |
+| `status`, `attempts`, `next_attempt_at`, `last_error`, `processed_at` | `PENDING` → `DONE` veya `DEAD`. `next_attempt_at` hem vade hem kiradır |
+
+**DB'nin zorladığı kurallar**
+
+| Kural | Kısıt |
+|---|---|
+| Zarf yazıldıktan sonra değişmez; yalnız `dispatched_at` / `dispatch_error` yazılır; satır silinebilir (saklama) | trigger `domain_events_immutable` → `KV_DOMAIN_EVENTS_IMMUTABLE` (`dbErrorMap`: `INTERNAL_ERROR`) |
+| Zarf biçimi: sürüm 1, tip biçimi, konu tipi contracts `EventSubjectType`, payload nesne | `domain_events_version_check`, `_type_check`, `_subject_check`, `_payload_object_check`, `_natural_key_check`, `_dispatch_error_check` |
+| Tüketici adı contracts `dedupeKey` handler kuralı; deneme ≥ 0; `DONE` ⇔ `processed_at` dolu | `domain_event_deliveries_consumer_check`, `_attempts_check`, `_processed_check` |
+
+**FK yok:** olay bir mesajdır, ilişki değil. `actor_id` FK'si yazımda `users` satırında `FOR KEY SHARE` alırdı ve KV-33 kilit sırasına (§9.1) yeni bir kilit eklerdi; ayrıca 30 gün saklamayla çelişir. Teslim → olay FK'si `ON DELETE CASCADE`.
+
+**Dağıtım ve teslim** (ayrıntı [`KV-21_NOTIFICATIONS.md`](./KV-21_NOTIFICATIONS.md) §5): dağıtıcı dağıtılmamış olayları `FOR UPDATE SKIP LOCKED` ile alır ve kayıtlı tüketiciler için teslim satırı açar; işleyici vadesi gelen teslimi kiralar (deneme +1, vade = kira sonu), tüketicinin yazdıkları teslimin `DONE` işaretiyle aynı transaction'da commit olur. 8 deneme, üstel bekleme, sonunda `DEAD`. Teslim en az bir kezdir; sıralama garantisi yoktur.
+
+**Saklama:** bütün teslimleri `DONE` olan olay, son `DONE`'dan (teslimsiz olayda dağıtımdan) 30 gün sonra günlük job'la silinir. Dağıtılmamış, ayrıştırılamamış ya da `PENDING`/`DEAD` teslimi olan olay asla otomatik silinmez. `natural_key` koruması bu yüzden saklama süresince geçerlidir; kalıcı koruma tüketicinin kendi anahtarıdır (ör. §9.3 `dedupe_key`).
+
+**Index'ler:** partial `domain_events_undispatched_idx (id) WHERE dispatched_at IS NULL` (dağıtma kuyruğu), `domain_events_dispatched_at_idx (dispatched_at) WHERE dispatched_at IS NOT NULL AND dispatch_error IS NULL` (saklama), `domain_event_deliveries_due_idx (next_attempt_at) WHERE status = 'PENDING'` (işleme kuyruğu), `domain_event_deliveries_dead_idx (event_id) WHERE status = 'DEAD'` (izleme); UNIQUE `natural_key`.
+
+**Şu an yazanlar:** admin-users (KV-33): `sanction.applied`, `sanction.lifted`, `role.changed` (yalnız rol değiştiğinde). Diğer üreticiler KV-21 PR-4'te kendi modüllerinde eklenir.
 
 ---
 

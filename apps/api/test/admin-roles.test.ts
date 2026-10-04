@@ -135,6 +135,9 @@ describe("admin rol ataması (postgres)", { skip: backend ? false : "TEST_DATABA
     }
   }
 
+  const eventsAbout = (...userIds: string[]) =>
+    db.domainEvent.findMany({ where: { subjectType: "USER", subjectId: { in: userIds } }, select: { type: true, actorId: true, subjectId: true, payload: true } });
+
   const activeSuperAdmins = () => db.userRole.count({ where: { role: "SUPER_ADMIN", user: { status: "ACTIVE", deletedAt: null } } });
 
   /** Yarışta 500 dönerse sebebi (ör. deadlock) assert mesajında görünsün. */
@@ -171,6 +174,13 @@ describe("admin rol ataması (postgres)", { skip: backend ? false : "TEST_DATABA
       assert.equal(trail.length, 1, JSON.stringify(trail));
       assert.equal(trail[0]!.actorId, survivor.id);
       assert.deepEqual([trail[0]!.operation, trail[0]!.before, trail[0]!.after], ["change", { role: "SUPER_ADMIN" }, { role: "ADMIN" }]);
+
+      // Olay audit ile aynı transaction'da: kaybeden işlem olay da yazmaz (KV-21 PR-2).
+      const events = await eventsAbout(a.id, b.id);
+      assert.deepEqual(
+        events.map((e) => [e.type, e.actorId, e.subjectId, e.payload]),
+        [["role.changed", survivor.id, demoted.id, { previousRoles: ["SUPER_ADMIN"], roles: ["ADMIN"] }]],
+      );
     });
   });
 
@@ -192,6 +202,8 @@ describe("admin rol ataması (postgres)", { skip: backend ? false : "TEST_DATABA
       else assertError(loser, 403, "FORBIDDEN");
       assert.equal(await activeSuperAdmins(), 1);
       assert.equal(await db.sanction.count({ where: { userId: { in: [a.id, b.id] } } }), 1);
+      const events = await eventsAbout(a.id, b.id);
+      assert.deepEqual(events.map((e) => e.type), ["sanction.applied"]);
     });
   });
 });

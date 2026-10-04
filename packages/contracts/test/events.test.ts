@@ -14,6 +14,7 @@ import {
   eventTypes,
   isEventType,
   naturalKey,
+  newEventId,
   NotificationType,
   parseEvent,
   type EventDefinition,
@@ -270,5 +271,34 @@ describe("tekrar işleme", () => {
   test("tekrarlanabilir olayların doğal anahtarı yok", () => {
     const changed = parseEvent(event({ type: "vote.changed", payload: { fromOptionId: OPTION_A, toOptionId: OPTION_B } }));
     assert.equal(naturalKey(changed), null);
+  });
+});
+
+describe("olay kimliği (newEventId, UUIDv7)", () => {
+  test("biçim: sürüm 7, RFC 9562 varyantı; createEvent/parseEvent kabul eder", () => {
+    for (let i = 0; i < 200; i++) {
+      const id = newEventId();
+      assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    }
+    const id = newEventId();
+    assert.equal(parseEvent(event({ id })).id, id);
+  });
+
+  test("ilk 48 bit milisaniye zamanıdır; farklı milisaniyelerde zaman sırasıyla artar", () => {
+    const at = new Date("2026-10-04T12:34:56.789Z");
+    const id = newEventId(at);
+    assert.equal(parseInt(id.replaceAll("-", "").slice(0, 12), 16), at.getTime());
+    const ids = Array.from({ length: 50 }, (_, i) => newEventId(new Date(at.getTime() + i)));
+    assert.deepEqual([...ids].sort(), ids);
+  });
+
+  test("aynı zamanda üretilen kimlikler farklıdır (74 bit rastgele)", () => {
+    const at = new Date();
+    assert.equal(new Set(Array.from({ length: 1000 }, () => newEventId(at))).size, 1000);
+  });
+
+  test("geçersiz zaman reddedilir", () => {
+    assert.throws(() => newEventId(new Date(Number.NaN)), TypeError);
+    assert.throws(() => newEventId(new Date(-1)), TypeError);
   });
 });
