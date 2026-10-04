@@ -141,20 +141,55 @@ describe("admin rol ataması (postgres)", { skip: backend ? false : "TEST_DATABA
   const failure = (results: Res[]) =>
     [...results.map((r) => r.body), ...h.logs.filter((l) => l.includes("beklenmeyen hata")).slice(-2).map((l) => l.slice(0, 600))].join("\n");
 
-  test("yarış: iki SUPER_ADMIN birbirini aynı anda düşürür → tam olarak biri başarılı, en az bir aktif SUPER_ADMIN kalır", async () => {
+  /**
+   * Kaybeden isteğin sonucu zamanlamaya bağlıdır ve ikisi de doğrudur: kazanan önce commit ederse kaybedenin aktörü
+   * yetki kontrolüne geldiğinde artık SUPER_ADMIN değildir (403 FORBIDDEN); kontrolü kazanandan önce geçerse transaction
+   * içi sayım son aktif SUPER_ADMIN'i korur (409 CONFLICT). Asıl koşul her iki durumda aynıdır.
+   */
+  test("yarış: iki SUPER_ADMIN birbirini aynı anda düşürür → biri 200, diğeri 403 (artık SUPER_ADMIN değil) veya 409 (last_super_admin); tek aktif SUPER_ADMIN ve tek audit kalır", async () => {
     await withOnlyTwoSuperAdmins(async (a, b) => {
-      const results = await Promise.all([put(b.id, "ADMIN", a.cookie), put(a.id, "ADMIN", b.cookie)]);
-      assert.deepEqual(results.map((r) => r.statusCode).sort(), [200, 409], failure(results));
+      const requests = [
+        { actor: a, target: b },
+        { actor: b, target: a },
+      ];
+      const results = await Promise.all(requests.map(({ actor, target }) => put(target.id, "ADMIN", actor.cookie)));
+      const winners = results.flatMap((r, i) => (r.statusCode === 200 ? [i] : []));
+      assert.equal(winners.length, 1, failure(results));
+      const won = winners[0]!;
+      const loser = results[1 - won]!;
+
+      if (loser.statusCode === 403) assertError(loser, 403, "FORBIDDEN");
+      else assertError(loser, 409, "CONFLICT");
+
+      // Kalan tek aktif SUPER_ADMIN kazananın aktörüdür (= kaybeden isteğin hedefi); kaybedenin aktörü ADMIN'e düştü.
+      const { actor: survivor, target: demoted } = requests[won]!;
       assert.equal(await activeSuperAdmins(), 1);
+      assert.equal((await roleOf(survivor.id))?.role, "SUPER_ADMIN");
+      assert.deepEqual(await roleOf(demoted.id), { role: "ADMIN", grantedById: survivor.id });
+
+      const trail = [...(await audits(a.id)), ...(await audits(b.id))];
+      assert.equal(trail.length, 1, JSON.stringify(trail));
+      assert.equal(trail[0]!.actorId, survivor.id);
+      assert.deepEqual([trail[0]!.operation, trail[0]!.before, trail[0]!.after], ["change", { role: "SUPER_ADMIN" }, { role: "ADMIN" }]);
     });
   });
 
-  test("yarış: iki SUPER_ADMIN birbirini aynı anda banlar → tam olarak biri başarılı, en az bir aktif SUPER_ADMIN kalır", async () => {
+  /**
+   * Kaybeden isteğin sonucu zamanlamaya bağlıdır ve ikisi de doğrudur: BAN, aktörün oturumlarını aynı transaction'da
+   * iptal eder. Kaybedenin oturum kontrolü kazananın commit'inden sonra çalışırsa oturum artık geçersizdir (401
+   * UNAUTHENTICATED); önce çalışırsa transaction içi taze yetki kontrolü aktörü BANNED görür (403 FORBIDDEN). Son aktif
+   * SUPER_ADMIN kuralına (409) hiç gelinmez: SUPER_ADMIN kilidi yetki kontrolünden önce alınır.
+   */
+  test("yarış: iki SUPER_ADMIN birbirini aynı anda banlar → biri 201, diğeri 403 (aktör BANNED) veya 401 (oturumu iptal edildi); tek aktif SUPER_ADMIN kalır", async () => {
     await withOnlyTwoSuperAdmins(async (a, b) => {
       const ban = (target: User, actor: User) =>
         send("POST", `/admin/users/${target.id}/sanctions`, { type: "BAN", endsAt: null, reason: "Hesap ele geçirildi" }, actor.cookie);
       const results = await Promise.all([ban(b, a), ban(a, b)]);
-      assert.deepEqual(results.map((r) => r.statusCode).sort(), [201, 403], failure(results));
+      const winners = results.filter((r) => r.statusCode === 201);
+      assert.equal(winners.length, 1, failure(results));
+      const loser = results.find((r) => r.statusCode !== 201)!;
+      if (loser.statusCode === 401) assertError(loser, 401, "UNAUTHENTICATED");
+      else assertError(loser, 403, "FORBIDDEN");
       assert.equal(await activeSuperAdmins(), 1);
       assert.equal(await db.sanction.count({ where: { userId: { in: [a.id, b.id] } } }), 1);
     });

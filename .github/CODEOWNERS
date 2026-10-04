@@ -47,6 +47,8 @@
 /apps/api/src/modules/audit/                @Utkuuzun14
 /apps/api/src/modules/settings/             @Utkuuzun14
 /apps/worker/src/jobs/notifications/        @Utkuuzun14
+/apps/worker/src/jobs/sanctions/            @Utkuuzun14
+/apps/worker/test/sanctions.test.ts         @Utkuuzun14
 /apps/web/src/features/notifications/       @Utkuuzun14
 /apps/web/src/features/admin-users/         @Utkuuzun14
 /apps/web/src/features/audit/               @Utkuuzun14

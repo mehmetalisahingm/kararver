@@ -1,6 +1,6 @@
 // Worker giriş noktası: pnpm --filter @kararver/worker dev (TECH_DECISIONS §3.5).
-// media.process (Mert, KV-16), trends.refresh (Faruk, KV-28) ve snapshots.daily (Faruk, KV-29). Diğer job'lar (notifications) kendi
-// klasörlerinde eklenir ve burada kaydedilir.
+// media.process (Mert, KV-16), trends.refresh (Faruk, KV-28), snapshots.daily (Faruk, KV-29) ve sanctions.expire (Utku, KV-33).
+// Diğer job'lar (notifications) kendi klasörlerinde eklenir ve burada kaydedilir.
 import path from "node:path";
 import { defaultSettings } from "@kararver/contracts";
 import { createPrismaClient } from "@kararver/db";
@@ -10,6 +10,7 @@ import { MEDIA_PROCESS_QUEUE, MEDIA_QUEUE_OPTIONS, processMedia } from "./jobs/m
 import { createSubprocessModerator } from "./jobs/media/moderator.ts";
 import { createS3WorkerStorage } from "./jobs/media/storage.ts";
 import { createPrismaMediaJobStore } from "./jobs/media/store.ts";
+import { expireSanctions, SANCTIONS_EXPIRE_CRON, SANCTIONS_EXPIRE_QUEUE } from "./jobs/sanctions/job.ts";
 import { runDailySnapshots, SNAPSHOT_TIME_ZONE, SNAPSHOTS_CRON, SNAPSHOTS_QUEUE } from "./jobs/snapshots/job.ts";
 import { TRENDS_CRON, TRENDS_QUEUE } from "./jobs/trends/config.ts";
 import { refreshTrends } from "./jobs/trends/job.ts";
@@ -76,7 +77,18 @@ await boss.work(SNAPSHOTS_QUEUE, { batchSize: 1 }, async () => {
   await runDailySnapshots({ prisma, now: () => new Date(), log });
   log("info", "snapshots.daily bitti", { ms: Date.now() - started });
 });
-log("info", "worker hazır", { queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE], concurrency: config.mediaConcurrency });
+// sanctions.expire: her dakika; süresi dolan yaptırımlardan sonra users.status senkronu. Job idempotent (kilit + yeniden hesap).
+await boss.createQueue(SANCTIONS_EXPIRE_QUEUE, { policy: "singleton", retryLimit: 0 });
+await boss.schedule(SANCTIONS_EXPIRE_QUEUE, SANCTIONS_EXPIRE_CRON, null, { tz: "Europe/Istanbul" });
+await boss.work(SANCTIONS_EXPIRE_QUEUE, { batchSize: 1 }, async () => {
+  const started = Date.now();
+  const result = await expireSanctions({ prisma, now: () => new Date(), log });
+  if (result.candidates > 0) log("info", "sanctions.expire bitti", { ...result, ms: Date.now() - started });
+});
+log("info", "worker hazır", {
+  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE],
+  concurrency: config.mediaConcurrency,
+});
 
 async function shutdown(signal: string): Promise<void> {
   log("info", "kapanıyor", { signal });

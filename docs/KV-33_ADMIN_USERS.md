@@ -4,7 +4,7 @@
 > Kod: `apps/api/src/modules/admin-users/`, `apps/api/src/modules/rbac/roles-routes.ts` · Testler: `apps/api/test/admin-users.test.ts`, `apps/api/test/admin-roles.test.ts`
 > İlgili: [`DATA_MODEL.md`](./DATA_MODEL.md) §9.1 (yaptırım servis kuralları), §9.2 (audit) · [`KV-04_ROLES_EVENTS.md`](./KV-04_ROLES_EVENTS.md) (yetki)
 
-KV-33 üç PR'dır: **PR-A** `audit_logs` ve `writeAudit` (KV-39), **PR-B** bu belgedeki endpoint'ler, **PR-C** süresi dolan yaptırımlar için `users.status` senkron job'ı.
+KV-33 üç PR'dır: **PR-A** `audit_logs` ve `writeAudit` (KV-39), **PR-B** bu belgedeki endpoint'ler, **PR-C** süresi dolan yaptırımlar için `users.status` senkron job'ı (§6).
 
 ## 1. Endpoint'ler
 
@@ -68,7 +68,25 @@ Her değiştiren işlem tek transaction'dadır ve sabit kilit sırası izler:
 
 ## 5. Bilinen açıklar ve sonraki işler
 
-- **PR-C merge olana kadar:** süresi dolan SUSPEND, `users.status`'ta `SUSPENDED` kalır; kullanıcı giriş yapamaz ve yönetici kaldıramaz (409 `expired`). PR-C (süre dolumu job'ı) PR-B'nin hemen ardından merge edilmelidir.
+- **Süre dolumu gecikmesi:** süresi dolan yaptırım `users.status`'a en geç ~90 sn içinde yansır (§6); o arada kullanıcı giriş yapamaz ve açık oturumu 403 alır. Yönetici süresi dolmuş yaptırımı kaldıramaz (409 `expired`); beklemesi yeterlidir. PR-C, PR-B'den sonra ve onunla birlikte merge edilmelidir.
 - **Olaylar:** `sanction.applied`, `sanction.lifted`, `role.changed` üretilmez (olay outbox'ı henüz yok, KV-04).
 - **İtiraz endpoint'i:** ertelendi, ayrı iş (KV-04 §5/1).
 - **`admin.audit.list`:** ayrı PR (KV-39).
+
+## 6. Süre dolumu job'ı — `sanctions.expire` (PR-C)
+
+Kod: `apps/worker/src/jobs/sanctions/` · Test: `apps/worker/test/sanctions.test.ts` · Kayıt: `apps/worker/src/main.ts`.
+
+- **Aralık:** pg-boss cron'u ile her dakika (`* * * * *`), kuyruk `singleton`. pg-boss cron'u dakika çözünürlüklüdür ve cron izleyicisi varsayılan 30 sn'de bir çalışır; bu yüzden süresi dolan yaptırım `users.status`'a **en geç ~90 sn içinde (+ iş süresi)** yansır. Yönetici işlemleri (PR-B) aynı transaction'da senkronladığı için bu gecikme yalnız zamanla dolan yaptırımlar içindir.
+- **Ne yapar:** Durumu `SUSPENDED`/`RESTRICTED` olup kaldırılmamış yaptırımlardan hesaplanan değerden farklı olan kullanıcıları bulur (turda en fazla 500; kalanlar sonraki turda) ve `users.status`'u düzeltir. Karar contracts `statusFromSanctions` ile verilir (API ile aynı fonksiyon); SQL yalnız ön filtredir. BAN kalıcıdır, süre dolumuyla değişmez.
+- **Yaptırım satırı değişmez:** süre dolması kaldırma değildir; job `sanctions`'a yazmaz (`lifted_*` boş kalır). DB de aktörsüz kaldırmaya izin vermez (`sanctions_lift_check`, `sanctions_guard`).
+- **Her kullanıcı ayrı transaction:** `users` satırı `FOR NO KEY UPDATE` (PR-B ile aynı kilit), kilitten sonra taze okuma ve yeniden hesap; değiştiyse durum + aynı transaction'da audit (`source: WORKER`, aktör NULL, `user.status.sync` / `sync`, `before: {status}`, `after: {status, expiredTypes}`). Değişmediyse hiçbir şey yazılmaz. Bir kullanıcıdaki hata turu durdurmaz.
+- **İdempotent:** iki worker veya tekrar çalışma aynı kullanıcıda kilitte sıraya girer; ikincisi düzeltilmiş durumu görür ve yazmaz → tek audit (testli).
+- **Yönetici işlemiyle yarış (testli, iki sıra):**
+
+  | Sıra | Sonuç |
+  |---|---|
+  | Yönetici önce yeni SUSPEND uygular, job bekler | Job aktif SUSPEND'i görür; durum zaten `SUSPENDED` → değişiklik ve audit yok |
+  | Job önce `ACTIVE` yazar, yönetici bekler | Yönetici kilitten sonra `ACTIVE` görür, yeni SUSPEND ile `SUSPENDED` yazar; job'ın tek audit'i kalır |
+
+- **Index:** aday sorgusu `users_status_idx` ile başlar, her aday için `sanctions_user_id_lifted_at_ends_at_idx`; migration gerekmez. Test `EXPLAIN`'i `SET LOCAL enable_seqscan = off` ile koşar (boş/küçük tabloda planner seq scan seçmesin; index'in kullanılabildiği sınanır).
