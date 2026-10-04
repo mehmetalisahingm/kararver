@@ -1,7 +1,30 @@
 # KV-46 / #48 — Ekran durumları ve erişilebilirlik matrisi
 
 #111 mevcut kullanıcı ekranları ve ortak admin kabuğunu kapsar. #48 açık kalır;
-medya/beta bağımlılıkları (#20 → #18, #47), fiziksel cihaz ve staging kabulü ayrıdır.
+#20 medya/sosyal teslimi #124 ile main'e alındı ve #20 kapandı. #47 beta bağımlılığı,
+fiziksel cihaz, ekran okuyucu ve staging kabulü hâlâ final kapanış için beklenir.
+
+## 4 Ekim — Güncel main ve medya matrisi
+
+#111 main'e alındı; bu devam teslimi #124 ve #111'i içeren main üzerine kuruludur.
+Yeni medya arayüzü Chromium'da
+integration işinde, Firefox/WebKit'te browser-accessibility işinde çalışır:
+her motorda 3 senaryo × 2 viewport = 6 test, toplam 18 medya testi. Dolu yükleme
+listesi iki temada axe/taşma denetiminden geçer ve ekran görüntüsü kaydedilir.
+Motor sürümü ve emülasyon bilgisi rapora eklenir. Private URL, PUT/complete/publish
+retry, sıra, karantina/reddetme ve galeri klavye/loading/retry kapsamı korunur.
+
+Final dış kabul kaydı (#48 açık):
+
+| Kabul | Kayıt gereği | Durum |
+| --- | --- | --- |
+| Fiziksel Android/iOS ve gerçek Safari | Cihaz, OS/tarayıcı sürümü, 360px gezinme/form/galeri bulgusu | Bekliyor |
+| NVDA/VoiceOver/TalkBack | Form adı/hata duyurusu, modal odak dönüşü ve galeri okuma | Bekliyor |
+| Staging root/server 500 → retry | Ortam adresi, hata ve iyileşme kanıtı | Bekliyor |
+| #47 kapalı beta | Gerçek kullanıcı bulguları ve modül sahiplerinin düzeltmeleri | Bekliyor |
+
+Bu satırlar otomatik tarayıcı/axe testiyle tamamlanmış sayılmaz. Son CI bağlantısı
+medya matrisi devam PR'ı ve issue #48 üzerinde kayıtlıdır.
 
 ## Düzeltmeler
 

@@ -5,6 +5,7 @@ dist/
 build/
 coverage/
 state-report/
+media-report/
 *.tsbuildinfo
 
 # Ortam dosyaları: sadece *.example commit edilir

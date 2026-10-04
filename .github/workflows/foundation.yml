@@ -121,6 +121,16 @@ jobs:
         with:
           name: flows-${{ matrix.browser }}
           path: apps/web/test-results
+      - name: Media upload and gallery browser matrix
+        if: matrix.browser != 'chromium'
+        run: pnpm --filter @kararver/web exec playwright test -c playwright.media.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.browser != 'chromium'
+        with:
+          name: media-${{ matrix.browser }}
+          path: |
+            apps/web/test-results
+            apps/web/media-report
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -192,7 +202,9 @@ jobs:
         if: always()
         with:
           name: web-e2e-api-results
-          path: apps/web/test-results
+          path: |
+            apps/web/test-results
+            apps/web/media-report
           if-no-files-found: ignore
   staging-smoke:
     if: github.event_name == 'workflow_dispatch' && inputs.staging_api_url != ''
