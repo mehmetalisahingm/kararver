@@ -4,6 +4,8 @@ import { api,sample,failure } from "./api";
 const ids=["01998b9a-0000-7000-8000-000000000090","01998b9a-0000-7000-8000-000000000091"];
 const file={name:"foto.png",mimeType:"image/png",buffer:Buffer.from("PNG-test")};
 const view=(id:string,status="PENDING")=>({id,purpose:"POLL",status,url:status==="APPROVED"?`https://cdn.kararver.test/${id}.png`:null,preview:null,width:800,height:530,createdAt:"2026-10-01T09:00:00.000Z"});
+test.beforeEach(async({browser},info)=>{info.annotations.push({type:"browser-version",description:browser.version()},{type:"device",description:`${info.project.name}: viewport emulation, not a physical device`});});
+test.afterEach(async({page},info)=>{if(info.status==="passed")await page.screenshot({path:info.outputPath("verified-media-state.png"),fullPage:true});});
 
 test("real-adapter gallery shows loading, image retry and ordered keyboard navigation",async({page})=>{
   const {handlers}=await api(page);const poll=sample("polls.get");
@@ -21,7 +23,7 @@ test("real-adapter gallery shows loading, image retry and ordered keyboard navig
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
 });
 
-test("media upload/complete retry, ordered publication and failed publish retain selection",async({page})=>{
+test("media upload/complete retry, ordered publication and failed publish retain selection",async({page},info)=>{
   const {handlers}=await api(page);const keys:string[]=[];let uploads=0,completes=0,puts=0,publishes=0;const bodies:any[]=[];
   handlers.set("media.uploads.create",async r=>{
     keys.push(r.request().headers()["idempotency-key"]);uploads++;
@@ -46,8 +48,12 @@ test("media upload/complete retry, ordered publication and failed publish retain
   await page.getByLabel("Görsel ekle",{exact:true}).setInputFiles({...file,name:"ikinci.png"});
   await expect(page.getByText("Görsel onaylandı.",{exact:true})).toHaveCount(2);
   await page.getByRole("button",{name:"2. görseli önceye taşı"}).click();
-  expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  for(const theme of ["dark","light"]) {
+    if(await page.locator(".product").getAttribute("data-theme")!==theme)await page.getByRole("button",{name:/tema/i}).click();
+    expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.screenshot({path:info.outputPath(`uploads-${theme}.png`),fullPage:true});
+  }
   for(let n=0;n<2;n++) {
     await page.getByRole("button",{name:"Yayın önizlemesi"}).click();await page.getByRole("button",{name:/puan ile yayımla$/i}).click();
     if(n===0){await expect(page.locator("main").getByRole("alert")).toBeVisible();await expect(page.getByText("Görsel onaylandı.",{exact:true})).toHaveCount(2);}
