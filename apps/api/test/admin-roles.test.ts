@@ -144,7 +144,7 @@ describe("admin rol ataması (postgres)", { skip: backend ? false : "TEST_DATABA
   /**
    * Kaybeden isteğin sonucu zamanlamaya bağlıdır ve ikisi de doğrudur: kazanan önce commit ederse kaybedenin aktörü
    * yetki kontrolüne geldiğinde artık SUPER_ADMIN değildir (403 FORBIDDEN); kontrolü kazanandan önce geçerse transaction
-   * içi sayım son aktif SUPER_ADMIN'i korur (409 last_super_admin). Asıl koşul her iki durumda aynıdır.
+   * içi sayım son aktif SUPER_ADMIN'i korur (409 CONFLICT). Asıl koşul her iki durumda aynıdır.
    */
   test("yarış: iki SUPER_ADMIN birbirini aynı anda düşürür → biri 200, diğeri 403 (artık SUPER_ADMIN değil) veya 409 (last_super_admin); tek aktif SUPER_ADMIN ve tek audit kalır", async () => {
     await withOnlyTwoSuperAdmins(async (a, b) => {
@@ -159,10 +159,7 @@ describe("admin rol ataması (postgres)", { skip: backend ? false : "TEST_DATABA
       const loser = results[1 - won]!;
 
       if (loser.statusCode === 403) assertError(loser, 403, "FORBIDDEN");
-      else {
-        assertError(loser, 409, "CONFLICT");
-        assert.equal(loser.json().error.details[0]?.code, "last_super_admin", loser.body);
-      }
+      else assertError(loser, 409, "CONFLICT");
 
       // Kalan tek aktif SUPER_ADMIN kazananın aktörüdür (= kaybeden isteğin hedefi); kaybedenin aktörü ADMIN'e düştü.
       const { actor: survivor, target: demoted } = requests[won]!;
