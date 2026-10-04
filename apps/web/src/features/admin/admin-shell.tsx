@@ -18,6 +18,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [roles, setRoles] = useState<AdminRole[]>(() => currentRoles(demo, user?.email));
   const [ready, setReady] = useState(demo || !user);
+  const [error, setError] = useState("");
+  const [attempt, retry] = useState(0);
 
   useEffect(() => {
     if (demo) {
@@ -32,7 +34,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     }
     const controller = new AbortController();
     setReady(false);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/v1/me`, {
+    setError("");
+    const base = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "").replace(/\/v1$/, "");
+    fetch(`${base}/v1/me`, {
       credentials: "include",
       signal: controller.signal,
       headers: { accept: "application/json" },
@@ -43,19 +47,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         setRoles(parsed.data.roles as AdminRole[]);
       })
       .catch((error) => {
-        if (error?.name !== "AbortError") setRoles([]);
+        if (error?.name !== "AbortError") { setRoles([]); setError("Yönetim yetkisi kontrol edilemedi. Bağlantını kontrol edip tekrar deneyebilirsin."); }
       })
       .finally(() => {
         if (!controller.signal.aborted) setReady(true);
       });
     return () => controller.abort();
-  }, [demo, user?.id, user?.email]);
+  }, [demo, user?.id, user?.email, attempt]);
 
   const visible = useMemo(() => adminNav.filter((item) => canSeeAdminItem(roles, item)), [roles]);
 
   if (!ready) {
-    return <section className="kv-card kv-state"><h1>Yönetim yetkisi kontrol ediliyor…</h1></section>;
+    return <section className="kv-card kv-state" aria-busy="true"><h1 role="status">Yönetim yetkisi kontrol ediliyor…</h1></section>;
   }
+
+  if (error) return <section className="kv-card kv-state"><h1>Yönetim açılamadı.</h1><p role="alert">{error}</p><button className="kv-button" onClick={() => retry(n => n + 1)}>Yetkiyi tekrar kontrol et</button></section>;
 
   if (!user || !canEnterAdmin(roles)) {
     return (
@@ -128,10 +134,10 @@ export function AdminSection({ section }: { section: AdminSectionId }) {
           </tbody>
         </table>
       </div>
-      <dialog ref={dialogRef} className={styles.dialog} onCancel={() => dialogRef.current?.close()}>
+      <dialog ref={dialogRef} className={styles.dialog} aria-labelledby="admin-dialog-title" onCancel={() => dialogRef.current?.close()}>
         <div className={styles.dialogBody}>
           <span className="eyebrow">ORTAK MODAL KALIBI</span>
-          <h2>Yönetim işlemi</h2>
+          <h2 id="admin-dialog-title">Yönetim işlemi</h2>
           <p className="kv-muted">Gerçek modüller bu kalıbı kendi yetkili API işlemlerine bağlar. Kritik işlemlerde gerekçe ve audit kaydı zorunludur.</p>
           <label>Gerekçe<textarea className="kv-input" rows={4} /></label>
           <div className={styles.dialogActions}><button className="kv-button kv-button--secondary" onClick={() => dialogRef.current?.close()}>Vazgeç</button><button className="kv-button" onClick={() => dialogRef.current?.close()}>Onayla</button></div>

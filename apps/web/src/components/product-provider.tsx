@@ -48,7 +48,8 @@ export function ProductProvider({
   demo: boolean;
 }) {
   const [client] = useState(() => demo ? new DemoClient() : new ApiClient(process.env.NEXT_PUBLIC_API_URL ?? ""));
-  const [sessionReady, setSessionReady] = useState(demo);
+  // Demo forms also wait for hydration so early input cannot be discarded.
+  const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState("");
   const [sessionAttempt, retrySession] = useState(0);
   const [user, setUser] = useState<User | null>(null);
@@ -77,7 +78,10 @@ export function ProductProvider({
     }
   }, [pathname]);
   useEffect(() => {
-    if (!(client instanceof ApiClient)) return;
+    if (!(client instanceof ApiClient)) {
+      setSessionReady(true);
+      return;
+    }
     let active = true;
     const unsubscribe = client.subscribe(() => { if (active) setUser(client.current()); });
     setSessionError("");

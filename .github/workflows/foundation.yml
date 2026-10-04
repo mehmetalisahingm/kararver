@@ -86,6 +86,41 @@ jobs:
           name: web-e2e-demo-results
           path: apps/web/test-results
           if-no-files-found: ignore
+  browser-accessibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      CI: 'true'
+      KV_BROWSER: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @kararver/web exec playwright install --with-deps ${{ matrix.browser }}
+      - name: API screen states, desktop/mobile and both themes
+        run: pnpm --filter @kararver/web exec playwright test -c playwright.states.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: states-${{ matrix.browser }}
+          path: |
+            apps/web/test-results
+            apps/web/state-report
+      - name: Auth, votes, social, discovery and admin browser regressions
+        if: matrix.browser != 'chromium'
+        run: pnpm --filter @kararver/web test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.browser != 'chromium'
+        with:
+          name: flows-${{ matrix.browser }}
+          path: apps/web/test-results
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20

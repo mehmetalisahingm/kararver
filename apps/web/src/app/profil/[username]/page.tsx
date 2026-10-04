@@ -17,6 +17,10 @@ export default function Page() {
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [attempt, retry] = useState(0);
+  const [pageError, setPageError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     if (!client.getProfile || !client.getProfilePolls || !client.getProfileComments) {
@@ -26,6 +30,8 @@ export default function Page() {
     let active = true;
     setLoading(true);
     setError("");
+    setMissing(false);
+    setPageError("");
     Promise.all([
       client.getProfile(username),
       client.getProfilePolls(username),
@@ -39,32 +45,42 @@ export default function Page() {
         setComments(commentPage.data);
         setCommentCursor(commentPage.page.nextCursor);
       })
-      .catch((e) => active && setError((e as Error).message))
+      .catch((e) => { if (active) { setError((e as Error).message); setMissing(e.code === "NOT_FOUND"); } })
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [client, username, user?.id]);
+  }, [client, username, user?.id, attempt]);
 
   async function morePolls() {
-    if (!pollCursor || !client.getProfilePolls) return;
-    const page = await client.getProfilePolls(username, pollCursor);
-    setPolls((old) => [...old, ...page.data]);
-    setPollCursor(page.page.nextCursor);
+    if (busy || !pollCursor || !client.getProfilePolls) return;
+    setBusy(true); setPageError("");
+    try {
+      const page = await client.getProfilePolls(username, pollCursor);
+      setPolls((old) => [...old, ...page.data]);
+      setPollCursor(page.page.nextCursor);
+    } catch (e) { setPageError((e as Error).message); }
+    finally { setBusy(false); }
   }
 
   async function moreComments() {
-    if (!commentCursor || !client.getProfileComments) return;
-    const page = await client.getProfileComments(username, commentCursor);
-    setComments((old) => [...old, ...page.data]);
-    setCommentCursor(page.page.nextCursor);
+    if (busy || !commentCursor || !client.getProfileComments) return;
+    setBusy(true); setPageError("");
+    try {
+      const page = await client.getProfileComments(username, commentCursor);
+      setComments((old) => [...old, ...page.data]);
+      setCommentCursor(page.page.nextCursor);
+    } catch (e) { setPageError((e as Error).message); }
+    finally { setBusy(false); }
   }
 
   if (loading) return <Loading label="Profil yükleniyor…" />;
-  if (error) return <section className="kv-card kv-state"><h1>Profil açılamadı.</h1><ErrorMessage message={error} /><Link href="/">Akışa dön</Link></section>;
+  if (error) return <section className="kv-card kv-state"><h1>{missing ? "Profil bulunamadı." : "Profil açılamadı."}</h1><ErrorMessage message={error} />{!missing && <button className="kv-button" onClick={() => retry(n => n + 1)}>Profili tekrar yükle</button>}<Link href="/">Akışa dön</Link></section>;
   if (!profile) return <section className="kv-card kv-state"><h1>Profil demo modunda kullanılamıyor.</h1><p>Gerçek API modunda public profil, gönderiler ve yorumlar burada gösterilir.</p><Link href="/">Akışa dön</Link></section>;
 
   return (
     <div className="screen-stack">
       <Link href="/" className="back-link">← Akışa dön</Link>
+      <ErrorMessage message={pageError} />
+      {busy && <p role="status">Devamı yükleniyor…</p>}
       <section className="kv-card screen-stack">
         <div className="kv-row kv-between">
           <div>
@@ -92,7 +108,7 @@ export default function Page() {
             <p className="kv-muted">{poll.description}</p>
           </article>
         ))}
-        {pollCursor && <button className="kv-button kv-button--secondary" onClick={() => void morePolls()}>Daha fazla gönderi</button>}
+        {pollCursor && <button className="kv-button kv-button--secondary" disabled={busy} onClick={() => void morePolls()}>Daha fazla gönderi</button>}
       </section>
 
       <section className="kv-card screen-stack" aria-labelledby="profile-comments">
@@ -106,7 +122,7 @@ export default function Page() {
             </div>
           </article>
         ))}
-        {commentCursor && <button className="kv-button kv-button--secondary" onClick={() => void moreComments()}>Daha fazla yorum</button>}
+        {commentCursor && <button className="kv-button kv-button--secondary" disabled={busy} onClick={() => void moreComments()}>Daha fazla yorum</button>}
       </section>
     </div>
   );

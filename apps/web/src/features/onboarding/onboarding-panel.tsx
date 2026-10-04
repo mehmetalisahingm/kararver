@@ -19,6 +19,7 @@ export function OnboardingPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [saveError, setSaveError] = useState("");
   const [saved, setSaved] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -30,6 +31,7 @@ export function OnboardingPanel() {
     let active = true;
     setLoading(true);
     setError("");
+    setSaveError("");
     setSaved(false);
 
     if (demo) {
@@ -89,7 +91,7 @@ export function OnboardingPanel() {
   async function save() {
     if (!user || saving) return;
     setSaving(true);
-    setError("");
+    setSaveError("");
     try {
       if (!demo) {
         if (!(client instanceof ApiClient)) throw new Error("API istemcisi hazır değil.");
@@ -98,7 +100,7 @@ export function OnboardingPanel() {
       setSaved(true);
       notify(selected.length ? "İlgi alanların kaydedildi." : "İlgi alanların temizlendi.");
     } catch (reason) {
-      setError((reason as Error).message);
+      setSaveError((reason as Error).message);
     } finally {
       setSaving(false);
     }
@@ -141,6 +143,8 @@ export function OnboardingPanel() {
 
         {!loading && !error && (
           <div className="kv-stack">
+            {items.length === 0 && <p className="kv-muted">Şu an seçilebilecek kategori yok. Bu adımı atlayabilirsin.</p>}
+            {saveError && <p role="alert">{saveError} Seçimlerin korundu; tekrar kaydedebilirsin.</p>}
             <div aria-label="İlgi kategorileri">
               {items.map((item) => {
                 const active = selected.includes(item.id);
@@ -180,7 +184,7 @@ export function OnboardingPanel() {
         <span className="eyebrow">TOPLULUK ÖNERİLERİ</span>
         <h2>İstersen topluluklara göz at.</h2>
         <p className="kv-muted">Buradaki önerilere bakmak seni otomatik olarak hiçbir topluluğa üye yapmaz.</p>
-        {communities.length === 0 ? (
+        {loading ? <p role="status">Topluluklar yükleniyor…</p> : error ? <p className="kv-muted">Topluluk önerileri yüklenemedi. Yukarıdaki tekrar dene düğmesini kullanabilirsin.</p> : communities.length === 0 ? (
           <p className="kv-muted">Şu an gösterilecek açık topluluk yok.</p>
         ) : (
           communities.map((community) => (
