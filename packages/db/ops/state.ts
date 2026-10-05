@@ -75,14 +75,28 @@ export async function collectState(db: Sql): Promise<DbState> {
   return { migrations, rows, catalog };
 }
 
+/**
+ * Kısıt tanımının yazım biçimini eşitler. PostgreSQL, CHECK ifadesini dökümden yeniden okurken tip dönüşümlerini
+ * farklı yere yazabilir: `x = ANY ((ARRAY['a'::character varying])::text[])` restore sonrası
+ * `x = ANY (ARRAY[('a'::character varying)::text])` olur (staging PG 18 tatbikatında görüldü). Anlam aynıdır;
+ * tip dönüşümleri, parantezler ve boşluklar atılınca iki yazım eşleşir. Kısıt adı ve geri kalan ifade aynen karşılaştırılır.
+ */
+export function normalizeConstraint(def: string): string {
+  return def
+    // Yalnız tip adı atılır ("character varying" veya tek kelime); ardından gelen AND/OR gibi kelimelere dokunulmaz.
+    .replace(/::(character varying|"?[a-z_][a-z0-9_]*"?)(\[\])?/gi, "")
+    .replace(/[()\s]/g, "");
+}
+
 /** İki özet arasındaki farklar; boş dizi = aynı. */
 export function compareState(expected: DbState, actual: DbState): string[] {
   const diffs: string[] = [];
   const list = (label: string, a: string[], b: string[]) => {
-    const sa = new Set(a);
-    const sb = new Set(b);
-    for (const x of a) if (!sb.has(x)) diffs.push(`${label}: eksik ${x}`);
-    for (const x of b) if (!sa.has(x)) diffs.push(`${label}: fazla ${x}`);
+    const norm = label === "constraints" ? normalizeConstraint : (x: string) => x;
+    const sa = new Set(a.map(norm));
+    const sb = new Set(b.map(norm));
+    for (const x of a) if (!sb.has(norm(x))) diffs.push(`${label}: eksik ${x}`);
+    for (const x of b) if (!sa.has(norm(x))) diffs.push(`${label}: fazla ${x}`);
   };
   list("migration", expected.migrations, actual.migrations);
   for (const t of new Set([...Object.keys(expected.rows), ...Object.keys(actual.rows)])) {

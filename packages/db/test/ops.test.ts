@@ -17,7 +17,7 @@ import { backup } from "../ops/backup.ts";
 import { approval, checkMigrations, CUTOFF, findDestructive, transactional } from "../ops/check-migrations.ts";
 import { pgEnv, pgTool, redact, withDatabase } from "../ops/pg-tools.ts";
 import { restore } from "../ops/restore.ts";
-import { checkInvariants, collectState, compareState, type DbState } from "../ops/state.ts";
+import { checkInvariants, collectState, compareState, normalizeConstraint, type DbState } from "../ops/state.ts";
 import { createPrismaClient, type PrismaClient } from "../src/index.ts";
 
 const packageDir = path.resolve(import.meta.dirname, "..");
@@ -131,6 +131,24 @@ describe("durum karşılaştırması ve bağlantı", () => {
       "functions: eksik f() md5=1",
       "functions: fazla f() md5=2",
     ]);
+  });
+
+  test("kısıt yazım farkı (PG 18 restore) fark sayılmaz; anlam farkı sayılır", () => {
+    // Staging tatbikatında (PG 18.6) migration'ın yazdığı ve dökümden geri gelen aynı CHECK.
+    const created = "share_links.share_links_channel_check CHECK (((channel)::text = ANY ((ARRAY['x'::character varying, 'copy'::character varying])::text[])))";
+    const restored = "share_links.share_links_channel_check CHECK (((channel)::text = ANY (ARRAY[('x'::character varying)::text, ('copy'::character varying)::text])))";
+    assert.equal(normalizeConstraint(created), normalizeConstraint(restored));
+    const s1: DbState = { ...base, catalog: { ...base.catalog, constraints: [created] } };
+    assert.deepEqual(compareState(s1, { ...s1, catalog: { ...s1.catalog, constraints: [restored] } }), []);
+    // Değer, ad veya mantık değişirse yakalanır.
+    for (const changed of [
+      restored.replace("'copy'", "'mail'"),
+      restored.replace("share_links_channel_check", "share_links_kanal_check"),
+      "polls.c CHECK ((a)::text = 'x' AND (b)::text = 'y')".replace("AND", "OR"),
+    ]) {
+      assert.notEqual(normalizeConstraint(changed), normalizeConstraint(created));
+    }
+    assert.notEqual(normalizeConstraint("t.c CHECK ((a)::text = 'x' AND b > 0)"), normalizeConstraint("t.c CHECK ((a)::text = 'x' OR b > 0)"));
   });
 
   test("parola ortam değişkeniyle geçer, loglarda gizlenir", () => {
