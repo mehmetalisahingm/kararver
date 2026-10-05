@@ -9,6 +9,7 @@ import type { AdminClient } from "./admin-client.ts";
 import { adminNav, canEnterAdmin, canSeeAdminItem, type AdminRole, type AdminSectionId } from "./admin-model";
 import styles from "./admin-shell.module.css";
 import { AdminRolesContext } from "./admin-ui";
+import { CategoriesPanel } from "./categories-panel";
 import { CommunitiesPanel } from "./communities-panel";
 import { ContentPanel } from "./content-panel";
 import { MediaPanel } from "./media-panel";
@@ -114,13 +115,15 @@ const sectionMeta: Record<AdminSectionId, { title: string; intro: string; metric
   audit: { title: "Audit geçmişi", intro: "Kim, neyi, ne zaman ve hangi gerekçeyle değiştirdi görünümü.", metric: [["Bugün", "83"], ["Başarısız", "2"], ["Kritik", "6"]] },
 };
 
-/** Gerçek API'ye bağlı bölümler. Diğerleri (kullanıcılar, kategoriler, ayarlar, audit…) kendi işlerinde bağlanır. */
+/** Gerçek API'ye bağlı bölümler. Diğerleri kendi işlerinde bağlanır. */
 function livePanel(section: AdminSectionId, admin: AdminClient) {
   switch (section) {
     case "reports":
       return <ReportsPanel admin={admin} />;
     case "media":
       return <MediaPanel admin={admin} />;
+    case "categories":
+      return <CategoriesPanel admin={admin} />;
     case "communities":
       return <CommunitiesPanel admin={admin} />;
     case "polls":
