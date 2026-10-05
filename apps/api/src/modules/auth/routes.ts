@@ -15,7 +15,8 @@ export type AuthDeps = {
   session: SessionSettings;
   webUrl: string;
   mediaPublicBaseUrl: string;
-  rolesOf: RolesOf;
+  /** Tam uygulamada RBAC store'dan gelir; auth-only test/harness'larda USER varsayılır. */
+  rolesOf?: RolesOf;
   /** Sistem ayarı `registration.enabled` (KV-40, #42). Ayar servisi gelene kadar her zaman açık. */
   isRegistrationEnabled: () => Promise<boolean>;
 };
@@ -34,6 +35,7 @@ export function normalizeEmail(email: string): string {
 export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
   const { store, hasher, mailer, now, session } = deps;
   const cookies = createSessionCookies(session);
+  const rolesOf: RolesOf = deps.rolesOf ?? (async () => ["USER"]);
 
   // Bilinmeyen e-postada da parola doğrulaması yapılır; cevap süresi hesabın varlığını ele vermez.
   const dummyHash = hasher.hash(newToken());
@@ -129,7 +131,7 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
     );
     cookies.set(reply, raw);
     // İlk giriş puanı (#67, 20 puan) puan defteriyle birlikte gelecek; tablo henüz yok.
-    return { status: 200, body: { data: toMe(user, deps.mediaPublicBaseUrl, await deps.rolesOf(user.id)) } };
+    return { status: 200, body: { data: toMe(user, deps.mediaPublicBaseUrl, await rolesOf(user.id)) } };
   });
 
   route("auth.logout", async ({ viewer, reply }) => {
