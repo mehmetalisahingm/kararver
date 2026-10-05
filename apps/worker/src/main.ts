@@ -1,13 +1,14 @@
 // Worker giriş noktası: pnpm --filter @kararver/worker dev (TECH_DECISIONS §3.5).
 // media.process (Mert, KV-16), trends.refresh (Faruk, KV-28), snapshots.daily (Faruk, KV-29), sanctions.expire (Utku, KV-33)
-// ve olay outbox'ı events.dispatch / events.cleanup (Utku, KV-21). Diğer job'lar kendi klasörlerinde eklenir ve burada kaydedilir.
+// ve olay outbox'ı events.dispatch / events.cleanup, bildirim saklaması notifications.cleanup (Utku, KV-21). Diğer job'lar kendi klasörlerinde eklenir ve burada kaydedilir.
 import path from "node:path";
 import { defaultSettings } from "@kararver/contracts";
 import { createPrismaClient } from "@kararver/db";
 import { PgBoss } from "pg-boss";
 import { loadWorkerConfig } from "./config.ts";
 import { cleanupEvents } from "./jobs/events/cleanup.ts";
-import { productionConsumers } from "./jobs/events/consumers.ts";
+import { productionConsumers } from "./jobs/events/registry.ts";
+import { cleanupNotifications, NOTIFICATIONS_CLEANUP_CRON, NOTIFICATIONS_CLEANUP_QUEUE } from "./jobs/notifications/cleanup.ts";
 import { runDispatchLoop } from "./jobs/events/dispatch.ts";
 import {
   DISPATCH_LOOP_MS,
@@ -110,8 +111,14 @@ await boss.schedule(EVENTS_CLEANUP_QUEUE, EVENTS_CLEANUP_CRON, null, { tz: "Euro
 await boss.work(EVENTS_CLEANUP_QUEUE, { batchSize: 1 }, async () => {
   await cleanupEvents({ prisma, now: () => new Date(), log });
 });
+// notifications.cleanup: her gün 04:00 İstanbul; okunmuş bildirim 90 gün, silinmiş hesabın bildirimleri 30 gün (jobs/notifications/cleanup.ts).
+await boss.createQueue(NOTIFICATIONS_CLEANUP_QUEUE, { policy: "singleton", retryLimit: 0 });
+await boss.schedule(NOTIFICATIONS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_CRON, null, { tz: "Europe/Istanbul" });
+await boss.work(NOTIFICATIONS_CLEANUP_QUEUE, { batchSize: 1 }, async () => {
+  await cleanupNotifications({ prisma, now: () => new Date(), log });
+});
 log("info", "worker hazır", {
-  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE],
+  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE],
   concurrency: config.mediaConcurrency,
 });
 

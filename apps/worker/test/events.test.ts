@@ -10,7 +10,8 @@ import { after, before, describe, test } from "node:test";
 import { createEvent, newEventId, type DomainEvent, type EventType } from "@kararver/contracts";
 import { Prisma, type PrismaClient } from "@kararver/db";
 import { cleanupEvents, RETENTION_DAYS } from "../src/jobs/events/cleanup.ts";
-import { assertConsumers, PermanentEventError, productionConsumers, type EventConsumer } from "../src/jobs/events/consumers.ts";
+import { assertConsumers, PermanentEventError, type EventConsumer } from "../src/jobs/events/consumers.ts";
+import { productionConsumers } from "../src/jobs/events/registry.ts";
 import {
   dispatchBatch,
   LEASE_MS,
@@ -361,13 +362,13 @@ describe("olay outbox'ı dağıtıcısı (postgres)", { skip: url ? false : "TES
     assert.equal((await runDispatchLoop({ ...deps([rec.consumer]), maxMs: 60_000, signal: stop.signal })).turns, 0);
   });
 
-  test("tüketici kaydı: ad biçimi ve tekilliği, katalog tipleri; üretimde kayıtlı tüketici yok", () => {
+  test("tüketici kaydı: ad biçimi ve tekilliği, katalog tipleri; üretimde yalnız notifications (KV-21 PR-3)", () => {
     const ok: EventConsumer = { name: "notifications", types: ["poll.closed"], handle: async () => {} };
     assert.equal(assertConsumers([ok]).length, 1);
     assert.throws(() => assertConsumers([{ ...ok, name: "Bildirim" }]), TypeError);
     assert.throws(() => assertConsumers([ok, { ...ok }]), TypeError);
     assert.throws(() => assertConsumers([{ ...ok, types: [] }]), TypeError);
     assert.throws(() => assertConsumers([{ ...ok, types: ["poll.deleted" as EventType] }]), TypeError);
-    assert.deepEqual(productionConsumers, []);
+    assert.deepEqual(productionConsumers.map((c) => c.name), ["notifications"]);
   });
 });

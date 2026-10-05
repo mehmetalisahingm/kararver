@@ -475,7 +475,7 @@ Hangi işlemin gerekçe istediği, izinli türler ve hassas alan yasağı işlem
 
 ### 9.3 Bildirimler (Utku, KV-21)
 
-Şema `admin.prisma` (`Notification`, enum `notification_type`), kısıtlar ve okunmamış index'i `…_utku_kv21_notifications` migration'ının elle yazılan bölümündedir. Davranış ve API: [`KV-21_NOTIFICATIONS.md`](./KV-21_NOTIFICATIONS.md).
+Şema `admin.prisma` (`Notification`, enum `notification_type`), kısıtlar ve okunmamış index'i `…_utku_kv21_notifications`, `SANCTION_APPLIED` değeri ve okunmuş (saklama) index'i `…_utku_kv21_notification_consumer` migration'ındadır. Enum değerleri contracts `NotificationType` ile birebir ve aynı sıradadır (test). Davranış ve API: [`KV-21_NOTIFICATIONS.md`](./KV-21_NOTIFICATIONS.md) §2, §3, §6.
 
 | Kural | Kısıt |
 |---|---|
@@ -484,8 +484,9 @@ Hangi işlemin gerekçe istediği, izinli türler ve hassas alan yasağı işlem
 | Konu tipi contracts `NotificationView.subject` kümesi; `data` JSON nesnesi; okunma oluşturmadan önce olamaz | `notifications_subject_type_check`, `notifications_data_object_check`, `notifications_read_after_created_check` |
 
 - **FK'ler:** `recipient_id`, `actor_id → users`, `poll_id → polls`, hepsi `RESTRICT`. `event_id`'nin FK'si yoktur: outbox satırı 30 gün sonra silinir (§9.4).
-- **Index'ler:** `(recipient_id, created_at DESC, id DESC)` liste ve cursor; partial `notifications_unread_idx (recipient_id) WHERE read_at IS NULL` okunmamış sayısı; `poll_id` (KV-34 sessize alma), `actor_id`.
-- **Yazan:** yalnız teslim job'u (worker, KV-21 PR-3). API yalnız alıcının kendi satırlarını okur ve `read_at`'i doldurur.
+- **Index'ler:** `(recipient_id, created_at DESC, id DESC)` liste ve cursor; partial `notifications_unread_idx (recipient_id) WHERE read_at IS NULL` okunmamış sayısı; partial `notifications_read_at_idx (read_at) WHERE read_at IS NOT NULL` saklama; `poll_id` (KV-34 sessize alma), `actor_id`.
+- **Yazan:** yalnız bildirim tüketicisi (worker `jobs/notifications`, KV-21 PR-3), olay teslim transaction'ında; dilim başına tek `INSERT … SELECT unnest(...) ON CONFLICT DO NOTHING` (kolon eşlemesi `notifications-sql.test.ts` ile korunur). `created_at` = olayın `occurredAt`'i. API yalnız alıcının kendi satırlarını okur ve `read_at`'i doldurur.
+- **Saklama** (worker `notifications.cleanup`, günlük): okunmuş bildirim 90 gün sonra silinir, okunmamış silinmez; silinmiş hesabın bütün bildirimleri hesap silindikten 30 gün sonra silinir.
 
 ### 9.4 Olay outbox'ı (Utku, KV-21 PR-2)
 

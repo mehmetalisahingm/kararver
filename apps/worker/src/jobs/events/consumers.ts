@@ -40,8 +40,4 @@ export function assertConsumers(consumers: readonly EventConsumer[]): readonly E
   return Object.freeze([...consumers]);
 }
 
-/**
- * Üretimde kayıtlı tüketiciler. Şu an boş: olaylar dağıtılır ama kimseye teslim edilmez ve 30 gün sonra silinir.
- * PR-3 bildirim tüketicisini ekler; ondan önce dağıtılmış olaylar ona geriye dönük verilmez.
- */
-export const productionConsumers: readonly EventConsumer[] = assertConsumers([]);
+// Üretimde kayıtlı tüketiciler: registry.ts (tüketici modülleri bu dosyayı import eder; döngü olmasın diye ayrı).

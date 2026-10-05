@@ -1,11 +1,12 @@
 {
   "name": "@kararver/contracts",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./fixtures": "./fixtures/index.ts"
+    "./fixtures": "./fixtures/index.ts",
+    "./fixtures/events": "./fixtures/events.ts"
   },
   "scripts": {
     "test": "node --test \"test/*.test.mjs\" \"test/*.test.ts\"",

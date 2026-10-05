@@ -349,8 +349,10 @@ export const eventCatalog = Object.freeze({
     subjects: ["USER"],
     actor: "user",
     payload: z.strictObject({ sanctionId: Id, type: SanctionType, endsAt: Timestamp.nullable() }),
-    consumers: ["search", "metrics"],
+    consumers: ["notifications", "search", "metrics"],
     analytics: [],
+    // Yalnız WARNING ve RESTRICT_* bildirim üretir; SUSPEND/BAN kullanıcı girişte hatayı görür (KV-21 §4).
+    notification: "SANCTION_APPLIED",
     sensitive: [],
     naturalKey: (e) => `sanction.applied:${e.payload.sanctionId}`,
   }),
