@@ -5,8 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Me, dataOf } from "@kararver/contracts";
 import { useProduct } from "../../components/product-provider";
+import type { AdminClient } from "./admin-client.ts";
 import { adminNav, canEnterAdmin, canSeeAdminItem, type AdminRole, type AdminSectionId } from "./admin-model";
 import styles from "./admin-shell.module.css";
+import { AdminRolesContext } from "./admin-ui";
+import { CommunitiesPanel } from "./communities-panel";
+import { ContentPanel } from "./content-panel";
+import { MediaPanel } from "./media-panel";
+import { ReportsPanel } from "./reports-panel";
 
 function currentRoles(demo: boolean, email: string | undefined): AdminRole[] {
   if (!demo || !email) return [];
@@ -89,7 +95,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         })}
         <div className={styles.role}>Rol: {roles.join(", ")}</div>
       </aside>
-      <section className={styles.content}>{children}</section>
+      <section className={styles.content}><AdminRolesContext.Provider value={roles}>{children}</AdminRolesContext.Provider></section>
     </div>
   );
 }
@@ -108,9 +114,39 @@ const sectionMeta: Record<AdminSectionId, { title: string; intro: string; metric
   audit: { title: "Audit geçmişi", intro: "Kim, neyi, ne zaman ve hangi gerekçeyle değiştirdi görünümü.", metric: [["Bugün", "83"], ["Başarısız", "2"], ["Kritik", "6"]] },
 };
 
+/** Gerçek API'ye bağlı bölümler. Diğerleri (kullanıcılar, kategoriler, ayarlar, audit…) kendi işlerinde bağlanır. */
+function livePanel(section: AdminSectionId, admin: AdminClient) {
+  switch (section) {
+    case "reports":
+      return <ReportsPanel admin={admin} />;
+    case "media":
+      return <MediaPanel admin={admin} />;
+    case "communities":
+      return <CommunitiesPanel admin={admin} />;
+    case "polls":
+      return <ContentPanel admin={admin} kind="polls" />;
+    case "comments":
+      return <ContentPanel admin={admin} kind="comments" />;
+    default:
+      return null;
+  }
+}
+
 export function AdminSection({ section }: { section: AdminSectionId }) {
   const meta = sectionMeta[section];
+  const { client } = useProduct();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const live = client.admin ? livePanel(section, client.admin) : null;
+  if (live) {
+    return (
+      <>
+        <header className={styles.hero}>
+          <div><span className="eyebrow">YÖNETİM</span><h1>{meta.title}</h1><p className="kv-muted">{meta.intro}</p></div>
+        </header>
+        {live}
+      </>
+    );
+  }
   return (
     <>
       <header className={styles.hero}>

@@ -3,14 +3,14 @@ import { decodeCursor, encodeCursor, invalidCursor } from "../../http/cursor.ts"
 import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
 import type { AuthStore } from "../auth/store.ts";
-import { toMe } from "./me.ts";
+import { toMe, type RolesOf } from "./me.ts";
 
 const POINTS_LEDGER_CURSOR = "points-ledger:v1";
 
-export function registerUserRoutes(route: Route, deps: { store: AuthStore; mediaPublicBaseUrl: string }): void {
-  const { store, mediaPublicBaseUrl } = deps;
+export function registerUserRoutes(route: Route, deps: { store: AuthStore; mediaPublicBaseUrl: string; rolesOf: RolesOf }): void {
+  const { store, mediaPublicBaseUrl, rolesOf } = deps;
 
-  route("me.get", async ({ viewer }) => ({ status: 200, body: { data: toMe(viewer!.user, mediaPublicBaseUrl) } }));
+  route("me.get", async ({ viewer }) => ({ status: 200, body: { data: toMe(viewer!.user, mediaPublicBaseUrl, await rolesOf(viewer!.id)) } }));
 
   route("me.update", async ({ viewer, body }) => {
     if (body.avatarMediaId && !(await store.isUsableAvatar(viewer!.id, body.avatarMediaId))) {
@@ -21,7 +21,7 @@ export function registerUserRoutes(route: Route, deps: { store: AuthStore; media
       bio: body.bio === "" ? null : body.bio,
       avatarMediaId: body.avatarMediaId,
     });
-    return { status: 200, body: { data: toMe(user, mediaPublicBaseUrl) } };
+    return { status: 200, body: { data: toMe(user, mediaPublicBaseUrl, await rolesOf(user.id)) } };
   });
 
   route("points.get", async ({ viewer }) => {

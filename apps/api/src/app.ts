@@ -163,7 +163,13 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     now,
   });
 
+  const rolesOf = async (userId: string) => {
+    const { roles } = await deps.rbacStore.grants(userId, now());
+    return roles.length > 0 ? roles : ["USER" as const];
+  };
+
   registerAuthRoutes(route, {
+    rolesOf,
     store: deps.authStore,
     hasher: deps.hasher,
     mailer: deps.mailer,
@@ -173,7 +179,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     mediaPublicBaseUrl: config.mediaPublicBaseUrl,
     isRegistrationEnabled: deps.isRegistrationEnabled ?? (async () => true),
   });
-  registerUserRoutes(route, { store: deps.authStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  registerUserRoutes(route, { store: deps.authStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl, rolesOf });
   if (deps.pointAdminStore) registerPointAdminRoutes(route, { store: deps.pointAdminStore, now });
   if (deps.pollStore) {
     registerPollRoutes(route, {
