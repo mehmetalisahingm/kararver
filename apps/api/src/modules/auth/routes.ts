@@ -2,7 +2,7 @@
 import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
 import { sendSafely, type Mailer } from "../../mail/mailer.ts";
-import { toMe } from "../users/me.ts";
+import { toMe, type RolesOf } from "../users/me.ts";
 import { hashToken, newToken, type PasswordHasher } from "./crypto.ts";
 import { createSessionCookies, type SessionSettings } from "./session.ts";
 import type { AuthStore, NewToken, TokenPurpose } from "./store.ts";
@@ -15,6 +15,7 @@ export type AuthDeps = {
   session: SessionSettings;
   webUrl: string;
   mediaPublicBaseUrl: string;
+  rolesOf: RolesOf;
   /** Sistem ayarı `registration.enabled` (KV-40, #42). Ayar servisi gelene kadar her zaman açık. */
   isRegistrationEnabled: () => Promise<boolean>;
 };
@@ -128,7 +129,7 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
     );
     cookies.set(reply, raw);
     // İlk giriş puanı (#67, 20 puan) puan defteriyle birlikte gelecek; tablo henüz yok.
-    return { status: 200, body: { data: toMe(user, deps.mediaPublicBaseUrl) } };
+    return { status: 200, body: { data: toMe(user, deps.mediaPublicBaseUrl, await deps.rolesOf(user.id)) } };
   });
 
   route("auth.logout", async ({ viewer, reply }) => {

@@ -1,5 +1,6 @@
 import { Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
+import { AdminClient } from "../features/admin/admin-client.ts";
 import { MediaClient } from "./media-client.ts";
 import { UiError, safeReturnTo } from "./model.ts";
 import type { Draft, PageResult, Poll, ProductClient, ProfileComment, PublicProfile, User } from "./model.ts";
@@ -34,6 +35,8 @@ export function mapPoll(wire: ReturnType<typeof PollCard.parse> | ReturnType<typ
 }
 export class ApiClient implements ProductClient {
   readonly media: MediaClient;
+  /** Yönetim ekranları (KV-14/24/32/37/38); demo adapter'da yoktur, ekran yer tutucuya düşer. */
+  readonly admin: AdminClient;
   private social: ApiEngagement;
   protected http: HttpClient;
   private user: User | null = null;
@@ -41,6 +44,7 @@ export class ApiClient implements ProductClient {
   constructor(baseUrl: string, fetcher?: typeof fetch, uploadFetcher?: typeof fetch) {
     this.http = new HttpClient(baseUrl, fetcher);
     this.media = new MediaClient(this.http, uploadFetcher);
+    this.admin = new AdminClient(this.http);
     this.social = new ApiEngagement(this.http);
     this.http.onUnauthorized = () => this.setUser(null);
   }
