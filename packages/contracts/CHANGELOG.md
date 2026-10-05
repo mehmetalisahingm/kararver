@@ -3,6 +3,17 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.17.0 — 2026-10-05 (Utku, KV-21 PR-3 bildirim tüketicisi)
+
+Kırıcı değişiklik yok: `NotificationType` açık enum'dur (API_CONTRACTS §5), yeni değer minor; diğerleri yeni sabit ve şema.
+
+- **Eklendi:** `NotificationType` += `SANCTION_APPLIED` (sona). Katalogda `sanction.applied` artık `notifications` tüketicisini listeler ve `notification: "SANCTION_APPLIED"`; bildirim yalnız `WARNING` ve `RESTRICT_*` için yazılır, `SUSPEND`/`BAN` için yazılmaz (KV-21 §4).
+- **Eklendi:** `notificationData`: tipe göre `NotificationView.data` şemaları (strict, düz alanlar; seçim, serbest metin ve kişisel veri yok). `NotificationView.data` değişmedi.
+- **Eklendi:** `MANDATORY_NOTIFICATION_TYPES` (`MODERATION_APPLIED`, `SANCTION_APPLIED`: kapatılamaz) ve `POLL_MILESTONES` (10, 50, 100, 500, 1000, 5000, 10000; üretici ve tüketici aynı listeyi kullanır).
+- **Değişti:** `notifications.preferences.update` notu: `SANCTION_APPLIED` da kapatılamaz.
+- **Eklendi:** paket alt yolu `@kararver/contracts/fixtures/events` (`eventExamples`): worker'daki bildirim adapter sözleşme testi katalog örneklerini kullanır.
+- **Belge:** KV-04 katalog tablosunda `sanction.applied` satırı.
+
 ## 1.16.0 — 2026-10-04 (Utku, KV-21 PR-2 olay outbox'ı)
 
 Kırıcı değişiklik yok (yeni yardımcı ve DB hata eşlemesi minor; zarf, katalog, `createEvent` ve `parseEvent` değişmedi).

@@ -1,8 +1,12 @@
 // Bildirimler — sağlayıcı Utku · KV-21 (#23), KV-34 (#36); tüketici Mehmet KV-35 (#37)
 import { z } from "zod";
-import { Count, CursorQuery, dataOf, Id, pageOf, PublicUser, Timestamp } from "../common.ts";
+import { ContentStatus, Count, CursorQuery, dataOf, Id, pageOf, PublicUser, Timestamp } from "../common.ts";
 import { defineEndpoint } from "../endpoint.ts";
+import { SanctionType } from "./admin.ts";
+import { TrendFormat } from "./discovery.ts";
+import { ModerationAction } from "./moderation.ts";
 
+/** Açık enum (API_CONTRACTS §5): istemci bilinmeyen tipi genel gösterir. Yeni değer sona eklenir (DB enum'u aynı sırada). */
 export const NotificationType = z.enum([
   "COMMENT_ON_POLL",
   "REPLY_TO_COMMENT",
@@ -13,7 +17,32 @@ export const NotificationType = z.enum([
   "DECISION_UPDATED",
   "MODERATION_APPLIED",
   "COMMUNITY_FEATURED",
+  "SANCTION_APPLIED",
 ]);
+export type NotificationType = z.infer<typeof NotificationType>;
+
+/** Kullanıcının kapatamayacağı tipler (KV-34 tercihleri ve anket sessizi bunlara uygulanmaz). */
+export const MANDATORY_NOTIFICATION_TYPES: readonly NotificationType[] = Object.freeze(["MODERATION_APPLIED", "SANCTION_APPLIED"]);
+
+/** Oy kilometre taşları (KV-21 §4): yalnız anket sahibine. Üretici (poll.milestone) ve bildirim tüketicisi aynı listeyi kullanır. */
+export const POLL_MILESTONES: readonly number[] = Object.freeze([10, 50, 100, 500, 1000, 5000, 10000]);
+
+/**
+ * Tipe göre `NotificationView.data` (KV-21 PR-3). Küçük, düz alanlar; oy seçimi, serbest metin (gerekçe, yorum) ve kişisel
+ * veri yoktur. `NotificationView.data` genel kayıt olarak kalır; istemci tipe göre bu şemalarla okur.
+ */
+export const notificationData = Object.freeze({
+  COMMENT_ON_POLL: z.strictObject({}),
+  REPLY_TO_COMMENT: z.strictObject({ parentId: Id }),
+  ALTERNATIVE_ON_POLL: z.strictObject({}),
+  POLL_MILESTONE: z.strictObject({ metric: z.enum(["VOTES"]), milestone: z.number().int().positive() }),
+  POLL_TRENDING: z.strictObject({ format: TrendFormat, rank: z.number().int().min(1) }),
+  POLL_CLOSED: z.strictObject({ reason: z.enum(["EXPIRED", "OWNER"]) }),
+  DECISION_UPDATED: z.strictObject({ first: z.boolean() }),
+  MODERATION_APPLIED: z.strictObject({ action: ModerationAction, toStatus: ContentStatus }),
+  COMMUNITY_FEATURED: z.strictObject({ communityId: Id }),
+  SANCTION_APPLIED: z.strictObject({ sanctionType: SanctionType.extract(["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING"]), endsAt: Timestamp.nullable() }),
+} satisfies Record<NotificationType, z.ZodObject>);
 
 export const NotificationView = z.strictObject({
   id: Id,
@@ -125,7 +154,7 @@ export const notificationEndpoints = [
     errors: [],
     idempotency: "natural",
     cache: "private",
-    notes: ["MODERATION_APPLIED kapatılamaz; gönderilirse 400 VALIDATION_ERROR."],
+    notes: ["MODERATION_APPLIED ve SANCTION_APPLIED kapatılamaz (MANDATORY_NOTIFICATION_TYPES); gönderilirse 400 VALIDATION_ERROR."],
   }),
   defineEndpoint({
     id: "notifications.mutes.put",

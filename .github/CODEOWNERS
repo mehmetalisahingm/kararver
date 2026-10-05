@@ -50,6 +50,8 @@
 /apps/worker/src/jobs/notifications/        @Utkuuzun14
 /apps/worker/src/jobs/events/               @Utkuuzun14
 /apps/worker/test/events.test.ts            @Utkuuzun14
+/apps/worker/test/notifications*.test.ts    @Utkuuzun14
+/apps/worker/scripts/notifications-fanout-bench.ts @Utkuuzun14
 /apps/worker/src/jobs/sanctions/            @Utkuuzun14
 /apps/worker/test/sanctions.test.ts         @Utkuuzun14
 /apps/web/src/features/notifications/       @Utkuuzun14

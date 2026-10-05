@@ -13,10 +13,14 @@ import {
   eventEnvelope,
   eventTypes,
   isEventType,
+  MANDATORY_NOTIFICATION_TYPES,
   naturalKey,
   newEventId,
   NotificationType,
+  notificationData,
+  NotificationView,
   parseEvent,
+  POLL_MILESTONES,
   type EventDefinition,
   type EventType,
 } from "../src/index.ts";
@@ -300,5 +304,43 @@ describe("olay kimliği (newEventId, UUIDv7)", () => {
   test("geçersiz zaman reddedilir", () => {
     assert.throws(() => newEventId(new Date(Number.NaN)), TypeError);
     assert.throws(() => newEventId(new Date(-1)), TypeError);
+  });
+});
+
+describe("bildirim verisi (KV-21 PR-3)", () => {
+  const samples: Record<NotificationType, Record<string, string | number | boolean | null>> = {
+    COMMENT_ON_POLL: {},
+    REPLY_TO_COMMENT: { parentId: OPTION_A },
+    ALTERNATIVE_ON_POLL: {},
+    POLL_MILESTONE: { metric: "VOTES", milestone: 100 },
+    POLL_TRENDING: { format: "WEEKLY_MOVERS", rank: 3 },
+    POLL_CLOSED: { reason: "EXPIRED" },
+    DECISION_UPDATED: { first: true },
+    MODERATION_APPLIED: { action: "HIDE", toStatus: "HIDDEN" },
+    COMMUNITY_FEATURED: { communityId: OPTION_B },
+    SANCTION_APPLIED: { sanctionType: "WARNING", endsAt: null },
+  };
+
+  test("her bildirim tipinin data şeması var; örnek hem tipe özgü şemadan hem NotificationView.data'dan geçer", () => {
+    assert.deepEqual(Object.keys(notificationData).sort(), [...NotificationType.options].sort());
+    for (const type of NotificationType.options) {
+      notificationData[type].parse(samples[type]);
+      NotificationView.shape.data.parse(samples[type]);
+      assert.throws(() => notificationData[type].parse({ ...samples[type], reason: "serbest metin" }), type);
+    }
+  });
+
+  test("yaptırım bildirimi yalnız WARNING ve RESTRICT_*; gerekçe taşımaz", () => {
+    for (const t of ["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING"]) notificationData.SANCTION_APPLIED.parse({ sanctionType: t, endsAt: null });
+    for (const t of ["SUSPEND", "BAN"]) assert.throws(() => notificationData.SANCTION_APPLIED.parse({ sanctionType: t, endsAt: null }));
+    assert.equal(eventCatalog["sanction.applied"].notification, "SANCTION_APPLIED");
+    assert.ok(eventCatalog["sanction.applied"].consumers.includes("notifications"));
+  });
+
+  test("kapatılamayan tipler ve kilometre taşları", () => {
+    assert.deepEqual([...MANDATORY_NOTIFICATION_TYPES].sort(), ["MODERATION_APPLIED", "SANCTION_APPLIED"]);
+    assert.ok(MANDATORY_NOTIFICATION_TYPES.every((t) => NotificationType.options.includes(t)));
+    assert.deepEqual([...POLL_MILESTONES], [10, 50, 100, 500, 1000, 5000, 10000]);
+    assert.deepEqual([...POLL_MILESTONES].sort((a, b) => a - b), [...POLL_MILESTONES]);
   });
 });

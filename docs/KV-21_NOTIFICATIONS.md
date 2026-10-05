@@ -9,8 +9,8 @@ Kabul koşulları: tekrarlanan olay tek bildirim üretir; başka kullanıcının
 | PR | İçerik | Durum |
 |---|---|---|
 | PR-1 | `notifications` tablosu, okuma API'si (liste, okunmamış sayısı, okundu), kullanıcı izolasyonu | ✅ #125 |
-| **PR-2** | Olay outbox'ı (`domain_events`, mutation ile aynı transaction'da yazım), worker dağıtıcısı (pg-boss), retry/DEAD, saklama; ilk üretici admin-users | bu PR (§5) |
-| PR-3 | Teslim job'u (`notifications.deliver`), modül adapter'ları, retry/dead letter, sözleşme testleri, saklama temizliği | sırada |
+| PR-2 | Olay outbox'ı (`domain_events`, mutation ile aynı transaction'da yazım), worker dağıtıcısı (pg-boss), retry/DEAD, saklama; ilk üretici admin-users | ✅ #128 (§5) |
+| **PR-3** | `notifications` tüketicisi, modül adapter'ları, alıcı süzgeci ve KV-34 politika kancası, kitlesel fan-out, sözleşme testleri, bildirim saklaması | bu PR (§6) |
 | PR-4 | Üretici modüllerde olay yazımı (comments, votes, polls, trends, moderation; sahipleri reviewer) | sırada |
 
 V1'de teslim **uygulama içi bildirim satırı yazmaktır**; e-posta/push yoktur (MVP §12).
@@ -47,6 +47,8 @@ Kapsam dışı: `notifications.preferences.*`, `notifications.mutes.*` (KV-34; r
   - **`poll.closed` ve karar güncellemesi (`decision.updated`):** anketin bütün geçerli oy verenlerine bildirim. Alıcılar teslimde DB'den çözülür ve 1000'lik dilimlerle yazılır (fan-out); olay başına en fazla 50 000 alıcı.
   - **Topluluk öne çıkarma (`community.featured`):** üyelere bildirim **yok**.
   - **Oy kilometre taşları (`poll.milestone`):** yalnız anket sahibine; eşikler 10, 50, 100, 500, 1000, 5000, 10 000.
+- **Yaptırım kaldırma (`sanction.lifted`):** V1'de bildirim yok. RESTRICT_* kaldırıldığında kullanıcıya bildirim KV-34 veya sonrasında değerlendirilir (yeni bildirim tipi gerekir).
+- **PR-3 kararları (2026-10-05):** trend bildirimi anket + format başına ömür boyu bir kez; moderasyon, yaptırım ve öne çıkarma bildirimlerinde aktör gösterilmez; `poll.closed` anket sahibine de gider; BANNED ve silinmiş hesaba bildirim yazılmaz (SUSPENDED/RESTRICTED'e yazılır); teslim anında görünür olmayan içerik (yorum, cevap, öneri, anket) için bildirim yazılmaz; silinmiş hesabın bildirimleri silinmeden 30 gün sonra temizlenir. Ayrıntı §6.
 - **PR-2 → PR-3 arası olaylar:** PR-2'de üretimde kayıtlı tüketici yoktur; bu arada üretilen olaylar (şu an admin-users'ın `sanction.*` / `role.changed` olayları) **abonesiz dağıtılır** ve 30 gün sonra silinir. PR-3'teki `notifications` tüketicisi onları **geriye dönük almaz** (bildirim üretilmez). Genel kural: tüketici, kayıt olmadan önce dağıtılmış olayları görmez (§5.2).
 
 ## 5. Olay outbox'ı ve dağıtıcı (PR-2)
@@ -88,7 +90,7 @@ WHERE event_id = '<olay>' AND consumer = '<tüketici>' AND status = 'DEAD';
 
 **Saklama:** `events.cleanup`, her gün 03:30 Europe/Istanbul, 5000'lik dilimlerle: bütün teslimleri `DONE` olan ve son `DONE`'u (teslimsiz olayda dağıtım anı) 30 günden eski olaylar silinir. Dağıtılmamış, ayrıştırılamamış, `PENDING` veya `DEAD` teslimi olan olay asla silinmez. Her çalışmada `DEAD` teslim, 10 dk'dan eski `PENDING`, 10 dk'dan eski dağıtılmamış ve ayrıştırılamamış olay sayısı loglanır; biri 0'dan büyükse `warn`.
 
-**Tüketici kaydı:** `productionConsumers` (şu an boş; PR-3 `notifications`'ı ekler). Tüketici yalnız kayıt olduktan sonra dağıtılan olayları alır; geriye dönük teslim yoktur.
+**Tüketici kaydı:** `productionConsumers` (`jobs/events/registry.ts`; PR-3'ten beri `notifications`, §6). Tüketici yalnız kayıt olduktan sonra dağıtılan olayları alır; geriye dönük teslim yoktur.
 
 ### 5.3 Tüketici arayüzü (PR-3 adapter'ları buna takılır)
 
@@ -104,3 +106,57 @@ class PermanentEventError extends Error {} // yeniden denenmeden DEAD
 - `handle` teslim transaction'ında çalışır; idempotent olmalıdır (teslim en az bir kez).
 - **Sıralama garantisi yok** (contracts `eventDelivery.ordering = "none"`): tüketici delta uygulamaz, güncel durumu DB'den okur veya tekdüze bir alanla (`occurredAt`, `version`) eskiyi yok sayar. Bildirimde `created_at` olayın `occurredAt`'i olur (PR-3), böylece ters sırada işlenen iki olay listede doğru sırada görünür.
 - **Kilit:** `users` satırı kilitlemesi gerekirse yalnız `FOR NO KEY UPDATE` ve KV-33 sırası; asla `FOR UPDATE` (FK'lerin `FOR KEY SHARE`'i ile çakışır). Bildirim INSERT'inin FK kilidi (`FOR KEY SHARE`) KV-33'ün `FOR NO KEY UPDATE`'iyle çakışmaz.
+
+## 6. Bildirim tüketicisi ve adapter'lar (PR-3)
+
+Kod: `apps/worker/src/jobs/notifications/` (`adapters.ts`, `consumer.ts`, `write.ts`, `policy.ts`, `cleanup.ts`); kayıt `apps/worker/src/jobs/events/registry.ts` (`productionConsumers` = `notifications`). Testler: `apps/worker/test/notifications-contract.test.ts` (sözleşme, DB'siz), `notifications.test.ts` (adapter'lar, fan-out, süzgeç, politika, uçtan uca, saklama), `notifications-sql.test.ts` (ham SQL koruması).
+
+### 6.1 Akış ve adapter'lar
+
+Olay → adapter → alıcılar (teslim anında DB'den) → ortak süzgeç ve politika → `notifications` satırları; hepsi teslim transaction'ında (§5.2: DONE ile birlikte commit). Adapter iki parçalıdır: `draft(event)` saf (tip, konu, anket, gösterilen aktör, `data`, dedupe anahtarı; `null` = bildirim yok) ve `recipients(tx, event)` (DB; `null` = konu teslimde görünür değil; konu satırı hiç yoksa `PermanentEventError` → DEAD).
+
+| Olay | Bildirim | Alıcı | Konu | Aktör | `data` | Dedupe |
+|---|---|---|---|---|---|---|
+| `comment.created` | `COMMENT_ON_POLL` | anket sahibi | yorum | yorumcu | `{}` | olay kimliği |
+| `comment.replied` | `REPLY_TO_COMMENT` | üst yorumun sahibi | cevap | cevaplayan | `{ parentId }` | olay kimliği |
+| `alternative.created` | `ALTERNATIVE_ON_POLL` | anket sahibi | öneri | öneren | `{}` | olay kimliği |
+| `poll.milestone` | `POLL_MILESTONE` | yalnız anket sahibi; eşikler `POLL_MILESTONES` (10, 50, 100, 500, 1000, 5000, 10 000), listede olmayan yok sayılır | anket | — | `{ metric, milestone }` | doğal anahtar (eşik başına bir kez) |
+| `poll.trending` | `POLL_TRENDING` | anket sahibi | anket | — | `{ format, rank }` | `poll.trending:<anket>:<format>` (ömür boyu bir kez) |
+| `poll.closed` | `POLL_CLOSED` | bütün geçerli oy verenler (fan-out) + anket sahibi | anket | kapatan (OWNER) / — (EXPIRED) | `{ reason }` | doğal anahtar (anket başına bir kez) |
+| `decision.updated` | `DECISION_UPDATED` | bütün geçerli oy verenler (fan-out) | anket | anket sahibi | `{ first }` (seçim yazılmaz) | olay kimliği (her güncelleme ayrı) |
+| `moderation.applied` | `MODERATION_APPLIED` | içeriğin sahibi (anket/yorum; yorumda anket DB'den) | anket/yorum | **gizli** | `{ action, toStatus }` | olay kimliği |
+| `community.featured` | `COMMUNITY_FEATURED` | yalnız anket sahibi (üyelere yok) | anket | **gizli** | `{ communityId }` | doğal anahtar |
+| `sanction.applied` | `SANCTION_APPLIED` | yaptırım alan; yalnız `WARNING`, `RESTRICT_*` | kullanıcı | **gizli** | `{ sanctionType, endsAt }` (gerekçe yok) | doğal anahtar |
+
+`dedupe_key` = `notifications:<naturalKey ?? event.id>` (trend hariç). UNIQUE `(recipient_id, dedupe_key)` ve `ON CONFLICT DO NOTHING`; retry'da, aynı iş olgusunun farklı kimlikle tekrarında ve aynı alıcının iki yoldan gelmesinde tek satır kalır (anket sahibi kendi anketine oy veremez, `KV_SELF_VOTE`; verseydi de tek satır). `created_at` = olayın `occurredAt`'i. `data` şemaları contracts `notificationData`'dadır.
+
+**Üreticiler:** bugün yalnız `sanction.applied` üretiliyor (admin-users, PR-2); diğerlerinin üreticileri PR-4'te sahiplerinin modüllerinde eklenir (Faruk: polls, votes, comments, trends job'u; Mert: moderation; Mehmet: decision-updates, featured). Adapter'lar hazır ve contracts örnek olayları + gerçek DB verisiyle testlidir; PR-4'te yalnız üretici ve onun testi eklenir.
+
+### 6.2 Alıcı süzgeci ve politika
+
+- **Ortak süzgeç** (SQL'de): olayın gerçek aktörü alıcı olmaz (aktörü gizlenen tiplerde de); silinmiş (`deleted_at`) ve BANNED hesap bildirim almaz; SUSPENDED / RESTRICTED alır.
+- **Görünürlük:** yorum, cevap, öneri ve anket konulu bildirimler konu içerik teslimde `ACTIVE` veya `LOCKED` değilse yazılmaz; moderasyon bildirimi hariç (gizlenen içeriğin sahibi bilmeli).
+- **KV-34 politika kancası:** `policy.ts` (`NotificationPolicy`, bugün `allowAll`). Tüketici her alıcı diliminde çağırır; KV-34 tip tercihi ve anket sessizini (`poll_id`) yalnız bu dosyada uygular. `MODERATION_APPLIED` ve `SANCTION_APPLIED` kapatılamaz (contracts `MANDATORY_NOTIFICATION_TYPES`): politikaya hiç sorulmaz.
+
+### 6.3 Kitlesel fan-out ve ölçüm
+
+`poll.closed` ve `decision.updated` anketin bütün geçerli oy verenlerine (`votes.invalidated_at IS NULL`) gider: tüketici transaction'ında, 1000'lik dilimlerle (keyset `votes.created_at, user_id`; index `votes (poll_id, created_at, invalidated_at)`), olay başına en fazla 50 000 alıcı. Aşılırsa en eski oy verenler alır ve `warn` loglanır (sıra deterministik, retry aynı kümeyi seçer). Dilim başına tek `INSERT … SELECT FROM unnest($kimlikler, $alıcılar) ON CONFLICT (recipient_id, dedupe_key) DO NOTHING`; kimlikler contracts UUIDv7 üreteciyle JS'te üretilir (`notifications.id`'nin DB varsayılanı yok). Bütün dilimler tek transaction'da: ya hepsi commit olur ya hiçbiri; retry çift kayıt üretmez. Kolon eşlemesi ham SQL olduğu için `notifications-sql.test.ts` satırı Prisma ile geri okuyup bütün kolonları karşılaştırır ve tablo/model kolon listesini sabitler.
+
+**50 000 alıcı ölçümü** (2026-10-05; tüketici transaction sınırı 30 sn, karar eşiği 15 sn):
+
+| Yazım yolu | İlk teslim | Retry (hepsi dedupe) |
+|---|---|---|
+| `createMany({ skipDuplicates })` dilimleri (ilk deneme, bırakıldı) | 36,5 sn | 35,9 sn |
+| **Dilim başına tek `INSERT … SELECT unnest(...)` (uygulanan)** | **9,1 sn** | **3,7 sn** |
+
+Makine: Intel Core i7-13700H (14 çekirdek / 20 iş parçacığı), 16 GB RAM, Samsung NVMe; Windows 11 Pro 10.0.26200; Node 24.21.0; PostgreSQL 17.11 (docker compose `postgres:17.11-alpine`; Docker 20 CPU / 7,6 GB); Prisma 7.10.0. Dilim sorgusunun kendisi ~4 ms (`EXPLAIN ANALYZE`); süre yazımda. Üretim donanımında ölçüm 15 sn'yi geçerse plan B: ayrı fan-out job'ları (cursor tablosu, dilim başına kısa transaction).
+
+**Ölçüm script'i:** `apps/worker/scripts/notifications-fanout-bench.ts`, CI'da koşmaz. Yalnız açıkça verilen `TEST_DATABASE_URL`'e (adı `_test` ile biten) yazar, `.env`'den türetmez; ne ölçtüğü ve nasıl çalıştırılacağı dosyanın başında. O veritabanına N kullanıcı, oy ve bildirim bırakır; ardından `pnpm test:reset`.
+
+### 6.4 Saklama
+
+`notifications.cleanup`: her gün 04:00 Europe/Istanbul, `singleton`, 5000'lik dilimler. Okunmuş bildirim okunduktan 90 gün sonra silinir (partial index `notifications_read_at_idx`); okunmamış silinmez. Silinmiş hesabın bütün bildirimleri (okunmuş/okunmamış) hesap silindikten 30 gün sonra silinir.
+
+### 6.5 Sözleşme testi (kabul koşulu)
+
+`notifications-contract.test.ts`: katalogda `notification` alanı olan her olay tipinin tam bir adapter'ı var ve her adapter'ın tipi katalogdaki `notification` ile aynı (iki yönlü; adapter'sız bildirim olayı eklenemez); tüketicinin tipleri bu kümeyle aynı ve üretimde kayıtlı; her adapter'ın contracts örnek olayından (`@kararver/contracts/fixtures/events`) ürettiği taslak `NotificationView` ve tipe özgü `notificationData` şemasından geçer; `data`'da olayın hassas alanları yok; dedupe anahtarı biçimi ve uzunluğu; `created_at` = `occurredAt`; aktörü gizlenen tipler; bildirim üretmeyen durumlar (SUSPEND/BAN, listede olmayan eşik).

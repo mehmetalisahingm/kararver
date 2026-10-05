@@ -126,7 +126,7 @@ route("admin.reports.resolve", async ({ params, authorize }) => {
 | `points.granted` | Mehmet `points` | USER | any | metrics | — | — | var |
 | `points.debited` | Mehmet `points` | USER | user | metrics | — | — | var |
 | `points.adjusted` | Mehmet `points` | USER | user | metrics | — | — | var |
-| `sanction.applied` | Utku `admin-users` | USER | user | search, metrics | — | — | var |
+| `sanction.applied` | Utku `admin-users` | USER | user | notifications, search, metrics | — | SANCTION_APPLIED (yalnız WARNING, RESTRICT_*) | var |
 | `sanction.lifted` | Utku `admin-users` | USER | user | search, metrics | — | — | var |
 | `role.changed` | Utku `rbac` | USER | user | — | — | — | — |
 | `settings.changed` | Utku `settings` | SETTING | user | cache | — | — | var |

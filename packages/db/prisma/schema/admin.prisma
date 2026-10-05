@@ -135,6 +135,8 @@ enum NotificationType {
   DECISION_UPDATED
   MODERATION_APPLIED
   COMMUNITY_FEATURED
+  // KV-21 PR-3: yalnız WARNING / RESTRICT_* yaptırımı (kapatılamaz).
+  SANCTION_APPLIED
 
   @@map("notification_type")
 }
@@ -142,7 +144,9 @@ enum NotificationType {
 // Uygulama içi bildirim: alıcı başına bir satır. Satırı yalnız teslim job'u (worker, KV-21 PR-3) yazar; API yalnız
 // alıcının kendi satırlarını okur ve read_at'i doldurur. Tekrarlanan olay (UNIQUE recipient_id + dedupe_key) tek
 // satır üretir; anahtar kuralı contracts dedupeKey/naturalKey (docs/KV-21_NOTIFICATIONS.md §2).
-// type ve poll_id KV-34 tercih/sessize alma filtresi içindir. Kısıtlar ve okunmamış index'i migration SQL'inde elle.
+// type ve poll_id KV-34 tercih/sessize alma filtresi içindir. Kısıtlar, okunmamış ve okunmuş (saklama) index'leri migration
+// SQL'inde elle. created_at = olayın occurredAt'i (sırasız teslimde liste doğru sırada). Saklama: okunmuş 90 gün, silinmiş
+// hesabın bütün bildirimleri silinmeden 30 gün sonra (worker notifications.cleanup).
 model Notification {
   id          String           @id @default(uuid(7)) @db.Uuid
   recipientId String           @map("recipient_id") @db.Uuid
