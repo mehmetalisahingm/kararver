@@ -231,7 +231,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     const meta = await ownedPoll(params.id, viewer!.id);
     if (!isPubliclyVisible(meta)) throw new ApiError("NOT_FOUND", "İçerik bulunamadı.");
     if (meta.kind !== "POLL") throw notAPoll([]);
-    if (!isClosed(meta, now())) await store.closePoll(params.id, now());
+    if (!isClosed(meta, now())) await store.closePoll(params.id, viewer!.id, now());
     return { status: 200, body: { data: await detail({ id: params.id }, viewer) } };
   });
 

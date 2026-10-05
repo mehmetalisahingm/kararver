@@ -21,6 +21,7 @@ import { DEFAULT_MEDIA_SETTINGS, type MediaSettings } from "../../src/modules/me
 import { DEFAULT_FEED_SETTINGS, type FeedSettings } from "../../src/modules/feed/for-you.ts";
 import { createPrismaFeedStore } from "../../src/modules/feed/prisma-store.ts";
 import { createPrismaCommentStore } from "../../src/modules/comments/prisma-store.ts";
+import { createPrismaNotificationStore } from "../../src/modules/notifications/prisma-store.ts";
 import { createPrismaOnboardingStore } from "../../src/modules/onboarding/prisma-store.ts";
 import { createPrismaPollStore } from "../../src/modules/polls/prisma-store.ts";
 import { createPrismaSearchStore } from "../../src/modules/search/prisma-store.ts";
@@ -211,6 +212,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     reportStore: backend.prisma ? createPrismaReportStore(backend.prisma) : undefined,
     moderationStore: backend.prisma ? createPrismaModerationStore(backend.prisma) : undefined,
     adminUserStore: backend.prisma ? createPrismaAdminUserStore(backend.prisma) : undefined,
+    notificationStore: backend.prisma ? createPrismaNotificationStore(backend.prisma) : undefined,
     pollSettings: async () => pollSettings,
     commentStore: backend.prisma ? createPrismaCommentStore(backend.prisma) : undefined,
     isCommentsEnabled: async () => commentsEnabled.value,

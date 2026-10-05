@@ -8,6 +8,7 @@
 import type { PrismaClient } from "@kararver/db";
 import { recomputeStaleSnapshots } from "../snapshots/job.ts";
 import { COMPUTED_FORMATS, slotEnd, TREND_CONFIG, type ComputedFormat } from "./config.ts";
+import { emitTrendEntries } from "./entries.ts";
 import { scoreQuery, windowStart, type ScoreRow } from "./score.ts";
 
 export type TrendJobDeps = {
@@ -59,6 +60,8 @@ export async function refreshFormat(deps: TrendJobDeps, format: ComputedFormat, 
         });
         // Puanlar ve SUCCEEDED aynı transaction'da: okuyucu yarım sıralama görmez.
         await tx.trendRun.update({ where: { id: runId }, data: { status: "SUCCEEDED", finishedAt: deps.now() } });
+        // KV-21 (#23): ilk 10'a giren anketler için poll.trending, aynı transaction'da (entries.ts).
+        await emitTrendEntries(tx, { format, runId, now: deps.now() });
         return rows.length;
       },
       { timeout: 60_000 },

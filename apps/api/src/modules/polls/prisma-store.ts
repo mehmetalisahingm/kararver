@@ -1,7 +1,9 @@
 // PollStore'un PostgreSQL/Prisma uygulaması. Tablolar: polls, poll_options, tags, poll_tags,
 // poll_media, poll_addenda, votes, poll_reactions, idempotency_keys (DATA_MODEL.md, API_CONTRACTS.md §6).
+import { createEvent, newEventId } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
 import { assertNoCommittedKey, findIdempotentResult, runIdempotent } from "../../http/idempotency.ts";
+import { writeEvent } from "../events/write.ts";
 import { spendPublishPoints } from "../points/store.ts";
 import { writeRevision } from "../revisions/write.ts";
 import {
@@ -329,8 +331,16 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
       });
     },
 
-    async closePoll(id, now) {
-      await prisma.poll.updateMany({ where: { id, closedAt: null, closesAt: { gt: now } }, data: { closedAt: now } });
+    async closePoll(id, actorId, now) {
+      await prisma.$transaction(async (tx) => {
+        // Oy ve yorumla aynı kilit (anket satırı): süre dolumu job'u (worker polls.expire) da bu satırı kilitler; ikisinden
+        // yalnız biri kapatır. Koşul kilitten sonra okunur.
+        await tx.$queryRaw`SELECT 1 FROM polls WHERE id = ${id}::uuid FOR UPDATE`;
+        const { count } = await tx.poll.updateMany({ where: { id, closedAt: null, closesAt: { gt: now } }, data: { closedAt: now } });
+        if (count === 0) return;
+        // KV-21 (#23): natural key poll.closed:<anket>; süre dolumu ile aynı anket için tek olay.
+        await writeEvent(tx, createEvent({ id: newEventId(now), type: "poll.closed", occurredAt: now.toISOString(), actorId, subject: { type: "POLL", id }, payload: { reason: "OWNER", closedAt: now.toISOString() } }));
+      });
     },
 
     async removePoll(id, now) {

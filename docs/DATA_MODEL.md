@@ -517,9 +517,9 @@ Hangi işlemin gerekçe istediği, izinli türler ve hassas alan yasağı işlem
 
 **Saklama:** bütün teslimleri `DONE` olan olay, son `DONE`'dan (teslimsiz olayda dağıtımdan) 30 gün sonra günlük job'la silinir. Dağıtılmamış, ayrıştırılamamış ya da `PENDING`/`DEAD` teslimi olan olay asla otomatik silinmez. `natural_key` koruması bu yüzden saklama süresince geçerlidir; kalıcı koruma tüketicinin kendi anahtarıdır (ör. §9.3 `dedupe_key`).
 
-**Index'ler:** partial `domain_events_undispatched_idx (id) WHERE dispatched_at IS NULL` (dağıtma kuyruğu), `domain_events_dispatched_at_idx (dispatched_at) WHERE dispatched_at IS NOT NULL AND dispatch_error IS NULL` (saklama), `domain_event_deliveries_due_idx (next_attempt_at) WHERE status = 'PENDING'` (işleme kuyruğu), `domain_event_deliveries_dead_idx (event_id) WHERE status = 'DEAD'` (izleme); UNIQUE `natural_key`.
+**Index'ler:** partial `domain_events_undispatched_idx (id) WHERE dispatched_at IS NULL` (dağıtma kuyruğu), `domain_events_dispatched_at_idx (dispatched_at) WHERE dispatched_at IS NOT NULL AND dispatch_error IS NULL` (saklama), `domain_events_poll_expired_idx (occurred_at) WHERE type = 'poll.closed' AND actor_id IS NULL` (worker `polls.expire` alt sınırı, KV-21 PR-4a), `domain_event_deliveries_due_idx (next_attempt_at) WHERE status = 'PENDING'` (işleme kuyruğu), `domain_event_deliveries_dead_idx (event_id) WHERE status = 'DEAD'` (izleme); UNIQUE `natural_key`.
 
-**Şu an yazanlar:** admin-users (KV-33): `sanction.applied`, `sanction.lifted`, `role.changed` (yalnız rol değiştiğinde). Diğer üreticiler KV-21 PR-4'te kendi modüllerinde eklenir.
+**Şu an yazanlar:** admin-users (KV-33): `sanction.applied`, `sanction.lifted`, `role.changed` (yalnız rol değiştiğinde); comments (`comment.created`, `comment.replied`, `alternative.created`), votes (`poll.milestone`), polls (`poll.closed` OWNER), worker `polls.expire` (`poll.closed` EXPIRED) ve `trends.refresh` (`poll.trending`) (KV-21 PR-4a). Tablo: [`KV-21_NOTIFICATIONS.md`](./KV-21_NOTIFICATIONS.md) §7.
 
 ---
 
