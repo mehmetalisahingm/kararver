@@ -1,8 +1,10 @@
 // CommentStore'un PostgreSQL/Prisma uygulaması. Tablolar: comments, comment_reactions, polls.
 // Kilit sırası her yerde aynıdır: önce anket satırı, sonra yorum(lar). Böylece yorum ekleme,
 // silme ve tepki işlemleri birbirini kilitlemeden (deadlock) sıraya girer.
+import { createEvent, newEventId } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
 import { runIdempotent } from "../../http/idempotency.ts";
+import { writeEvent } from "../events/write.ts";
 import { writeRevision } from "../revisions/write.ts";
 import type { CommentRecord, CommentStore, Outcome, PageRequest, ReactionSummary, ReactionValue } from "./store.ts";
 
@@ -93,6 +95,14 @@ async function lockReactable(tx: Tx, commentId: string): Promise<boolean> {
 
 const counter = (value: ReactionValue) => (value === "LIKE" ? "likeCount" : "dislikeCount");
 
+/** KV-21: cevap → comment.replied, üst seviye öneri → alternative.created, üst seviye yorum → comment.created. */
+function commentEvent(c: { id: string; pollId: string; authorId: string; kind: CommentRecord["kind"]; parentId: string | null | undefined; at: Date }) {
+  const base = { id: newEventId(c.at), occurredAt: c.at.toISOString(), actorId: c.authorId, subject: { type: "COMMENT" as const, id: c.id } };
+  if (c.parentId) return createEvent({ ...base, type: "comment.replied", payload: { pollId: c.pollId, parentId: c.parentId } });
+  if (c.kind === "ALTERNATIVE") return createEvent({ ...base, type: "alternative.created", payload: { pollId: c.pollId } });
+  return createEvent({ ...base, type: "comment.created", payload: { pollId: c.pollId } });
+}
+
 export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
   const notFound = <T>(reason: Extract<Outcome<T>, { ok: false }>["reason"]): Outcome<T> => ({ ok: false, reason });
 
@@ -158,6 +168,8 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
         // Sürüm 1: ilk paylaşım (#66 içerik geçmişi).
         await writeRevision(tx, "comment", comment.id, authorId, comment.createdAt);
         await tx.poll.update({ where: { id: pollId }, data: { commentCount: { increment: 1 } } });
+        // KV-21 (#23): bildirim olayı aynı transaction'da (Idempotency-Key tekrarında bu callback yeniden çalışmaz).
+        await writeEvent(tx, commentEvent({ id: comment.id, pollId, authorId, kind, parentId, at: comment.createdAt }));
         return { ok: true, value: comment.id };
       });
       if (result.kind === "rejected") return { ok: false, reason: result.reason };

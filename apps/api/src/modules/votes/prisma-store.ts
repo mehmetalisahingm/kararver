@@ -1,6 +1,8 @@
 // VoteStore'un PostgreSQL/Prisma uygulaması. Tablolar: polls, poll_options, votes, vote_events.
+import { createEvent, newEventId, POLL_MILESTONES } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
 import { writeAudit } from "../audit/write.ts";
+import { writeEvent } from "../events/write.ts";
 import type { CastVoteResult, PollTally, VoteCorrection, VoteStore } from "./store.ts";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
@@ -57,7 +59,12 @@ export function createPrismaVoteStore(prisma: PrismaClient): VoteStore {
           });
           await tx.voteEvent.create({ data: { voteId: vote.id, pollId, userId, type: "CAST", toOptionId: optionId } });
           await tx.pollOption.update({ where: { id: optionId }, data: { voteCount: { increment: 1 } } });
-          await tx.poll.update({ where: { id: pollId }, data: { voteCount: { increment: 1 } } });
+          const { voteCount } = await tx.poll.update({ where: { id: pollId }, data: { voteCount: { increment: 1 } }, select: { voteCount: true } });
+          // KV-21 (#23): geçerli oy sayısı bir eşiğe tam bu oyla ulaştıysa kilometre taşı. Anket satırı kilitli olduğu için
+          // eşzamanlı oylarda eşiği tek oy geçer; düşüp yeniden geçişte natural key (anket + eşik) ikinci olayı yazmaz.
+          if (POLL_MILESTONES.includes(voteCount)) {
+            await writeEvent(tx, createEvent({ id: newEventId(now), type: "poll.milestone", occurredAt: now.toISOString(), actorId: null, subject: { type: "POLL", id: pollId }, payload: { metric: "VOTES", milestone: voteCount } }));
+          }
           return { kind: "cast", vote, tally: await tally(tx, pollId, poll, now) };
         }
 

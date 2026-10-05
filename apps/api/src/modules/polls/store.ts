@@ -190,8 +190,8 @@ export interface PollStore {
   listByIds(ids: string[], viewerId: string | null): Promise<PollRecord[]>;
   /** Düzenleme ve yeni içerik sürümü (#66) aynı transaction'da; editor: düzenleyen ve zaman. */
   updatePoll(id: string, patch: PollPatch, editor: { id: string; at: Date }): Promise<void>;
-  /** Etkin kapanış zaten geçmişse değişiklik yapmaz. */
-  closePoll(id: string, now: Date): Promise<void>;
+  /** Etkin kapanış zaten geçmişse değişiklik yapmaz. Kapatırsa poll.closed (OWNER) olayını aynı transaction'da yazar (KV-21). */
+  closePoll(id: string, actorId: string, now: Date): Promise<void>;
   removePoll(id: string, now: Date): Promise<void>;
   createAddendum(pollId: string, body: string, scope: IdempotencyScope | null): Promise<IdempotentResult>;
   /**

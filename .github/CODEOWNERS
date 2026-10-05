@@ -27,6 +27,8 @@
 /apps/api/src/modules/trends/               @farukkemree
 /apps/worker/src/jobs/trends/               @farukkemree
 /apps/worker/src/jobs/snapshots/            @farukkemree
+# Anket süre dolumu olayı (KV-21 PR-4a): alan Faruk'un, job'u Utku yazdı; biri yeterli.
+/apps/worker/src/jobs/polls/                @farukkemree @Utkuuzun14
 
 # ── Mert — media / moderation / community ─────────────────────
 /apps/api/src/modules/media/                @MertKAYAR
@@ -51,6 +53,8 @@
 /apps/worker/src/jobs/events/               @Utkuuzun14
 /apps/worker/test/events.test.ts            @Utkuuzun14
 /apps/worker/test/notifications*.test.ts    @Utkuuzun14
+/apps/worker/test/kv21-*.test.ts            @Utkuuzun14
+/apps/api/test/kv21-*.test.ts               @Utkuuzun14
 /apps/worker/scripts/notifications-fanout-bench.ts @Utkuuzun14
 /apps/worker/src/jobs/sanctions/            @Utkuuzun14
 /apps/worker/test/sanctions.test.ts         @Utkuuzun14

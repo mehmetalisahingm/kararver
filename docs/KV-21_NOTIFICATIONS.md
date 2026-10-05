@@ -10,8 +10,10 @@ Kabul koşulları: tekrarlanan olay tek bildirim üretir; başka kullanıcının
 |---|---|---|
 | PR-1 | `notifications` tablosu, okuma API'si (liste, okunmamış sayısı, okundu), kullanıcı izolasyonu | ✅ #125 |
 | PR-2 | Olay outbox'ı (`domain_events`, mutation ile aynı transaction'da yazım), worker dağıtıcısı (pg-boss), retry/DEAD, saklama; ilk üretici admin-users | ✅ #128 (§5) |
-| **PR-3** | `notifications` tüketicisi, modül adapter'ları, alıcı süzgeci ve KV-34 politika kancası, kitlesel fan-out, sözleşme testleri, bildirim saklaması | bu PR (§6) |
-| PR-4 | Üretici modüllerde olay yazımı (comments, votes, polls, trends, moderation; sahipleri reviewer) | sırada |
+| **PR-3** | `notifications` tüketicisi, modül adapter'ları, alıcı süzgeci ve KV-34 politika kancası, kitlesel fan-out, sözleşme testleri, bildirim saklaması | PR açık (§6) |
+| **PR-4a** | Faruk'un modüllerinde üreticiler: yorum, kilometre taşı, elle kapatma, süre dolumu job'u (`polls.expire`), trend girişleri; worker olay yazıcısı | bu PR (§7) |
+| PR-4b | Mert: moderasyon üreticisi | sırada |
+| — | Mehmet: `decision.updated` (#25), `community.featured` (#44) kendi modülleriyle | §7.3 |
 
 V1'de teslim **uygulama içi bildirim satırı yazmaktır**; e-posta/push yoktur (MVP §12).
 
@@ -130,7 +132,7 @@ Olay → adapter → alıcılar (teslim anında DB'den) → ortak süzgeç ve po
 
 `dedupe_key` = `notifications:<naturalKey ?? event.id>` (trend hariç). UNIQUE `(recipient_id, dedupe_key)` ve `ON CONFLICT DO NOTHING`; retry'da, aynı iş olgusunun farklı kimlikle tekrarında ve aynı alıcının iki yoldan gelmesinde tek satır kalır (anket sahibi kendi anketine oy veremez, `KV_SELF_VOTE`; verseydi de tek satır). `created_at` = olayın `occurredAt`'i. `data` şemaları contracts `notificationData`'dadır.
 
-**Üreticiler:** bugün yalnız `sanction.applied` üretiliyor (admin-users, PR-2); diğerlerinin üreticileri PR-4'te sahiplerinin modüllerinde eklenir (Faruk: polls, votes, comments, trends job'u; Mert: moderation; Mehmet: decision-updates, featured). Adapter'lar hazır ve contracts örnek olayları + gerçek DB verisiyle testlidir; PR-4'te yalnız üretici ve onun testi eklenir.
+**Üreticiler:** §7. Adapter'lar hazır ve contracts örnek olayları + gerçek DB verisiyle testlidir; PR-4'te yalnız üretici ve onun testi eklenir.
 
 ### 6.2 Alıcı süzgeci ve politika
 
@@ -160,3 +162,40 @@ Makine: Intel Core i7-13700H (14 çekirdek / 20 iş parçacığı), 16 GB RAM, S
 ### 6.5 Sözleşme testi (kabul koşulu)
 
 `notifications-contract.test.ts`: katalogda `notification` alanı olan her olay tipinin tam bir adapter'ı var ve her adapter'ın tipi katalogdaki `notification` ile aynı (iki yönlü; adapter'sız bildirim olayı eklenemez); tüketicinin tipleri bu kümeyle aynı ve üretimde kayıtlı; her adapter'ın contracts örnek olayından (`@kararver/contracts/fixtures/events`) ürettiği taslak `NotificationView` ve tipe özgü `notificationData` şemasından geçer; `data`'da olayın hassas alanları yok; dedupe anahtarı biçimi ve uzunluğu; `created_at` = `occurredAt`; aktörü gizlenen tipler; bildirim üretmeyen durumlar (SUSPEND/BAN, listede olmayan eşik).
+
+## 7. Olay üreticileri (PR-4)
+
+Her olay, mutation'ın transaction'ında durum değişikliğinin yanında yazılır: API'de `writeEvent(tx, createEvent({ id: newEventId(now), … }))`, worker'da `writeWorkerEvent` (`apps/worker/src/jobs/events/write.ts`; API'yi import edemediği için eşi, doğrulama yine contracts `parseEvent`, kolon eşlemesi `kv21-e2e.test.ts` ile sabit). Payload'lar contracts kataloğuyla birebir; bildirim adapter'ları (§6) aynı şemayı okur.
+
+### 7.1 PR-4a (Faruk'un modülleri)
+
+| Olay | Nerede | Transaction / kilit | Natural key | Not |
+|---|---|---|---|---|
+| `comment.created`, `comment.replied`, `alternative.created` | `comments/prisma-store.ts` `createComment` | mevcut `runIdempotent`; anket satırı `FOR UPDATE` | — (olay kimliği) | Cevap (`parentId`) → `replied`; üst seviye öneri → `alternative.created`. `Idempotency-Key` tekrarında callback çalışmaz: tek olay |
+| `poll.milestone` | `votes/prisma-store.ts` `castVote` (yalnız ilk oy) | mevcut; anket satırı `FOR UPDATE` | `poll.milestone:<anket>:VOTES:<n>` | Geçerli oy sayısı (`polls.vote_count`) `POLL_MILESTONES`'tan birine tam bu oyla ulaşınca; sistem olayı (aktör yok). Eşzamanlı oylar kilitte sıraya girer → tek olay; geçersiz sayma sonrası yeniden geçişte natural key ikinci olayı yazmaz (30 gün sonra yazılsa da bildirim `dedupe_key`'i tek bildirim bırakır). Oy değiştirme ve geri alma olay üretmez |
+| `poll.closed` (OWNER) | `polls/prisma-store.ts` `closePoll` | yeni transaction; anket satırı `FOR UPDATE` | `poll.closed:<anket>` | Yalnız `closed_at` NULL ve `closes_at` gelecekteyken kapatır; aktör sahip |
+| `poll.closed` (EXPIRED) | worker `jobs/polls/expire.ts` (`polls.expire`, dakikalık, `singleton`) | anket başına transaction; anket satırı `FOR UPDATE` | `poll.closed:<anket>` | Süresi dolan anket pasif kapanır (`closed_at` boş kalır); job yalnız olayı üretir, `occurredAt` = `closes_at`, aktör yok. Aday: POLL, `closed_at` NULL, `closes_at` alt sınır ile şimdi arasında, olayı yok. **Alt sınır:** hiç süre dolumu olayı yoksa son 1 saat (deploy anında eski kapanışlar için bildirim yağmuru olmasın), varsa `max(şimdi − 7 gün, en eski süre dolumu olayı)`; böylece deploy öncesi kapanışlar hiç olay üretmez. Worker 7 günden uzun kapalı kalırsa o aradaki kapanışlar olay üretmez |
+| `poll.trending` | worker `jobs/trends/entries.ts`, `trends.refresh` başarılı çalıştırma transaction'ında | puanlar + SUCCEEDED + olaylar birlikte | `poll.trending:<anket>:<format>:<çalıştırma>` | **Listeye giriş:** bu çalıştırmada ilk 10'da (genel sıra) olup aynı formatın önceki başarılı çalıştırmasında (penceresi daha önce biten) ilk 10'da olmayan. Önceki çalıştırma yoksa (ilk tur) taban: olay yok. Her girişte olay; bildirim anket + format başına ömür boyu bir kez (§6.1) |
+
+**Kapanışta tek olay:** elle kapatma yalnız `closes_at > şimdi` iken, job yalnız `closes_at ≤ şimdi AND closed_at IS NULL` iken yazar; ikisi de anket satırını kilitleyip koşulu kilitten sonra okur; natural key `poll.closed:<anket>` UNIQUE. DISCUSSION süresizdir, kapanmaz.
+
+### 7.2 PR-4b (Mert): moderasyon
+
+`moderation.applied` → `moderation/prisma-store.ts` `applyToPoll` / `applyToComment`, yalnız uygulanan işlemde (PR-4b).
+
+### 7.3 Mehmet'in üreticileri (KV-23 #25, KV-42 #44) — kontrol listesi
+
+`decision-updates` ve `featured` modülleri henüz yok (2026-10-05); iki olay o issue'larla gelir. Adapter'lar (§6) hazır ve testli.
+
+| Olay | Mutation | Payload | Natural key |
+|---|---|---|---|
+| `decision.updated` | `decisions.put` (#25) | `{ chosenOptionId, first }` | — (her güncelleme ayrı bildirim; değişmeyen `PUT` olay yazmaz) |
+| `community.featured` | `admin.featured.create` / surface değiştiren `update`, yalnız `surface = COMMUNITY` (#44) | `{ placementId, communityId, startsAt, endsAt }` | `community.featured:<placementId>` (diğer yüzeyler `featured.applied`) |
+
+Her üretici için: (1) olay mutation ile aynı transaction'da, kilitlerden sonra; (2) `createEvent` (zarf ve payload doğrulaması) + `newEventId(now)`, `occurredAt` = mutation zamanı; (3) payload'a serbest metin (gerekçe) veya kişisel veri yazılmaz; (4) testler: olay birebir yazılıyor, mutation geri alınınca olay yok (`kv21-producers.test.ts`'teki geçici trigger yöntemi), tekrar eden işlem tek olay; (5) KV-21 §7 tablosuna satır.
+
+### 7.4 Testler
+
+- `apps/api/test/kv21-producers.test.ts`: her API üreticisi için olay birebir, geri alma (geçici `AFTER INSERT` trigger'ı yalnız işaretlenen konu için hata verir; ne mutation satırı ne olay kalır), tekrar eden işlem tek olay; 12 eşzamanlı oy → tek kilometre taşı; geçersiz sayma sonrası yeniden geçiş → tek olay.
+- `apps/worker/test/kv21-producers.test.ts`: `polls.expire` (tek olay, ikinci tur, atlananlar, eşzamanlı iki tur, elle kapatma ile aynı natural key, alt sınır kuralı) ve trend girişleri (giriş/kalan/düşen, yeniden giriş → yeni olay ama tek bildirim, ilk tur taban).
+- `apps/api/test/kv21-e2e.test.ts` (uçtan uca): `POST /polls/:id/comments` → olay → worker dağıtıcısı ve bildirim tüketicisi → anket sahibinin `GET /notifications`'ı ve okunmamış sayısı; elle kapatma → oy verenlerin `POLL_CLOSED`'u; worker ve API yazıcısının aynı satırı yazması. Worker kaynakları yalnız bu testte göreli yolla import edilir.

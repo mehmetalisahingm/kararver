@@ -9,6 +9,7 @@
 2. Her format için bir `trend_runs` satırı açılır (`RUNNING`). Sıralama SQL'le hesaplanır ve ilk 500 sıra `trend_scores`'a yazılır. `components` alanı puanın bileşenlerini tutar.
 3. Puanlar ve `SUCCEEDED` durumu **aynı transaction'da** yazılır: okuyucu yarım sıralama görmez. Hata olursa çalıştırma hata metniyle `FAILED` olur; önceki başarılı sıralama yerinde kalır.
 4. `GET /v1/trends/:format` her format için güncel başarılı çalıştırmayı (en yeni `window_end`) okur.
+5. **Listeye giriş olayı (KV-21 PR-4a):** aynı transaction'da, bu çalıştırmada ilk 10'da olup formatın önceki başarılı çalıştırmasında ilk 10'da olmayan anketler için `poll.trending` outbox'a yazılır (`jobs/trends/entries.ts`). Formatın önceki başarılı çalıştırması yoksa olay yok (taban). Bildirim anket + format başına bir kez: [`KV-21_NOTIFICATIONS.md`](./KV-21_NOTIFICATIONS.md) §7.1.
 
 ## Formatlar
 
