@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
+  // Browser uses NEXT_PUBLIC_API_URL=/api; this rewrite keeps session requests same-origin.
   async rewrites() {
     const apiUrl = process.env.API_URL?.replace(/\/$/, "");
     if (!apiUrl) return [];
