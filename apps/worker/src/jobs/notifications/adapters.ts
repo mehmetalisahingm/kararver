@@ -88,6 +88,8 @@ async function toPollAuthor(tx: Tx, pollId: string): Promise<Recipients | null> 
 }
 
 const NOTIFIED_SANCTIONS = new Set(["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING"]);
+/** Trend dışı bırakma / geri alma: sıralama kararı, bildirilmez (KV-21 karar 4); olay yine üretilir. */
+const TREND_ACTIONS = new Set(["EXCLUDE_FROM_TRENDS", "INCLUDE_IN_TRENDS"]);
 
 export const notificationAdapters: Readonly<Partial<Record<EventType, NotificationAdapter>>> = Object.freeze({
   "comment.created": define({
@@ -163,13 +165,16 @@ export const notificationAdapters: Readonly<Partial<Record<EventType, Notificati
     eventType: "moderation.applied",
     type: "MODERATION_APPLIED",
     // İçeriğin sahibine; moderatör gösterilmez. Görünürlük kuralı uygulanmaz (gizlenen içeriğin sahibi bilmeli).
+    // Trend dışı bırakma / geri alma bildirilmez: trend oyunlamasına bilgi vermemek için (KV-21 karar 4).
     draft: (e) =>
-      draftOf(e, "MODERATION_APPLIED", {
-        subject: { type: e.subject.type === "COMMENT" ? "COMMENT" : "POLL", id: e.subject.id },
-        pollId: e.subject.type === "POLL" ? e.subject.id : null,
-        actorId: null,
-        data: { action: e.payload.action, toStatus: e.payload.toStatus },
-      }),
+      TREND_ACTIONS.has(e.payload.action)
+        ? null
+        : draftOf(e, "MODERATION_APPLIED", {
+            subject: { type: e.subject.type === "COMMENT" ? "COMMENT" : "POLL", id: e.subject.id },
+            pollId: e.subject.type === "POLL" ? e.subject.id : null,
+            actorId: null,
+            data: { action: e.payload.action, toStatus: e.payload.toStatus },
+          }),
     recipients: async (tx, e) => {
       if (e.subject.type === "POLL") return { userIds: [(await pollOf(tx, e.subject.id)).authorId] };
       const c = await commentOf(tx, e.subject.id);
