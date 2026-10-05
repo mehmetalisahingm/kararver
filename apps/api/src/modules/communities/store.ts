@@ -48,20 +48,24 @@ export interface CommunityStore {
     scope: IdempotencyScope | null,
     input: CommunityInput,
     createdById: string,
+    trail: AdminTrail,
   ): Promise<
     | { kind: "created" | "replayed"; id: string }
     | { kind: "key_reused" }
     | { kind: "rejected"; reason: CommunityRejection }
   >;
-  updateCommunity(id: string, patch: CommunityPatch): Promise<"OK" | "NOT_FOUND" | CommunityRejection>;
+  updateCommunity(id: string, patch: CommunityPatch, trail: AdminTrail & { reason: string }): Promise<"OK" | "NOT_FOUND" | CommunityRejection>;
   /**
    * Üyelik yoksa oluşturur (sayaç aynı transaction'da artar), varsa rolü MODERATOR yapar. Askıdaki hesap da
    * atanabilir: yetkili işlem ACTIVE hesap ister (KV-04), rol hesap açılınca geçerli olur.
    */
-  assignModerator(communityId: string, userId: string): Promise<"OK" | "COMMUNITY_NOT_FOUND" | "USER_NOT_FOUND">;
+  assignModerator(communityId: string, userId: string, trail: AdminTrail & { reason: string }): Promise<"OK" | "COMMUNITY_NOT_FOUND" | "USER_NOT_FOUND">;
   /** MODERATOR → MEMBER; üyelik ve sayaç korunur. Moderatör değilse hiçbir şey yapmaz. */
-  removeModerator(communityId: string, userId: string): Promise<"OK" | "COMMUNITY_NOT_FOUND">;
+  removeModerator(communityId: string, userId: string, trail: AdminTrail): Promise<"OK" | "COMMUNITY_NOT_FOUND">;
 }
+
+/** Yönetici işleminin audit izi (KV-39): kim, hangi istek, ne zaman. Kayıt işlemle aynı transaction'da yazılır. */
+export type AdminTrail = { actorId: string; requestId: string | null; now: Date };
 
 export type CommunityRejection = "slug_taken" | "image_unusable";
 export type CommunityInput = {

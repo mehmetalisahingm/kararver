@@ -2,7 +2,10 @@
 // Kilit sırası Faruk'un yorum modülüyle aynıdır: önce anket, sonra yorum (KV-17); böylece eşzamanlı yorum
 // yazma/silme ile moderasyon sayaçlarda deadlock veya çift sayım üretmez.
 import type { Prisma, PrismaClient } from "@kararver/db";
+import { writeAudit } from "../audit/write.ts";
+import { writeEvent } from "../events/write.ts";
 import { communityOfTarget } from "./community-of.ts";
+import { closeOpenReports, eventOf } from "./trail.ts";
 import {
   closesReports,
   counterDelta,
@@ -16,18 +19,43 @@ import {
 
 type Tx = Prisma.TransactionClient;
 
-async function recordAndCloseReports(tx: Tx, input: ApplyInput, from: ContentStatus, to: ContentStatus): Promise<void> {
-  const target = input.kind === "polls" ? { pollId: input.id } : { commentId: input.id };
-  await tx.moderationAction.create({
-    data: { actorId: input.actorId, action: input.action, ...target, fromStatus: from, toStatus: to, reason: input.reason },
+type Snapshot = Record<string, string | boolean | null>;
+
+/**
+ * Geçmiş (moderation_actions), kapanan raporlar (report.resolved), audit ve moderation.applied olayı: hepsi çağıranın
+ * transaction'ında. Audit gerekçeyi ve önce/sonra özetini taşır; olay bildirim ve analitik tüketicileri içindir.
+ */
+async function recordTrail(tx: Tx, input: ApplyInput, from: ContentStatus, to: ContentStatus, before: Snapshot, after: Snapshot): Promise<void> {
+  const column = input.kind === "polls" ? { pollId: input.id } : { commentId: input.id };
+  const type = input.kind === "polls" ? "POLL" : "COMMENT";
+  const recorded = await tx.moderationAction.create({
+    data: { actorId: input.actorId, action: input.action, ...column, fromStatus: from, toStatus: to, reason: input.reason },
+    select: { id: true },
   });
   // Yayını kısıtlayan işlem raporu karşılar; kuyrukta içeriği zaten görünmeyen ölü kayıt kalmaz.
-  if (closesReports(input.action)) {
-    await tx.report.updateMany({
-      where: { ...target, status: "OPEN" },
-      data: { status: "ACTIONED", resolvedById: input.actorId, resolvedAt: input.now, resolutionNote: input.reason },
-    });
-  }
+  const closedReports = closesReports(input.action) ? await closeOpenReports(tx, { type, id: input.id }, input.actorId, input.reason, input.now) : 0;
+  await writeAudit(tx, {
+    source: "API",
+    actorId: input.actorId,
+    action: input.kind === "polls" ? "moderation.poll.apply" : "moderation.comment.apply",
+    operation: input.action.toLowerCase(),
+    target: { type, id: input.id },
+    reason: input.reason,
+    before,
+    after: { ...after, closedReports },
+    requestId: input.requestId,
+    at: input.now,
+  });
+  await writeEvent(
+    tx,
+    eventOf("moderation.applied", input.actorId, { type, id: input.id }, input.now, {
+      moderationActionId: recorded.id,
+      action: input.action,
+      fromStatus: from,
+      toStatus: to,
+      reportId: null,
+    }),
+  );
 }
 
 async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
@@ -42,7 +70,7 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
     const want = input.action === "EXCLUDE_FROM_TRENDS";
     if (want === excluded) return { kind: "unchanged", outcome: outcome(row.status, excluded) };
     await tx.poll.update({ where: { id: input.id }, data: { trendExcludedAt: want ? input.now : null } });
-    await recordAndCloseReports(tx, input, row.status, row.status);
+    await recordTrail(tx, input, row.status, row.status, { status: row.status, trendExcluded: excluded }, { status: row.status, trendExcluded: want });
     return { kind: "applied", outcome: outcome(row.status, want) };
   }
 
@@ -56,7 +84,7 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
     // REMOVED ⇔ deleted_at dolu; geri yüklemede boşalır.
     data: { status: next, deletedAt: next === "REMOVED" ? input.now : row.status === "REMOVED" ? null : undefined },
   });
-  await recordAndCloseReports(tx, input, row.status, next);
+  await recordTrail(tx, input, row.status, next, { status: row.status, trendExcluded: excluded }, { status: next, trendExcluded: excluded });
   return { kind: "applied", outcome: outcome(next, excluded) };
 }
 
@@ -88,7 +116,7 @@ async function applyToComment(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
     await tx.poll.update({ where: { id: meta.pollId }, data: { commentCount: { increment: delta } } });
     if (meta.parentId) await tx.comment.update({ where: { id: meta.parentId }, data: { replyCount: { increment: delta } } });
   }
-  await recordAndCloseReports(tx, input, row.status, next);
+  await recordTrail(tx, input, row.status, next, { status: row.status }, { status: next });
   return { kind: "applied", outcome: outcome(next) };
 }
 

@@ -6,9 +6,9 @@
 // Kapatma (status=HIDDEN): topluluk public liste/sayfadan, katılımdan ve yeni anket açmaktan çıkar; üyelikler,
 // anketler ve moderatör rolleri silinmez, geri açılınca olduğu gibi döner.
 //
-// Bilinen açık: gövdedeki `reason` doğrulanır ama saklanmaz. Kritik yönetici işlemleri audit_logs'a işlemle aynı
-// transaction'da yazılmalı (KV-04 §4.4); tablo KV-39 (#41, Utku) ile gelince eklenecek. Ayrıca sözleşmede kapatılmış
-// topluluğu listeleyen bir admin okuma endpoint'i yok; yönetici kapatılmış topluluğu kimliğiyle PATCH eder.
+// İz (KV-39): açma, düzenleme/kapatma (yalnız değişen alanlar önce/sonra olarak, gerekçeyle) ve moderatör atama/kaldırma
+// audit_logs'a işlemle aynı transaction'da yazılır; değişiklik olmayan idempotent çağrı iz bırakmaz. Sözleşmede
+// kapatılmış topluluğu listeleyen bir admin okuma endpoint'i yok; yönetici kapatılmış topluluğu kimliğiyle PATCH eder.
 import { ApiError } from "../../http/errors.ts";
 import { idempotencyKeyReused, readIdempotencyScope } from "../../http/idempotency.ts";
 import type { Route } from "../../http/route.ts";
@@ -47,33 +47,38 @@ export function registerCommunityAdminRoutes(route: Route, deps: CommunityAdminD
         membersVisibility: body.membersVisibility,
       },
       viewer!.id,
+      { actorId: viewer!.id, requestId: request.id, now: now() },
     );
     if (result.kind === "key_reused") throw idempotencyKeyReused();
     if (result.kind === "rejected") throw rejection(result.reason);
     return { status: 201, body: { data: await detail(result.id, viewer!.id) } };
   });
 
-  route("admin.communities.update", async ({ params, body, viewer }) => {
-    const { reason: _reason, description, ...rest } = body;
-    const outcome = await store.updateCommunity(params.id, {
-      ...rest,
-      // Boş açıklama göndermek açıklamayı temizler.
-      ...(description !== undefined && { description: description || null }),
-    });
+  route("admin.communities.update", async ({ params, body, viewer, request }) => {
+    const { reason, description, ...rest } = body;
+    const outcome = await store.updateCommunity(
+      params.id,
+      {
+        ...rest,
+        // Boş açıklama göndermek açıklamayı temizler.
+        ...(description !== undefined && { description: description || null }),
+      },
+      { actorId: viewer!.id, requestId: request.id, now: now(), reason },
+    );
     if (outcome === "NOT_FOUND") throw notFound();
     if (outcome !== "OK") throw rejection(outcome);
     return { status: 200, body: { data: await detail(params.id, viewer!.id) } };
   });
 
-  route("admin.communities.moderators.put", async ({ params }) => {
-    const outcome = await store.assignModerator(params.id, params.userId);
+  route("admin.communities.moderators.put", async ({ params, body, viewer, request }) => {
+    const outcome = await store.assignModerator(params.id, params.userId, { actorId: viewer!.id, requestId: request.id, now: now(), reason: body.reason });
     if (outcome === "COMMUNITY_NOT_FOUND") throw notFound();
     if (outcome === "USER_NOT_FOUND") throw new ApiError("NOT_FOUND", "Kullanıcı bulunamadı.");
     return { status: 200, body: { data: { role: "MODERATOR" } } };
   });
 
-  route("admin.communities.moderators.delete", async ({ params }) => {
-    if ((await store.removeModerator(params.id, params.userId)) === "COMMUNITY_NOT_FOUND") throw notFound();
+  route("admin.communities.moderators.delete", async ({ params, viewer, request }) => {
+    if ((await store.removeModerator(params.id, params.userId, { actorId: viewer!.id, requestId: request.id, now: now() })) === "COMMUNITY_NOT_FOUND") throw notFound();
     return { status: 204, body: null };
   });
 }

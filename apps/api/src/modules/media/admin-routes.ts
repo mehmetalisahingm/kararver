@@ -7,8 +7,9 @@
 //   REJECT : public anahtar karar öncesi ve karar sonrası idempotent silinir. İkinci silme, eşzamanlı APPROVE'ın
 //            ilk silmeden sonra oluşturduğu kopyayı da temizler. Tekrar REJECT (unchanged) de temizliği yeniden dener.
 //
-// Bilinen açık: signed preview URL'lerine ve reddedilmiş görsel erişimine audit kaydı (KV-08 §7) audit_logs tablosu
-// KV-39 (#41, Utku) ile gelince eklenecek; o zamana kadar izi `moderation_actions` (karar) taşır, erişim izlenmez.
+// İz (KV-39): karar `moderation_actions`'a ve audit_logs'a (media.review), yasak ekleme/silme audit_logs'a
+// (media.ban.manage), önizleme URL'i alan her görsel erişimi audit_logs'a (media.queue.read / preview) yazılır;
+// hepsi mutasyonla aynı transaction'da, önizleme audit'i URL'ler döndürülmeden önce.
 import { ApiError } from "../../http/errors.ts";
 import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
 import type { Route } from "../../http/route.ts";
@@ -31,7 +32,7 @@ const CONFLICT_MESSAGES = {
 export function registerMediaAdminRoutes(route: Route, deps: MediaAdminDeps): void {
   const { store, storage, mediaPublicBaseUrl } = deps;
 
-  route("admin.media.list", async ({ query, moderationScope }) => {
+  route("admin.media.list", async ({ query, moderationScope, viewer, request }) => {
     const scope = await moderationScope();
     const list = `admin.media.list:${query.status}`;
     const at = decodeCursor(query.cursor, list);
@@ -44,10 +45,12 @@ export function registerMediaAdminRoutes(route: Route, deps: MediaAdminDeps): vo
     const nextCursor = rows.length > query.limit && last ? encodeCursor(list, [last.createdAt.toISOString()], last.id) : null;
     const now = deps.now();
     const data = await Promise.all(page.map((m) => toMediaView(m, storage, mediaPublicBaseUrl, now, { previewRejected: scope.all })));
+    // Önizleme URL'i alan her görselin erişimi audit'e yazılır (KV-08 §7); yazılamazsa URL'ler dönmez.
+    await store.recordPreviews({ mediaIds: data.filter((v) => v.preview).map((v) => v.id), actorId: viewer!.id, requestId: request.id, now });
     return { status: 200, body: { data, page: { nextCursor, hasMore: nextCursor !== null } } };
   });
 
-  route("admin.media.decide", async ({ params, body, viewer, authorize, moderationScope }) => {
+  route("admin.media.decide", async ({ params, body, viewer, authorize, moderationScope, request }) => {
     const media = await store.findForReview(params.id);
     if (!media) throw notFound();
     await authorize({ communityId: media.communityId });
@@ -67,7 +70,7 @@ export function registerMediaAdminRoutes(route: Route, deps: MediaAdminDeps): vo
 
     let result: Awaited<ReturnType<MediaStore["applyDecision"]>>;
     try {
-      result = await store.applyDecision({ id: media.id, actorId: viewer!.id, decision: body.decision, reason: body.reason, now: deps.now() });
+      result = await store.applyDecision({ id: media.id, actorId: viewer!.id, decision: body.decision, reason: body.reason, now: deps.now(), requestId: request.id });
     } catch (err) {
       // APPROVE public kopyayı DB'den önce yazar. DB transaction'ı patlarsa bilinen public anahtarı temizlemeye çalış.
       if (body.decision === "APPROVE") await storage.deletePublic(publicKey).catch(() => undefined);
@@ -88,7 +91,9 @@ export function registerMediaAdminRoutes(route: Route, deps: MediaAdminDeps): vo
     if (body.decision === "REJECT") await storage.deletePublic(publicKey);
 
     const scope = await moderationScope();
-    return { status: 200, body: { data: await toMediaView(result.media, storage, mediaPublicBaseUrl, deps.now(), { previewRejected: scope.all }) } };
+    const view = await toMediaView(result.media, storage, mediaPublicBaseUrl, deps.now(), { previewRejected: scope.all });
+    if (view.preview) await store.recordPreviews({ mediaIds: [view.id], actorId: viewer!.id, requestId: request.id, now: deps.now() });
+    return { status: 200, body: { data: view } };
   });
 
   // ── Yasaklı görsel listesi (KV-38, #40): yetki media.ban.manage (ADMIN+), kaynağa bağlı kural yoktur ──
@@ -116,8 +121,8 @@ export function registerMediaAdminRoutes(route: Route, deps: MediaAdminDeps): vo
     return { status: 200, body: { data: page.map(banView), page: { nextCursor, hasMore: nextCursor !== null } } };
   });
 
-  route("admin.media.bans.create", async ({ body, viewer }) => {
-    const result = await store.createBan({ mediaId: body.mediaId, actorId: viewer!.id, reason: body.reason });
+  route("admin.media.bans.create", async ({ body, viewer, request }) => {
+    const result = await store.createBan({ mediaId: body.mediaId, actorId: viewer!.id, reason: body.reason, requestId: request.id, now: deps.now() });
     if (result.kind === "not_found") throw notFound();
     if (result.kind === "conflict") {
       throw conflict(
@@ -128,8 +133,8 @@ export function registerMediaAdminRoutes(route: Route, deps: MediaAdminDeps): vo
     return { status: result.kind === "created" ? 201 : 200, body: { data: banView(result.ban) } };
   });
 
-  route("admin.media.bans.delete", async ({ params }) => {
-    await store.deleteBan(params.id);
+  route("admin.media.bans.delete", async ({ params, viewer, request }) => {
+    await store.deleteBan({ id: params.id, actorId: viewer!.id, requestId: request.id, now: deps.now() });
     return { status: 204, body: null };
   });
 }
