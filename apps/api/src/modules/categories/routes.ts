@@ -1,9 +1,6 @@
-// Admin kategori yönetimi — KV-26 (#28). Sözleşme: packages/contracts/src/domains/admin.ts (admin.categories.*)
+// Admin kategori yönetimi — KV-26 (#28), KV-41 (#43). Sözleşme: packages/contracts/src/domains/admin.ts (admin.categories.*)
 // Yetki: category.manage (ADMIN+, KV-04), router'ın kapısında verilir; kaynağa bağlı kural yoktur.
-// Silme yok: kategori pasife alınır (isActive=false).
-//
-// Bilinen açık: gövdedeki `reason` doğrulanır ama henüz saklanmaz. Audit kaydı işlemle aynı transaction'da
-// yazılmalı (KV-04 §4.4); audit_logs tablosu KV-39 (#41, Utku) ile gelince create/update'e eklenecek.
+// Silme yok: kategori pasife alınır (isActive=false). Create/update audit kaydı mutasyonla aynı transaction'da yazılır.
 import { ApiError } from "../../http/errors.ts";
 import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
 import { idempotencyKeyReused, readIdempotencyScope } from "../../http/idempotency.ts";
@@ -59,15 +56,26 @@ export function registerCategoryAdminRoutes(route: Route, deps: CategoryAdminDep
   });
 
   route("admin.categories.create", async ({ body, viewer, request }) => {
-    const scope = readIdempotencyScope(request, { userId: viewer!.id, route: "admin.categories.create", body, now: now(), required: false });
-    const result = await store.create(scope, input(body) as CategoryInput);
+    const at = now();
+    const scope = readIdempotencyScope(request, { userId: viewer!.id, route: "admin.categories.create", body, now: at, required: false });
+    const result = await store.create(scope, input(body) as CategoryInput, {
+      actorId: viewer!.id,
+      requestId: request.id,
+      now: at,
+      reason: body.reason,
+    });
     if (result.kind === "key_reused") throw idempotencyKeyReused();
     if (result.kind === "rejected") throw slugTaken();
     return { status: 201, body: { data: await load(result.resourceId) } };
   });
 
-  route("admin.categories.update", async ({ params, body }) => {
-    const outcome = await store.update(params.id, input(body));
+  route("admin.categories.update", async ({ params, body, viewer, request }) => {
+    const outcome = await store.update(params.id, input(body), {
+      actorId: viewer!.id,
+      requestId: request.id,
+      now: now(),
+      reason: body.reason,
+    });
     if (outcome === "NOT_FOUND") throw new ApiError("NOT_FOUND", "Kategori bulunamadı.");
     if (outcome === "SLUG_TAKEN") throw slugTaken();
     return { status: 200, body: { data: await load(params.id) } };
