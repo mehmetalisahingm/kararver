@@ -1,7 +1,7 @@
-// Yönetim ekranlarının API istemcisi (KV-14, KV-24, KV-32, KV-37, KV-38). Her çağrı sözleşme endpoint'ine gider ve
+// Yönetim ekranlarının API istemcisi (KV-14, KV-24, KV-32, KV-37, KV-38, KV-41). Her çağrı sözleşme endpoint'ine gider ve
 // cevap sözleşme şemasıyla doğrulanır (HttpClient). Yetki sunucudadır: istemci rol kontrolü yalnız menü/düğme
 // gizlemedir, ret 403 olarak gelir ve ekranda gösterilir.
-import type { BannedMediaView, CommunityCard, CommunityDetail, MediaView, ReportView } from "@kararver/contracts";
+import type { AdminCategory, BannedMediaView, CommunityCard, CommunityDetail, MediaView, ReportView } from "@kararver/contracts";
 import type { HttpClient } from "../../lib/http-client.ts";
 
 export type Report = ReturnType<typeof ReportView.parse>;
@@ -9,6 +9,7 @@ export type AdminMedia = ReturnType<typeof MediaView.parse>;
 export type BannedMedia = ReturnType<typeof BannedMediaView.parse>;
 export type Community = ReturnType<typeof CommunityCard.parse>;
 export type CommunityDetailView = ReturnType<typeof CommunityDetail.parse>;
+export type Category = ReturnType<typeof AdminCategory.parse>;
 
 export type Page<T> = { items: T[]; next: string | null };
 type Wire<T> = { data: T[]; page: { nextCursor: string | null } };
@@ -17,10 +18,19 @@ export type ReportStatus = "OPEN" | "ACTIONED" | "DISMISSED";
 export type ReportTargetType = "POLL" | "COMMENT" | "MEDIA" | "USER";
 export type MediaQueueStatus = "QUARANTINED" | "PENDING" | "REJECTED";
 export type ContentKind = "polls" | "comments";
-export type ModerationAction = "HIDE" | "RESTORE" | "LOCK" | "UNLOCK" | "REMOVE" | "EXCLUDE_FROM_TRENDS" | "INCLUDE_IN_TRENDS";
+export type ModerationAction = "HIDE" | "RESTORE" | "LOCK" | "UNLOCK" | "REMOVE" | "EXCLUDE_FROM_TRENDS" | "INCLUDE_FROM_TRENDS" | "INCLUDE_IN_TRENDS";
 export type ModerationOutcome = { id: string; status: string; trendExcluded: boolean | null };
 export type CommunityInput = { slug: string; name: string; description?: string; membersVisibility: "PUBLIC" | "MEMBERS" | "MODERATORS" };
 export type CommunityPatch = Partial<CommunityInput> & { status?: "ACTIVE" | "HIDDEN" };
+export type CategoryInput = {
+  slug: string;
+  name: string;
+  description?: string | null;
+  iconKey?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+};
+export type CategoryPatch = Partial<CategoryInput>;
 
 const page = <T>(wire: unknown): Page<T> => {
   const { data, page: info } = wire as Wire<T>;
@@ -79,5 +89,16 @@ export class AdminClient {
   }
   async removeModerator(id: string, userId: string) {
     await this.http.request("admin.communities.moderators.delete", { params: { id, userId } });
+  }
+
+  // ── Kategori yönetimi (KV-41) ──
+  async categories(cursor?: string, signal?: AbortSignal) {
+    return page<Category>(await this.http.request("admin.categories.list", { query: { cursor, limit: "20" }, signal }));
+  }
+  async createCategory(input: CategoryInput, reason: string, key: string) {
+    return data<Category>(await this.http.request("admin.categories.create", { body: { ...input, reason }, key }));
+  }
+  async updateCategory(id: string, patch: CategoryPatch, reason: string) {
+    return data<Category>(await this.http.request("admin.categories.update", { params: { id }, body: { ...patch, reason } }));
   }
 }
