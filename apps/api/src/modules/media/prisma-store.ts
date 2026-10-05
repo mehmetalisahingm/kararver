@@ -1,6 +1,8 @@
 // MediaStore'un PostgreSQL uygulaması — media_assets (DATA_MODEL.md §9, docs/MEDIA_MODERATION.md).
 import type { Prisma, PrismaClient } from "@kararver/db";
+import { writeAudit } from "../audit/write.ts";
 import { communityOfMedia } from "../moderation/community-of.ts";
+import { closeOpenReports } from "../moderation/trail.ts";
 import { publicObjectKeyFor } from "./storage.ts";
 import type { BanRecord, IdempotencyScope, IdempotentResult, MediaRecord, MediaStatus, MediaStore } from "./store.ts";
 
@@ -143,7 +145,7 @@ export function createPrismaMediaStore(prisma: PrismaClient): MediaStore {
       return { ...media, communityId, banned: banned > 0 };
     },
 
-    async applyDecision({ id, actorId, decision, reason, now }) {
+    async applyDecision({ id, actorId, decision, reason, now, requestId }) {
       return prisma.$transaction(async (tx) => {
         const locked = await tx.$queryRaw<{ status: MediaStatus; processed_object_key: string | null }[]>`
           SELECT status::text AS status, processed_object_key FROM media_assets WHERE id = ${id}::uuid FOR UPDATE`;
@@ -179,13 +181,20 @@ export function createPrismaMediaStore(prisma: PrismaClient): MediaStore {
         await tx.moderationAction.create({
           data: { actorId, action: decision, mediaId: id, fromStatus: current.status, toStatus: target, reason },
         });
-        if (decision === "REJECT") {
-          // Reddedilen görselin açık raporları karşılanmıştır; kuyrukta ölü kayıt kalmaz.
-          await tx.report.updateMany({
-            where: { mediaId: id, status: "OPEN" },
-            data: { status: "ACTIONED", resolvedById: actorId, resolvedAt: now, resolutionNote: reason },
-          });
-        }
+        // Reddedilen görselin açık raporları karşılanmıştır; kuyrukta ölü kayıt kalmaz (her biri report.resolved olayı yazar).
+        const closedReports = decision === "REJECT" ? await closeOpenReports(tx, { type: "MEDIA", id }, actorId, reason, now) : 0;
+        await writeAudit(tx, {
+          source: "API",
+          actorId,
+          action: "media.review",
+          operation: decision.toLowerCase(),
+          target: { type: "MEDIA", id },
+          reason,
+          before: { status: current.status },
+          after: { status: target, closedReports },
+          requestId,
+          at: now,
+        });
         return { kind: "applied" as const, media };
       });
     },
@@ -200,7 +209,7 @@ export function createPrismaMediaStore(prisma: PrismaClient): MediaStore {
       return rows.map(toBan);
     },
 
-    async createBan({ mediaId, actorId, reason }) {
+    async createBan({ mediaId, actorId, reason, requestId, now }) {
       const media = await prisma.mediaAsset.findUnique({
         where: { id: mediaId },
         select: { status: true, contentSha256: true, perceptualHash: true },
@@ -216,9 +225,24 @@ export function createPrismaMediaStore(prisma: PrismaClient): MediaStore {
       if (media.status !== "REJECTED") return { kind: "conflict", reason: "not_rejected" };
       if (!media.contentSha256 && !media.perceptualHash) return { kind: "conflict", reason: "no_fingerprint" };
       try {
-        const created = await prisma.bannedMediaHash.create({
-          data: { sourceMediaId: mediaId, contentSha256: media.contentSha256, perceptualHash: media.perceptualHash, reason, createdById: actorId },
-          select: banSelect,
+        const created = await prisma.$transaction(async (tx) => {
+          const row = await tx.bannedMediaHash.create({
+            data: { sourceMediaId: mediaId, contentSha256: media.contentSha256, perceptualHash: media.perceptualHash, reason, createdById: actorId },
+            select: banSelect,
+          });
+          await writeAudit(tx, {
+            source: "API",
+            actorId,
+            action: "media.ban.manage",
+            operation: "create",
+            target: { type: "MEDIA", id: mediaId },
+            reason,
+            before: null,
+            after: { banId: row.id, matchesExact: row.contentSha256 !== null, matchesSimilar: row.perceptualHash !== null },
+            requestId,
+            at: now,
+          });
+          return row;
         });
         return { kind: "created", ban: toBan(created) };
       } catch (err) {
@@ -230,8 +254,41 @@ export function createPrismaMediaStore(prisma: PrismaClient): MediaStore {
       }
     },
 
-    async deleteBan(id) {
-      await prisma.bannedMediaHash.deleteMany({ where: { id } });
+    async deleteBan({ id, actorId, requestId, now }) {
+      await prisma.$transaction(async (tx) => {
+        const ban = await tx.bannedMediaHash.findUnique({ where: { id }, select: { sourceMediaId: true } });
+        if (!ban) return;
+        // Eşzamanlı ikinci silme: yalnız satırı gerçekten silen istek audit yazar.
+        if ((await tx.bannedMediaHash.deleteMany({ where: { id } })).count === 0) return;
+        await writeAudit(tx, {
+          source: "API",
+          actorId,
+          action: "media.ban.manage",
+          operation: "delete",
+          target: { type: "MEDIA", id: ban.sourceMediaId },
+          before: { banId: id },
+          after: null,
+          requestId,
+          at: now,
+        });
+      });
+    },
+
+    async recordPreviews({ mediaIds, actorId, requestId, now }) {
+      if (mediaIds.length === 0) return;
+      await prisma.$transaction(async (tx) => {
+        for (const id of mediaIds) {
+          await writeAudit(tx, {
+            source: "API",
+            actorId,
+            action: "media.queue.read",
+            operation: "preview",
+            target: { type: "MEDIA", id },
+            requestId,
+            at: now,
+          });
+        }
+      });
     },
   };
 }

@@ -1,6 +1,9 @@
 // ReportStore'un PostgreSQL uygulaması — reports (DATA_MODEL.md §9).
 import { Prisma, type PrismaClient } from "@kararver/db";
+import { writeAudit } from "../audit/write.ts";
+import { writeEvent } from "../events/write.ts";
 import { communityOfTarget } from "../moderation/community-of.ts";
+import { eventOf } from "../moderation/trail.ts";
 import type { FiledReport, QueueItem, ReportReason, ReportStatus, ReportStore, ReportTargetType } from "./store.ts";
 
 type TargetColumn = "pollId" | "commentId" | "mediaId" | "reportedUserId";
@@ -80,6 +83,19 @@ const itemOf = (r: ReportRow, communityId: string | null, reportCount: number): 
 });
 
 export function createPrismaReportStore(prisma: PrismaClient): ReportStore {
+  /** report.created: yeni rapor veya kapanmış raporun yeniden açılması (açık rapor tekrarında yazılmaz). */
+  async function writeCreated(tx: Prisma.TransactionClient, report: Parameters<ReportStore["file"]>[0], reportId: string) {
+    await writeEvent(
+      tx,
+      eventOf("report.created", report.reporterId, { type: "REPORT", id: reportId }, report.now, {
+        targetType: report.target.type,
+        targetId: report.target.id,
+        reason: report.reason,
+        communityId: await communityOfTarget(tx, report.target),
+      }),
+    );
+  }
+
   async function file(report: Parameters<ReportStore["file"]>[0]): Promise<FiledReport> {
     const column = COLUMN[report.target.type];
     const where = { reporterId: report.reporterId, [column]: report.target.id } as Prisma.ReportWhereInput;
@@ -91,6 +107,7 @@ export function createPrismaReportStore(prisma: PrismaClient): ReportStore {
           data: { reporterId: report.reporterId, [column]: report.target.id, reason: report.reason, details: report.details } as Prisma.ReportUncheckedCreateInput,
           select: { id: true },
         });
+        await writeCreated(tx, report, created.id);
         return { reportId: created.id, outcome: "created" as const };
       }
       if (existing.status === "OPEN") return { reportId: existing.id, outcome: "pending" as const };
@@ -99,6 +116,7 @@ export function createPrismaReportStore(prisma: PrismaClient): ReportStore {
         where: { id: existing.id },
         data: { status: "OPEN", reason: report.reason, details: report.details, resolvedById: null, resolvedAt: null, resolutionNote: null },
       });
+      await writeCreated(tx, report, existing.id);
       return { reportId: existing.id, outcome: "reopened" as const };
     });
   }
@@ -183,7 +201,7 @@ export function createPrismaReportStore(prisma: PrismaClient): ReportStore {
       return itemOf(report, communityId, reportCount);
     },
 
-    async resolve({ reportId, actorId, resolution, note, now }) {
+    async resolve({ reportId, actorId, resolution, note, now, requestId }) {
       return prisma.$transaction(async (tx) => {
         const report = await tx.report.findUnique({ where: { id: reportId } });
         if (!report) return { kind: "not_found" as const };
@@ -203,6 +221,27 @@ export function createPrismaReportStore(prisma: PrismaClient): ReportStore {
           });
         }
         const resolved = await tx.report.findUniqueOrThrow({ where: { id: reportId } });
+        // İz (KV-39, KV-21): kapanan her açık rapor için olay, işlem için tek audit kaydı (rapor + hedef + kapanan sayısı).
+        const closedIds = await tx.report.findMany({
+          where: { ...targetWhere(report), status: resolution, resolvedById: actorId, resolvedAt: now },
+          select: { id: true },
+          orderBy: { id: "asc" },
+        });
+        for (const { id } of closedIds) {
+          await writeEvent(tx, eventOf("report.resolved", actorId, { type: "REPORT", id }, now, { resolution, targetType: target.type, targetId: target.id }));
+        }
+        await writeAudit(tx, {
+          source: "API",
+          actorId,
+          action: "report.resolve",
+          operation: resolution.toLowerCase(),
+          target: { type: "REPORT", id: reportId },
+          reason: note,
+          before: { status: "OPEN", openReports: closed.count },
+          after: { status: resolution, targetType: target.type, targetId: target.id, resolvedReports: closed.count },
+          requestId,
+          at: now,
+        });
         return { kind: "resolved" as const, item: itemOf(resolved, await communityOfTarget(tx, target), closed.count) };
       });
     },

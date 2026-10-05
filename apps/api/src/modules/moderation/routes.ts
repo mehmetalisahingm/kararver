@@ -4,10 +4,11 @@
 // yalnız ADMIN+ geri yükler (DATA_MODEL §7.1).
 //
 // Sayaç ve görünürlük etkileri store'da, işlemle aynı transaction'dadır. Her işlem `moderation_actions`'a önce/sonra
-// durumuyla yazılır; yayını kısıtlayan işlem (HIDE/LOCK/REMOVE) hedefin açık raporlarını ACTIONED yapar.
+// durumuyla, audit_logs'a (moderation.poll.apply / moderation.comment.apply) ve olay outbox'ına (`moderation.applied`,
+// kapanan raporlar için `report.resolved`) yazılır; yayını kısıtlayan işlem (HIDE/LOCK/REMOVE) hedefin açık raporlarını
+// ACTIONED yapar.
 //
 // Kapsam dışı / bilinen açıklar:
-// - `reason` audit_logs'a (KV-39, #41) yazılmaz; moderation_actions geçmişi tek iz.
 // - Yorumda LOCK/UNLOCK desteklenmez (409): KV-17 yalnız ACTIVE yorumu listeler, kilit anket düzeyindedir.
 // - İçerik düzenleme, kategori/etiket/topluluk değiştirme (KV-37 kapsam metni) için sözleşmede endpoint yok.
 import { ApiError } from "../../http/errors.ts";
@@ -26,7 +27,7 @@ export function registerModerationRoutes(route: Route, deps: ModerationDeps): vo
   const { store, now } = deps;
 
   const register = (kind: ContentKind) =>
-    route(`admin.moderation.${kind}`, async ({ params, body, viewer, authorize, moderationScope }) => {
+    route(`admin.moderation.${kind}`, async ({ params, body, viewer, authorize, moderationScope, request }) => {
       const target = await store.findTarget(kind, params.id);
       if (!target) throw new ApiError("NOT_FOUND", kind === "polls" ? "Anket bulunamadı." : "Yorum bulunamadı.");
       await authorize({ communityId: target.communityId });
@@ -38,6 +39,7 @@ export function registerModerationRoutes(route: Route, deps: ModerationDeps): vo
         action: body.action as ModerationActionName,
         reason: body.reason,
         now: now(),
+        requestId: request.id,
         actorIsAdmin: (await moderationScope()).all,
       });
       switch (result.kind) {

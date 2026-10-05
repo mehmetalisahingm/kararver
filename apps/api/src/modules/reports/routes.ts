@@ -3,8 +3,9 @@
 // görünür (reportCount), sonuçlandırma o hedefin açık raporlarının hepsini birlikte kapatır.
 // Yetki KV-04: report.queue.read (kuyruk kapsamı: MODERATOR atandığı topluluklar, ADMIN+ tümü),
 // report.resolve (hedefin topluluğu DB'den okunur; topluluğu olmayan hedef — kullanıcı raporu — yalnız ADMIN+).
-// Kapsam dışı: içeriğe işlem uygulama (admin.moderation.*, KV-37), report.created/resolved olayı (olay
-// outbox'ı henüz yok, KV-04), rapor hız sınırı (KV-19, #21), audit_logs kaydı (KV-39, #41).
+// İz: sonuçlandırma audit_logs'a (report.resolve) ve report.resolved olayı outbox'a, rapor oluşturma report.created
+// olayı ile mutasyonla aynı transaction'da yazılır (store). Kapsam dışı: içeriğe işlem uygulama (admin.moderation.*,
+// KV-37), rapor hız sınırı (KV-19, #21).
 import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
 import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
@@ -32,7 +33,7 @@ export function registerReportRoutes(route: Route, deps: ReportDeps): void {
     }
     if (!(await deps.store.isReportable(target))) throw new ApiError("NOT_FOUND", "Raporlanacak içerik bulunamadı.");
 
-    const filed = await deps.store.file({ reporterId: viewer!.id, target, reason: body.reason, details: body.note || null });
+    const filed = await deps.store.file({ reporterId: viewer!.id, target, reason: body.reason, details: body.note || null, now: deps.now() });
     return { status: 202, body: { data: { reportId: filed.reportId } } };
   });
 
@@ -58,7 +59,7 @@ export function registerReportRoutes(route: Route, deps: ReportDeps): void {
     return { status: 200, body: { data: page.map(reportView), page: { nextCursor, hasMore: nextCursor !== null } } };
   });
 
-  route("admin.reports.resolve", async ({ params, body, viewer, authorize }) => {
+  route("admin.reports.resolve", async ({ params, body, viewer, authorize, request }) => {
     const report = await deps.store.findForResolve(params.id);
     if (!report) throw new ApiError("NOT_FOUND", "Rapor bulunamadı.");
     await authorize({ communityId: report.communityId });
@@ -74,6 +75,7 @@ export function registerReportRoutes(route: Route, deps: ReportDeps): void {
       resolution: body.resolution,
       note: body.note,
       now: deps.now(),
+      requestId: request.id,
     });
     if (result.kind === "not_found") throw new ApiError("NOT_FOUND", "Rapor bulunamadı.");
     if (result.kind === "conflict") throw new ApiError("CONFLICT", "Rapor başka bir moderatör tarafından sonuçlandırıldı.", [{ code: "already_resolved" }]);

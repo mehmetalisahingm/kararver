@@ -49,6 +49,7 @@ export type MediaDecisionInput = {
   decision: "APPROVE" | "REJECT";
   reason: string;
   now: Date;
+  requestId: string | null;
 };
 export type MediaDecisionResult =
   | { kind: "applied" | "unchanged"; media: MediaRecord }
@@ -77,9 +78,11 @@ export interface MediaStore {
   // ── Yasaklı görsel listesi (KV-38, #40) ──
   listBans(after: { createdAt: Date; id: string } | null, limit: number): Promise<BanRecord[]>;
   /** Reddedilmiş görselin parmak izini listeye ekler; zaten listedeyse mevcut kaydı döner. */
-  createBan(input: { mediaId: string; actorId: string; reason: string }): Promise<BanResult>;
-  /** Olmayan kayıt için sessizce döner (idempotent). */
-  deleteBan(id: string): Promise<void>;
+  createBan(input: { mediaId: string; actorId: string; reason: string; requestId: string | null; now: Date }): Promise<BanResult>;
+  /** Olmayan kayıt için sessizce döner (idempotent); audit yalnız gerçekten silinirse yazılır. */
+  deleteBan(input: { id: string; actorId: string; requestId: string | null; now: Date }): Promise<void>;
+  /** Moderatör/admin önizleme URL'i alan görseller için erişim izi (KV-08 §7): görsel başına bir audit kaydı. */
+  recordPreviews(input: { mediaIds: string[]; actorId: string; requestId: string | null; now: Date }): Promise<void>;
 }
 
 export type BanRecord = {

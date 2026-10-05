@@ -11,6 +11,8 @@ export type NewReport = {
   target: { type: ReportTargetType; id: string };
   reason: ReportReason;
   details: string | null;
+  /** İşlemin anı: `report.created` olayının zamanı. */
+  now: Date;
 };
 
 /** created: yeni satır · pending: aynı hedefe açık raporu vardı · reopened: kapanmış rapor yeniden açıldı. */
@@ -37,7 +39,15 @@ export type QueueItem = {
   resolvedAt: Date | null;
 };
 
-export type ResolveInput = { reportId: string; actorId: string; resolution: "ACTIONED" | "DISMISSED"; note: string; now: Date };
+export type ResolveInput = {
+  reportId: string;
+  actorId: string;
+  resolution: "ACTIONED" | "DISMISSED";
+  note: string;
+  now: Date;
+  /** X-Request-Id: audit kaydına yazılır. */
+  requestId: string | null;
+};
 
 export interface ReportStore {
   /** Raporlayanın görebileceği bir hedef mi: kaldırılmamış içerik, yayınlanmış görsel, silinmemiş hesap. */

@@ -1,6 +1,7 @@
 // CommunityStore'un PostgreSQL uygulaması — communities, community_memberships (DATA_MODEL.md §9).
 import type { Prisma, PrismaClient } from "@kararver/db";
 import { runIdempotent } from "../../http/idempotency.ts";
+import { writeAudit } from "../audit/write.ts";
 import type { CommunityRecord, CommunityRejection, CommunityRole, CommunityStore, MemberRecord } from "./store.ts";
 
 const isUniqueViolation = (err: unknown) => typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
@@ -131,12 +132,23 @@ export function createPrismaCommunityStore(prisma: PrismaClient): CommunityStore
       return row ? toRecord(row) : null;
     },
 
-    async createCommunity(scope, input, createdById) {
+    async createCommunity(scope, input, createdById, trail) {
       try {
         const result = await runIdempotent<CommunityRejection>(prisma, scope, 201, async (tx) => {
           if (input.imageMediaId && !(await isUsableImage(tx, input.imageMediaId))) return { ok: false, reason: "image_unusable" };
           if ((await tx.community.count({ where: { slug: input.slug } })) > 0) return { ok: false, reason: "slug_taken" };
           const created = await tx.community.create({ data: { ...input, createdById }, select: { id: true } });
+          await writeAudit(tx, {
+            source: "API",
+            actorId: trail.actorId,
+            action: "community.create",
+            operation: "create",
+            target: { type: "COMMUNITY", id: created.id },
+            before: null,
+            after: { slug: input.slug, name: input.name, membersVisibility: input.membersVisibility, imageMediaId: input.imageMediaId },
+            requestId: trail.requestId,
+            at: trail.now,
+          });
           return { ok: true, value: created.id };
         });
         if (result.kind === "created" || result.kind === "replayed") return { kind: result.kind, id: result.resourceId };
@@ -148,23 +160,34 @@ export function createPrismaCommunityStore(prisma: PrismaClient): CommunityStore
       }
     },
 
-    async updateCommunity(id, patch) {
+    async updateCommunity(id, patch, trail) {
       const { slug, name, description, imageMediaId, membersVisibility, status } = patch;
       try {
         return await prisma.$transaction(async (tx) => {
-          if ((await tx.community.count({ where: { id } })) === 0) return "NOT_FOUND" as const;
+          const current = await tx.community.findUnique({
+            where: { id },
+            select: { slug: true, name: true, description: true, imageMediaId: true, membersVisibility: true, status: true },
+          });
+          if (!current) return "NOT_FOUND" as const;
           if (imageMediaId && !(await isUsableImage(tx, imageMediaId))) return "image_unusable" as const;
           if (slug && (await tx.community.count({ where: { slug, id: { not: id } } })) > 0) return "slug_taken" as const;
-          await tx.community.update({
-            where: { id },
-            data: {
-              ...(slug !== undefined && { slug }),
-              ...(name !== undefined && { name }),
-              ...(description !== undefined && { description }),
-              ...(imageMediaId !== undefined && { imageMediaId }),
-              ...(membersVisibility !== undefined && { membersVisibility }),
-              ...(status !== undefined && { status }),
-            },
+
+          // Yalnız gerçekten değişen alanlar yazılır ve audit'e önce/sonra olarak girer; değişiklik yoksa iz de yok.
+          const wanted = { slug, name, description, imageMediaId, membersVisibility, status };
+          const changes = Object.fromEntries(Object.entries(wanted).filter(([key, value]) => value !== undefined && value !== current[key as keyof typeof current]));
+          if (Object.keys(changes).length === 0) return "OK" as const;
+          await tx.community.update({ where: { id }, data: changes });
+          await writeAudit(tx, {
+            source: "API",
+            actorId: trail.actorId,
+            action: "community.update",
+            operation: "update",
+            target: { type: "COMMUNITY", id },
+            reason: trail.reason,
+            before: Object.fromEntries(Object.keys(changes).map((key) => [key, current[key as keyof typeof current] ?? null])),
+            after: changes,
+            requestId: trail.requestId,
+            at: trail.now,
           });
           return "OK" as const;
         });
@@ -175,7 +198,7 @@ export function createPrismaCommunityStore(prisma: PrismaClient): CommunityStore
     },
 
     // ON CONFLICT DO NOTHING + sayaç: join ile aynı kural; mevcut üyeyse rol yükseltilir, sayaç değişmez.
-    async assignModerator(communityId, userId) {
+    async assignModerator(communityId, userId, trail) {
       return prisma.$transaction(async (tx) => {
         if ((await tx.community.count({ where: { id: communityId } })) === 0) return "COMMUNITY_NOT_FOUND" as const;
         const user = await tx.user.findUnique({ where: { id: userId }, select: { deletedAt: true } });
@@ -184,19 +207,51 @@ export function createPrismaCommunityStore(prisma: PrismaClient): CommunityStore
           INSERT INTO community_memberships (community_id, user_id, role, created_at, updated_at)
           VALUES (${communityId}::uuid, ${userId}::uuid, 'MODERATOR', now(), now())
           ON CONFLICT DO NOTHING`;
+        let previous: "MEMBER" | null = null;
         if (inserted === 1) {
           await tx.community.update({ where: { id: communityId }, data: { memberCount: { increment: 1 } } });
         } else {
+          const existing = await tx.communityMembership.findUniqueOrThrow({ where: { communityId_userId: { communityId, userId } }, select: { role: true } });
+          // Zaten moderatör: değişiklik yok, iz de yok (idempotent).
+          if (existing.role === "MODERATOR") return "OK" as const;
+          previous = "MEMBER";
           await tx.communityMembership.update({ where: { communityId_userId: { communityId, userId } }, data: { role: "MODERATOR" } });
         }
+        await writeAudit(tx, {
+          source: "API",
+          actorId: trail.actorId,
+          action: "community.moderator.assign",
+          operation: "assign",
+          target: { type: "COMMUNITY", id: communityId },
+          reason: trail.reason,
+          before: { userId, role: previous },
+          after: { userId, role: "MODERATOR" },
+          requestId: trail.requestId,
+          at: trail.now,
+        });
         return "OK" as const;
       });
     },
 
-    async removeModerator(communityId, userId) {
-      if ((await prisma.community.count({ where: { id: communityId } })) === 0) return "COMMUNITY_NOT_FOUND";
-      await prisma.communityMembership.updateMany({ where: { communityId, userId, role: "MODERATOR" }, data: { role: "MEMBER" } });
-      return "OK";
+    async removeModerator(communityId, userId, trail) {
+      return prisma.$transaction(async (tx) => {
+        if ((await tx.community.count({ where: { id: communityId } })) === 0) return "COMMUNITY_NOT_FOUND" as const;
+        const { count } = await tx.communityMembership.updateMany({ where: { communityId, userId, role: "MODERATOR" }, data: { role: "MEMBER" } });
+        if (count === 1) {
+          await writeAudit(tx, {
+            source: "API",
+            actorId: trail.actorId,
+            action: "community.moderator.assign",
+            operation: "remove",
+            target: { type: "COMMUNITY", id: communityId },
+            before: { userId, role: "MODERATOR" },
+            after: { userId, role: "MEMBER" },
+            requestId: trail.requestId,
+            at: trail.now,
+          });
+        }
+        return "OK" as const;
+      });
     },
   };
 }

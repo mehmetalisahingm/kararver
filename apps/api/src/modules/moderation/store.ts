@@ -19,6 +19,8 @@ export type ApplyInput = {
   action: ModerationActionName;
   reason: string;
   now: Date;
+  /** X-Request-Id: audit kaydına yazılır. */
+  requestId: string | null;
   /** ADMIN+ mu: kaldırılmış içeriği yalnız yönetici geri yükler (DATA_MODEL §7.1). */
   actorIsAdmin: boolean;
 };

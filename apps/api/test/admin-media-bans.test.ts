@@ -166,11 +166,13 @@ describe("yasaklı görsel listesi (postgres)", { skip: backend ? false : "TEST_
   });
 
   test("liste en yeni önce sayfalanır; yasak kaldırılınca listeden çıkar, tekrar kaldırma idempotent", async () => {
+    // Diğer testlerin ve önceki koşuların kayıtlarının önünde kalmak için tarih tabanı her koşuda ileri gider.
+    const base = Date.now() + 5 * 365 * 86_400_000;
     const created: string[] = [];
     for (let i = 0; i < 3; i++) {
       const res = await ban(admin.cookie, (await media()).id);
       created.push(res.json().data.id);
-      await db.bannedMediaHash.update({ where: { id: res.json().data.id }, data: { createdAt: new Date(Date.UTC(2030, 0, 1, 10, i)) } });
+      await db.bannedMediaHash.update({ where: { id: res.json().data.id }, data: { createdAt: new Date(base + i) } });
     }
     const first = await list(admin.cookie, "?limit=2");
     assert.equal(first.statusCode, 200, first.body);
