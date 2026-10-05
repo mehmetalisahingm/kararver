@@ -25,3 +25,6 @@ packages/db/generated/
 *.log
 .DS_Store
 Thumbs.db
+
+# KV-48 staging tatbikatı raporları ve yedekleri
+drill/

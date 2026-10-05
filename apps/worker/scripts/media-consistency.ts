@@ -73,6 +73,23 @@ export async function listKeys(client: S3Client, bucket: string, pageSize = 1000
   return keys;
 }
 
+/** Bucket'ı listeler; erişim reddi ve eksik bucket yığın izi yerine anlaşılır bir hata olur (hangi bucket, hangi sebep). */
+export async function listKeysOrExplain(client: S3Client, bucket: string, label: "private" | "public"): Promise<Set<string>> {
+  try {
+    return await listKeys(client, bucket);
+  } catch (err) {
+    const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+    const status = e.$metadata?.httpStatusCode;
+    const why =
+      status === 403 || e.name === "AccessDenied"
+        ? "erişim reddedildi (403): bu anahtar bu bucket için yetkili değil. Bucket'a özel anahtar kullanılıyor olabilir; API'nin bu bucket'a yazabilmesi için de aynı yetki gerekir."
+        : status === 404 || e.name === "NoSuchBucket"
+          ? "bucket bulunamadı (404): ad veya endpoint yanlış."
+          : `${e.name ?? "hata"} (${status ?? "?"})`;
+    throw new Error(`${label} bucket'ı (${bucket}) okunamadı: ${why}`);
+  }
+}
+
 export function s3Client(config: StorageConfig): S3Client {
   return new S3Client({
     endpoint: config.endpoint,
@@ -92,8 +109,8 @@ if (import.meta.main) {
     });
     const client = s3Client(config.storage);
     const [privateKeys, publicKeys] = await Promise.all([
-      listKeys(client, config.storage.privateBucket),
-      listKeys(client, config.storage.publicBucket),
+      listKeysOrExplain(client, config.storage.privateBucket, "private"),
+      listKeysOrExplain(client, config.storage.publicBucket, "public"),
     ]);
     const report = compareMedia(rows, privateKeys, publicKeys);
     console.log(`medya: ${rows.length} kayıt, private ${privateKeys.size} nesne, public ${publicKeys.size} nesne`);
