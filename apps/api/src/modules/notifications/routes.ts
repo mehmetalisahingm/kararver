@@ -21,7 +21,9 @@ export function toNotificationView(n: NotificationRecord, mediaBase: string) {
           avatarUrl: n.actor.avatarPublicKey ? `${mediaBase}/${n.actor.avatarPublicKey}` : null,
         }
       : null,
-    data: n.data,
+    // DB'de zaten tutulan poll_id, yorum bildirimini doğru ankete döndürmek için view data'sına eklenir.
+    // Olay payload'ı değişmez; NotificationView.data scalar map sözleşmesi korunur.
+    data: n.pollId ? { ...n.data, pollId: n.pollId } : n.data,
     readAt: n.readAt?.toISOString() ?? null,
     createdAt: n.createdAt.toISOString(),
   };
