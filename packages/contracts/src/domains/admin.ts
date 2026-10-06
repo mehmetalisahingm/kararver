@@ -173,10 +173,49 @@ const CategoryBody = z.strictObject({
   isActive: z.boolean().optional(),
 });
 
+const Rate = z.number().min(0).max(100).nullable();
+const GrowthMetric = z.strictObject({
+  current: Count,
+  previous: Count,
+  percentChange: z.number().nullable(),
+});
+
 export const Metrics = z.strictObject({
   range: z.enum(["7d", "30d"]),
   generatedAt: Timestamp,
-  totals: z.strictObject({ users: Count, polls: Count, votes: Count, comments: Count, openReports: Count }),
+  totals: z.strictObject({
+    users: Count,
+    polls: Count,
+    votes: Count,
+    comments: Count,
+    openReports: Count,
+    quarantinedMedia: Count,
+    highRiskMedia: Count,
+    shares: Count,
+  }),
+  activity: z.strictObject({ dau: Count, wau: Count }),
+  growth: z.strictObject({
+    registrations: GrowthMetric,
+    polls: GrowthMetric,
+    votes: GrowthMetric,
+    comments: GrowthMetric,
+  }),
+  firstContribution: z.strictObject({
+    eligibleUsers: Count,
+    contributors: Count,
+    ratePct: Rate,
+  }),
+  d7Retention: z.strictObject({
+    matureUsers: Count,
+    retainedUsers: Count,
+    ratePct: Rate,
+  }),
+  sharing: z.strictObject({
+    eligiblePolls: Count,
+    sharedPolls: Count,
+    createdLinks: Count,
+    ratePct: Rate,
+  }),
   series: z.array(
     z.strictObject({
       localDate: z.iso.date(),
