@@ -91,6 +91,11 @@ export function SocialPanel({ poll }: { poll: Poll }) {
     if (deleting) dialog.current?.showModal();
     else dialog.current?.close();
   }, [deleting]);
+  useEffect(() => {
+    if (!data || !window.location.hash.startsWith("#yorum-")) return;
+    const id = window.location.hash.slice(1);
+    requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: "center" }));
+  }, [data]);
 
   async function mutate(
     optimistic: Engagement,
@@ -233,6 +238,7 @@ export function SocialPanel({ poll }: { poll: Poll }) {
     return (
       <article
         key={c.id}
+        id={`yorum-${c.id}`}
         className={`social-comment ${c.parentId ? "social-reply" : ""}`}
         aria-label={c.deleted ? "Silinmiş yorum" : `${c.author} yorumu`}
       >

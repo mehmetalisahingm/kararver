@@ -146,6 +146,7 @@ export function safeReturnTo(value: string | null): string {
     (/^\/$/.test(value) ||
       /^\/olustur$/.test(value) ||
       /^\/hesap$/.test(value) ||
+      /^\/bildirimler$/.test(value) ||
       /^\/ilgi-alanlari$/.test(value) ||
       /^\/profil\/[a-z0-9_]{3,30}$/.test(value) ||
       /^\/admin(?:\/[A-Za-z0-9_-]+)?$/.test(value) ||
@@ -161,6 +162,8 @@ export interface ProductClient extends EngagementClient, DiscoveryClient {
   /** Topluluk ekranları ve rapor gönderme; yalnız gerçek API client'ında (demo'da ekran/düğme gösterilmez). */
   community?: import("../features/community/community-client.ts").CommunityClient;
   reports?: import("../features/community/community-client.ts").ReportClient;
+  /** Bildirim merkezi; yalnız gerçek API client'ında. */
+  notifications?: import("../features/notifications/notification-client.ts").NotificationClient;
   list(): Promise<Poll[]>;
   get(id: string): Promise<Poll>;
   login(email: string, password: string): Promise<User>;
