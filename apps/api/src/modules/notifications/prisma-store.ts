@@ -8,6 +8,7 @@ const select = {
   type: true,
   subjectType: true,
   subjectId: true,
+  pollId: true,
   data: true,
   readAt: true,
   createdAt: true,
