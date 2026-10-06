@@ -206,6 +206,34 @@ describe("oy geçersiz sayma (postgres)", { skip: backend ? false : "TEST_DATABA
     assert.equal(await db.vote.count({ where: { userId: voter.id, invalidatedAt: { not: null } } }), 0);
   });
 
+  test("#45 kabul (gerçek bağımlılıklar): KV-33 ban endpoint'i oyları silmez; ayrı ve gerekçeli geçersiz sayma düşer, auditlenir, geri alınır", async () => {
+    const poll = await createPoll();
+    const [fake, honest] = [await signUp(), await signUp()];
+    const fv = await vote(poll.id, poll.options[0]!.id, fake);
+    await vote(poll.id, poll.options[1]!.id, honest);
+
+    // KV-33 (#35) gerçek yaptırım endpoint'i: BAN oturumları kapatır, oylara dokunmaz.
+    const ban = await send("POST", `/admin/users/${fake.id}/sanctions`, { type: "BAN", reason: "Sahte hesap ağı" }, admin.cookie);
+    assert.equal(ban.statusCode, 201, ban.body);
+    assert.equal((await db.user.findUniqueOrThrow({ where: { id: fake.id }, select: { status: true } })).status, "BANNED");
+    assert.deepEqual(await counts(poll.id), { total: 2, options: [1, 1] }, "ban tek başına geçmiş oyu düşmez");
+    assert.equal(await db.voteEvent.count({ where: { voteId: fv, type: "INVALIDATE" } }), 0);
+
+    // Ayrı, gerekçeli işlem: hesabın oyları düşer; tekrar istek çift düşüm yapmaz; audit ve snapshot işareti yazılır.
+    assert.deepEqual(result(await invalidate({ type: "ACCOUNTS", userIds: [fake.id] })).changed, 1);
+    assert.deepEqual(result(await invalidate({ type: "ACCOUNTS", userIds: [fake.id] })).changed, 0);
+    assert.deepEqual(await counts(poll.id), { total: 1, options: [0, 1] });
+    const logs = await auditFor(poll.id);
+    assert.deepEqual(logs.map((l) => [l.operation, l.actorId, (l.after as { by: string }).by]), [["invalidate", admin.id, "ACCOUNTS"]]);
+    const stale = await db.poll.findUniqueOrThrow({ where: { id: poll.id }, select: { snapshotsStaleSince: true } });
+    assert.ok(stale.snapshotsStaleSince, "trend/snapshot yeniden hesabı için işaretlendi (worker testleri yeniden üretimi doğrular)");
+
+    // Geri alma: sayaçlar döner, ikinci audit kaydı.
+    assert.equal(result(await restore([fv])).changed, 1);
+    assert.deepEqual(await counts(poll.id), { total: 2, options: [1, 1] });
+    assert.deepEqual((await auditFor(poll.id)).map((l) => l.operation), ["invalidate", "restore"]);
+  });
+
   test("eşzamanlı: iki yönetici aynı oyları geçersiz sayar ve aynı anda yeni oylar gelir; sayaçlar tablo ile tutarlı", async () => {
     const poll = await createPoll();
     const voters: User[] = [];
