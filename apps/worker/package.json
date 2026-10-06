@@ -9,7 +9,8 @@
     "test": "node --test --test-concurrency=1 \"test/*.test.ts\"",
     "hash:eval": "node scripts/hash-eval.ts",
     "typecheck": "tsc -p tsconfig.json",
-    "media:check": "node scripts/media-consistency.ts"
+    "media:check": "node scripts/media-consistency.ts",
+    "media:latency": "node scripts/media-latency.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1141.0",
