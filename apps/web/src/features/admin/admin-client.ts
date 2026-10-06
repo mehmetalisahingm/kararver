@@ -1,7 +1,18 @@
 // Yönetim ekranlarının API istemcisi (KV-14, KV-24, KV-32, KV-37, KV-38, KV-41). Her çağrı sözleşme endpoint'ine gider ve
 // cevap sözleşme şemasıyla doğrulanır (HttpClient). Yetki sunucudadır: istemci rol kontrolü yalnız menü/düğme
 // gizlemedir, ret 403 olarak gelir ve ekranda gösterilir.
-import type { AdminCategory, BannedMediaView, CommunityCard, CommunityDetail, MediaView, ReportView } from "@kararver/contracts";
+import type {
+  AdminCategory,
+  AdminCommentItem,
+  AdminPollItem,
+  BannedMediaView,
+  Category as PublicCategory,
+  CommunityCard,
+  CommunityDetail,
+  ContentHistoryItem,
+  MediaView,
+  ReportView,
+} from "@kararver/contracts";
 import type { HttpClient } from "../../lib/http-client.ts";
 
 export type Report = ReturnType<typeof ReportView.parse>;
@@ -10,6 +21,10 @@ export type BannedMedia = ReturnType<typeof BannedMediaView.parse>;
 export type Community = ReturnType<typeof CommunityCard.parse>;
 export type CommunityDetailView = ReturnType<typeof CommunityDetail.parse>;
 export type Category = ReturnType<typeof AdminCategory.parse>;
+export type PollCategory = ReturnType<typeof PublicCategory.parse>;
+export type AdminPoll = ReturnType<typeof AdminPollItem.parse>;
+export type AdminComment = ReturnType<typeof AdminCommentItem.parse>;
+export type HistoryItem = ReturnType<typeof ContentHistoryItem.parse>;
 
 export type Page<T> = { items: T[]; next: string | null };
 type Wire<T> = { data: T[]; page: { nextCursor: string | null } };
@@ -18,8 +33,23 @@ export type ReportStatus = "OPEN" | "ACTIONED" | "DISMISSED";
 export type ReportTargetType = "POLL" | "COMMENT" | "MEDIA" | "USER";
 export type MediaQueueStatus = "QUARANTINED" | "PENDING" | "REJECTED";
 export type ContentKind = "polls" | "comments";
-export type ModerationAction = "HIDE" | "RESTORE" | "LOCK" | "UNLOCK" | "REMOVE" | "EXCLUDE_FROM_TRENDS" | "INCLUDE_IN_TRENDS";
-export type ModerationOutcome = { id: string; status: string; trendExcluded: boolean | null };
+export type ModerationAction =
+  | "HIDE"
+  | "RESTORE"
+  | "LOCK"
+  | "UNLOCK"
+  | "REMOVE"
+  | "EXCLUDE_FROM_TRENDS"
+  | "INCLUDE_IN_TRENDS"
+  | "CLOSE_COMMENTS"
+  | "OPEN_COMMENTS";
+export type ModerationOutcome = { id: string; status: string; trendExcluded: boolean | null; commentsClosed: boolean | null };
+export type ContentStatus = "ACTIVE" | "HIDDEN" | "UNDER_REVIEW" | "LOCKED" | "REMOVED";
+export type PollSearch = { q?: string; status?: ContentStatus; communityId?: string; categoryId?: string; reported?: boolean; trendExcluded?: boolean };
+export type CommentSearch = { q?: string; status?: ContentStatus; communityId?: string; pollId?: string; reported?: boolean };
+/** categoryId / communityId: yalnız verilen alan değişir; communityId null topluluktan çıkarır (yalnız yönetici). */
+export type PollPlacement = { categoryId?: string; communityId?: string | null };
+export type StrongSanction = "RESTRICT_COMMENTS" | "RESTRICT_POSTING" | "SUSPEND" | "BAN";
 export type CommunityInput = { slug: string; name: string; description?: string; membersVisibility: "PUBLIC" | "MEMBERS" | "MODERATORS" };
 export type CommunityPatch = Partial<CommunityInput> & { status?: "ACTIVE" | "HIDDEN" };
 export type CategoryInput = {
@@ -37,6 +67,8 @@ const page = <T>(wire: unknown): Page<T> => {
   return { items: data, next: info.nextCursor };
 };
 const data = <T>(wire: unknown) => (wire as { data: T }).data;
+/** Boolean süzgeç sorgusu: yalnız verilen değer gönderilir ("true" | "false"). */
+const flag = (value: boolean | undefined) => (value === undefined ? undefined : String(value));
 
 export class AdminClient {
   private http: HttpClient;
@@ -52,9 +84,36 @@ export class AdminClient {
     return data<Report>(await this.http.request("admin.reports.resolve", { params: { id }, body: { resolution, note } }));
   }
 
+  /** Kuyruktan içerik sahibini uyar (WARNING); hedefin açık raporlarını kapatır. */
+  async warn(reportId: string, reason: string) {
+    return data<{ sanctionId: string; userId: string; closedReports: number }>(await this.http.request("admin.reports.warn", { params: { id: reportId }, body: { reason } }));
+  }
+  /** Sert yaptırım (yalnız yönetici): reportId ile rapora ve moderasyon geçmişine bağlanır. SUSPEND için endsAt gerekir. */
+  async sanction(userId: string, type: StrongSanction, reason: string, reportId: string, endsAt: string | null) {
+    return data<{ id: string }>(await this.http.request("admin.sanctions.create", { params: { id: userId }, body: { type, reason, endsAt, reportId } }));
+  }
+
   // ── İçerik moderasyonu (KV-37) ──
   async moderate(kind: ContentKind, id: string, action: ModerationAction, reason: string) {
     return data<ModerationOutcome>(await this.http.request(`admin.moderation.${kind}`, { params: { id }, body: { action, reason } }));
+  }
+  async polls(search: PollSearch, cursor?: string, signal?: AbortSignal) {
+    const query = { ...search, reported: flag(search.reported), trendExcluded: flag(search.trendExcluded), cursor, limit: "20" };
+    return page<AdminPoll>(await this.http.request("admin.content.polls", { query, signal }));
+  }
+  async comments(search: CommentSearch, cursor?: string, signal?: AbortSignal) {
+    const query = { ...search, reported: flag(search.reported), cursor, limit: "20" };
+    return page<AdminComment>(await this.http.request("admin.content.comments", { query, signal }));
+  }
+  async history(kind: ContentKind, id: string, cursor?: string, signal?: AbortSignal) {
+    return page<HistoryItem>(await this.http.request(`admin.moderation.history.${kind}`, { params: { id }, query: { cursor, limit: "20" }, signal }));
+  }
+  async movePoll(id: string, placement: PollPlacement, reason: string) {
+    return data<AdminPoll>(await this.http.request("admin.moderation.polls.move", { params: { id }, body: { ...placement, reason } }));
+  }
+  /** Taşıma penceresindeki kategori seçenekleri: aktif kategoriler (public; yönetici listesi yalnız admin'e açık). */
+  async pollCategories(signal?: AbortSignal) {
+    return data<PollCategory[]>(await this.http.request("categories.list", { signal }));
   }
 
   // ── Görsel inceleme ve yasak listesi (KV-16, KV-38) ──

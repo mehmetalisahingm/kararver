@@ -1,11 +1,15 @@
 "use client";
 
-// Moderasyon kuyruğu (KV-24, KV-37): rapor listesi, gerekçeli sonuçlandırma ve rapor edilen içeriğe işlem.
-// Kuyrukta hedef başına tek satır görünür (reportCount); sonuçlandırma o hedefin açık raporlarını birlikte kapatır.
+// Moderasyon kuyruğu (KV-24, KV-37): rapor listesi, gerekçeli sonuçlandırma, rapor edilen içeriğe işlem, içerik sahibini
+// uyarma ve (yönetici) yaptırım, içeriğin rapor + moderasyon geçmişi.
+// Kuyrukta hedef başına tek satır görünür (reportCount); sonuçlandırma, uyarı ve yaptırım o hedefin açık raporlarını
+// birlikte kapatır. Uyarı ve yaptırım rapora bağlı yazılır (moderation_actions + audit).
 import { useCallback, useEffect, useState } from "react";
 import { AdminClient } from "./admin-client.ts";
-import type { Community, ModerationAction, Report, ReportStatus, ReportTargetType } from "./admin-client.ts";
-import { ActionDialog, ListState, formatDate, reasonLabels, shortId, targetLabels, useNotice, useRemoteList } from "./admin-ui";
+import type { Community, ModerationAction, Report, ReportStatus, ReportTargetType, StrongSanction } from "./admin-client.ts";
+import { HistoryDialog } from "./content-history";
+import { statusLabels as contentStatusLabels, suspendUntil } from "./content-model.ts";
+import { ActionDialog, ListState, formatDate, isAdminRole, reasonLabels, shortId, targetLabels, useAdminRoles, useNotice, useRemoteList } from "./admin-ui";
 import styles from "./admin-shell.module.css";
 
 const statusLabels: Record<ReportStatus, string> = { OPEN: "Açık", ACTIONED: "İşlem yapıldı", DISMISSED: "Reddedildi" };
@@ -15,13 +19,23 @@ const pollActions: [ModerationAction, string][] = [
   ["REMOVE", "Kaldır"],
   ["LOCK", "Kilitle"],
   ["EXCLUDE_FROM_TRENDS", "Trendden çıkar"],
+  ["CLOSE_COMMENTS", "Yorumları kapat (oy açık kalır)"],
 ];
 const commentActions: [ModerationAction, string][] = [
   ["HIDE", "Gizle"],
   ["REMOVE", "Kaldır"],
 ];
 
-type Dialog = { kind: "resolve"; report: Report } | { kind: "content"; report: Report } | { kind: "media"; report: Report } | null;
+const sanctionLabels: Record<StrongSanction, string> = {
+  RESTRICT_COMMENTS: "Yorum yapmayı kısıtla",
+  RESTRICT_POSTING: "Paylaşım yapmayı kısıtla",
+  SUSPEND: "Hesabı askıya al",
+  BAN: "Hesabı yasakla",
+};
+
+type Dialog =
+  | { kind: "resolve" | "content" | "media" | "warn" | "sanction" | "history"; report: Report }
+  | null;
 
 export function ReportsPanel({ admin }: { admin: AdminClient }) {
   const [status, setStatus] = useState<ReportStatus>("OPEN");
@@ -31,6 +45,9 @@ export function ReportsPanel({ admin }: { admin: AdminClient }) {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [resolution, setResolution] = useState<"ACTIONED" | "DISMISSED">("DISMISSED");
   const [action, setAction] = useState<ModerationAction>("HIDE");
+  const [sanction, setSanction] = useState<StrongSanction>("RESTRICT_COMMENTS");
+  const [days, setDays] = useState("7");
+  const isAdmin = isAdminRole(useAdminRoles());
   const { setNotice, element } = useNotice();
 
   const load = useCallback(
@@ -92,9 +109,14 @@ export function ReportsPanel({ admin }: { admin: AdminClient }) {
                 <tr key={report.id}>
                   <td>
                     <strong>{targetLabels[report.target.type]}</strong>
+                    {report.contentStatus ? <> · {contentStatusLabels[report.contentStatus]}</> : null}
+                    {report.excerpt ? <><br />{report.excerpt}</> : null}
                     <br />
-                    <small className="kv-muted" title={report.target.id}>{shortId(report.target.id)}</small>
-                    {report.communityId ? <><br /><small className="kv-muted">Topluluk içi</small></> : null}
+                    <small className="kv-muted" title={report.target.id}>
+                      {report.targetUser ? `@${report.targetUser.username} · ` : ""}
+                      {shortId(report.target.id)}
+                      {report.communityId ? " · topluluk içi" : ""}
+                    </small>
                   </td>
                   <td>
                     {reasonLabels[report.reason] ?? report.reason}
@@ -113,10 +135,19 @@ export function ReportsPanel({ admin }: { admin: AdminClient }) {
                           {report.target.type === "MEDIA" ? (
                             <button className="kv-button kv-button--ghost" onClick={() => setDialog({ kind: "media", report })}>Görseli reddet</button>
                           ) : null}
+                          {report.targetUser ? (
+                            <button className="kv-button kv-button--ghost" onClick={() => setDialog({ kind: "warn", report })}>Uyar</button>
+                          ) : null}
+                          {report.targetUser && isAdmin ? (
+                            <button className="kv-button kv-button--ghost" onClick={() => { setSanction("RESTRICT_COMMENTS"); setDays("7"); setDialog({ kind: "sanction", report }); }}>Yaptırım</button>
+                          ) : null}
                         </>
                       ) : (
                         <span className="kv-muted">{statusLabels[report.status]}</span>
                       )}
+                      {report.target.type === "POLL" || report.target.type === "COMMENT" ? (
+                        <button className="kv-button kv-button--ghost" onClick={() => setDialog({ kind: "history", report })}>Geçmiş</button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -167,6 +198,52 @@ export function ReportsPanel({ admin }: { admin: AdminClient }) {
           </select>
         </label>
       </ActionDialog>
+
+      <ActionDialog
+        open={dialog?.kind === "warn"}
+        title="İçerik sahibini uyar"
+        description={`@${dialog?.report.targetUser?.username ?? ""} hesabına uyarı yazılır (hesap durumu değişmez) ve bu hedefin açık raporları kapanır. İçeriğe dokunulmaz; gerekirse ayrıca gizle. Uyarı hesabın yaptırım geçmişinde ve audit kaydında görünür.`}
+        submitLabel="Uyar"
+        onClose={close}
+        onSubmit={async (reason) => {
+          await admin.warn(dialog!.report.id, reason);
+          done("Uyarı yazıldı ve raporlar kapatıldı.");
+        }}
+      />
+
+      <ActionDialog
+        open={dialog?.kind === "sanction"}
+        title="Yaptırım uygula"
+        description={`@${dialog?.report.targetUser?.username ?? ""} hesabına yaptırım uygulanır; rapor ve moderasyon geçmişine bağlanır, hedefin açık raporları kapanır. Askı ve yasak açık oturumları sonlandırır.`}
+        submitLabel="Uygula"
+        onClose={close}
+        validate={() => (sanction === "SUSPEND" && !(Number(days) >= 1 && Number(days) <= 365) ? "Askı süresi 1 ile 365 gün arasında olmalı." : null)}
+        onSubmit={async (reason) => {
+          await admin.sanction(dialog!.report.targetUser!.id, sanction, reason, dialog!.report.id, sanction === "SUSPEND" ? suspendUntil(Number(days)) : null);
+          done("Yaptırım uygulandı ve rapora bağlandı.");
+        }}
+      >
+        <label>
+          Yaptırım
+          <select className="kv-input" value={sanction} onChange={(event) => setSanction(event.target.value as StrongSanction)}>
+            {(Object.keys(sanctionLabels) as StrongSanction[]).map((value) => <option key={value} value={value}>{sanctionLabels[value]}</option>)}
+          </select>
+        </label>
+        {sanction === "SUSPEND" ? (
+          <label>
+            Süre (gün)
+            <input className="kv-input" type="number" min={1} max={365} value={days} onChange={(event) => setDays(event.target.value)} />
+          </label>
+        ) : null}
+      </ActionDialog>
+
+      <HistoryDialog
+        admin={admin}
+        kind={target?.type === "COMMENT" ? "comments" : "polls"}
+        id={dialog?.kind === "history" ? dialog.report.target.id : null}
+        title={dialog?.report.excerpt ?? ""}
+        onClose={close}
+      />
 
       <ActionDialog
         open={dialog?.kind === "media"}
