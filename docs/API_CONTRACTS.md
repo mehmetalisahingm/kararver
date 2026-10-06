@@ -104,6 +104,7 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `GET /me/bookmarks`<br>Kaydedilenler (sadece sahibi) · `bookmarks.list` | U | 200 | — | Mehmet `bookmarks` | Ümit (web) | #24 | hazır |
 | `PUT /polls/:id/follow`<br>Sonucu takip et · `follows.put` | U | 200 | doğal | Mehmet `decision-updates` | Ümit (web) | #25 | hazır |
 | `DELETE /polls/:id/follow`<br>Takibi bırak · `follows.delete` | U | 200 | doğal | Mehmet `decision-updates` | Ümit (web) | #25 | hazır |
+| `GET /polls/:id/decision`<br>Karar ve takip durumu · `decisions.get` | G | 200 | — | Mehmet `decision-updates` | Ümit (web) | #25 | hazır |
 | `PUT /polls/:id/decision`<br>Kararımı verdim (sahibin seçimi ve gerekçesi) · `decisions.put` | O | 200 | doğal | Mehmet `decision-updates` | Ümit (web) | #25 | hazır |
 | `GET /me/interests`<br>Seçili ilgi kategorileri · `interests.get` | U | 200 | — | Mehmet `onboarding` | Ümit (web) | #17 | hazır |
 | `PUT /me/interests`<br>İlgi kategorilerini ayarla (tam liste) · `interests.put` | U | 200 | doğal | Mehmet `onboarding` | Ümit (web) | #17 #29 | hazır |
@@ -218,7 +219,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #22 | `POST /polls`, `GET /feed` |
 | #23 | `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/read` |
 | #24 | `GET /me`, `PATCH /me`, `GET /profiles/:username`, `GET /profiles/:username/polls`, `GET /profiles/:username/comments`, `PUT /polls/:id/bookmark`, `DELETE /polls/:id/bookmark`, `GET /me/bookmarks` |
-| #25 | `PUT /polls/:id/follow`, `DELETE /polls/:id/follow`, `PUT /polls/:id/decision` |
+| #25 | `PUT /polls/:id/follow`, `DELETE /polls/:id/follow`, `GET /polls/:id/decision`, `PUT /polls/:id/decision` |
 | #26 | `POST /reports`, `GET /admin/reports`, `POST /admin/reports/:id/resolve`, `POST /admin/polls/:id/moderation`, `POST /admin/comments/:id/moderation` |
 | #27 | `GET /polls/:id`, `GET /polls/lookup`, `POST /polls/:id/shares` |
 | #28 | `GET /search`, `GET /categories`, `GET /admin/categories`, `POST /admin/categories`, `PATCH /admin/categories/:id` |

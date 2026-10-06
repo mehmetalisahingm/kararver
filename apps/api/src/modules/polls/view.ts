@@ -49,9 +49,9 @@ export function toPollDetail(poll: PollRecord, viewer: SessionUser | null, now: 
         vote: vote?.optionId ?? null,
         voteInvalidated: vote?.invalidated ?? false,
         reaction: poll.reactions.viewer,
-        // Kaydetme ve takip (Mehmet, KV-22/KV-23) tabloları gelene kadar sabit.
+        // Kaydetme KV-22 private listeden okunur; takip KV-23 store tarafından çözülür.
         bookmarked: false,
-        following: false,
+        following: poll.viewerFollowing ?? false,
         isAuthor,
         ...voteAvailability({
           kind: poll.kind,

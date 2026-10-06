@@ -20,6 +20,8 @@ export const DecisionUpdate = z.strictObject({
   updatedAt: Timestamp,
 });
 
+export const DecisionState = z.strictObject({ decision: DecisionUpdate.nullable(), following: z.boolean(), isAuthor: z.boolean() });
+
 export const Announcement = z.strictObject({
   id: Id,
   title: z.string(),
@@ -182,6 +184,12 @@ export const growthEndpoints = [
     cache: "private",
   }),
   defineEndpoint({
+    id: "decisions.get", domain: "growth", method: "GET", path: "/polls/:id/decision",
+    summary: "Karar ve takip durumu", auth: "public", provider: growth("decision-updates"), consumers: web,
+    unblocks: ["#25"], availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(DecisionState) }, errors: [], idempotency: "none", cache: "viewer",
+  }),
+  defineEndpoint({
     id: "decisions.put",
     domain: "growth",
     method: "PUT",
@@ -197,7 +205,7 @@ export const growthEndpoints = [
       body: z.strictObject({ chosenOptionId: Id.nullable(), note: z.string().trim().min(1).max(1000) }),
     },
     responses: { 200: dataOf(DecisionUpdate) },
-    errors: [],
+    errors: ["CONTENT_LOCKED"],
     idempotency: "natural",
     cache: "private",
     notes: ["chosenOptionId aynı anketin seçeneği olmalı (bileşik FK); tartışmada null."],

@@ -1,4 +1,4 @@
-import { Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
+import { DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
 import { AdminClient } from "../features/admin/admin-client.ts";
 import { MediaClient } from "./media-client.ts";
@@ -56,6 +56,16 @@ export class ApiClient implements ProductClient {
   addComment(id: string, draft: CommentDraft, key: string) { return this.social.addComment(id,draft,key); }
   editComment(id: string, commentId: string, text: string) { return this.social.editComment(id,commentId,text); }
   deleteComment(id: string, commentId: string) { return this.social.deleteComment(id,commentId); }
+  async getDecision(id: string, signal?: AbortSignal) {
+    return dataOf(DecisionState).parse(await this.http.request("decisions.get", { params: { id }, signal })).data;
+  }
+  async setDecision(id: string, input: { chosenOptionId: string | null; note: string }) {
+    return dataOf(DecisionUpdate).parse(await this.http.request("decisions.put", { params: { id }, body: input })).data;
+  }
+  async setFollow(id: string, following: boolean) {
+    await this.http.request(following ? "follows.put" : "follows.delete", { params: { id } });
+    return following;
+  }
   current() { return this.user; }
   private acceptUser(value: unknown) {
     const { data } = dataOf(Me).parse(value);

@@ -6,6 +6,7 @@ import { ErrorMessage, Loading } from "../../components/fields";
 import { UiError } from "../../lib/model";
 import type { Poll } from "../../lib/model";
 import { SocialPanel } from "../social/social-panel";
+import { DecisionPanel } from "./decision-panel";
 import { PollGallery } from "./gallery";
 
 export function PollDetail({ id }: { id: string }) {
@@ -214,6 +215,7 @@ export function PollDetail({ id }: { id: string }) {
           </>
         )}
       </article>
+      <DecisionPanel key={`decision:${poll.id}:${user?.id || "guest"}`} poll={poll} />
       <PollGallery key={poll.id} poll={poll} />
       <SocialPanel key={`${poll.id}:${user?.id || "guest"}`} poll={poll} />
     </div>

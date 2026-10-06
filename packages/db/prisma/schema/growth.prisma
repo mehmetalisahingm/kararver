@@ -76,3 +76,19 @@ model PointLedgerEntry {
   @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("point_ledger_entries")
 }
+
+model PollFollow {
+ userId String @map("user_id") @db.Uuid
+ pollId String @map("poll_id") @db.Uuid
+ createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+ @@id([userId, pollId])
+ @@index([pollId, createdAt, userId])
+ @@map("poll_follows")
+}
+model PollDecision {
+ pollId String @id @map("poll_id") @db.Uuid
+ chosenOptionId String? @map("chosen_option_id") @db.Uuid
+ note String @db.VarChar(1000)
+ updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+ @@map("poll_decisions")
+}
