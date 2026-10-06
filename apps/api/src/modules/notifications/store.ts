@@ -8,6 +8,8 @@ export type NotificationRecord = {
   id: string;
   type: z.infer<typeof NotificationType>;
   subject: { type: "POLL" | "COMMENT" | "COMMUNITY" | "USER"; id: string };
+  /** Yorum bildirimini doğru ankete döndürmek ve anket sessizini uygulamak için; DB'de zaten tutulur. */
+  pollId: string | null;
   /** Silinmiş aktör veya sistem bildirimi: null. */
   actor: { id: string; username: string; displayName: string; avatarPublicKey: string | null } | null;
   data: Record<string, string | number | boolean | null>;
