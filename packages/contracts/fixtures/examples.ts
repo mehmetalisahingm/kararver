@@ -178,7 +178,39 @@ const mediaView = (status: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
-const report = { id: REPORT, target: { type: "COMMENT", id: COMMENT }, reason: "SPAM", note: null, status: "OPEN", reportCount: 2, communityId: null, createdAt: T1, resolvedAt: null };
+const report = {
+  id: REPORT,
+  target: { type: "COMMENT", id: COMMENT },
+  excerpt: "Boyalı parça fiyatı düşürür.",
+  contentStatus: "ACTIVE",
+  targetUser: { id: U2, username: "umit" },
+  reason: "SPAM",
+  note: null,
+  status: "OPEN",
+  reportCount: 2,
+  communityId: null,
+  createdAt: T1,
+  resolvedAt: null,
+};
+const adminPoll = {
+  id: POLL,
+  publicId: "ab12cd34",
+  slug: "bu-araba-bu-fiyata-alinir-mi",
+  kind: "POLL",
+  title: "Bu araba bu fiyata alınır mı?",
+  status: "ACTIVE",
+  trendExcluded: false,
+  commentsClosed: false,
+  contentLocked: true,
+  author: deniz,
+  category: categoryRef,
+  community: communityRef,
+  voteCount: 12,
+  commentCount: 3,
+  openReportCount: 1,
+  createdAt: T0,
+};
+const adminComment = { id: COMMENT, pollId: POLL, pollTitle: "Bu araba bu fiyata alınır mı?", parentId: null, body: "Boyalı parça fiyatı düşürür.", status: "ACTIVE", author: umit, openReportCount: 2, createdAt: T1 };
 const communityCard = { ...communityRef, description: "Kampüs, yemekhane, ulaşım.", imageUrl: null, memberCount: 128 };
 const communityDetail = { ...communityCard, membersVisibility: "MEMBERS", createdAt: T0, viewer: { role: "MEMBER" } };
 const notification = { id: NOTIF, type: "COMMENT_ON_POLL", subject: { type: "POLL", id: POLL }, actor: umit, data: {}, readAt: null, createdAt: T1 };
@@ -313,9 +345,21 @@ export const examples: Example[] = [
   { endpoint: "reports.create", name: "ok", request: { body: { target: { type: "COMMENT", id: COMMENT }, reason: "SPAM" } }, status: 202, body: data({ reportId: REPORT }) },
   { endpoint: "admin.reports.list", name: "ok", status: 200, body: page([report]) },
   { endpoint: "admin.reports.resolve", name: "ok", request: { params: { id: REPORT }, body: { resolution: "ACTIONED", note: "Yorum kaldırıldı" } }, status: 200, body: data({ ...report, status: "ACTIONED", resolvedAt: T1 }) },
-  { endpoint: "admin.moderation.polls", name: "hide", request: { params: pollParams, body: { action: "HIDE", reason } }, status: 200, body: data({ id: POLL, status: "HIDDEN", trendExcluded: false }) },
+  { endpoint: "admin.moderation.polls", name: "hide", request: { params: pollParams, body: { action: "HIDE", reason } }, status: 200, body: data({ id: POLL, status: "HIDDEN", trendExcluded: false, commentsClosed: false }) },
+  { endpoint: "admin.moderation.polls", name: "close-comments", request: { params: pollParams, body: { action: "CLOSE_COMMENTS", reason } }, status: 200, body: data({ id: POLL, status: "ACTIVE", trendExcluded: false, commentsClosed: true }) },
   { endpoint: "admin.moderation.polls", name: "out-of-scope", request: { params: pollParams, body: { action: "HIDE", reason } }, status: 403, body: error("FORBIDDEN", "Bu topluluk için yetkiniz yok.") },
-  { endpoint: "admin.moderation.comments", name: "remove", request: { params: { id: COMMENT }, body: { action: "REMOVE", reason } }, status: 200, body: data({ id: COMMENT, status: "REMOVED", trendExcluded: null }) },
+  { endpoint: "admin.moderation.comments", name: "remove", request: { params: { id: COMMENT }, body: { action: "REMOVE", reason } }, status: 200, body: data({ id: COMMENT, status: "REMOVED", trendExcluded: null, commentsClosed: null }) },
+  { endpoint: "admin.content.polls", name: "ok", request: { query: { q: "araba", reported: "true" } }, status: 200, body: page([adminPoll]) },
+  { endpoint: "admin.content.comments", name: "ok", request: { query: { q: "boyalı", status: "ACTIVE" } }, status: 200, body: page([adminComment]) },
+  { endpoint: "admin.moderation.history.polls", name: "ok", request: { params: pollParams }, status: 200, body: page([
+    { kind: "ACTION", id: id(61), at: T1, action: "CLOSE_COMMENTS", actor: deniz, fromStatus: "ACTIVE", toStatus: "ACTIVE", reason, reportId: null },
+    { kind: "REPORT", id: REPORT, at: T0, reason: "SPAM", note: null, status: "ACTIONED", resolvedAt: T1, resolvedBy: deniz, resolutionNote: reason },
+  ]) },
+  { endpoint: "admin.moderation.history.comments", name: "ok", request: { params: { id: COMMENT } }, status: 200, body: page([{ kind: "REPORT", id: REPORT, at: T1, reason: "SPAM", note: null, status: "OPEN", resolvedAt: null, resolvedBy: null, resolutionNote: null }]) },
+  { endpoint: "admin.moderation.polls.move", name: "ok", request: { params: pollParams, body: { categoryId: CAT, communityId: COMM, reason: "Yanlış kategoriye açılmış" } }, status: 200, body: data(adminPoll) },
+  { endpoint: "admin.moderation.polls.move", name: "removed", request: { params: pollParams, body: { communityId: null, reason: "Topluluk dışı" } }, status: 409, body: error("CONFLICT", "Kaldırılmış anket taşınamaz.", [{ code: "removed" }]) },
+  { endpoint: "admin.reports.warn", name: "ok", request: { params: { id: REPORT }, body: { reason: "Hakaret içeren yorum, ilk uyarı" } }, status: 200, body: data({ sanctionId: SANCTION, userId: U2, closedReports: 2 }) },
+  { endpoint: "admin.reports.warn", name: "hedef-yok", request: { params: { id: REPORT }, body: { reason: "Hakaret içeren yorum, ilk uyarı" } }, status: 409, body: error("CONFLICT", "Raporun hedefinin sahibi bulunamadı.", [{ code: "no_target_user" }]) },
   { endpoint: "admin.media.list", name: "ok", status: 200, body: page([mediaView("QUARANTINED")]) },
   { endpoint: "admin.media.decide", name: "ok", request: { params: { id: MEDIA }, body: { decision: "APPROVE", reason: "Uygun içerik" } }, status: 200, body: data(mediaView("APPROVED", { url: mediaRef.url, preview: null })) },
   { endpoint: "admin.media.bans.list", name: "ok", status: 200, body: page([bannedMedia]) },
@@ -356,6 +400,7 @@ export const examples: Example[] = [
   { endpoint: "admin.users.reports", name: "against", request: { params: { id: U2 }, query: { side: "against" } }, status: 200, body: page([{ id: REPORT, target: { type: "COMMENT", id: COMMENT }, reason: "SPAM", status: "OPEN", createdAt: T1, resolvedAt: null }]) },
   { endpoint: "admin.users.activity", name: "ok", request: { params: { id: U2 } }, status: 200, body: page([{ kind: "COMMENT", id: COMMENT, pollId: POLL, excerpt: "Bence ikinci seçenek daha mantıklı.", status: "ACTIVE", createdAt: T1 }]) },
   { endpoint: "admin.sanctions.create", name: "conflict", request: { params: { id: U2 }, body: { type: "SUSPEND", reason: "Tekrarlayan spam", endsAt: T_CLOSE } }, status: 409, body: error("CONFLICT", "Bu kullanıcıda aynı tipte aktif bir yaptırım var.", [{ code: "already_active" }]) },
+  { endpoint: "admin.sanctions.create", name: "suspend-rapor-bagli", request: { params: { id: U2 }, body: { type: "SUSPEND", reason: "Tekrarlayan spam", endsAt: T_CLOSE, reportId: REPORT } }, status: 201, body: data(sanction) },
   { endpoint: "admin.sanctions.create", name: "suspend", request: { params: { id: U2 }, body: { type: "SUSPEND", reason: "Tekrarlayan spam", endsAt: T_CLOSE } }, status: 201, body: data(sanction) },
   { endpoint: "admin.sanctions.lift", name: "ok", request: { params: { id: U2, sanctionId: SANCTION }, body: { reason: "İtiraz kabul edildi" } }, status: 200, body: data({ ...sanction, liftedAt: T1, liftedBy: deniz, liftReason: "İtiraz kabul edildi" }) },
   { endpoint: "admin.roles.put", name: "ok", request: { params: { id: U2 }, body: { role: "MODERATOR", reason: "Topluluk moderatörü" } }, status: 200, body: data({ userId: U2, roles: ["MODERATOR"] }) },

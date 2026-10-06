@@ -130,6 +130,12 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /admin/reports/:id/resolve`<br>Raporu sonuçlandır · `admin.reports.resolve` | M | 200 | doğal | Mert `reports` | Mert (admin moderasyon UI, KV-37) | #26 | hazır |
 | `POST /admin/polls/:id/moderation`<br>Anket üzerinde gerekçeli moderasyon işlemi · `admin.moderation.polls` | M | 200 | doğal | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #39 #26 | hazır |
 | `POST /admin/comments/:id/moderation`<br>Yorum üzerinde gerekçeli moderasyon işlemi · `admin.moderation.comments` | M | 200 | doğal | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #39 #26 | hazır |
+| `GET /admin/polls`<br>Yönetici anket arama ve listesi · `admin.content.polls` | M | 200 | — | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #39 #45 | hazır |
+| `GET /admin/comments`<br>Yönetici yorum arama ve listesi · `admin.content.comments` | M | 200 | — | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #39 #45 | hazır |
+| `GET /admin/polls/:id/moderation-history`<br>Anketin rapor ve moderasyon geçmişi · `admin.moderation.history.polls` | M | 200 | — | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #39 | hazır |
+| `GET /admin/comments/:id/moderation-history`<br>Yorumun rapor ve moderasyon geçmişi · `admin.moderation.history.comments` | M | 200 | — | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #39 | hazır |
+| `PATCH /admin/polls/:id/placement`<br>Anketin kategorisini veya topluluğunu gerekçeyle değiştir · `admin.moderation.polls.move` | M | 200 | doğal | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #39 | hazır |
+| `POST /admin/reports/:id/warn`<br>Raporlanan içeriğin sahibini uyar · `admin.reports.warn` | M | 200 | — | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #39 #26 | hazır |
 | `GET /admin/media`<br>Görsel inceleme kuyruğu · `admin.media.list` | M | 200 | — | Mert `media` | Mert (admin moderasyon UI, KV-37) | #18 #40 | hazır |
 | `POST /admin/media/:id/decision`<br>Görseli onayla / reddet · `admin.media.decide` | M | 200 | doğal | Mert `media` | Mert (admin moderasyon UI, KV-37) | #18 #40 | hazır |
 | `GET /admin/polls/:id/revisions`<br>İçerik sürüm geçmişi · `admin.revisions.polls` | A | 200 | — | Faruk `polls` | Mert (moderasyon, KV-37), Utku (audit, KV-39) | #39 #41 | hazır |
@@ -220,7 +226,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #23 | `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/read` |
 | #24 | `GET /me`, `PATCH /me`, `GET /profiles/:username`, `GET /profiles/:username/polls`, `GET /profiles/:username/comments`, `PUT /polls/:id/bookmark`, `DELETE /polls/:id/bookmark`, `GET /me/bookmarks` |
 | #25 | `PUT /polls/:id/follow`, `DELETE /polls/:id/follow`, `GET /polls/:id/decision`, `PUT /polls/:id/decision` |
-| #26 | `POST /reports`, `GET /admin/reports`, `POST /admin/reports/:id/resolve`, `POST /admin/polls/:id/moderation`, `POST /admin/comments/:id/moderation` |
+| #26 | `POST /reports`, `GET /admin/reports`, `POST /admin/reports/:id/resolve`, `POST /admin/polls/:id/moderation`, `POST /admin/comments/:id/moderation`, `POST /admin/reports/:id/warn` |
 | #27 | `GET /polls/:id`, `GET /polls/lookup`, `POST /polls/:id/shares` |
 | #28 | `GET /search`, `GET /categories`, `GET /admin/categories`, `POST /admin/categories`, `PATCH /admin/categories/:id` |
 | #29 | `GET /feed`, `PUT /me/interests` |
@@ -233,13 +239,13 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #36 | `GET /notifications/preferences`, `PATCH /notifications/preferences`, `PUT /notifications/mutes/:pollId`, `DELETE /notifications/mutes/:pollId` |
 | #37 | `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/read`, `GET /notifications/preferences`, `PATCH /notifications/preferences` |
 | #38 | `GET /admin/metrics` |
-| #39 | `GET /admin/reports`, `POST /admin/polls/:id/moderation`, `POST /admin/comments/:id/moderation`, `GET /admin/polls/:id/revisions`, `GET /admin/comments/:id/revisions` |
+| #39 | `GET /admin/reports`, `POST /admin/polls/:id/moderation`, `POST /admin/comments/:id/moderation`, `GET /admin/polls`, `GET /admin/comments`, `GET /admin/polls/:id/moderation-history`, `GET /admin/comments/:id/moderation-history`, `PATCH /admin/polls/:id/placement`, `POST /admin/reports/:id/warn`, `GET /admin/polls/:id/revisions`, `GET /admin/comments/:id/revisions` |
 | #40 | `GET /admin/media`, `POST /admin/media/:id/decision`, `GET /admin/media/bans`, `POST /admin/media/bans`, `DELETE /admin/media/bans/:id` |
 | #41 | `GET /admin/polls/:id/revisions`, `GET /admin/comments/:id/revisions`, `GET /admin/audit` |
 | #42 | `GET /config`, `GET /admin/settings`, `PATCH /admin/settings/:key`, `PUT /admin/emergency` |
 | #43 | `GET /admin/categories`, `POST /admin/categories`, `PATCH /admin/categories/:id` |
 | #44 | `GET /announcements/active`, `GET /admin/featured`, `POST /admin/featured`, `PATCH /admin/featured/:id`, `DELETE /admin/featured/:id`, `GET /admin/announcements`, `POST /admin/announcements`, `PATCH /admin/announcements/:id`, `DELETE /admin/announcements/:id` |
-| #45 | `POST /admin/votes/invalidate`, `POST /admin/votes/restore` |
+| #45 | `GET /admin/polls`, `GET /admin/comments`, `POST /admin/votes/invalidate`, `POST /admin/votes/restore` |
 | #66 | `POST /polls`, `PUT /polls/:id/reaction`, `DELETE /polls/:id/reaction`, `PUT /comments/:id/reaction`, `DELETE /comments/:id/reaction` |
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
 <!-- END:unblocks -->

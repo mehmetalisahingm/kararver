@@ -2,7 +2,7 @@
 // KV-24 (#26), KV-37 (#39), KV-38 (#40); içerik sürüm geçmişi sağlayıcısı Faruk (#66)
 import { z } from "zod";
 import { MediaView } from "./media.ts";
-import { ContentStatus, Count, CursorQuery, dataOf, Empty, Id, IdParams, pageOf, PublicUser, Timestamp } from "../common.ts";
+import { CategoryRef, CommunityRef, ContentStatus, Count, CursorQuery, dataOf, Empty, Id, IdParams, pageOf, PublicUser, Timestamp } from "../common.ts";
 import { defineEndpoint } from "../endpoint.ts";
 
 export const ReportTargetType = z.enum(["POLL", "COMMENT", "MEDIA", "USER"]);
@@ -21,6 +21,12 @@ export const ReportStatus = z.enum(["OPEN", "ACTIONED", "DISMISSED"]);
 export const ReportView = z.strictObject({
   id: Id,
   target: z.strictObject({ type: ReportTargetType, id: Id }),
+  /** Hedefin özeti: anket başlığı, yorumun ilk 140 karakteri, kullanıcı adı. Görselde null. */
+  excerpt: z.string().nullable(),
+  /** Hedef içeriğin şimdiki durumu (anket/yorum); diğer hedeflerde null. */
+  contentStatus: ContentStatus.nullable(),
+  /** Hedefin sahibi (anket/yorum yazarı, görseli yükleyen, raporlanan hesap); silinmişse null. Uyar/yaptırım bu hesaba gider. */
+  targetUser: z.strictObject({ id: Id, username: z.string() }).nullable(),
   reason: ReportReason,
   note: z.string().nullable(),
   status: ReportStatus,
@@ -52,6 +58,8 @@ export const ModerationAction = z.enum([
   "REMOVE",
   "EXCLUDE_FROM_TRENDS",
   "INCLUDE_IN_TRENDS",
+  "CLOSE_COMMENTS",
+  "OPEN_COMMENTS",
 ]);
 const Reason = z.string().trim().min(3).max(500);
 
@@ -73,6 +81,89 @@ export const VoteCorrectionResult = z.strictObject({
   notFound: z.array(Id),
   affectedPollIds: z.array(Id),
 });
+
+/** Yönetici anket listesi satırı (KV-37). Gizli ve kaldırılmış anketler dahildir. */
+export const AdminPollItem = z.strictObject({
+  id: Id,
+  publicId: z.string(),
+  slug: z.string(),
+  kind: z.enum(["POLL", "DISCUSSION"]),
+  title: z.string(),
+  status: ContentStatus,
+  trendExcluded: z.boolean(),
+  /** Moderasyon yorumları kapattı (CLOSE_COMMENTS); sahibin allowComments ayarından bağımsızdır. */
+  commentsClosed: z.boolean(),
+  /** İlk geçerli oy geldi: başlık, açıklama, seçenekler ve sonuç görünürlüğü artık değişmez (yönetici dahil). */
+  contentLocked: z.boolean(),
+  author: PublicUser,
+  category: CategoryRef,
+  community: CommunityRef.nullable(),
+  voteCount: Count,
+  commentCount: Count,
+  openReportCount: Count,
+  createdAt: Timestamp,
+});
+
+/** Yönetici yorum listesi satırı (KV-37). Gizli ve kaldırılmış yorumlar dahildir. */
+export const AdminCommentItem = z.strictObject({
+  id: Id,
+  pollId: Id,
+  pollTitle: z.string(),
+  parentId: Id.nullable(),
+  body: z.string(),
+  status: ContentStatus,
+  author: PublicUser,
+  openReportCount: Count,
+  createdAt: Timestamp,
+});
+
+/** moderation_actions.action değerleri (içerik, görsel, kullanıcı işlemleri). */
+export const ModerationRecordAction = z.enum([
+  "APPROVE",
+  "REJECT",
+  "HIDE",
+  "REMOVE",
+  "RESTORE",
+  "LOCK",
+  "UNLOCK",
+  "EXCLUDE_FROM_TRENDS",
+  "INCLUDE_IN_TRENDS",
+  "CLOSE_COMMENTS",
+  "OPEN_COMMENTS",
+  "MOVE",
+  "WARN_USER",
+  "SANCTION_USER",
+  "DISMISS_REPORT",
+]);
+
+/**
+ * İçeriğin rapor + moderasyon geçmişi (KV-37). Raporlayanın kimliği dönmez; rapor kapanışında yalnız sonuçlandıran görünür.
+ * Zaman çizgisi: `at` azalan.
+ */
+export const ContentHistoryItem = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("REPORT"),
+    id: Id,
+    at: Timestamp,
+    reason: ReportReason,
+    note: z.string().nullable(),
+    status: ReportStatus,
+    resolvedAt: Timestamp.nullable(),
+    resolvedBy: PublicUser.nullable(),
+    resolutionNote: z.string().nullable(),
+  }),
+  z.strictObject({
+    kind: z.literal("ACTION"),
+    id: Id,
+    at: Timestamp,
+    action: ModerationRecordAction,
+    actor: PublicUser,
+    fromStatus: z.string().nullable(),
+    toStatus: z.string().nullable(),
+    reason: z.string(),
+    reportId: Id.nullable(),
+  }),
+]);
 
 export const Revision = z.strictObject({
   version: z.number().int().min(1),
@@ -101,17 +192,23 @@ const moderationEndpoint = (target: "polls" | "comments") =>
     request: {
       params: IdParams,
       body: z.strictObject({
-        action: target === "polls" ? ModerationAction : ModerationAction.exclude(["EXCLUDE_FROM_TRENDS", "INCLUDE_IN_TRENDS"]),
+        action:
+          target === "polls"
+            ? ModerationAction
+            : ModerationAction.exclude(["EXCLUDE_FROM_TRENDS", "INCLUDE_IN_TRENDS", "CLOSE_COMMENTS", "OPEN_COMMENTS"]),
         reason: Reason,
       }),
     },
-    responses: { 200: dataOf(z.strictObject({ id: Id, status: ContentStatus, trendExcluded: z.boolean().nullable() })) },
+    responses: {
+      200: dataOf(z.strictObject({ id: Id, status: ContentStatus, trendExcluded: z.boolean().nullable(), commentsClosed: z.boolean().nullable() })),
+    },
     errors: ["CONFLICT"],
     idempotency: "natural",
     cache: "private",
     notes: [
       "Moderatör sadece atandığı topluluktaki içeriğe işlem yapar (KV-04); aksi 403.",
       "Her işlem önce/sonra durumuyla audit'e yazılır (KV-39). Geçersiz geçiş 409 CONFLICT.",
+      "trendExcluded ve commentsClosed yalnız ankette doludur, yorumda null. CLOSE_COMMENTS/OPEN_COMMENTS yalnız ankette: oy açık kalır, yeni yorum ve cevap 409 COMMENTS_DISABLED olur; mevcut yorumlar görünmeye devam eder. LOCK'tan ayrıdır (LOCK oyu da kapatır).",
     ],
   });
 
@@ -133,6 +230,156 @@ const revisionsEndpoint = (target: "polls" | "comments") =>
     idempotency: "none",
     cache: "private",
   });
+
+const SearchText = z.string().trim().min(2).max(100);
+
+const contentEndpoints = [
+  defineEndpoint({
+    id: "admin.content.polls",
+    domain: "moderation",
+    method: "GET",
+    path: "/admin/polls",
+    summary: "Yönetici anket arama ve listesi",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#39", "#45"],
+    availability: { status: "ready" },
+    request: {
+      query: z.strictObject({
+        ...CursorQuery.shape,
+        /** Başlık veya açıklamada, Türkçe harf/büyük-küçük farkı gözetmeden. */
+        q: SearchText.optional(),
+        status: ContentStatus.optional(),
+        communityId: Id.optional(),
+        categoryId: Id.optional(),
+        authorId: Id.optional(),
+        /** true: yalnız açık raporu olanlar. */
+        reported: z.stringbool().optional(),
+        /** true: yalnız trendden çıkarılmış olanlar. */
+        trendExcluded: z.stringbool().optional(),
+      }),
+    },
+    responses: { 200: pageOf(AdminPollItem) },
+    errors: ["INVALID_CURSOR"],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "En yeni önce. Gizli, kilitli, inceleme altındaki ve kaldırılmış anketler dahildir (public listelerden farkı).",
+      "Moderatör yalnız atandığı toplulukların anketlerini görür; topluluksuz anketler yalnız ADMIN+ listesindedir. Filtre yetki değildir: işlem endpoint'leri hedefin topluluğunu ayrıca denetler.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.content.comments",
+    domain: "moderation",
+    method: "GET",
+    path: "/admin/comments",
+    summary: "Yönetici yorum arama ve listesi",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#39", "#45"],
+    availability: { status: "ready" },
+    request: {
+      query: z.strictObject({
+        ...CursorQuery.shape,
+        /** Yorum metninde, Türkçe harf/büyük-küçük farkı gözetmeden. */
+        q: SearchText.optional(),
+        status: ContentStatus.optional(),
+        pollId: Id.optional(),
+        communityId: Id.optional(),
+        authorId: Id.optional(),
+        reported: z.stringbool().optional(),
+      }),
+    },
+    responses: { 200: pageOf(AdminCommentItem) },
+    errors: ["INVALID_CURSOR"],
+    idempotency: "none",
+    cache: "private",
+    notes: ["En yeni önce. Gizli ve kaldırılmış yorumlar dahildir. Kapsam kuralı admin.content.polls ile aynıdır."],
+  }),
+  ...(["polls", "comments"] as const).map((target) =>
+    defineEndpoint({
+      id: `admin.moderation.history.${target}`,
+      domain: "moderation",
+      method: "GET",
+      path: `/admin/${target}/:id/moderation-history`,
+      summary: `${target === "polls" ? "Anketin" : "Yorumun"} rapor ve moderasyon geçmişi`,
+      auth: "moderator",
+      provider: moderation,
+      consumers: adminUi,
+      unblocks: ["#39"],
+      availability: { status: "ready" },
+      request: { params: IdParams, query: CursorQuery },
+      responses: { 200: pageOf(ContentHistoryItem) },
+      errors: ["INVALID_CURSOR"],
+      idempotency: "none",
+      cache: "private",
+      notes: [
+        "Raporlar (kapanmış olanlar dahil) ve moderasyon işlemleri tek zaman çizgisinde, yeniden eskiye. Raporlayan kimliği dönmez.",
+        "Moderatör yalnız atandığı topluluğun içeriği için okur (403). Sürüm geçmişi ayrıdır: admin.revisions.*.",
+      ],
+    }),
+  ),
+  defineEndpoint({
+    id: "admin.moderation.polls.move",
+    domain: "moderation",
+    method: "PATCH",
+    path: "/admin/polls/:id/placement",
+    summary: "Anketin kategorisini veya topluluğunu gerekçeyle değiştir",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#39"],
+    availability: { status: "ready" },
+    request: {
+      params: IdParams,
+      body: z
+        .strictObject({
+          categoryId: Id.optional(),
+          /** null: topluluktan çıkar (yalnız ADMIN+). */
+          communityId: Id.nullable().optional(),
+          reason: Reason,
+        })
+        .refine((b) => b.categoryId !== undefined || b.communityId !== undefined, { message: "categoryId veya communityId gerekli", path: ["categoryId"] }),
+    },
+    responses: { 200: dataOf(AdminPollItem) },
+    errors: ["CONFLICT"],
+    idempotency: "natural",
+    cache: "private",
+    notes: [
+      "Soru metni, açıklama ve seçenekler değişmediği için ilk geçerli oydan sonra da serbesttir (KV-37 kararı); oy, yorum ve sonuçlar taşınmaz, olduğu gibi kalır.",
+      "Moderatör hem kaynak hem hedef toplulukta atanmış olmalıdır (403); topluluktan çıkarma ve topluluksuz anketi bir topluluğa alma yalnız ADMIN+.",
+      "Hedef kategori etkin, hedef topluluk açık olmalı: aksi 400 VALIDATION_ERROR (unknown_category | unknown_community). Kaldırılmış anket 409 (removed). Değişiklik yoksa 200, audit ve kayıt yazılmaz.",
+      "Feed, arama, trend ve topluluk akışı anketi canlı okur: ek yeniden hesaplama gerekmez, taşıma sonrası ilk okumada yeni yerinde görünür.",
+      "Audit: moderation.poll.apply / move (önce/sonra kategori ve topluluk). moderation_actions MOVE kaydı yazılır.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.reports.warn",
+    domain: "moderation",
+    method: "POST",
+    path: "/admin/reports/:id/warn",
+    summary: "Raporlanan içeriğin sahibini uyar",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#39", "#26"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(z.strictObject({ sanctionId: Id, userId: Id, closedReports: Count })) },
+    errors: ["CONFLICT"],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "Hedefin sahibine WARNING yaptırımı yazar (hesap durumu değişmez; Utku'nun sanctions tablosu ve sanction.applied olayı). Hedefin açık raporlarını ACTIONED yapar.",
+      "Aynı işlemde moderation_actions WARN_USER (rapor bağlantılı) ve audit report.warn / apply yazılır; audit önce/sonra, rapor, hedef ve yaptırım kimliğini taşır.",
+      "Moderatör yalnız USER rolündeki hesabı uyarır (403); admin hedef SUPER_ADMIN ister (KV-04 sanctionTarget). Kendini uyarma 403.",
+      "409 CONFLICT details[0].code: no_target_user (hedefin sahibi yok veya hesap silinmiş), already_resolved (rapor zaten kapalı).",
+      "Sert yaptırım (kısıt, askı, ban) için admin.sanctions.create body'sine reportId verilir; aynı iz oraya da yazılır.",
+    ],
+  }),
+];
 
 export const moderationEndpoints = [
   defineEndpoint({
@@ -206,6 +453,7 @@ export const moderationEndpoints = [
   }),
   moderationEndpoint("polls"),
   moderationEndpoint("comments"),
+  ...contentEndpoints,
   defineEndpoint({
     id: "admin.media.list",
     domain: "moderation",

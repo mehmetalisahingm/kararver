@@ -36,6 +36,7 @@ export type SystemAuditAction = (typeof systemAuditActions)[number];
 export type AuditAction = ActionId | SystemAuditAction;
 
 const moderationOps = ModerationAction.options.map((o) => o.toLowerCase());
+const commentOnlyExcluded = (o: string) => o.endsWith("_trends") || o.endsWith("_comments");
 
 /**
  * Audit'li KV-04 işlemleri ve izinli türleri. Audit yazan her katalog işlemi burada açıkça bulunur; listede
@@ -58,7 +59,10 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   "media.ban.manage": ["create", "delete"],
   "report.resolve": ["actioned", "dismissed"],
   "moderation.poll.apply": moderationOps,
-  "moderation.comment.apply": moderationOps.filter((o) => !o.endsWith("_trends")),
+  "moderation.comment.apply": moderationOps.filter((o) => !commentOnlyExcluded(o)),
+  // KV-37: kategori/topluluk taşıma ve rapor kuyruğundan uyarı.
+  "moderation.poll.move": ["move"],
+  "moderation.user.warn": ["warn"],
   "community.create": ["create"],
   "community.update": ["update"],
   "settings.update": ["update"],
@@ -99,6 +103,8 @@ export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditActi
   "category.manage",
   "moderation.poll.apply",
   "moderation.comment.apply",
+  "moderation.poll.move",
+  "moderation.user.warn",
   "media.review",
   "report.resolve",
   "community.update",
