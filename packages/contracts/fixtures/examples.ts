@@ -293,6 +293,7 @@ export const examples: Example[] = [
   { endpoint: "bookmarks.list", name: "ok", status: 200, body: page([card(hidden, { ...viewer(null), bookmarked: true })]) },
   { endpoint: "follows.put", name: "ok", request: { params: pollParams }, status: 200, body: data({ following: true }) },
   { endpoint: "follows.delete", name: "ok", request: { params: pollParams }, status: 200, body: data({ following: false }) },
+  { endpoint: "decisions.get", name: "ok", request: { params: pollParams }, status: 200, body: data({ decision: null, following: false, isAuthor: false }) },
   { endpoint: "decisions.put", name: "ok", request: { params: pollParams, body: { chosenOptionId: OPT_A, note: "Pazarlıkla aldım." } }, status: 200, body: data({ pollId: POLL, chosenOptionId: OPT_A, note: "Pazarlıkla aldım.", updatedAt: T1 }) },
   { endpoint: "interests.get", name: "ok", status: 200, body: data({ categoryIds: [CAT] }) },
   { endpoint: "interests.put", name: "ok", request: { body: { categoryIds: [CAT] } }, status: 200, body: data({ categoryIds: [CAT] }) },

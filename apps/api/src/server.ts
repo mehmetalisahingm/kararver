@@ -1,3 +1,4 @@
+import { createPrismaDecisionStore } from "./modules/decisions/prisma-store.ts";
 // API giriş noktası: pnpm --filter @kararver/api dev
 import path from "node:path";
 import { createPrismaClient } from "@kararver/db";
@@ -48,6 +49,7 @@ const app = buildApp({
   rbacStore: createPrismaRbacStore(prisma),
   pollStore: createPrismaPollStore(prisma),
   profileStore: createPrismaProfileStore(prisma),
+  decisionStore: createPrismaDecisionStore(prisma),
   shareStore: createPrismaShareStore(prisma),
   pointAdminStore: createPrismaPointAdminStore(prisma),
   searchStore: createPrismaSearchStore(prisma),

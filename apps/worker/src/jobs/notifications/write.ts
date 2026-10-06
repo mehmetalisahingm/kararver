@@ -83,11 +83,18 @@ export async function fanoutToVoters(
     const after: Prisma.Sql = cursor
       ? Prisma.sql`AND (v.created_at, v.user_id) > (${cursor.createdAt}::timestamptz, ${cursor.userId}::uuid)`
       : Prisma.empty;
+    // KV-23: deduplicate voters + explicit followers before slicing, so one person uses one slot.
+    const audience = draft.type === "DECISION_UPDATED" || draft.type === "POLL_CLOSED"
+      ? Prisma.sql`(SELECT user_id, min(created_at) AS created_at FROM (
+          SELECT user_id, created_at FROM votes WHERE poll_id = ${opts.pollId}::uuid AND invalidated_at IS NULL
+          UNION ALL
+          SELECT user_id, created_at FROM poll_follows WHERE poll_id = ${opts.pollId}::uuid
+        ) audience GROUP BY user_id)`
+      : Prisma.sql`(SELECT user_id, created_at FROM votes WHERE poll_id = ${opts.pollId}::uuid AND invalidated_at IS NULL)`;
     const rows: { userId: string; createdAt: Date }[] = await tx.$queryRaw`
       SELECT v.user_id::text AS "userId", v.created_at AS "createdAt"
-      FROM votes v JOIN users u ON u.id = v.user_id
-      WHERE v.poll_id = ${opts.pollId}::uuid AND v.invalidated_at IS NULL
-        AND u.deleted_at IS NULL AND u.status <> 'BANNED'
+      FROM ${audience} v JOIN users u ON u.id = v.user_id
+      WHERE u.deleted_at IS NULL AND u.status <> 'BANNED'
         AND (${draft.eventActorId}::uuid IS NULL OR v.user_id <> ${draft.eventActorId}::uuid)
         ${after}
       ORDER BY v.created_at, v.user_id

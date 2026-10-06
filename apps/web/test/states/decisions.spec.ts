@@ -1,0 +1,40 @@
+import { test, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { api, failure } from "./api";
+const id = "01998b9a-0000-7000-8000-000000000020";
+test("owner publishes decision, reloads it, and follows without changing vote results", async ({ page }) => {
+ const mock = await api(page); let decision: any = null; let following = false; let writes = 0;
+ mock.handlers.set("decisions.get", r => r.fulfill({ json: { data: { decision, following, isAuthor: true } } }));
+ mock.handlers.set("decisions.put", async r => {
+  writes++; decision = { ...r.request().postDataJSON(), pollId: id, updatedAt: "2026-10-06T10:00:00.000Z" };
+  await r.fulfill({ json: { data: decision } });
+ });
+ mock.handlers.set("follows.put", r => { following = true; return r.fulfill({ json: { data: { following } } }); });
+ mock.handlers.set("follows.delete", r => { following = false; return r.fulfill({ json: { data: { following } } }); });
+ await page.goto(`/karar/${id}`);
+ await page.getByLabel("Kararın ve gerekçen").fill("Deneyip karar verdim, ilk seçenek daha rahat.");
+ await page.getByRole("combobox", { name: "Seçimin", exact: true }).selectOption({ index: 1 });
+ await page.getByRole("button", { name: "Kararımı paylaş", exact: true }).click();
+ await expect(page.getByRole("heading", { name: "Kararını verdi", exact: true })).toBeVisible();
+ expect(writes).toBe(1);
+ await page.getByRole("button", { name: "Sonucu takip et", exact: true }).click();
+ await expect(page.getByRole("button", { name: "Takibi bırak", exact: true })).toHaveAttribute("aria-pressed", "true");
+ await page.reload();
+ await expect(page.getByLabel("Kararın ve gerekçen")).toHaveValue(decision.note);
+ await page.getByRole("button", { name: "Takibi bırak", exact: true }).click();
+ await expect(page.getByRole("button", { name: "Sonucu takip et", exact: true })).toHaveAttribute("aria-pressed", "false");
+ expect((await new AxeBuilder({page}).include('[aria-labelledby="decision-title"]').analyze()).violations).toEqual([]);
+ await page.screenshot({ path: test.info().outputPath("decision-panel.png"), fullPage: true });
+ expect(mock.unexpected).toEqual([]);
+});
+test("guest reads without login prompt; only follow action asks to sign in", async ({ page }) => {
+ const mock = await api(page);
+ mock.handlers.set("me.get", r => r.fulfill({ status: 401, json: failure("UNAUTHENTICATED") }));
+ mock.handlers.set("decisions.get", r => r.fulfill({ json: { data: { decision: null, following: false, isAuthor: false } } }));
+ await page.goto(`/karar/${id}`);
+ await expect(page.getByRole("button", { name: "Sonucu takip et", exact: true })).toBeVisible();
+ await expect(page.getByRole("dialog")).toHaveCount(0);
+ await expect(page.getByLabel("Kararın ve gerekçen")).toHaveCount(0);
+ await page.getByRole("button", { name: "Sonucu takip et", exact: true }).click();
+ await expect(page.getByRole("link", { name: "Girişe devam et" })).toBeVisible();
+});

@@ -64,6 +64,7 @@ export type ReactionValue = "LIKE" | "DISLIKE";
 export type ReactionSummary = { likes: number; dislikes: number; viewer: ReactionValue | null };
 
 export type PollRecord = {
+  viewerFollowing?: boolean;
   id: string;
   publicId: string;
   slug: string;

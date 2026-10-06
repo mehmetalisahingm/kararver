@@ -153,6 +153,8 @@ export function safeReturnTo(value: string | null): string {
     ? value
     : "/";
 }
+export type Decision = { pollId: string; chosenOptionId: string | null; note: string; updatedAt: string };
+export type DecisionState = { decision: Decision | null; following: boolean; isAuthor: boolean };
 export interface ProductClient extends EngagementClient, DiscoveryClient {
   /** Gerçek API'de dolu (yönetim ekranları); demo adapter'da tanımsız. */
   admin?: import("../features/admin/admin-client.ts").AdminClient;
@@ -172,6 +174,9 @@ export interface ProductClient extends EngagementClient, DiscoveryClient {
   updateProfile?(input: { displayName?: string; bio?: string | null }): Promise<User>;
   getProfilePolls?(username: string, cursor?: string): Promise<PageResult<Poll>>;
   getProfileComments?(username: string, cursor?: string): Promise<PageResult<ProfileComment>>;
+  getDecision?(id: string, signal?: AbortSignal): Promise<DecisionState>;
+  setDecision?(id: string, input: { chosenOptionId: string | null; note: string }): Promise<Decision>;
+  setFollow?(id: string, following: boolean): Promise<boolean>;
   getBookmarks?(cursor?: string): Promise<PageResult<Poll>>;
   setBookmark?(id: string, saved: boolean): Promise<boolean>;
 }

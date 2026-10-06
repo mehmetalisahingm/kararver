@@ -1,3 +1,9 @@
+## KV-23 (#25)
+
+- `decisions.get`: public karar ve izleyici takip/sahiplik durumu; private/no-store.
+- `decisions.put`: moderasyon kilidi için CONTENT_LOCKED; aynı değer tekrarı olay üretmez.
+- Karar/kapanış bildirimleri açık takipçileri de kapsar; kullanıcı + olay tekilliği korunur.
+
 # @kararver/contracts — Değişiklik günlüğü
 
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).

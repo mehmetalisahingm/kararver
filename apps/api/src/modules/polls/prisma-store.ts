@@ -172,6 +172,10 @@ async function enforcePublishLimits(tx: Tx, poll: NewPoll, userCreatedAt: Date, 
 }
 
 export function createPrismaPollStore(prisma: PrismaClient): PollStore {
+  async function followingIds(ids: string[], viewerId: string | null): Promise<Set<string>> {
+    if (!viewerId || !ids.length) return new Set();
+    return new Set((await prisma.pollFollow.findMany({ where: { userId: viewerId, pollId: { in: ids } }, select: { pollId: true } })).map(r => r.pollId));
+  }
   async function replaceTags(tx: Tx, pollId: string, slugs: string[]): Promise<void> {
     await tx.pollTag.deleteMany({ where: { pollId } });
     for (const slug of [...new Set(slugs)]) {
@@ -192,7 +196,9 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
 
     async findPoll(by, viewerId) {
       const poll = await prisma.poll.findUnique({ where: by, include: pollInclude(viewerId) });
-      return poll ? toRecord(poll as PollRow) : null;
+      if (!poll) return null;
+      const follows = await followingIds([poll.id], viewerId);
+      return { ...toRecord(poll as PollRow), viewerFollowing: follows.has(poll.id) };
     },
 
     async listByIds(ids, viewerId) {
@@ -201,7 +207,8 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
         where: { id: { in: ids }, status: { in: ["ACTIVE", "LOCKED"] } },
         include: pollInclude(viewerId),
       });
-      const byId = new Map(rows.map((row) => [row.id, toRecord(row as PollRow)]));
+      const follows = await followingIds(ids, viewerId);
+      const byId = new Map(rows.map((row) => [row.id, { ...toRecord(row as PollRow), viewerFollowing: follows.has(row.id) }]));
       return ids.flatMap((id) => byId.get(id) ?? []);
     },
 
@@ -232,7 +239,8 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
         orderBy: [...fields.map((f) => ({ [f]: "desc" as const })), { id: "desc" as const }],
         take: limit,
       });
-      return rows.map((row) => ({ ...toRecord(row as PollRow), voteCount: row.voteCount }));
+      const follows = await followingIds(rows.map(r => r.id), viewerId);
+      return rows.map((row) => ({ ...toRecord(row as PollRow), viewerFollowing: follows.has(row.id), voteCount: row.voteCount }));
     },
 
     findPollMeta: (id) =>

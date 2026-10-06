@@ -213,6 +213,7 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "bookmarks.list": "bookmark.read",
   "follows.put": "follow.set",
   "follows.delete": "follow.set",
+  "decisions.get": "content.read",
   "decisions.put": "decision.set",
   "interests.get": "interests.read",
   "interests.put": "interests.set",

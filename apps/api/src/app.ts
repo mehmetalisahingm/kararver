@@ -1,3 +1,5 @@
+import { registerDecisionRoutes } from "./modules/decisions/routes.ts";
+import type { DecisionStore } from "./modules/decisions/store.ts";
 // Fastify uygulaması. Bağımlılıklar dışarıdan verilir; server.ts gerçeklerini, testler kendi
 // store/mailer/saatini bağlar. Yeni modül: src/modules/<modül>/routes.ts + aşağıya bir satır.
 import { randomUUID } from "node:crypto";
@@ -59,6 +61,7 @@ import { registerVoteRoutes } from "./modules/votes/routes.ts";
 import type { VoteStore } from "./modules/votes/store.ts";
 
 export type AppDeps = {
+ decisionStore?: DecisionStore;
   config: Config;
   authStore: AuthStore;
   /** Rol, yaptırım ve topluluk moderatörlüğü (KV-12); her istekte okunur. */
@@ -225,6 +228,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       });
     }
   }
+  if (deps.decisionStore) registerDecisionRoutes(route, { store: deps.decisionStore, now });
   if (deps.shareStore) registerShareRoutes(route, { store: deps.shareStore, webUrl: config.webUrl });
   if (deps.categoryAdminStore) registerCategoryAdminRoutes(route, { store: deps.categoryAdminStore, now });
   if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
