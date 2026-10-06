@@ -60,6 +60,7 @@ export function ProductProvider({
   >({});
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [message, notify] = useState("");
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [returnTo, setReturn] = useState("/");
   const [theme, setTheme] = useState("dark");
   const [gate, setGate] = useState(false);
@@ -91,6 +92,27 @@ export function ProductProvider({
     });
     return () => { active = false; unsubscribe(); };
   }, [client, sessionAttempt]);
+  useEffect(() => {
+    const notifications = client.notifications;
+    if (!notifications || !user) {
+      setUnreadNotifications(0);
+      return;
+    }
+    let active = true;
+    const refresh = () => {
+      notifications.unreadCount()
+        .then((count) => { if (active) setUnreadNotifications(count); })
+        .catch(() => { /* Rozet kritik değil; bildirim ekranı hatayı ayrıca gösterir. */ });
+    };
+    refresh();
+    window.addEventListener("kv:notifications-changed", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("kv:notifications-changed", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [client.notifications, user?.id, pathname]);
   const syncUser = () => {
     const current = client.current();
     if (current)
@@ -196,6 +218,11 @@ export function ProductProvider({
                 >
                   <span aria-hidden="true">{n.icon}</span>
                   {n.label}
+                  {n.href === "/bildirimler" && unreadNotifications > 0 ? (
+                    <small className="notification-badge" aria-label={`${unreadNotifications} okunmamış bildirim`}>
+                      {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                    </small>
+                  ) : null}
                 </Link>
               ))}
             </nav>
@@ -296,6 +323,11 @@ export function ProductProvider({
             >
               <span aria-hidden="true">{n.icon}</span>
               {n.label}
+              {n.href === "/bildirimler" && unreadNotifications > 0 ? (
+                <small className="notification-badge" aria-label={`${unreadNotifications} okunmamış bildirim`}>
+                  {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                </small>
+              ) : null}
             </Link>
           ))}
         </nav>
