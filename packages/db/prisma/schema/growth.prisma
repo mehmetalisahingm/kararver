@@ -81,6 +81,8 @@ model PollFollow {
  userId String @map("user_id") @db.Uuid
  pollId String @map("poll_id") @db.Uuid
  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+ user User @relation("PollFollowUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+ poll Poll @relation("PollFollowPoll", fields: [pollId], references: [id], onDelete: Cascade, onUpdate: NoAction)
  @@id([userId, pollId])
  @@index([pollId, createdAt, userId])
  @@map("poll_follows")
@@ -90,5 +92,7 @@ model PollDecision {
  chosenOptionId String? @map("chosen_option_id") @db.Uuid
  note String @db.VarChar(1000)
  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+ poll Poll @relation("PollDecisionPoll", fields: [pollId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+ chosenOption PollOption? @relation("PollDecisionOption", fields: [pollId, chosenOptionId], references: [pollId, id], onDelete: Restrict, onUpdate: NoAction)
  @@map("poll_decisions")
 }
