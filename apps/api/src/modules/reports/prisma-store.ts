@@ -35,6 +35,9 @@ type QueueRow = {
 const fromRow = (r: QueueRow): QueueItem => ({
   id: r.id,
   target: { type: r.target_type, id: r.target_id },
+  excerpt: null,
+  contentStatus: null,
+  targetUser: null,
   reason: r.reason,
   note: r.details,
   status: r.status,
@@ -73,6 +76,9 @@ function actionTarget(t: Target): { pollId: string } | { commentId: string } | {
 const itemOf = (r: ReportRow, communityId: string | null, reportCount: number): QueueItem => ({
   id: r.id,
   target: targetOf(r),
+  excerpt: null,
+  contentStatus: null,
+  targetUser: null,
   reason: r.reason,
   note: r.details,
   status: r.status,
@@ -81,6 +87,47 @@ const itemOf = (r: ReportRow, communityId: string | null, reportCount: number): 
   createdAt: r.createdAt,
   resolvedAt: r.resolvedAt,
 });
+
+const EXCERPT_CHARS = 140;
+const excerptOf = (text: string) => (text.length > EXCERPT_CHARS ? `${text.slice(0, EXCERPT_CHARS - 1)}…` : text);
+
+/**
+ * Kuyruk satırlarına hedef özeti, durumu ve sahibini ekler (KV-37): moderatör hangi içeriğin raporlandığını ve
+ * kime uyarı gideceğini kuyrukta görür. Hedef türü başına tek sorgu (N+1 yok).
+ */
+async function describe(db: PrismaClient | Prisma.TransactionClient, items: QueueItem[]): Promise<QueueItem[]> {
+  const ids = (type: ReportTargetType) => items.filter((i) => i.target.type === type).map((i) => i.target.id);
+  const owner = (u: { id: string; username: string; deletedAt: Date | null }) => (u.deletedAt === null ? { id: u.id, username: u.username } : null);
+  const userSelect = { id: true, username: true, deletedAt: true } as const;
+  const [polls, comments, media, users] = await Promise.all([
+    ids("POLL").length ? db.poll.findMany({ where: { id: { in: ids("POLL") } }, select: { id: true, title: true, status: true, author: { select: userSelect } } }) : [],
+    ids("COMMENT").length ? db.comment.findMany({ where: { id: { in: ids("COMMENT") } }, select: { id: true, body: true, status: true, author: { select: userSelect } } }) : [],
+    ids("MEDIA").length ? db.mediaAsset.findMany({ where: { id: { in: ids("MEDIA") } }, select: { id: true, uploader: { select: userSelect } } }) : [],
+    ids("USER").length ? db.user.findMany({ where: { id: { in: ids("USER") } }, select: userSelect }) : [],
+  ]);
+  const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((r) => [r.id, r]));
+  const p = byId(polls);
+  const c = byId(comments);
+  const m = byId(media);
+  const u = byId(users);
+  return items.map((item) => {
+    const { type, id } = item.target;
+    if (type === "POLL") {
+      const row = p.get(id);
+      return row ? { ...item, excerpt: row.title, contentStatus: row.status, targetUser: owner(row.author) } : item;
+    }
+    if (type === "COMMENT") {
+      const row = c.get(id);
+      return row ? { ...item, excerpt: excerptOf(row.body), contentStatus: row.status, targetUser: owner(row.author) } : item;
+    }
+    if (type === "MEDIA") {
+      const row = m.get(id);
+      return row ? { ...item, targetUser: owner(row.uploader) } : item;
+    }
+    const row = u.get(id);
+    return row ? { ...item, excerpt: row.username, targetUser: owner(row) } : item;
+  });
+}
 
 export function createPrismaReportStore(prisma: PrismaClient): ReportStore {
   /** report.created: yeni rapor veya kapanmış raporun yeniden açılması (açık rapor tekrarında yazılmaz). */
@@ -188,7 +235,7 @@ export function createPrismaReportStore(prisma: PrismaClient): ReportStore {
           ORDER BY target_type, target_id, created_at ASC, id ASC
         )
         SELECT * FROM grouped ${where} ${order} LIMIT ${limit}`);
-      return rows.map(fromRow);
+      return describe(prisma, rows.map(fromRow));
     },
 
     async findForResolve(id) {
@@ -198,7 +245,7 @@ export function createPrismaReportStore(prisma: PrismaClient): ReportStore {
         communityOfTarget(prisma, targetOf(report)),
         prisma.report.count({ where: { ...targetWhere(report), status: report.status } }),
       ]);
-      return itemOf(report, communityId, reportCount);
+      return (await describe(prisma, [itemOf(report, communityId, reportCount)]))[0]!;
     },
 
     async resolve({ reportId, actorId, resolution, note, now, requestId }) {
@@ -242,7 +289,8 @@ export function createPrismaReportStore(prisma: PrismaClient): ReportStore {
           requestId,
           at: now,
         });
-        return { kind: "resolved" as const, item: itemOf(resolved, await communityOfTarget(tx, target), closed.count) };
+        const item = itemOf(resolved, await communityOfTarget(tx, target), closed.count);
+        return { kind: "resolved" as const, item: (await describe(tx, [item]))[0]! };
       });
     },
   };

@@ -9,6 +9,22 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.18.0 — 2026-10-06 (Mert, KV-37 gelişmiş admin içerik işlemleri, #39)
+
+Kırıcı değişiklik yok: yeni uç noktalar, `ModerationAction` enum'unda yeni değerler (açık enum, API_CONTRACTS §5) ve yanıtlara eklenen alanlar; `admin.sanctions.create` gövdesine isteğe bağlı alan. Reviewer: Faruk (polls/comments, `allowComments` etkin değer), Utku (`admin.sanctions.create` + `reportId`, `sanction.applied`).
+
+- **Eklendi:** `admin.content.polls` (`GET /admin/polls`) ve `admin.content.comments` (`GET /admin/comments`): yönetici arama/liste. Türkçe harf ve büyük-küçük duyarsız metin, durum/topluluk/kategori/yazar/rapor/trend süzgeçleri; gizli ve kaldırılmış içerik dahil; moderatör yalnız kendi toplulukları (`moderation.content.search`, kapsam: queue).
+- **Eklendi:** `admin.moderation.history.polls|comments` (`GET /admin/{polls|comments}/:id/moderation-history`): içeriğin raporları ve moderasyon işlemleri (kullanıcı uyarısı/yaptırımı rapor üzerinden dahil) tek zaman çizgisinde; raporlayan kimliği dönmez (`moderation.content.history`).
+- **Eklendi:** `admin.moderation.polls.move` (`PATCH /admin/polls/:id/placement`): kategori ve/veya topluluk taşıma, gerekçeli; ilk geçerli oydan sonra da serbest (soru, açıklama, seçenekler değişmez); hedef toplulukta da yetki ister (`moderation.poll.move`).
+- **Eklendi:** `admin.reports.warn` (`POST /admin/reports/:id/warn`): kuyruktan içerik sahibine WARNING; hedefin açık raporlarını kapatır; `moderation.user.warn` (sanctionTarget kuralı).
+- **Eklendi:** `ModerationAction` += `CLOSE_COMMENTS`, `OPEN_COMMENTS` (yalnız anket): yorumları kapatır, oy ve görünürlük etkilenmez. `moderation.applied` olayının `action` alanı bunları taşıyabilir; bildirim üretmez.
+- **Eklendi:** `AdminPollItem`, `AdminCommentItem`, `ContentHistoryItem`, `ModerationRecordAction`; `ReportView` += `excerpt`, `contentStatus`, `targetUser` (kuyrukta içerik özeti ve uyarının hedefi).
+- **Değişti:** `admin.moderation.polls|comments` yanıtı += `commentsClosed` (ankette bool, yorumda null). `PollDetail.allowComments` artık etkin değerdir: moderasyon kapattıysa `false`.
+- **Değişti:** `admin.sanctions.create` gövdesi += isteğe bağlı `reportId`: yaptırımı rapora bağlar (`moderation_actions.SANCTION_USER`, audit `after.reportId`, hedefin açık raporları ACTIONED); 409 `report_mismatch`, 404 rapor yok.
+- **Eklendi:** KV-04 işlemleri `moderation.content.search`, `moderation.content.history`, `moderation.poll.move`, `moderation.user.warn`; audit işlemleri `move`, `warn`, `close_comments`, `open_comments`.
+- **DB:** `polls.comments_closed_at`, `moderation_action_type` += `CLOSE_COMMENTS`, `OPEN_COMMENTS`, `MOVE`, `SANCTION_USER`; `comments_body_trgm_idx` (migration `20261006130000_mert_kv37_admin_content_ops`).
+- **Kapsam dışı (#39 kararı):** etiket değiştirme.
+
 ## 1.17.0 — 2026-10-05 (Utku, KV-21 PR-3 bildirim tüketicisi)
 
 Kırıcı değişiklik yok: `NotificationType` açık enum'dur (API_CONTRACTS §5), yeni değer minor; diğerleri yeni sabit ve şema.

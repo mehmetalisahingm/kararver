@@ -27,9 +27,17 @@ export type QueueFilter = {
   after: { sortAt: Date; id: string } | null;
 };
 
+export type ContentState = "ACTIVE" | "UNDER_REVIEW" | "HIDDEN" | "LOCKED" | "REMOVED";
+
 export type QueueItem = {
   id: string;
   target: { type: ReportTargetType; id: string };
+  /** Hedef özeti (anket başlığı, yorumun ilk 140 karakteri, kullanıcı adı); görselde null. */
+  excerpt: string | null;
+  /** Anket/yorum hedefinin şimdiki durumu; diğer hedeflerde null. */
+  contentStatus: ContentState | null;
+  /** Hedefin sahibi; silinmiş hesapta null. Uyar/yaptırım bu hesaba gider. */
+  targetUser: { id: string; username: string } | null;
   reason: ReportReason;
   note: string | null;
   status: ReportStatus;

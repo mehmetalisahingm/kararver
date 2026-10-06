@@ -460,9 +460,10 @@ describe("canModerate paritesi", () => {
         for (const communityIds of communitySets) {
           for (const communityId of [C1, C2, null]) {
             const expected = canModerate({ role: roles[0], status, communityIds }, { communityId });
+            // sanctionTarget korumalı işlemler (moderation.user.warn) hedef kullanıcı ister; hedef sıradan USER.
             const a = actor({ status, roles, moderatedCommunityIds: communityIds });
             for (const action of scoped) {
-              assert.equal(authorize(a, action, { communityId }, NOW).allowed, expected, `${status} ${roles[0]} ${action}`);
+              assert.equal(authorize(a, action, { communityId, targetUserId: "hedef-kullanici", targetRoles: ["USER"] }, NOW).allowed, expected, `${status} ${roles[0]} ${action}`);
             }
           }
         }

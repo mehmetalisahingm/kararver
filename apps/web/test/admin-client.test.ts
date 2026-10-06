@@ -130,3 +130,72 @@ test("sözleşmeye uymayan cevap reddedilir (sızıntı: fazladan alan)", async 
   const { admin } = client(() => new Response(JSON.stringify(poisoned.body), { status: 200 }));
   await assert.rejects(admin.bans(), (e: UiError) => e.code === "INVALID_RESPONSE");
 });
+
+// ─── KV-37 (#39): arama, taşıma, geçmiş, uyar ve yaptırım bağlantısı ───
+
+test("anket araması: süzgeçler sorguya gider, boş olanlar girmez, boolean 'true' olarak gönderilir", async () => {
+  const { admin, calls } = client(() => reply("admin.content.polls", "ok"));
+  const page = await admin.polls({ q: "araba", status: "HIDDEN", reported: true }, "cur_1");
+  const url = new URL(calls[0].url);
+  assert.equal(url.pathname, "/v1/admin/polls");
+  assert.deepEqual(
+    [url.searchParams.get("q"), url.searchParams.get("status"), url.searchParams.get("reported"), url.searchParams.get("cursor"), url.searchParams.get("limit")],
+    ["araba", "HIDDEN", "true", "cur_1", "20"],
+  );
+  assert.equal(url.searchParams.has("trendExcluded"), false);
+  assert.equal(url.searchParams.has("communityId"), false);
+  assert.equal(page.items[0].commentsClosed, false);
+});
+
+test("yorum araması ve içerik geçmişi sözleşme şemasıyla okunur", async () => {
+  const comments = client(() => reply("admin.content.comments", "ok"));
+  const found = await comments.admin.comments({ q: "boyalı", pollId: "01998b9a-0000-7000-8000-000000000020" });
+  assert.equal(new URL(comments.calls[0].url).searchParams.get("pollId"), "01998b9a-0000-7000-8000-000000000020");
+  assert.equal(found.items[0].pollTitle.length > 0, true);
+
+  const history = client(() => reply("admin.moderation.history.polls", "ok"));
+  const timeline = await history.admin.history("polls", "01998b9a-0000-7000-8000-000000000020");
+  assert.ok(new URL(history.calls[0].url).pathname.endsWith("/moderation-history"));
+  assert.deepEqual(timeline.items.map((item) => item.kind), ["ACTION", "REPORT"]);
+});
+
+test("taşıma: yalnız verilen alanlar PATCH gövdesinde; gerekçe zorunlu; topluluktan çıkarma null gönderir", async () => {
+  const { admin, calls } = client(() => reply("admin.moderation.polls.move", "ok"));
+  await admin.movePoll("01998b9a-0000-7000-8000-000000000020", { categoryId: "01998b9a-0000-7000-8000-000000000010" }, "Yanlış kategori");
+  assert.equal(calls[0].method, "PATCH");
+  assert.ok(calls[0].url.endsWith("/v1/admin/polls/01998b9a-0000-7000-8000-000000000020/placement"));
+  assert.deepEqual(calls[0].body, { categoryId: "01998b9a-0000-7000-8000-000000000010", reason: "Yanlış kategori" });
+
+  await admin.movePoll("01998b9a-0000-7000-8000-000000000020", { communityId: null }, "Topluluk dışı");
+  assert.deepEqual(calls[1].body, { communityId: null, reason: "Topluluk dışı" });
+});
+
+test("taşıma 409'u (kaldırılmış anket) UiError olarak yüzeye çıkar", async () => {
+  const { admin } = client(() => reply("admin.moderation.polls.move", "removed"));
+  await assert.rejects(admin.movePoll("01998b9a-0000-7000-8000-000000000020", { communityId: null }, "Topluluk dışı"), (e: UiError) => e.code === "CONFLICT");
+});
+
+test("yorumları kapat işlemi moderasyon gövdesinde; cevap commentsClosed taşır", async () => {
+  const { admin, calls } = client(() => reply("admin.moderation.polls", "close-comments"));
+  const outcome = await admin.moderate("polls", "01998b9a-0000-7000-8000-000000000020", "CLOSE_COMMENTS", "Tartışma kontrolden çıktı");
+  assert.deepEqual(calls[0].body, { action: "CLOSE_COMMENTS", reason: "Tartışma kontrolden çıktı" });
+  assert.equal(outcome.commentsClosed, true);
+});
+
+test("uyar: rapor kimliğine POST, gerekçe gövdede; yaptırım reportId ve süreyle gider", async () => {
+  const warn = client(() => reply("admin.reports.warn", "ok"));
+  const result = await warn.admin.warn("01998b9a-0000-7000-8000-000000000060", "Hakaret içeren yorum, ilk uyarı");
+  assert.ok(warn.calls[0].url.endsWith("/v1/admin/reports/01998b9a-0000-7000-8000-000000000060/warn"));
+  assert.deepEqual(warn.calls[0].body, { reason: "Hakaret içeren yorum, ilk uyarı" });
+  assert.equal(result.closedReports, 2);
+
+  const sanction = client(() => reply("admin.sanctions.create", "suspend-rapor-bagli"));
+  await sanction.admin.sanction("01998b9a-0000-7000-8000-000000000002", "SUSPEND", "Tekrarlayan spam", "01998b9a-0000-7000-8000-000000000060", "2026-12-01T00:00:00.000Z");
+  assert.deepEqual(sanction.calls[0].body, { type: "SUSPEND", reason: "Tekrarlayan spam", endsAt: "2026-12-01T00:00:00.000Z", reportId: "01998b9a-0000-7000-8000-000000000060" });
+});
+
+test("kuyruk satırı hedef özeti, durumu ve sahibini taşır", async () => {
+  const { admin } = client(() => reply("admin.reports.list", "ok"));
+  const [report] = (await admin.reports({ status: "OPEN" })).items;
+  assert.deepEqual([report.excerpt, report.contentStatus, report.targetUser?.username], ["Boyalı parça fiyatı düşürür.", "ACTIVE", "umit"]);
+});

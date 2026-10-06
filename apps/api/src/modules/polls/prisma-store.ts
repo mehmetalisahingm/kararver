@@ -103,7 +103,8 @@ function toRecord(poll: PollRow): PollRecord {
     priceCurrency: poll.priceCurrency,
     status: poll.status,
     resultsVisibility: poll.resultsVisibility,
-    allowComments: poll.allowComments,
+    // Etkin değer: moderasyon yorumları kapattıysa (CLOSE_COMMENTS, KV-37) sahibin ayarı ne olursa olsun kapalı.
+    allowComments: poll.allowComments && poll.commentsClosedAt === null,
     opensAt: poll.opensAt,
     closesAt: poll.closesAt,
     closedAt: poll.closedAt,

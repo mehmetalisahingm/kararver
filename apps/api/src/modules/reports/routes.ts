@@ -16,6 +16,9 @@ export type ReportDeps = { store: ReportStore; now: () => Date };
 const reportView = (r: QueueItem) => ({
   id: r.id,
   target: r.target,
+  excerpt: r.excerpt,
+  contentStatus: r.contentStatus,
+  targetUser: r.targetUser,
   reason: r.reason,
   note: r.note,
   status: r.status,

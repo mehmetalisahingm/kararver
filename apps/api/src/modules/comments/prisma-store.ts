@@ -150,11 +150,12 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
 
     createComment: async ({ pollId, authorId, body, kind, parentId }, scope): Promise<Outcome<string>> => {
       const result = await runIdempotent(prisma, scope, 201, async (tx): Promise<Outcome<string>> => {
-        const [poll] = await tx.$queryRaw<{ status: string; allow_comments: boolean }[]>`
-          SELECT status::text, allow_comments FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
+        const [poll] = await tx.$queryRaw<{ status: string; allow_comments: boolean; comments_closed_at: Date | null }[]>`
+          SELECT status::text, allow_comments, comments_closed_at FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
         if (!poll || !VISIBLE_POLL.includes(poll.status as never)) return notFound("POLL_NOT_FOUND");
         if (poll.status === "LOCKED") return notFound("CONTENT_LOCKED");
-        if (!poll.allow_comments) return notFound("COMMENTS_DISABLED");
+        // Moderasyon kapatması (KV-37) sahibin allow_comments ayarından bağımsızdır; yeni yorum ve cevap engellenir.
+        if (!poll.allow_comments || poll.comments_closed_at !== null) return notFound("COMMENTS_DISABLED");
 
         if (parentId) {
           const [parent] = await tx.$queryRaw<{ status: string; parent_id: string | null }[]>`

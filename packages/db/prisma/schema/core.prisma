@@ -247,6 +247,9 @@ model Poll {
   // Doluysa anket algoritmik trend listelerine girmez (EXCLUDE_FROM_TRENDS moderasyon işlemi, KV-37 Mert yazar).
   // Görünürlüğü etkilemez; editör seçimi/öne çıkarma ayrı yüzeydir (KV-28, docs/KV-28_TRENDS.md).
   trendExcludedAt   DateTime?          @map("trend_excluded_at") @db.Timestamptz(3)
+  // Moderasyon yorumları kapattı (CLOSE_COMMENTS, KV-37): oy açık kalır, yeni yorum/cevap COMMENTS_DISABLED olur.
+  // Sahibin allow_comments ayarından bağımsızdır; sahip geri açamaz, yalnız OPEN_COMMENTS açar.
+  commentsClosedAt  DateTime?          @map("comments_closed_at") @db.Timestamptz(3)
   // Oy geçersiz sayıldı/geri alındı (KV-43): bu andan sonraki günlük snapshot'lar yeniden üretilecek. Worker
   // (trends.refresh, snapshots.daily) yeniden üretip temizler. NULL: snapshot'lar güncel.
   snapshotsStaleSince DateTime?        @map("snapshots_stale_since") @db.Timestamptz(3)

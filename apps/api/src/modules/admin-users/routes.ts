@@ -21,7 +21,8 @@ export type AdminUserDeps = { store: AdminUserStore; now: () => Date; mediaPubli
 const userNotFound = () => new ApiError("NOT_FOUND", "Kullanıcı bulunamadı.");
 const conflict = (message: string, code: string) => new ApiError("CONFLICT", message, [{ code }]);
 
-export const SANCTION_REJECTIONS: Record<Exclude<ApplyRejection | LiftRejection, "not_found" | "forbidden">, () => ApiError> = {
+export const SANCTION_REJECTIONS: Record<Exclude<ApplyRejection | LiftRejection, "not_found" | "forbidden" | "report_not_found">, () => ApiError> = {
+  report_mismatch: () => conflict("Rapor bu kullanıcının içeriğine ait değil.", "report_mismatch"),
   already_active: () => conflict("Bu kullanıcıda aynı tipte aktif bir yaptırım var.", "already_active"),
   user_deleted: () => conflict("Silinmiş hesaba yeni yaptırım uygulanamaz.", "user_deleted"),
   last_super_admin: () => conflict("Son aktif SUPER_ADMIN askıya alınamaz veya yasaklanamaz.", "last_super_admin"),
@@ -32,6 +33,7 @@ export const SANCTION_REJECTIONS: Record<Exclude<ApplyRejection | LiftRejection,
 export function sanctionRejection(reason: ApplyRejection | LiftRejection): ApiError {
   if (reason === "not_found") return new ApiError("NOT_FOUND", "Kullanıcı veya yaptırım bulunamadı.");
   if (reason === "forbidden") return new ApiError("FORBIDDEN", "Bu işlem için yetkiniz yok.");
+  if (reason === "report_not_found") return new ApiError("NOT_FOUND", "Rapor bulunamadı.");
   return SANCTION_REJECTIONS[reason]();
 }
 
@@ -111,6 +113,7 @@ export function registerAdminUserRoutes(route: Route, deps: AdminUserDeps): void
       type: body.type as SanctionType,
       reason: body.reason,
       endsAt,
+      reportId: body.reportId,
       actorId: viewer!.id,
       requestId: request.id,
       now: at,

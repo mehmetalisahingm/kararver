@@ -383,7 +383,7 @@ export const adminEndpoints = [
     request: {
       params: IdParams,
       body: z
-        .strictObject({ type: SanctionType, reason: Reason, endsAt: Timestamp.nullable().default(null) })
+        .strictObject({ type: SanctionType, reason: Reason, endsAt: Timestamp.nullable().default(null), reportId: Id.optional() })
         .refine((b) => b.type !== "SUSPEND" || b.endsAt !== null, { message: "SUSPEND için endsAt zorunlu", path: ["endsAt"] })
         // BAN kalıcıdır; DB de reddeder (sanctions_ban_permanent_check, DATA_MODEL §9.1).
         .refine((b) => b.type !== "BAN" || b.endsAt === null, { message: "BAN için endsAt null olmalı", path: ["endsAt"] })
@@ -400,6 +400,7 @@ export const adminEndpoints = [
       "users.status aynı transaction'da aktif yaptırımlardan yeniden hesaplanır (statusFromSanctions).",
       "409 CONFLICT details[0].code: already_active (aynı tipte aktif yaptırım; WARNING hariç), user_deleted, last_super_admin. Farklı tipe geçiş (ör. SUSPEND aktifken BAN) serbesttir.",
       "endsAt geçmişte ise 400 VALIDATION_ERROR.",
+      "reportId (KV-37): moderasyon kuyruğundan uygulanan yaptırımı rapora bağlar. Rapor, hedefin sahibi bu kullanıcı olan bir rapor olmalı (409 report_mismatch; rapor yoksa 404). Aynı transaction'da hedefin açık raporları ACTIONED olur, moderation_actions SANCTION_USER ve audit after.reportId yazılır.",
     ],
   }),
   defineEndpoint({

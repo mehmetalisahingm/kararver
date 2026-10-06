@@ -41,6 +41,11 @@ enum ModerationActionType {
   INCLUDE_IN_TRENDS
   WARN_USER
   DISMISS_REPORT
+  // KV-37: yalnız yorumları kapatma/açma, kategori-topluluk taşıma, rapor bağlantılı yaptırım.
+  CLOSE_COMMENTS
+  OPEN_COMMENTS
+  MOVE
+  SANCTION_USER
 
   @@map("moderation_action_type")
 }
