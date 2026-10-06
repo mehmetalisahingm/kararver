@@ -68,7 +68,10 @@ export function notificationCopy(notification: NotificationItem): { title: strin
 }
 
 export class NotificationClient {
-  constructor(private readonly http: HttpClient) {}
+  private readonly http: HttpClient;
+  constructor(http: HttpClient) {
+    this.http = http;
+  }
 
   async list(unreadOnly = false, cursor?: string, signal?: AbortSignal): Promise<NotificationPage> {
     const parsed = pageOf(NotificationView).parse(
