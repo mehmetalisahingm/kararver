@@ -5,6 +5,7 @@ import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
 import { UiError } from "../../lib/model";
 import type { Poll } from "../../lib/model";
+import { ReportButton } from "../community/report-dialog";
 import { SocialPanel } from "../social/social-panel";
 import { PollGallery } from "./gallery";
 
@@ -119,6 +120,7 @@ export function PollDetail({ id }: { id: string }) {
           <span className="kv-badge">{poll.category}</span>
           <div className="kv-row">
             <span className="kv-help">{poll.author}</span>
+            <ReportButton target={{ type: "POLL", id: poll.id }} label="Bu içeriği raporla" />
             {client.setBookmark && (
               <button
                 className="kv-button kv-button--ghost"

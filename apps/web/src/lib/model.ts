@@ -156,6 +156,9 @@ export function safeReturnTo(value: string | null): string {
 export interface ProductClient extends EngagementClient, DiscoveryClient {
   /** Gerçek API'de dolu (yönetim ekranları); demo adapter'da tanımsız. */
   admin?: import("../features/admin/admin-client.ts").AdminClient;
+  /** Topluluk ekranları ve rapor gönderme; yalnız gerçek API client'ında (demo'da ekran/düğme gösterilmez). */
+  community?: import("../features/community/community-client.ts").CommunityClient;
+  reports?: import("../features/community/community-client.ts").ReportClient;
   list(): Promise<Poll[]>;
   get(id: string): Promise<Poll>;
   login(email: string, password: string): Promise<User>;

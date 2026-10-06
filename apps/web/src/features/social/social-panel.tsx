@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
 import type { Poll } from "../../lib/model";
+import { ReportButton } from "../community/report-dialog";
 import { emptyCommentDraft, reactionAfter } from "./model";
 import type { Comment, Engagement, Reaction, ReactionSummary } from "./model";
 
@@ -307,6 +308,7 @@ export function SocialPanel({ poll }: { poll: Poll }) {
                   Yanıtla
                 </button>
               )}
+              {!c.canEdit && <ReportButton target={{ type: "COMMENT", id: c.id }} label={`${c.author} yorumunu raporla`} />}
               {c.canEdit && (
                 <>
                   <button

@@ -35,6 +35,7 @@ export function useProduct() {
 const navigation = [
   { href: "/", icon: "⌂", label: "Ana Sayfa" },
   { href: "/kesfet", icon: "◇", label: "Keşfet" },
+  { href: "/topluluklar", icon: "◎", label: "Topluluklar" },
   { href: "/olustur", icon: "+", label: "Oluştur" },
   { href: "/bildirimler", icon: "♧", label: "Bildirimler" },
   { href: "/hesap", icon: "○", label: "Hesabım" },
