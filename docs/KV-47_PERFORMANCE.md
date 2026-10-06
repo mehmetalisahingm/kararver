@@ -1,7 +1,7 @@
 # KV-47: Performans, veri tabanı ve yük altında doğruluk (#49)
 
 > Sahip: **Faruk** · Araçlar: `apps/api/perf/` (`seed.ts`, `load.ts`, `verify.ts`, `query-count.ts`) · Test: `apps/api/test/query-count.test.ts`
-> Kapsam dışı (kayıtlı): medya kaynak/gecikme ve timeout ölçümü Mert'te (iş tanımı), hız sınırı KV-19 (Utku).
+> Medya kaynak/gecikme ve timeout ölçümü (Mert): bu belgenin [Medya](#medya-gecikme-ve-timeout-ölçümü-mert) bölümü. Kapsam dışı (kayıtlı): hız sınırı KV-19 (Utku).
 
 ## Özet
 
@@ -12,7 +12,7 @@
 | Oy p95 < 500 ms | **127 ms** (doyma testinde 476 ms) | ✅ |
 | Hata < %1 | **%0** (bütün koşularda) | ✅ |
 | Yük altında oy/trend doğruluğu ve cache gizliliği | 9/9 doğrulama geçti (aşağıda) | ✅ |
-| Medya timeout davranışı | Bu makinede S3 yok; Mert'in ölçümü bekleniyor | ⏳ Mert |
+| Medya timeout davranışı | Gerçek NudeNet + sharp hattı ölçüldü: görsel başına p95 ≤ 0,5 sn, timeout/hata/takılma her zaman karantina, APPROVED hiç yok (aşağıda: Medya). Gerçek S3/R2 gecikmesi staging'de | ✅ Mert (S3 gecikmesi: staging) |
 
 **Bulunan ve düzeltilen iki performans sorunu:**
 1. "Senin İçin" yerleşim döngüsü karesel çalışıyordu. Yük altında CPU'nun üçte birini yiyordu; artımlı sayaçlarla yeniden yazıldı, davranışı birebir aynı.
@@ -97,6 +97,70 @@
 | anket detayı | 11 | 16 |
 | oy | — | 12 |
 
+## Medya gecikme ve timeout ölçümü (Mert)
+
+Araç: `apps/worker/scripts/media-latency.ts` (`pnpm --filter @kararver/worker media:latency`, hızlı deneme için `-- --quick`), ham sonuç `apps/worker/scripts/media-latency.results.json`.
+
+**Ne gerçek, ne sahte:** Gerçek: `processMedia` akışı (sha256, imza kontrolü, sharp re-encode, dHash, risk politikası), gerçek NudeNet (Python alt-süreci), gerçek zaman aşımı kodu. Sahte: veritabanı ve object storage (bellek içi). Bu makinede S3 yok; **depolama gecikmesi parametriktir** (çağrı başına 0/200/1000/3000 ms enjekte edildi) ve gerçek S3/R2 gecikmesi staging'de ayrıca ölçülmelidir.
+
+**Ortam:** Intel Core i5-13500H (16 mantıksal çekirdek), 16 GB RAM, Windows 11 (10.0.26300), Node 24.11.0, sharp 0.35.5, NudeNet 3.4.2 (320n). KV-47'nin yük testindeki makineden farklıdır; sayılar kıyaslanmamalıdır. Her hücrede 40 örnek (eşzamanlılıkta 48 iş, depolamada 10).
+
+### Görsel başına süre (tek iş, depolama gecikmesi 0, ms)
+
+| Girdi | Dosya | Toplam p50 | p95 | p99 | NudeNet p50 | NudeNet p95 | Sonuç |
+|---|---|---|---|---|---|---|---|
+| 800×600 | 163 KB | 116 | 132 | 149 | 24 | 28 | 40/40 APPROVED |
+| 1920×1080 | 698 KB | 344 | 367 | 393 | 61 | 67 | 40/40 APPROVED |
+| 4000×3000 | 3,5 MB | 438 | 489 | 505 | 53 | 68 | 40/40 APPROVED |
+
+- Sürenin çoğu görsel işleme (decode + re-encode + dHash), model değil: NudeNet 320n görseli 320 px'e indirdiği için süresi çözünürlükten neredeyse bağımsız (~25–70 ms).
+- **Soğuk başlangıç:** ilk iş (süreç başlatma + model yükleme dahil) 500 ms, sonraki 124 ms. Worker yeniden başlayınca ilk görsel yarım saniye gecikir.
+- 8 MB üst sınırdaki görsel (sınır `media.maxBytes`) bu ölçümün büyük satırından (3,5 MB) uzun sürebilir; sürenin görsel çözme payı çözünürlükle büyür.
+
+### Worker eşzamanlılığı (`MEDIA_WORKER_CONCURRENCY`, 48 iş, 1920×1080)
+
+| Eşzamanlılık | İş/sn | Toplam p50 | p95 | En yavaş | Sonuç |
+|---|---|---|---|---|---|
+| 1 | 1,6 | 472 | 1.059 | 1.087 | 48/48 APPROVED |
+| 2 | 5,2 | 377 | 430 | 440 | 48/48 APPROVED |
+| 4 | 9,5 | 414 | 473 | 540 | 48/48 APPROVED |
+
+- Eşzamanlılık 1'in p95'i (1,06 sn) p50'nin iki katından fazla: ölçüm başındaki birkaç iş yavaş; nedeni ayrıca incelenmedi (ısınma işlemi yapıldı, bu yüzden yalnız ısınmaya bağlanamaz). Verim farkı ise sharp'ın libuv iş parçacıklarında paralel çalışmasından geliyor. Varsayılan 1'dir; yük artarsa 2–4'e çıkarmak verimi katlar.
+- Tek Python süreci istekleri **seri** işler (`moderate.py` satır satır okur), bu yüzden eşzamanlılık NudeNet'i hızlandırmaz, yalnız görsel işlemeyi paralelleştirir.
+
+### Depolama gecikmesi (çağrı başına, 1920×1080, p50 toplam ms)
+
+| Çağrı gecikmesi | 0 ms | 200 ms | 1.000 ms | 3.000 ms |
+|---|---|---|---|---|
+| İş süresi | 316 | 876 | 3.288 | 9.287 |
+
+Bir iş 3 depolama çağrısı yapar (özgün okuma, işlenmiş yazma, public yazma). İş süresi ≈ 316 ms + 3 × gecikme; doğrusaldır. Yavaş depolama işi uzatır ama hiçbir zaman yanlış karar üretmez; sorun yalnız bekleme süresidir.
+
+### Timeout ve hata davranışı (hepsi fail-closed)
+
+| Senaryo | Sonuç | Süre |
+|---|---|---|
+| Takılan model (timeout 1,5 sn) | QUARANTINED / `MODERATION_TIMEOUT` | 1,64 sn |
+| Model süreci hemen kapanıyor | QUARANTINED / `MODEL_ERROR` | 0,14 sn |
+| Model hazır olmuyor (başlangıç timeout 1,5 sn) | QUARANTINED / `MODERATION_TIMEOUT` | 1,58 sn |
+| 12 eşzamanlı iş, model 400 ms/görsel, timeout 2 sn | 4 APPROVED, 8 QUARANTINED / `MODERATION_TIMEOUT` | ≤ 2,2 sn |
+| Yukarıdakinden sonraki ilk iş | APPROVED (süreç yeniden başladı) | 0,54 sn |
+
+- **Hiçbir senaryoda hatalı görsel APPROVED olmadı**; timeout, çökme ve başlatma hatası karantinaya düşer ve moderatör kuyruğunda görünür.
+- **Bulgu (sıra beklemesi):** Timeout (8 sn) isteğin yazıldığı andan başlar, yani Python sürecinin önündeki sırayı da kapsar. Model yavaşlarsa (CPU çekişmesi, soğuk başlangıç) veya eşzamanlılık yüksekse, sırada bekleyen **sağlıklı** görseller de `MODERATION_TIMEOUT` ile karantinaya düşer ve süreç öldürüldüğü için yeniden başlar (~0,5 sn). Gerçek ölçümde model ~25–70 ms olduğundan 8 sn'lik sınıra yetişmek için sırada ~100 iş gerekir; `MEDIA_WORKER_CONCURRENCY` ≤ 8 sınırıyla bu olası değildir. Etkisi güvenlik değil, moderatörün kuyruğunun şişmesidir. İzlenecek ölçüt: `MODERATION_TIMEOUT` oranı; %1'in üstüne çıkarsa eşzamanlılık düşürülmeli veya model süreci çoğaltılmalı.
+
+### Düzeltme: S3 istemcilerine zaman aşımı eklendi
+
+- **Bulgu:** API ve worker'ın `S3Client`'ları bağlantı ve istek zaman aşımı tanımlamıyordu (AWS SDK varsayılanı sınırsız). Takılan bir S3 bağlantısı worker işini pg-boss'un iş süresi dolana kadar (varsayılan 15 dk) bekletirdi; moderasyon timeout'u yalnız model aşamasını kapsıyor.
+- **Düzeltme:** `requestHandler: { connectionTimeout: 5 sn, requestTimeout: 30 sn }` (`S3_CONNECTION_TIMEOUT_MS`, `S3_REQUEST_TIMEOUT_MS`; 8 MB'lık yükleme/indirme için cömert). Zaman aşımı hatası "geçici hata" sayılır: pg-boss yeniden dener, son denemede görsel `PROCESSING_FAILED` ile karantinaya alınır (mevcut davranış, `job.test.ts`).
+- Gerçek S3/R2 üzerinde zaman aşımının tetiklendiği staging'de doğrulanmadı.
+
+### Sınırlar
+
+- Görseller sentetik (şekil + gürültü); gerçek fotoğraflarda decode süresi farklı olabilir. NudeNet süresi içerikten bağımsızdır (sabit boyuta indirir).
+- Depolama ve DB gecikmesi gerçek değil (yukarıda). Staging'de (R2) yeniden koşturulmalı: `media:latency` depolamayı enjekte eder; gerçek depolamayla ölçmek için `harness`'a S3 adaptörü verilmelidir.
+- Tek makinede ölçüldü; ısınma ve arka plan yükü p95'i etkiler.
+
 ## Yük altında doğruluk (`verify.ts`, yük koşularından sonra)
 
 1. Sayaçlar: 10.000 anketin hepsinde anket ve seçenek sayacı geçerli oy sayısına eşit (yük sırasında ~4.600 yeni oy ve değiştirme).
@@ -130,7 +194,7 @@ PERF_DATABASE_URL=... pnpm --filter @kararver/api perf:queries   # uç nokta ba�
 
 | Konu | İş |
 |---|---|
-| Medya kaynak/gecikme ve timeout ölçümü | Mert (iş tanımı) |
+| Medya kaynak/gecikme ve timeout ölçümü | ✅ Mert: yukarıdaki Medya bölümü. Kalan: gerçek S3/R2 gecikmesi staging'de |
 | CDN/görsel teslim | #99 sonrası public görseller `Cache-Control: no-store`. Reddedilen görselin önbellekte kalmaması için doğru bir karar, ama CDN'in görselleri cache'lememesi demek. Ölçek büyüyünce CDN purge ile kısa ömürlü cache'e geçilmeli (Mert, Utku) |
 | Staging'de (ayrı makineler, üretim modu) aynı profil | KV-06 staging ortamı (Utku) hazır olunca |
 | Hız sınırı (rate limit) | KV-19 (#21, Utku). Yük testi aynı IP'den geldi; hız sınırı gelince test profili ona göre ayarlanmalı |

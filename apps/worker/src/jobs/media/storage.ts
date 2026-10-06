@@ -20,11 +20,17 @@ function isNotFound(err: unknown): boolean {
   return e?.name === "NoSuchKey" || e?.name === "NotFound" || e?.$metadata?.httpStatusCode === 404;
 }
 
+/** S3/R2 bağlantı kurma ve istek (8 MB indirme/yükleme dahil) üst sınırları. SDK varsayılanı sınırsızdır. */
+export const S3_CONNECTION_TIMEOUT_MS = 5_000;
+export const S3_REQUEST_TIMEOUT_MS = 30_000;
+
 export function createS3WorkerStorage(config: StorageConfig): WorkerStorage {
   const client = new S3Client({
     endpoint: config.endpoint,
     region: config.region,
     forcePathStyle: config.forcePathStyle,
+    // Takılan bağlantı işi sonsuza dek bekletmesin (KV-47 ölçümü: docs/KV-47_PERFORMANCE.md → Medya).
+    requestHandler: { connectionTimeout: S3_CONNECTION_TIMEOUT_MS, requestTimeout: S3_REQUEST_TIMEOUT_MS },
     credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
   });
 
