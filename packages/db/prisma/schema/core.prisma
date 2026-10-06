@@ -130,6 +130,8 @@ model User {
   interests                UserInterest[]
   pointAccount             PointAccount?
   pointLedgerEntries       PointLedgerEntry[]
+  // Mehmet — growth.prisma (KV-23)
+  pollFollows              PollFollow[]          @relation("PollFollowUser")
 
   @@index([status])
   @@map("users")
@@ -268,6 +270,9 @@ model Poll {
   media             PollMedia[]
   addenda           PollAddendum[]
   votes             Vote[]
+  // KV-23 (Mehmet): growth.prisma
+  follows           PollFollow[]   @relation("PollFollowPoll")
+  decision          PollDecision?  @relation("PollDecisionPoll")
   voteEvents        VoteEvent[]
   comments          Comment[]
   dailySnapshots    PollDailySnapshot[]
@@ -304,6 +309,7 @@ model PollOption {
   eventsFrom     VoteEvent[]               @relation("VoteEventFrom")
   eventsTo       VoteEvent[]               @relation("VoteEventTo")
   dailySnapshots PollOptionDailySnapshot[]
+  decisions      PollDecision[]            @relation("PollDecisionOption")
 
   @@unique([pollId, position])
   // Vote ve snapshot'taki bileşik FK'ler için: seçenek gerçekten o ankete ait olmalı.
