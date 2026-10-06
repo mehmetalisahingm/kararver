@@ -48,7 +48,7 @@ export function ProductProvider({
   children: ReactNode;
   demo: boolean;
 }) {
-  const [client] = useState(() => demo ? new DemoClient() : new ApiClient(process.env.NEXT_PUBLIC_API_URL ?? ""));
+  const [client] = useState<ProductClient>(() => demo ? new DemoClient() : new ApiClient(process.env.NEXT_PUBLIC_API_URL ?? ""));
   // Demo forms also wait for hydration so early input cannot be discarded.
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState("");
