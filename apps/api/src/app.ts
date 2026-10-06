@@ -242,7 +242,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   }
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
-  if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now });
+  if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.notificationStore) {
     registerNotificationRoutes(route, { store: deps.notificationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }

@@ -186,7 +186,7 @@ describe("içerik moderasyonu (postgres)", { skip: backend ? false : "TEST_DATAB
 
     const hide = await moderatePoll(admin.cookie, id, "HIDE", "Kural ihlali şüphesi");
     assert.equal(hide.statusCode, 200, hide.body);
-    assert.deepEqual(hide.json().data, { id, status: "HIDDEN", trendExcluded: false });
+    assert.deepEqual(hide.json().data, { id, status: "HIDDEN", trendExcluded: false, commentsClosed: false });
     assertError(await get(`/polls/${id}`), 404, "NOT_FOUND");
     assertError(await get(`/polls/${id}`, author.cookie), 404, "NOT_FOUND");
 
@@ -272,12 +272,12 @@ describe("içerik moderasyonu (postgres)", { skip: backend ? false : "TEST_DATAB
   test("trendden çıkarma: bayrak değişir, durum değişmez; tekrar idempotent; kaldırılmış ankette 409", async () => {
     const id = await poll(await signUp());
     const out = await moderatePoll(admin.cookie, id, "EXCLUDE_FROM_TRENDS", "Manipülatif etkileşim");
-    assert.deepEqual(out.json().data, { id, status: "ACTIVE", trendExcluded: true });
+    assert.deepEqual(out.json().data, { id, status: "ACTIVE", trendExcluded: true, commentsClosed: false });
     assert.ok((await pollRow(id)).trendExcludedAt);
     assert.equal((await moderatePoll(admin.cookie, id, "EXCLUDE_FROM_TRENDS")).json().data.trendExcluded, true);
     assert.equal(await db.moderationAction.count({ where: { pollId: id } }), 1);
 
-    assert.deepEqual((await moderatePoll(admin.cookie, id, "INCLUDE_IN_TRENDS")).json().data, { id, status: "ACTIVE", trendExcluded: false });
+    assert.deepEqual((await moderatePoll(admin.cookie, id, "INCLUDE_IN_TRENDS")).json().data, { id, status: "ACTIVE", trendExcluded: false, commentsClosed: false });
     assert.equal((await pollRow(id)).trendExcludedAt, null);
 
     await moderatePoll(admin.cookie, id, "REMOVE");
@@ -295,7 +295,7 @@ describe("içerik moderasyonu (postgres)", { skip: backend ? false : "TEST_DATAB
     assert.deepEqual(await counters(), { poll: 2, replies: 1 });
 
     const hide = await moderateComment(admin.cookie, reply, "HIDE");
-    assert.deepEqual(hide.json().data, { id: reply, status: "HIDDEN", trendExcluded: null });
+    assert.deepEqual(hide.json().data, { id: reply, status: "HIDDEN", trendExcluded: null, commentsClosed: null });
     assert.deepEqual(await counters(), { poll: 1, replies: 0 });
     const listed = await get(`/polls/${id}/comments`);
     assert.equal(JSON.stringify(listed.json()).includes(reply), false, "gizli yorum listelenmez");

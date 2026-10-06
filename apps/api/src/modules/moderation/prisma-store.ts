@@ -5,7 +5,11 @@ import type { Prisma, PrismaClient } from "@kararver/db";
 import { writeAudit } from "../audit/write.ts";
 import { writeEvent } from "../events/write.ts";
 import { communityOfTarget } from "./community-of.ts";
+import { listComments, listPolls } from "./content-list.ts";
+import { history } from "./history.ts";
+import { movePoll } from "./move.ts";
 import { closeOpenReports, eventOf } from "./trail.ts";
+import { findWarnTarget, warnReportTarget } from "./warn.ts";
 import {
   closesReports,
   counterDelta,
@@ -20,6 +24,8 @@ import {
 type Tx = Prisma.TransactionClient;
 
 type Snapshot = Record<string, string | boolean | null>;
+
+const COMMENT_ACTIONS: readonly string[] = ["CLOSE_COMMENTS", "OPEN_COMMENTS"];
 
 /**
  * Geçmiş (moderation_actions), kapanan raporlar (report.resolved), audit ve moderation.applied olayı: hepsi çağıranın
@@ -59,22 +65,37 @@ async function recordTrail(tx: Tx, input: ApplyInput, from: ContentStatus, to: C
 }
 
 async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
-  const [row] = await tx.$queryRaw<{ status: ContentStatus; trend_excluded_at: Date | null }[]>`
-    SELECT status::text AS status, trend_excluded_at FROM polls WHERE id = ${input.id}::uuid FOR UPDATE`;
+  const [row] = await tx.$queryRaw<{ status: ContentStatus; trend_excluded_at: Date | null; comments_closed_at: Date | null; community_id: string | null }[]>`
+    SELECT status::text AS status, trend_excluded_at, comments_closed_at, community_id::text AS community_id
+      FROM polls WHERE id = ${input.id}::uuid FOR UPDATE`;
   if (!row) return { kind: "not_found" };
+  // Yetki, anketin okunan topluluğuna göre verildi; bu arada taşındıysa karar geçersizdir.
+  if (row.community_id !== input.communityId) return { kind: "conflict", reason: "community_changed" };
   const excluded = row.trend_excluded_at !== null;
-  const outcome = (status: ContentStatus, trendExcluded: boolean) => ({ id: input.id, status, trendExcluded });
+  const closed = row.comments_closed_at !== null;
+  const outcome = (status: ContentStatus, trendExcluded: boolean, commentsClosed = closed) => ({ id: input.id, status, trendExcluded, commentsClosed });
+  const snap = (status: ContentStatus, trendExcluded: boolean, commentsClosed: boolean): Snapshot => ({ status, trendExcluded, commentsClosed });
 
   if (input.action === "EXCLUDE_FROM_TRENDS" || input.action === "INCLUDE_IN_TRENDS") {
     if (row.status === "REMOVED") return { kind: "conflict", reason: "removed" };
     const want = input.action === "EXCLUDE_FROM_TRENDS";
     if (want === excluded) return { kind: "unchanged", outcome: outcome(row.status, excluded) };
     await tx.poll.update({ where: { id: input.id }, data: { trendExcludedAt: want ? input.now : null } });
-    await recordTrail(tx, input, row.status, row.status, { status: row.status, trendExcluded: excluded }, { status: row.status, trendExcluded: want });
+    await recordTrail(tx, input, row.status, row.status, snap(row.status, excluded, closed), snap(row.status, want, closed));
     return { kind: "applied", outcome: outcome(row.status, want) };
   }
 
-  const next = statusTransition(row.status, input.action);
+  // Yalnız yorumları kapat/aç: oy ve anket görünürlüğü değişmez; LOCK'tan farkı budur.
+  if (COMMENT_ACTIONS.includes(input.action)) {
+    if (row.status === "REMOVED") return { kind: "conflict", reason: "removed" };
+    const want = input.action === "CLOSE_COMMENTS";
+    if (want === closed) return { kind: "unchanged", outcome: outcome(row.status, excluded) };
+    await tx.poll.update({ where: { id: input.id }, data: { commentsClosedAt: want ? input.now : null } });
+    await recordTrail(tx, input, row.status, row.status, snap(row.status, excluded, closed), snap(row.status, excluded, want));
+    return { kind: "applied", outcome: outcome(row.status, excluded, want) };
+  }
+
+  const next = statusTransition(row.status, input.action as StatusAction);
   if (next === "invalid") return { kind: "conflict", reason: "invalid_transition" };
   if (next === "same") return { kind: "unchanged", outcome: outcome(row.status, excluded) };
   if (row.status === "REMOVED" && !input.actorIsAdmin) return { kind: "forbidden", reason: "admin_required" };
@@ -84,21 +105,24 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
     // REMOVED ⇔ deleted_at dolu; geri yüklemede boşalır.
     data: { status: next, deletedAt: next === "REMOVED" ? input.now : row.status === "REMOVED" ? null : undefined },
   });
-  await recordTrail(tx, input, row.status, next, { status: row.status, trendExcluded: excluded }, { status: next, trendExcluded: excluded });
+  await recordTrail(tx, input, row.status, next, snap(row.status, excluded, closed), snap(next, excluded, closed));
   return { kind: "applied", outcome: outcome(next, excluded) };
 }
 
 async function applyToComment(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   const meta = await tx.comment.findUnique({ where: { id: input.id }, select: { pollId: true, parentId: true } });
   if (!meta) return { kind: "not_found" };
-  await tx.$queryRaw`SELECT 1 FROM polls WHERE id = ${meta.pollId}::uuid FOR UPDATE`;
+  const [poll] = await tx.$queryRaw<{ community_id: string | null }[]>`
+    SELECT community_id::text AS community_id FROM polls WHERE id = ${meta.pollId}::uuid FOR UPDATE`;
+  if (!poll) return { kind: "not_found" };
+  if (poll.community_id !== input.communityId) return { kind: "conflict", reason: "community_changed" };
   const [row] = await tx.$queryRaw<{ status: ContentStatus }[]>`
     SELECT status::text AS status FROM comments WHERE id = ${input.id}::uuid FOR UPDATE`;
   if (!row) return { kind: "not_found" };
-  const outcome = (status: ContentStatus) => ({ id: input.id, status, trendExcluded: null });
+  const outcome = (status: ContentStatus) => ({ id: input.id, status, trendExcluded: null, commentsClosed: null });
 
   // Yorumda "kilitli" durumu yok: LOCKED yorum listelenmez (KV-17 yalnız ACTIVE gösterir); kilit anket düzeyindedir.
-  if (input.action === "LOCK" || input.action === "UNLOCK" || input.action === "EXCLUDE_FROM_TRENDS" || input.action === "INCLUDE_IN_TRENDS") {
+  if (input.action === "LOCK" || input.action === "UNLOCK" || input.action === "EXCLUDE_FROM_TRENDS" || input.action === "INCLUDE_IN_TRENDS" || COMMENT_ACTIONS.includes(input.action)) {
     return { kind: "conflict", reason: "unsupported_action" };
   }
   const next = statusTransition(row.status, input.action as StatusAction);
@@ -134,5 +158,12 @@ export function createPrismaModerationStore(prisma: PrismaClient): ModerationSto
     apply(input) {
       return prisma.$transaction((tx) => (input.kind === "polls" ? applyToPoll(tx, input) : applyToComment(tx, input)));
     },
+
+    listPolls: (filter, limit) => listPolls(prisma, filter, limit),
+    listComments: (filter, limit) => listComments(prisma, filter, limit),
+    history: (kind, id, after, limit) => history(prisma, kind, id, after, limit),
+    movePoll: (input) => movePoll(prisma, input),
+    findWarnTarget: (reportId) => findWarnTarget(prisma, reportId),
+    warnReportTarget: (input) => warnReportTarget(prisma, input),
   };
 }

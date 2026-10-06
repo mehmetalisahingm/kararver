@@ -90,6 +90,8 @@ async function toPollAuthor(tx: Tx, pollId: string): Promise<Recipients | null> 
 const NOTIFIED_SANCTIONS = new Set(["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING"]);
 /** Trend dışı bırakma / geri alma: sıralama kararı, bildirilmez (KV-21 karar 4); olay yine üretilir. */
 const TREND_ACTIONS = new Set(["EXCLUDE_FROM_TRENDS", "INCLUDE_IN_TRENDS"]);
+/** Yalnız yorumları kapatma / açma (KV-37): anketin görünürlüğünü etkilemez, bildirim üretmez; olay yine yazılır. */
+const COMMENT_SWITCH_ACTIONS = new Set(["CLOSE_COMMENTS", "OPEN_COMMENTS"]);
 
 export const notificationAdapters: Readonly<Partial<Record<EventType, NotificationAdapter>>> = Object.freeze({
   "comment.created": define({
@@ -167,7 +169,7 @@ export const notificationAdapters: Readonly<Partial<Record<EventType, Notificati
     // İçeriğin sahibine; moderatör gösterilmez. Görünürlük kuralı uygulanmaz (gizlenen içeriğin sahibi bilmeli).
     // Trend dışı bırakma / geri alma bildirilmez: trend oyunlamasına bilgi vermemek için (KV-21 karar 4).
     draft: (e) =>
-      TREND_ACTIONS.has(e.payload.action)
+      TREND_ACTIONS.has(e.payload.action) || COMMENT_SWITCH_ACTIONS.has(e.payload.action)
         ? null
         : draftOf(e, "MODERATION_APPLIED", {
             subject: { type: e.subject.type === "COMMENT" ? "COMMENT" : "POLL", id: e.subject.id },

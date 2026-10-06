@@ -27,6 +27,7 @@ import {
   type TrustedActor,
 } from "@kararver/contracts";
 import { Prisma, type PrismaClient, type Role, type SanctionType, type UserStatus } from "@kararver/db";
+import { linkSanctionToReport, ownerOfTarget, targetOfReport } from "../moderation/trail.ts";
 import { assertNoCommittedKey, runIdempotent } from "../../http/idempotency.ts";
 import { writeAudit } from "../audit/write.ts";
 import { normalizeEmail } from "../auth/routes.ts";
@@ -299,7 +300,7 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
 
     async applySanction(scope, input) {
       const { userId, type, actorId, now } = input;
-      return runIdempotent<"not_found" | "already_active" | "user_deleted" | "last_super_admin" | "forbidden">(prisma, scope, 201, async (tx) => {
+      return runIdempotent<"not_found" | "already_active" | "user_deleted" | "last_super_admin" | "forbidden" | "report_not_found" | "report_mismatch">(prisma, scope, 201, async (tx) => {
         const target = await lockTarget(tx, userId);
         if (!target) return { ok: false, reason: "not_found" };
         if (scope) await assertNoCommittedKey(tx, scope);
@@ -316,11 +317,22 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
         // WARNING bir kayıttır, birden çok kez verilebilir; diğer tiplerde aynı tipte aktif yaptırım tek olur.
         if (type !== "WARNING" && open.some((s) => s.type === type)) return { ok: false, reason: "already_active" };
 
+        // KV-37: kuyruktan gelen yaptırım rapora bağlanır; rapor bu kullanıcının içeriğine ait olmalı.
+        if (input.reportId) {
+          const report = await tx.report.findUnique({ where: { id: input.reportId }, select: { pollId: true, commentId: true, mediaId: true, reportedUserId: true } });
+          if (!report) return { ok: false, reason: "report_not_found" };
+          if ((await ownerOfTarget(tx, targetOfReport(report))) !== userId) return { ok: false, reason: "report_mismatch" };
+        }
+
         const sanction = await tx.sanction.create({
           // starts_at/created_at işlemin anı (sanctions_lift_check: lifted_at >= created_at aynı saatle karşılaştırılır).
           data: { userId, type, reason: input.reason, startsAt: now, endsAt: input.endsAt, createdById: actorId, createdAt: now },
           select: { id: true },
         });
+        // Rapor bağlantısı: moderation_actions (SANCTION_USER) ve hedefin açık raporlarının ACTIONED'a kapanması.
+        const closedReports = input.reportId
+          ? await linkSanctionToReport(tx, { reportId: input.reportId, userId, actorId, action: "SANCTION_USER", reason: input.reason, now })
+          : 0;
         const status = await syncStatus(tx, userId, target.status, now);
         // Faruk'un sessions tablosu: SUSPEND/BAN açık oturumları aynı transaction'da iptal eder (DATA_MODEL §7.2).
         const sessionsRevoked = REVOKES_SESSIONS.has(type)
@@ -335,7 +347,14 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
           target: { type: "USER", id: userId },
           reason: input.reason,
           before: { status: target.status, activeTypes: [...new Set(open.map((s) => s.type))].sort() },
-          after: { status, sanctionId: sanction.id, type, endsAt: input.endsAt?.toISOString() ?? null, sessionsRevoked },
+          after: {
+            status,
+            sanctionId: sanction.id,
+            type,
+            endsAt: input.endsAt?.toISOString() ?? null,
+            sessionsRevoked,
+            ...(input.reportId ? { reportId: input.reportId, closedReports } : {}),
+          },
           requestId: input.requestId,
           at: now,
         });

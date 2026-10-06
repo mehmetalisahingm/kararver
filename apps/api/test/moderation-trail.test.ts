@@ -198,8 +198,8 @@ describe("moderasyon izi: audit ve olaylar (postgres)", { skip: backend ? false 
     const rows = await audit(pollId, "moderation.poll.apply");
     assert.equal(rows.length, 1);
     assert.deepEqual([rows[0].operation, rows[0].actorId, rows[0].reason], ["hide", admin.id, "Spam doğrulandı"]);
-    assert.deepEqual(rows[0].before, { status: "ACTIVE", trendExcluded: false });
-    assert.deepEqual(rows[0].after, { status: "HIDDEN", trendExcluded: false, closedReports: 1 });
+    assert.deepEqual(rows[0].before, { status: "ACTIVE", trendExcluded: false, commentsClosed: false });
+    assert.deepEqual(rows[0].after, { status: "HIDDEN", trendExcluded: false, commentsClosed: false, closedReports: 1 });
 
     const action = await db.moderationAction.findFirstOrThrow({ where: { pollId } });
     const applied = await events("moderation.applied", pollId);
