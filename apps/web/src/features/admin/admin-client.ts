@@ -45,8 +45,8 @@ export class AdminClient {
   }
 
   // ── Rapor kuyruğu (KV-24) ──
-  async reports(query: { status: ReportStatus; targetType?: ReportTargetType; cursor?: string }, signal?: AbortSignal) {
-    return page<Report>(await this.http.request("admin.reports.list", { query: { status: query.status, targetType: query.targetType, cursor: query.cursor, limit: "20" }, signal }));
+  async reports(query: { status: ReportStatus; targetType?: ReportTargetType; communityId?: string; cursor?: string }, signal?: AbortSignal) {
+    return page<Report>(await this.http.request("admin.reports.list", { query: { status: query.status, targetType: query.targetType, communityId: query.communityId, cursor: query.cursor, limit: "20" }, signal }));
   }
   async resolveReport(id: string, resolution: "ACTIONED" | "DISMISSED", note: string) {
     return data<Report>(await this.http.request("admin.reports.resolve", { params: { id }, body: { resolution, note } }));

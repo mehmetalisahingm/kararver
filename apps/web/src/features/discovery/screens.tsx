@@ -260,10 +260,10 @@ function SearchCard({ item }: { item: SearchResult }) {
   return (
     <article className="kv-card search-summary">
       <span className="eyebrow">TOPLULUK</span>
-      <h2>{item.community.name}</h2>
-      <p className="kv-help">
-        Topluluk özeti. Topluluk sayfası henüz bağlı değil.
-      </p>
+      <h2>
+        <Link href={`/topluluk/${item.community.slug}`}>{item.community.name}</Link>
+      </h2>
+      <p className="kv-help">Topluluk sayfasında soruları ve üyeleri gör.</p>
     </article>
   );
 }

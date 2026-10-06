@@ -2,9 +2,9 @@
 
 // Moderasyon kuyruğu (KV-24, KV-37): rapor listesi, gerekçeli sonuçlandırma ve rapor edilen içeriğe işlem.
 // Kuyrukta hedef başına tek satır görünür (reportCount); sonuçlandırma o hedefin açık raporlarını birlikte kapatır.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AdminClient } from "./admin-client.ts";
-import type { ModerationAction, Report, ReportStatus, ReportTargetType } from "./admin-client.ts";
+import type { Community, ModerationAction, Report, ReportStatus, ReportTargetType } from "./admin-client.ts";
 import { ActionDialog, ListState, formatDate, reasonLabels, shortId, targetLabels, useNotice, useRemoteList } from "./admin-ui";
 import styles from "./admin-shell.module.css";
 
@@ -26,15 +26,23 @@ type Dialog = { kind: "resolve"; report: Report } | { kind: "content"; report: R
 export function ReportsPanel({ admin }: { admin: AdminClient }) {
   const [status, setStatus] = useState<ReportStatus>("OPEN");
   const [targetType, setTargetType] = useState<ReportTargetType | "">("");
+  const [communityId, setCommunityId] = useState("");
+  const [communities, setCommunities] = useState<Community[]>([]);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [resolution, setResolution] = useState<"ACTIONED" | "DISMISSED">("DISMISSED");
   const [action, setAction] = useState<ModerationAction>("HIDE");
   const { setNotice, element } = useNotice();
 
   const load = useCallback(
-    (cursor: string | undefined, signal: AbortSignal) => admin.reports({ status, targetType: targetType || undefined, cursor }, signal),
-    [admin, status, targetType],
+    (cursor: string | undefined, signal: AbortSignal) => admin.reports({ status, targetType: targetType || undefined, communityId: communityId || undefined, cursor }, signal),
+    [admin, status, targetType, communityId],
   );
+  // Topluluk filtresi seçenekleri (ilk sayfa); liste alınamazsa filtre gizli kalır, kuyruk etkilenmez.
+  useEffect(() => {
+    const controller = new AbortController();
+    admin.communities(undefined, controller.signal).then((page) => setCommunities(page.items), () => setCommunities([]));
+    return () => controller.abort();
+  }, [admin]);
   const remote = useRemoteList(load);
   const close = () => setDialog(null);
   const done = (message: string) => {
@@ -61,6 +69,15 @@ export function ReportsPanel({ admin }: { admin: AdminClient }) {
             {Object.entries(targetLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
+        {communities.length > 0 ? (
+          <label>
+            Topluluk
+            <select className="kv-input" value={communityId} onChange={(event) => setCommunityId(event.target.value)}>
+              <option value="">Tümü</option>
+              {communities.map((community) => <option key={community.id} value={community.id}>{community.name}</option>)}
+            </select>
+          </label>
+        ) : null}
       </div>
       {element}
       {remote.items.length > 0 ? (
