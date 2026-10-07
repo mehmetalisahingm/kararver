@@ -11,6 +11,7 @@ describe("KV-42 öne çıkarma ve duyurular (postgres)", { skip: backend ? false
   let h: Harness;
   let admin: { cookie: string; id: string };
   let pollId = "";
+  let categoryId = "";
 
   function send(method: "GET" | "POST" | "PATCH" | "DELETE", url: string, body?: unknown, cookie?: string, key?: string) {
     return h.app.inject({
@@ -41,6 +42,9 @@ describe("KV-42 öne çıkarma ve duyurular (postgres)", { skip: backend ? false
 
   before(async () => {
     h = await createHarness(backend!);
+    categoryId = (await h.prisma!.category.create({
+      data: { slug: `kv42-${randomUUID().slice(0, 8)}`, name: "KV-42 Test" },
+    })).id;
     const root = await signUp();
     const seeds = rbacSeeds(h);
     await seeds.setRole(root.id, "SUPER_ADMIN", null);
@@ -54,6 +58,7 @@ describe("KV-42 öne çıkarma ve duyurular (postgres)", { skip: backend ? false
       {
         kind: "POLL",
         title: `KV-42 test anketi ${randomUUID()}`,
+        categoryId,
         durationHours: 24,
         resultsVisibility: "ALWAYS",
         options: [{ label: "A" }, { label: "B" }],
