@@ -554,7 +554,7 @@ export const adminEndpoints = [
     provider: mehmet("points"),
     consumers: utkuUi,
     unblocks: ["#67"],
-    availability: { status: "planned", tableIn: "#67" },
+    availability: { status: "ready" },
     request: {
       params: IdParams,
       body: z.strictObject({ delta: z.number().int().min(-1000).max(1000).refine((n) => n !== 0), reason: Reason }),
