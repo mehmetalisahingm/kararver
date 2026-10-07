@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { createPrismaPointAdminStore } from "../src/modules/points/admin-store.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
+import { rbacSeeds } from "./support/rbac-probe.ts";
 
 const backend = prismaBackend();
 
@@ -17,11 +18,16 @@ describe("admin puan düzeltmesi (postgres)", { skip: backend ? false : "TEST_DA
     await h?.close();
   });
 
-  function send(method: "POST", url: string, body: unknown) {
+  function send(method: "POST", url: string, body: unknown, cookie?: string, key?: string) {
     return h.app.inject({
       method,
       url: `/v1${url}`,
-      headers: { origin: WEB_ORIGIN, "content-type": "application/json" },
+      headers: {
+        origin: WEB_ORIGIN,
+        "content-type": "application/json",
+        ...(cookie ? { cookie } : {}),
+        ...(key ? { "idempotency-key": key } : {}),
+      },
       payload: JSON.stringify(body),
     });
   }
@@ -34,13 +40,12 @@ describe("admin puan düzeltmesi (postgres)", { skip: backend ? false : "TEST_DA
     assert.equal((await send("POST", "/auth/email/verify", { token: tokenFrom(h.mails[mailIndex]) })).statusCode, 200);
     const login = await send("POST", "/auth/login", { email: account.email, password: account.password });
     assert.equal(login.statusCode, 200, login.body);
-    sessionCookie(login.headers["set-cookie"]);
-    return login.json().data.id as string;
+    return { id: login.json().data.id as string, cookie: sessionCookie(login.headers["set-cookie"]) };
   }
 
   test("gerekçeli düzeltme atomik, idempotent ve aynı transaction'da auditli", async () => {
     const db = h.prisma!;
-    const userId = await accountWithInitialGrant();
+    const { id: userId } = await accountWithInitialGrant();
     const store = createPrismaPointAdminStore(db);
     const key = `adjust-${randomUUID()}`;
     const requestId = randomUUID();
@@ -109,5 +114,35 @@ describe("admin puan düzeltmesi (postgres)", { skip: backend ? false : "TEST_DA
     );
     assert.equal((await h.store.getPointsSummary(userId)).balance, 25);
     assert.equal(await db.auditLog.count({ where: { actorId: userId, action: "points.adjust", targetId: userId } }), 1);
+  });
+
+  test("admin.points.adjust gerçek HTTP endpoint'i RBAC, idempotency ve audit ile çalışır", async () => {
+    const db = h.prisma!;
+    const seeds = rbacSeeds(h);
+    const root = await accountWithInitialGrant();
+    await seeds.setRole(root.id, "SUPER_ADMIN", null);
+    const admin = await accountWithInitialGrant();
+    await seeds.setRole(admin.id, "ADMIN", root.id);
+    const target = await accountWithInitialGrant();
+
+    const key = `http-adjust-${randomUUID()}`;
+    const body = { delta: 5, reason: "Destek talebi doğrulandı" };
+    const first = await send("POST", `/admin/users/${target.id}/point-adjustments`, body, admin.cookie, key);
+    assert.equal(first.statusCode, 201, first.body);
+    assert.equal(first.json().data.delta, 5);
+    assert.equal(first.json().data.balanceAfter, 25);
+
+    const replay = await send("POST", `/admin/users/${target.id}/point-adjustments`, body, admin.cookie, key);
+    assert.equal(replay.statusCode, 201, replay.body);
+    assert.equal(replay.json().data.id, first.json().data.id);
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: target.id, reason: "ADMIN_ADJUSTMENT" } }), 1);
+    assert.equal(await db.auditLog.count({ where: { actorId: admin.id, action: "points.adjust", targetId: target.id } }), 1);
+
+    const reused = await send("POST", `/admin/users/${target.id}/point-adjustments`, { ...body, delta: 10 }, admin.cookie, key);
+    assert.equal(reused.statusCode, 409, reused.body);
+
+    const ordinary = await accountWithInitialGrant();
+    const forbidden = await send("POST", `/admin/users/${target.id}/point-adjustments`, body, ordinary.cookie, `http-adjust-${randomUUID()}`);
+    assert.equal(forbidden.statusCode, 403, forbidden.body);
   });
 });
