@@ -26,6 +26,8 @@ import { createAuthenticator, type SessionSettings } from "./modules/auth/sessio
 import type { AuthStore } from "./modules/auth/store.ts";
 import { registerCategoryAdminRoutes } from "./modules/categories/routes.ts";
 import type { CategoryAdminStore } from "./modules/categories/store.ts";
+import { registerFeaturedAdminRoutes } from "./modules/featured/routes.ts";
+import type { FeaturedAdminStore } from "./modules/featured/store.ts";
 import { registerCommentRoutes } from "./modules/comments/routes.ts";
 import type { CommentStore } from "./modules/comments/store.ts";
 import { DEFAULT_FEED_SETTINGS, type FeedSettings } from "./modules/feed/for-you.ts";
@@ -86,6 +88,8 @@ export type AppDeps = {
   revisionStore?: RevisionStore;
   /** Verilmezse admin kategori route'ları (admin.categories.*) kaydedilmez. */
   categoryAdminStore?: CategoryAdminStore;
+  /** Verilmezse KV-42 öne çıkarma/duyuru admin route'ları kaydedilmez. */
+  featuredAdminStore?: FeaturedAdminStore;
   /** pollStore ile birlikte verilirse "Senin İçin" sıralaması (KV-27) açılır; yoksa for_you "new" sırasıdır. */
   feedStore?: FeedStore;
   /** Keşif payı ve tekrar sınırları (KV-40, #42); ayar servisi gelene kadar DEFAULT_FEED_SETTINGS. */
@@ -231,6 +235,19 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   if (deps.decisionStore) registerDecisionRoutes(route, { store: deps.decisionStore, now });
   if (deps.shareStore) registerShareRoutes(route, { store: deps.shareStore, webUrl: config.webUrl });
   if (deps.categoryAdminStore) registerCategoryAdminRoutes(route, { store: deps.categoryAdminStore, now });
+  if (deps.featuredAdminStore) {
+    registerFeaturedAdminRoutes(route, {
+      store: deps.featuredAdminStore,
+      now,
+      polls: deps.pollStore
+        ? {
+            store: deps.pollStore,
+            settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+            mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+          }
+        : undefined,
+    });
+  }
   if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.voteStore) {
     registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });

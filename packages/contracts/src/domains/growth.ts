@@ -22,11 +22,32 @@ export const DecisionUpdate = z.strictObject({
 
 export const DecisionState = z.strictObject({ decision: DecisionUpdate.nullable(), following: z.boolean(), isAuthor: z.boolean() });
 
+export const FeaturedSurface = z.enum([
+  "HOME_SPOTLIGHT",
+  "FEED_TOP",
+  "DAILY_PICK",
+  "CATEGORY",
+  "COMMUNITY",
+  "EDITORS_CHOICE",
+]);
+export const FeaturedItem = z.strictObject({
+  placementId: Id,
+  surface: FeaturedSurface,
+  scopeId: Id.nullable(),
+  priority: z.number().int().min(0).max(1000),
+  badge: z.string().max(30).nullable(),
+  startsAt: Timestamp,
+  endsAt: Timestamp,
+  poll: PollCard,
+});
+
+export const AnnouncementAudience = z.enum(["ALL", "AUTHENTICATED"]);
 export const Announcement = z.strictObject({
   id: Id,
   title: z.string(),
   body: z.string(),
   level: z.enum(["INFO", "WARNING"]),
+  audience: AnnouncementAudience,
   startsAt: Timestamp,
   endsAt: Timestamp.nullable(),
 });
@@ -261,6 +282,24 @@ export const growthEndpoints = [
     idempotency: "none",
     cache: "private",
     notes: ["Paylaşım kartı (OG görseli) gizli sonuçta yüzde/toplam oy içermez."],
+  }),
+  defineEndpoint({
+    id: "featured.active",
+    domain: "growth",
+    method: "GET",
+    path: "/featured",
+    summary: "Aktif editöryel öne çıkarma yerleşimleri",
+    auth: "public",
+    provider: growth("featured"),
+    consumers: web,
+    unblocks: ["#44"],
+    availability: { status: "ready" },
+    request: { query: z.strictObject({ surface: FeaturedSurface, scopeId: Id.optional() }) },
+    responses: { 200: dataOf(z.array(FeaturedItem)) },
+    errors: ["VALIDATION_ERROR"],
+    idempotency: "none",
+    cache: "viewer",
+    notes: ["CATEGORY/COMMUNITY yüzeylerinde scopeId zorunlu; diğer yüzeylerde verilmez. Süresi biten veya kaldırılan içerik dönmez."],
   }),
   defineEndpoint({
     id: "announcements.active",

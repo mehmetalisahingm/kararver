@@ -226,6 +226,7 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "interests.get": "interests.read",
   "interests.put": "interests.set",
   "shares.create": "poll.share",
+  "featured.active": "content.read",
   "announcements.active": "content.read",
   "points.get": "points.read",
   "points.ledger": "points.read",

@@ -218,7 +218,7 @@ const sanction = { id: SANCTION, type: "SUSPEND", reason: "Tekrarlayan spam", st
 const adminUser = { ...umit, email: "umit@example.test", status: "ACTIVE", roles: ["USER"], createdAt: T0, reportCount: 0 };
 const setting = { key: "polls.voteChangeAllowed", value: true, version: 3, updatedAt: T1, updatedBy: deniz };
 const featured = { id: FEATURED, pollId: POLL, surface: "HOME_SPOTLIGHT", scopeId: null, priority: 10, badge: "Editörün Seçimi", startsAt: T0, endsAt: T_CLOSE };
-const announcement = { id: ANN, title: "Kapalı beta başladı", body: "Geri bildirimlerinizi bekliyoruz.", level: "INFO", startsAt: T0, endsAt: null };
+const announcement = { id: ANN, title: "Kapalı beta başladı", body: "Geri bildirimlerinizi bekliyoruz.", level: "INFO", audience: "ALL", startsAt: T0, endsAt: null };
 const ledger = { id: LEDGER, delta: -10, balanceAfter: 10, reason: "PUBLISH", referenceId: POLL, createdAt: T1 };
 const features = { registration: true, pollCreation: true, comments: true, uploads: true };
 const publicConfig = {
@@ -330,6 +330,7 @@ export const examples: Example[] = [
   { endpoint: "interests.get", name: "ok", status: 200, body: data({ categoryIds: [CAT] }) },
   { endpoint: "interests.put", name: "ok", request: { body: { categoryIds: [CAT] } }, status: 200, body: data({ categoryIds: [CAT] }) },
   { endpoint: "shares.create", name: "ok", request: { params: pollParams, body: { channel: "whatsapp" } }, status: 201, body: data({ shareId: "sh_9x2k", url: "https://kararver.test/karar/bu-araba-bu-fiyata-alinir-mi-ab12cd34?s=sh_9x2k" }) },
+  { endpoint: "featured.active", name: "ok", request: { query: { surface: "HOME_SPOTLIGHT" } }, status: 200, body: data([{ placementId: id(96), surface: "HOME_SPOTLIGHT", scopeId: null, priority: 100, badge: "Editör seçimi", startsAt: T0, endsAt: T1, poll: card(hidden) }]) },
   { endpoint: "announcements.active", name: "ok", status: 200, body: data([announcement]) },
   { endpoint: "points.get", name: "ok", status: 200, body: data({ balance: 10, publishCost: 10 }) },
   { endpoint: "points.ledger", name: "ok", status: 200, body: page([ledger, { ...ledger, id: id(94), delta: 20, balanceAfter: 20, reason: "INITIAL_GRANT", referenceId: null, createdAt: T0 }]) },
@@ -416,7 +417,7 @@ export const examples: Example[] = [
   { endpoint: "admin.featured.update", name: "ok", request: { params: { id: FEATURED }, body: { priority: 20, reason: "Öncelik arttı" } }, status: 200, body: data({ ...featured, priority: 20 }) },
   { endpoint: "admin.featured.delete", name: "ok", request: { params: { id: FEATURED } }, status: 204, body: null },
   { endpoint: "admin.announcements.list", name: "ok", status: 200, body: page([announcement]) },
-  { endpoint: "admin.announcements.create", name: "ok", request: { body: { title: "Kapalı beta başladı", body: "Geri bildirimlerinizi bekliyoruz.", startsAt: T0, reason: "Beta duyurusu" } }, status: 201, body: data(announcement) },
+  { endpoint: "admin.announcements.create", name: "ok", request: { body: { title: "Kapalı beta başladı", body: "Geri bildirimlerinizi bekliyoruz.", audience: "ALL", startsAt: T0, reason: "Beta duyurusu" } }, status: 201, body: data(announcement) },
   { endpoint: "admin.announcements.update", name: "ok", request: { params: { id: ANN }, body: { endsAt: T_CLOSE, reason: "Süre belirlendi" } }, status: 200, body: data({ ...announcement, endsAt: T_CLOSE }) },
   { endpoint: "admin.announcements.delete", name: "ok", request: { params: { id: ANN } }, status: 204, body: null },
   { endpoint: "admin.categories.list", name: "ok", status: 200, body: page([{ ...category, isActive: true, pollCount: 40 }]) },

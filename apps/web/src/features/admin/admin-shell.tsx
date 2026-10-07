@@ -12,6 +12,7 @@ import { AdminRolesContext } from "./admin-ui";
 import { CategoriesPanel } from "./categories-panel";
 import { CommunitiesPanel } from "./communities-panel";
 import { ContentPanel } from "./content-panel";
+import { FeaturedPanel } from "./featured-panel";
 import { MediaPanel } from "./media-panel";
 import { ReportsPanel } from "./reports-panel";
 
@@ -130,6 +131,8 @@ function livePanel(section: AdminSectionId, admin: AdminClient) {
       return <ContentPanel admin={admin} kind="polls" />;
     case "comments":
       return <ContentPanel admin={admin} kind="comments" />;
+    case "featured":
+      return <FeaturedPanel admin={admin} />;
     default:
       return null;
   }
