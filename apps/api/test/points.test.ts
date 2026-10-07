@@ -114,6 +114,30 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, reason: "PUBLISH" } }), 2);
   });
 
+  test("tartışma yayını da 10 puan harcar; retry çift harcamaz", async () => {
+    const account = await registerVerified();
+    const owner = await login(account);
+    const key = `discussion-${randomUUID()}`;
+    const body = {
+      kind: "DISCUSSION",
+      title: `Puan harcaması yapılan tartışma ${++titleSeq}`,
+      description: "Seçeneksiz tartışma da yayın maliyetine tabidir.",
+      categoryId,
+      allowComments: true,
+    };
+
+    const first = await send("POST", "/polls", body, owner.cookie, key);
+    assert.equal(first.statusCode, 201, first.body);
+    assert.equal(first.json().data.kind, "DISCUSSION");
+    assert.deepEqual(await summary(owner.cookie), { balance: 10, publishCost: 10 });
+
+    const retry = await send("POST", "/polls", body, owner.cookie, key);
+    assert.equal(retry.statusCode, 201, retry.body);
+    assert.equal(retry.json().data.id, first.json().data.id);
+    assert.deepEqual(await summary(owner.cookie), { balance: 10, publishCost: 10 });
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, reason: "PUBLISH" } }), 1);
+  });
+
   test("son 10 puanla iki paralel yayın yarışırsa yalnız biri commit olur", async () => {
     const account = await registerVerified();
     const owner = await login(account);
