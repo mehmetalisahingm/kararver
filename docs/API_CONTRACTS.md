@@ -110,8 +110,8 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `PUT /me/interests`<br>İlgi kategorilerini ayarla (tam liste) · `interests.put` | U | 200 | doğal | Mehmet `onboarding` | Ümit (web) | #17 #29 | hazır |
 | `POST /polls/:id/shares`<br>Kaynak ölçümlü paylaşım bağlantısı · `shares.create` | G | 201 | — | Mehmet `share` | Ümit (web) | #27 | hazır |
 | `GET /announcements/active`<br>Şu an gösterilecek duyurular · `announcements.active` | G | 200 | — | Mehmet `announcements` | Ümit (web) | #44 | hazır |
-| `GET /me/points`<br>Yayın puanı bakiyesi ve yayın maliyeti · `points.get` | U | 200 | — | Mehmet `points` | Ümit (web) | #67 #15 | planlı — tablo #67 migration'ı ile gelecek |
-| `GET /me/points/ledger`<br>Puan hareketleri (append-only) · `points.ledger` | U | 200 | — | Mehmet `points` | Ümit (web) | #67 | planlı — tablo #67 migration'ı ile gelecek |
+| `GET /me/points`<br>Yayın puanı bakiyesi ve yayın maliyeti · `points.get` | U | 200 | — | Mehmet `points` | Ümit (web) | #67 #15 | hazır |
+| `GET /me/points/ledger`<br>Puan hareketleri (append-only) · `points.ledger` | U | 200 | — | Mehmet `points` | Ümit (web) | #67 | hazır |
 
 ### Medya
 
@@ -189,7 +189,7 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `PATCH /admin/settings/:key`<br>Tek ayarı değiştir (iyimser kilit) · `admin.settings.update` | SA | 200 | doğal | Utku `settings` | Utku (admin UI) | #42 | hazır |
 | `PUT /admin/emergency`<br>Acil durum anahtarları (tek işlemle kapat/aç) · `admin.emergency.put` | SA | 200 | doğal | Utku `settings` | Utku (admin UI) | #42 | hazır |
 | `GET /admin/audit`<br>Değiştirilemez audit kayıtları · `admin.audit.list` | A | 200 | — | Utku `audit` | Utku (admin UI) | #41 | hazır |
-| `POST /admin/users/:id/point-adjustments`<br>Gerekçeli puan düzeltmesi · `admin.points.adjust` | A | 201 | **key zorunlu** | Mehmet `points` | Utku (admin UI) | #67 | planlı — tablo #67 migration'ı ile gelecek |
+| `POST /admin/users/:id/point-adjustments`<br>Gerekçeli puan düzeltmesi · `admin.points.adjust` | A | 201 | **key zorunlu** | Mehmet `points` | Utku (admin UI) | #67 | hazır |
 | `GET /admin/metrics`<br>Dashboard metrikleri · `admin.metrics.get` | A | 200 | — | Mehmet `analytics` | Mehmet (admin UI) | #38 | hazır |
 | `GET /admin/featured`<br>Öne çıkarma listesi · `admin.featured.list` | A | 200 | — | Mehmet `featured` | Mehmet (admin UI) | #44 | hazır |
 | `POST /admin/featured`<br>Öne çıkarma oluştur · `admin.featured.create` | A | 201 | key (ops.) | Mehmet `featured` | Mehmet (admin UI) | #44 | hazır |
