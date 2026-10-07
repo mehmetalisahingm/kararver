@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiClient } from "../lib/api-client";
 import { DemoClient } from "../lib/demo-client";
-import { Welcome, WELCOME_SEEN } from "../features/onboarding/welcome";
+import { WelcomeEntry, WelcomeResume } from "../features/onboarding/welcome-entry";
+import { hasWelcomeSeen } from "../lib/welcome-draft";
 import { emptyDraft, safeReturnTo } from "../lib/model";
 import type { Draft, ProductClient, User } from "../lib/model";
 import type { CommentDraft } from "../features/social/model";
@@ -69,7 +70,7 @@ export function ProductProvider({
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
   const pathname = usePathname();
-  useEffect(() => { try { setWelcomeSeen(localStorage.getItem(WELCOME_SEEN) === "1"); } catch { setWelcomeSeen(false); } }, [pathname]);
+  useEffect(() => { setWelcomeSeen(hasWelcomeSeen()); }, [pathname]);
   const router = useRouter();
   const previousPath = useRef(pathname);
   useEffect(() => {
@@ -162,8 +163,12 @@ export function ProductProvider({
       setCommentDrafts((old) => ({ ...old, [key]: value })),
   };
   if (pathname === "/basla") return <ProductContext.Provider value={context}>{children}</ProductContext.Provider>;
+  if (!demo && sessionReady && !user && pathname === "/" && welcomeSeen === null)
+    return <ProductContext.Provider value={context}><main id="main" aria-busy="true" /></ProductContext.Provider>;
   if (!demo && sessionReady && !user && pathname === "/" && welcomeSeen === false)
-    return <ProductContext.Provider value={context}><Welcome /></ProductContext.Provider>;
+    return <ProductContext.Provider value={context}><WelcomeEntry returnTo="/" /></ProductContext.Provider>;
+  if (!demo && sessionReady && !user && pathname === "/" && welcomeSeen === true)
+    return <ProductContext.Provider value={context}><WelcomeResume fallbackReturnTo="/" /></ProductContext.Provider>;
   return (
     <ProductContext.Provider value={context}>
       <div className="product" data-theme={theme}>
