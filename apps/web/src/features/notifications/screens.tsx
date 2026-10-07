@@ -24,6 +24,15 @@ function announceChanged() {
   window.dispatchEvent(new Event("kv:notifications-changed"));
 }
 
+function optionalServiceUnavailable(error: unknown) {
+  return error instanceof UiError && (error.code === "ENDPOINT_UNAVAILABLE" || error.code === "NOT_FOUND");
+}
+
+function mergeNotifications(previous: NotificationItem[], incoming: NotificationItem[]) {
+  const seen = new Set(previous.map((item) => item.id));
+  return [...previous, ...incoming.filter((item) => !seen.has(item.id))];
+}
+
 function dateLabel(value: string) {
   return new Intl.DateTimeFormat("tr-TR", {
     dateStyle: "medium",
@@ -32,7 +41,7 @@ function dateLabel(value: string) {
   }).format(new Date(value));
 }
 
-function PreferencesPanel() {
+function PreferencesPanel({ onAvailabilityChange }: { onAvailabilityChange: (available: boolean) => void }) {
   const { client } = useProduct();
   const api = client.notifications;
   const [preferences, setPreferences] = useState<Partial<Record<NotificationType, boolean>> | null>(null);
@@ -49,17 +58,20 @@ function PreferencesPanel() {
         if (!active) return;
         setPreferences(value.types);
         setState("ready");
+        onAvailabilityChange(true);
       })
       .catch((cause) => {
         if (!active) return;
-        if (cause instanceof UiError && cause.code === "ENDPOINT_UNAVAILABLE") setState("unavailable");
-        else {
+        if (optionalServiceUnavailable(cause)) {
+          setState("unavailable");
+          onAvailabilityChange(false);
+        } else {
           setError(messageOf(cause));
           setState("error");
         }
       });
     return () => { active = false; };
-  }, [api]);
+  }, [api, onAvailabilityChange]);
 
   if (state === "loading") return <div className="kv-card kv-state"><p role="status">Bildirim tercihleri yükleniyor…</p></div>;
   if (state === "unavailable") {
@@ -99,6 +111,13 @@ function PreferencesPanel() {
         <p className="kv-muted">Hangi isteğe bağlı bildirimleri görmek istediğini seç.</p>
       </div>
       <ErrorMessage message={error} />
+      {targetNotice ? (
+        <section className="kv-card kv-state" role="status">
+          <h2>Bildirim hedefi artık erişilebilir değil.</h2>
+          <p className="kv-muted">{targetNotice}</p>
+          <Link href="/">Akışa dön</Link>
+        </section>
+      ) : null}
       <div className="notification-preferences">
         {optionalPreferenceTypes.map((type) => {
           const checked = preferences[type] ?? true;
@@ -132,6 +151,8 @@ export function NotificationsScreen() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [mutedPolls, setMutedPolls] = useState<Set<string>>(() => new Set());
+  const [preferencesAvailable, setPreferencesAvailable] = useState(false);
+  const [targetNotice, setTargetNotice] = useState("");
   const [attempt, retry] = useState(0);
   const controller = useRef<AbortController | null>(null);
 
@@ -195,7 +216,8 @@ export function NotificationsScreen() {
     setError("");
     try {
       await api!.markRead({ all: true });
-      setItems((previous) => unreadOnly ? [] : previous.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })));
+      const readAt = new Date().toISOString();
+      setItems((previous) => unreadOnly ? [] : previous.map((item) => ({ ...item, readAt: item.readAt ?? readAt })));
       announceChanged();
     } catch (cause) {
       setError(messageOf(cause));
@@ -207,10 +229,29 @@ export function NotificationsScreen() {
   async function openNotification(notification: NotificationItem) {
     setBusyId(notification.id);
     setError("");
+    setTargetNotice("");
     try {
+      const pollId = pollIdOf(notification);
+      if (pollId) {
+        try {
+          await client.get(pollId);
+        } catch (cause) {
+          if (!optionalServiceUnavailable(cause)) throw cause;
+          if (!notification.readAt) {
+            await api!.markRead({ ids: [notification.id] });
+            const readAt = new Date().toISOString();
+            setItems((previous) => previous.map((item) => item.id === notification.id ? { ...item, readAt } : item));
+            announceChanged();
+          }
+          setTargetNotice("Bu bildirimin bağlı olduğu içerik artık erişilebilir değil. Kaldırılmış veya görünürlüğü değişmiş olabilir.");
+          setBusyId(null);
+          return;
+        }
+      }
       if (!notification.readAt) {
         await api!.markRead({ ids: [notification.id] });
-        setItems((previous) => previous.map((item) => item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item));
+        const readAt = new Date().toISOString();
+        setItems((previous) => previous.map((item) => item.id === notification.id ? { ...item, readAt } : item));
         announceChanged();
       }
       router.push(notificationHref(notification));
@@ -234,7 +275,12 @@ export function NotificationsScreen() {
         return copy;
       });
     } catch (cause) {
-      setError(messageOf(cause));
+      if (optionalServiceUnavailable(cause)) {
+        setPreferencesAvailable(false);
+        setError("Sessize alma hizmeti bu ortamda henüz kullanıma açılmadı.");
+      } else {
+        setError(messageOf(cause));
+      }
     } finally {
       setBusyId(null);
     }
@@ -247,7 +293,7 @@ export function NotificationsScreen() {
     load(next, signal)
       .then((page) => {
         if (signal.aborted) return;
-        setItems((previous) => [...previous, ...page.items]);
+        setItems((previous) => mergeNotifications(previous, page.items));
         setNext(page.next);
       })
       .catch((cause) => {
@@ -300,7 +346,7 @@ export function NotificationsScreen() {
                 </span>
                 <span aria-hidden="true">›</span>
               </button>
-              {pollId ? (
+              {pollId && preferencesAvailable ? (
                 <button className="kv-button kv-button--ghost notification-mute" onClick={() => void toggleMute(notification)} disabled={busyId === `mute:${notification.id}`}>
                   {busyId === `mute:${notification.id}` ? "İşleniyor…" : muted ? "Sessizi kaldır" : "Bu anketi sessize al"}
                 </button>
@@ -311,7 +357,7 @@ export function NotificationsScreen() {
       </div>
 
       {next ? <button className="kv-button kv-button--secondary" onClick={loadMore} disabled={more}>{more ? "Yükleniyor…" : "Daha fazla göster"}</button> : null}
-      <PreferencesPanel />
+      <PreferencesPanel onAvailabilityChange={setPreferencesAvailable} />
     </div>
   );
 }
