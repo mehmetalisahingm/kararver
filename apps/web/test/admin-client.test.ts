@@ -199,3 +199,37 @@ test("kuyruk satırı hedef özeti, durumu ve sahibini taşır", async () => {
   const [report] = (await admin.reports({ status: "OPEN" })).items;
   assert.deepEqual([report.excerpt, report.contentStatus, report.targetUser?.username], ["Boyalı parça fiyatı düşürür.", "ACTIVE", "umit"]);
 });
+
+
+test("KV-42 admin client: öne çıkarma CRUD doğru endpoint ve idempotency anahtarını kullanır", async () => {
+  const create = client(() => reply("admin.featured.create", "ok"));
+  const f = fixture("admin.featured.create", "ok");
+  const body = f.request!.body as any;
+  const { reason, ...input } = body;
+  await create.admin.createFeatured(input, reason, "featured-key-123");
+  assert.equal(create.calls[0].method, "POST");
+  assert.ok(create.calls[0].url.endsWith("/v1/admin/featured"));
+  assert.equal(create.calls[0].headers["Idempotency-Key"], "featured-key-123");
+  assert.deepEqual(create.calls[0].body, body);
+
+  const remove = client(() => reply("admin.featured.delete", "ok"));
+  await remove.admin.deleteFeatured((fixture("admin.featured.delete", "ok").request!.params as { id: string }).id);
+  assert.equal(remove.calls[0].method, "DELETE");
+});
+
+test("KV-42 admin client: duyuru hedef grubu API gövdesine gider", async () => {
+  const create = client(() => reply("admin.announcements.create", "ok"));
+  const f = fixture("admin.announcements.create", "ok");
+  const raw = f.request!.body as any;
+  const input = {
+    title: raw.title,
+    body: raw.body,
+    level: "INFO" as const,
+    audience: "ALL" as const,
+    startsAt: raw.startsAt,
+    endsAt: null,
+  };
+  await create.admin.createAnnouncement(input, raw.reason, "announcement-key-123");
+  assert.equal(create.calls[0].headers["Idempotency-Key"], "announcement-key-123");
+  assert.equal((create.calls[0].body as any).audience, "ALL");
+});

@@ -3,7 +3,7 @@
 // KV-12 (#14), KV-33 (#35), KV-36 (#38), KV-39 (#41), KV-40 (#42), KV-41 (#43), KV-42 (#44), #67
 import { z } from "zod";
 import { Category } from "./discovery.ts";
-import { Announcement, LedgerEntry } from "./growth.ts";
+import { Announcement, AnnouncementAudience, FeaturedSurface, LedgerEntry } from "./growth.ts";
 import { AllowedMimeType } from "./media.ts";
 import { ReportReason, ReportStatus, ReportTargetType } from "./moderation.ts";
 import {
@@ -128,14 +128,6 @@ export const AuditEntry = z.strictObject({
   createdAt: Timestamp,
 });
 
-export const FeaturedSurface = z.enum([
-  "HOME_SPOTLIGHT",
-  "FEED_TOP",
-  "DAILY_PICK",
-  "CATEGORY",
-  "COMMUNITY",
-  "EDITORS_CHOICE",
-]);
 export const FeaturedPlacement = z.strictObject({
   id: Id,
   pollId: Id,
@@ -159,6 +151,7 @@ const AnnouncementBody = z.strictObject({
   title: z.string().trim().min(3).max(120),
   body: z.string().trim().min(1).max(2000),
   level: z.enum(["INFO", "WARNING"]).default("INFO"),
+  audience: AnnouncementAudience.default("ALL"),
   startsAt: Timestamp,
   endsAt: Timestamp.nullable().default(null),
 });

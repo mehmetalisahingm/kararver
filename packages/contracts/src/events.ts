@@ -7,7 +7,8 @@
 // Audit kaydı olaydan türetilmez; mutation ile aynı transaction'da yazılır (KV-39).
 import { z } from "zod";
 import { ContentStatus, Count, DiscoverySource, Id, ReactionValue, Role, Timestamp } from "./common.ts";
-import { FeaturedSurface, SanctionType, Setting } from "./domains/admin.ts";
+import { SanctionType, Setting } from "./domains/admin.ts";
+import { FeaturedSurface } from "./domains/growth.ts";
 import { CommentKind } from "./domains/comments.ts";
 import { TrendFormat } from "./domains/discovery.ts";
 import { LedgerReason } from "./domains/growth.ts";

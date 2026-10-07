@@ -5,7 +5,9 @@ import type {
   AdminCategory,
   AdminCommentItem,
   AdminPollItem,
+  Announcement,
   BannedMediaView,
+  FeaturedPlacement,
   Category as PublicCategory,
   CommunityCard,
   CommunityDetail,
@@ -25,6 +27,8 @@ export type PollCategory = ReturnType<typeof PublicCategory.parse>;
 export type AdminPoll = ReturnType<typeof AdminPollItem.parse>;
 export type AdminComment = ReturnType<typeof AdminCommentItem.parse>;
 export type HistoryItem = ReturnType<typeof ContentHistoryItem.parse>;
+export type Featured = ReturnType<typeof FeaturedPlacement.parse>;
+export type AnnouncementView = ReturnType<typeof Announcement.parse>;
 
 export type Page<T> = { items: T[]; next: string | null };
 type Wire<T> = { data: T[]; page: { nextCursor: string | null } };
@@ -61,6 +65,23 @@ export type CategoryInput = {
   isActive?: boolean;
 };
 export type CategoryPatch = Partial<CategoryInput>;
+export type FeaturedInput = {
+  pollId: string;
+  surface: "HOME_SPOTLIGHT" | "FEED_TOP" | "DAILY_PICK" | "CATEGORY" | "COMMUNITY" | "EDITORS_CHOICE";
+  scopeId: string | null;
+  priority: number;
+  badge: string | null;
+  startsAt: string;
+  endsAt: string;
+};
+export type AnnouncementInput = {
+  title: string;
+  body: string;
+  level: "INFO" | "WARNING";
+  audience: "ALL" | "AUTHENTICATED";
+  startsAt: string;
+  endsAt: string | null;
+};
 
 const page = <T>(wire: unknown): Page<T> => {
   const { data, page: info } = wire as Wire<T>;
@@ -159,5 +180,32 @@ export class AdminClient {
   }
   async updateCategory(id: string, patch: CategoryPatch, reason: string) {
     return data<Category>(await this.http.request("admin.categories.update", { params: { id }, body: { ...patch, reason } }));
+  }
+
+  // ── Öne çıkarma ve duyurular (KV-42) ──
+  async featured(cursor?: string, signal?: AbortSignal) {
+    return page<Featured>(await this.http.request("admin.featured.list", { query: { cursor, limit: "20" }, signal }));
+  }
+  async createFeatured(input: FeaturedInput, reason: string, key: string) {
+    return data<Featured>(await this.http.request("admin.featured.create", { body: { ...input, reason }, key }));
+  }
+  async updateFeatured(id: string, patch: Partial<FeaturedInput>, reason: string) {
+    return data<Featured>(await this.http.request("admin.featured.update", { params: { id }, body: { ...patch, reason } }));
+  }
+  async deleteFeatured(id: string) {
+    await this.http.request("admin.featured.delete", { params: { id } });
+  }
+
+  async announcements(cursor?: string, signal?: AbortSignal) {
+    return page<AnnouncementView>(await this.http.request("admin.announcements.list", { query: { cursor, limit: "20" }, signal }));
+  }
+  async createAnnouncement(input: AnnouncementInput, reason: string, key: string) {
+    return data<AnnouncementView>(await this.http.request("admin.announcements.create", { body: { ...input, reason }, key }));
+  }
+  async updateAnnouncement(id: string, patch: Partial<AnnouncementInput>, reason: string) {
+    return data<AnnouncementView>(await this.http.request("admin.announcements.update", { params: { id }, body: { ...patch, reason } }));
+  }
+  async deleteAnnouncement(id: string) {
+    await this.http.request("admin.announcements.delete", { params: { id } });
   }
 }

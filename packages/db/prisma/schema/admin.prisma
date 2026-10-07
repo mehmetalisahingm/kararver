@@ -234,3 +234,67 @@ model EventDelivery {
   @@id([eventId, consumer])
   @@map("domain_event_deliveries")
 }
+
+
+// ─── Öne çıkarma ve zamanlanmış duyurular (KV-42, #44) ──────────────────────
+
+enum FeaturedSurface {
+  HOME_SPOTLIGHT
+  FEED_TOP
+  DAILY_PICK
+  CATEGORY
+  COMMUNITY
+  EDITORS_CHOICE
+
+  @@map("featured_surface")
+}
+
+enum AnnouncementLevel {
+  INFO
+  WARNING
+
+  @@map("announcement_level")
+}
+
+enum AnnouncementAudience {
+  ALL
+  AUTHENTICATED
+
+  @@map("announcement_audience")
+}
+
+model FeaturedPlacement {
+  id        String          @id @default(uuid(7)) @db.Uuid
+  pollId    String          @map("poll_id") @db.Uuid
+  surface   FeaturedSurface
+  scopeId   String?         @map("scope_id") @db.Uuid
+  priority  Int             @default(0)
+  badge     String?         @db.VarChar(30)
+  startsAt  DateTime        @map("starts_at") @db.Timestamptz(3)
+  endsAt    DateTime        @map("ends_at") @db.Timestamptz(3)
+  createdBy String          @map("created_by") @db.Uuid
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([surface, scopeId, startsAt, endsAt, priority], map: "featured_placements_surface_scope_time_priority_idx")
+  @@index([pollId], map: "featured_placements_poll_id_idx")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "featured_placements_created_at_id_idx")
+  @@map("featured_placements")
+}
+
+model Announcement {
+  id        String               @id @default(uuid(7)) @db.Uuid
+  title     String               @db.VarChar(120)
+  body      String               @db.VarChar(2000)
+  level     AnnouncementLevel    @default(INFO)
+  audience  AnnouncementAudience @default(ALL)
+  startsAt  DateTime             @map("starts_at") @db.Timestamptz(3)
+  endsAt    DateTime?            @map("ends_at") @db.Timestamptz(3)
+  createdBy String               @map("created_by") @db.Uuid
+  createdAt DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([startsAt, endsAt], map: "announcements_starts_at_ends_at_idx")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "announcements_created_at_id_idx")
+  @@map("announcements")
+}

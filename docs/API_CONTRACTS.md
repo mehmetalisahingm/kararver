@@ -109,6 +109,7 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `GET /me/interests`<br>Seçili ilgi kategorileri · `interests.get` | U | 200 | — | Mehmet `onboarding` | Ümit (web) | #17 | hazır |
 | `PUT /me/interests`<br>İlgi kategorilerini ayarla (tam liste) · `interests.put` | U | 200 | doğal | Mehmet `onboarding` | Ümit (web) | #17 #29 | hazır |
 | `POST /polls/:id/shares`<br>Kaynak ölçümlü paylaşım bağlantısı · `shares.create` | G | 201 | — | Mehmet `share` | Ümit (web) | #27 | hazır |
+| `GET /featured`<br>Aktif editöryel öne çıkarma yerleşimleri · `featured.active` | G | 200 | — | Mehmet `featured` | Ümit (web) | #44 | hazır |
 | `GET /announcements/active`<br>Şu an gösterilecek duyurular · `announcements.active` | G | 200 | — | Mehmet `announcements` | Ümit (web) | #44 | hazır |
 | `GET /me/points`<br>Yayın puanı bakiyesi ve yayın maliyeti · `points.get` | U | 200 | — | Mehmet `points` | Ümit (web) | #67 #15 | hazır |
 | `GET /me/points/ledger`<br>Puan hareketleri (append-only) · `points.ledger` | U | 200 | — | Mehmet `points` | Ümit (web) | #67 | hazır |
@@ -244,7 +245,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #41 | `GET /admin/polls/:id/revisions`, `GET /admin/comments/:id/revisions`, `GET /admin/audit` |
 | #42 | `GET /config`, `GET /admin/settings`, `PATCH /admin/settings/:key`, `PUT /admin/emergency` |
 | #43 | `GET /admin/categories`, `POST /admin/categories`, `PATCH /admin/categories/:id` |
-| #44 | `GET /announcements/active`, `GET /admin/featured`, `POST /admin/featured`, `PATCH /admin/featured/:id`, `DELETE /admin/featured/:id`, `GET /admin/announcements`, `POST /admin/announcements`, `PATCH /admin/announcements/:id`, `DELETE /admin/announcements/:id` |
+| #44 | `GET /featured`, `GET /announcements/active`, `GET /admin/featured`, `POST /admin/featured`, `PATCH /admin/featured/:id`, `DELETE /admin/featured/:id`, `GET /admin/announcements`, `POST /admin/announcements`, `PATCH /admin/announcements/:id`, `DELETE /admin/announcements/:id` |
 | #45 | `GET /admin/polls`, `GET /admin/comments`, `POST /admin/votes/invalidate`, `POST /admin/votes/restore` |
 | #66 | `POST /polls`, `PUT /polls/:id/reaction`, `DELETE /polls/:id/reaction`, `PUT /comments/:id/reaction`, `DELETE /comments/:id/reaction` |
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
