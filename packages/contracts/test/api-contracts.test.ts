@@ -96,15 +96,17 @@ describe("endpoint registry", () => {
     assert.equal(getEndpoint("votes.put").idempotency, "natural");
   });
 
-  test("V1_USER_FLOW endpointleri: gönderi tepkileri ve sürüm geçmişi hazır (#66), puan planlı", () => {
-    const planned = endpoints.filter((e) => e.availability.status === "planned").map((e) => e.id);
-    for (const id of ["reactions.poll.put", "reactions.poll.delete", "admin.revisions.polls", "admin.revisions.comments"]) assert.equal(getEndpoint(id).availability.status, "ready", id);
+  test("V1_USER_FLOW endpointleri: gönderi tepkileri, sürüm geçmişi ve puan hazır", () => {
     for (const id of [
+      "reactions.poll.put",
+      "reactions.poll.delete",
+      "admin.revisions.polls",
+      "admin.revisions.comments",
       "points.get",
       "points.ledger",
       "admin.points.adjust",
     ]) {
-      assert.ok(planned.includes(id), `${id} planlı olmalı`);
+      assert.equal(getEndpoint(id).availability.status, "ready", `${id} hazır olmalı`);
     }
   });
 
