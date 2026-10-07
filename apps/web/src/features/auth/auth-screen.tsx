@@ -52,7 +52,6 @@ export function AuthScreen({
   const emailSuffix = `${suffix}&email=${encodeURIComponent(email)}`;
 
   async function applyWelcomeSelection() {
-    if (!onboarding) return;
     const draft = readWelcomeDraft();
     if (!draft) return;
     if (demo || !(client instanceof ApiClient)) {
@@ -105,9 +104,10 @@ export function AuthScreen({
     setError("");
     try {
       if (mode === "login") {
+        const hasWelcomeDraft = Boolean(readWelcomeDraft());
         await client.login(email, password);
         syncUser();
-        if (onboarding) {
+        if (onboarding || hasWelcomeDraft) {
           try {
             await applyWelcomeSelection();
           } catch (reason) {
@@ -116,7 +116,7 @@ export function AuthScreen({
             return;
           }
         }
-        notify(onboarding ? "Giriş yaptın. KararVer akışın hazır." : "Giriş yaptın. Seçimin korunuyor; işlemi tamamlamak için yeniden onayla.");
+        notify(onboarding || hasWelcomeDraft ? "Giriş yaptın. KararVer akışın hazır." : "Giriş yaptın. Seçimin korunuyor; işlemi tamamlamak için yeniden onayla.");
         router.push(destination);
       }
       if (mode === "register") {
