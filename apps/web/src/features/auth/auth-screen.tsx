@@ -7,6 +7,7 @@ import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Field } from "../../components/fields";
 import { ApiClient } from "../../lib/api-client";
 import { safeReturnTo } from "../../lib/model";
+import { clearWelcomeDraft, readWelcomeDraft } from "../../lib/welcome-draft";
 import { WelcomeAuthContext } from "../onboarding/welcome";
 export type AuthMode = "login" | "register" | "verify" | "forgot" | "reset";
 const titles: Record<AuthMode, string> = {
@@ -37,6 +38,7 @@ export function AuthScreen({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [postLoginError, setPostLoginError] = useState("");
   useEffect(() => {
     if (demo || !["verify", "reset"].includes(mode)) return;
     const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
@@ -48,6 +50,53 @@ export function AuthScreen({
   const destination = safeReturnTo(target || returnTo);
   const suffix = `?returnTo=${encodeURIComponent(destination)}${onboarding ? "&onboarding=1" : ""}`;
   const emailSuffix = `${suffix}&email=${encodeURIComponent(email)}`;
+
+  async function applyWelcomeSelection() {
+    const draft = readWelcomeDraft();
+    if (!draft) return;
+    if (demo || !(client instanceof ApiClient)) {
+      clearWelcomeDraft();
+      return;
+    }
+    if (draft.categoryIds.length === 0) {
+      clearWelcomeDraft();
+      return;
+    }
+
+    const existing = await client.interests();
+    if (existing.length > 0) {
+      clearWelcomeDraft();
+      notify("Mevcut ilgi alanların korundu; tanıtımdaki seçimler hesabının üzerine yazılmadı.");
+      return;
+    }
+
+    const activeCategories = await client.publicationCategories();
+    const activeIds = new Set(activeCategories.map((category) => category.id));
+    const validIds = draft.categoryIds.filter((id) => activeIds.has(id));
+    if (validIds.length === 0) {
+      clearWelcomeDraft();
+      notify("Tanıtımda seçtiğin kategoriler artık aktif değil; tercihlerini daha sonra düzenleyebilirsin.");
+      return;
+    }
+
+    await client.saveInterests(validIds);
+    clearWelcomeDraft();
+    notify("Tanıtımda seçtiğin ilgi alanları hesabına kaydedildi.");
+  }
+
+  async function retryWelcomeSelection() {
+    if (busy) return;
+    setBusy(true);
+    setPostLoginError("");
+    try {
+      await applyWelcomeSelection();
+      router.push(destination);
+    } catch (reason) {
+      setPostLoginError((reason as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -55,11 +104,19 @@ export function AuthScreen({
     setError("");
     try {
       if (mode === "login") {
+        const hasWelcomeDraft = Boolean(readWelcomeDraft());
         await client.login(email, password);
         syncUser();
-        notify(
-          "Giriş yaptın. Seçimin korunuyor; işlemi tamamlamak için yeniden onayla.",
-        );
+        if (onboarding || hasWelcomeDraft) {
+          try {
+            await applyWelcomeSelection();
+          } catch (reason) {
+            setPostLoginError((reason as Error).message);
+            setPassword("");
+            return;
+          }
+        }
+        notify(onboarding || hasWelcomeDraft ? "Giriş yaptın. KararVer akışın hazır." : "Giriş yaptın. Seçimin korunuyor; işlemi tamamlamak için yeniden onayla.");
         router.push(destination);
       }
       if (mode === "register") {
@@ -102,7 +159,21 @@ export function AuthScreen({
         hesap: deniz@example.test. Yeni kayıt .test uzantılı olmalı. Kod:{" "}
         <strong>123456</strong>. Gerçek e-posta gönderilmez.
       </div>}
-      {done ? (
+      {postLoginError ? (
+        <div className="screen-stack" role="alert">
+          <p>Giriş başarılı, ancak ilgi alanların kaydedilemedi: {postLoginError}</p>
+          <p className="kv-muted">Seçimlerin korunuyor. Yeniden deneyebilir veya açıkça daha sonra ayarlamayı seçebilirsin.</p>
+          <button type="button" className="kv-button" disabled={busy} onClick={() => void retryWelcomeSelection()}>
+            {busy ? "Yeniden deneniyor…" : "İlgi alanlarını yeniden kaydet"}
+          </button>
+          <button type="button" className="kv-button kv-button--secondary" disabled={busy} onClick={() => {
+            clearWelcomeDraft();
+            router.push(destination);
+          }}>
+            İlgi alanlarını daha sonra ayarla
+          </button>
+        </div>
+      ) : done ? (
         <div className="screen-stack">
           <p role="status">
             {mode === "register" ? "E-postanı kontrol et. Hesap uygunsa doğrulama bağlantısı gönderildi." : mode === "forgot"
