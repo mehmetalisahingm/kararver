@@ -7,6 +7,7 @@ import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Field } from "../../components/fields";
 import { ApiClient } from "../../lib/api-client";
 import { safeReturnTo } from "../../lib/model";
+import { WelcomeAuthContext } from "../onboarding/welcome";
 export type AuthMode = "login" | "register" | "verify" | "forgot" | "reset";
 const titles: Record<AuthMode, string> = {
   login: "Tekrar hoş geldin.",
@@ -19,10 +20,12 @@ export function AuthScreen({
   mode,
   target,
   initialEmail = "",
+  onboarding = false,
 }: {
   mode: AuthMode;
   target?: string;
   initialEmail?: string;
+  onboarding?: boolean;
 }) {
   const { client, demo, user, syncUser, notify, returnTo } = useProduct();
   const router = useRouter();
@@ -43,7 +46,7 @@ export function AuthScreen({
     }
   }, [demo, mode]);
   const destination = safeReturnTo(target || returnTo);
-  const suffix = `?returnTo=${encodeURIComponent(destination)}`;
+  const suffix = `?returnTo=${encodeURIComponent(destination)}${onboarding ? "&onboarding=1" : ""}`;
   const emailSuffix = `${suffix}&email=${encodeURIComponent(email)}`;
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -85,6 +88,7 @@ export function AuthScreen({
   }
   return (
     <section className="auth-card kv-card screen-stack">
+      {onboarding && <WelcomeAuthContext />}
       <span className="eyebrow">KARARVER TOPLULUĞU</span>
       <h1>{titles[mode]}</h1>
       <p className="kv-muted">

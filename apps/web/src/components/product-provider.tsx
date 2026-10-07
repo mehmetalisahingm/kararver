@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiClient } from "../lib/api-client";
 import { DemoClient } from "../lib/demo-client";
+import { Welcome, WELCOME_SEEN } from "../features/onboarding/welcome";
 import { emptyDraft, safeReturnTo } from "../lib/model";
 import type { Draft, ProductClient, User } from "../lib/model";
 import type { CommentDraft } from "../features/social/model";
@@ -51,6 +52,7 @@ export function ProductProvider({
   const [client] = useState<ProductClient>(() => demo ? new DemoClient() : new ApiClient(process.env.NEXT_PUBLIC_API_URL ?? ""));
   // Demo forms also wait for hydration so early input cannot be discarded.
   const [sessionReady, setSessionReady] = useState(false);
+  const [welcomeSeen, setWelcomeSeen] = useState<boolean | null>(null);
   const [sessionError, setSessionError] = useState("");
   const [sessionAttempt, retrySession] = useState(0);
   const [user, setUser] = useState<User | null>(null);
@@ -67,6 +69,7 @@ export function ProductProvider({
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
   const pathname = usePathname();
+  useEffect(() => { try { setWelcomeSeen(localStorage.getItem(WELCOME_SEEN) === "1"); } catch { setWelcomeSeen(false); } }, [pathname]);
   const router = useRouter();
   const previousPath = useRef(pathname);
   useEffect(() => {
@@ -158,6 +161,9 @@ export function ProductProvider({
     setCommentDraft: (key: string, value: CommentDraft) =>
       setCommentDrafts((old) => ({ ...old, [key]: value })),
   };
+  if (pathname === "/basla") return <ProductContext.Provider value={context}>{children}</ProductContext.Provider>;
+  if (!demo && sessionReady && !user && pathname === "/" && welcomeSeen === false)
+    return <ProductContext.Provider value={context}><Welcome /></ProductContext.Provider>;
   return (
     <ProductContext.Provider value={context}>
       <div className="product" data-theme={theme}>
