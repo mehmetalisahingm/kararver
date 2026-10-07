@@ -98,7 +98,12 @@ function PreferencesPanel({ onAvailabilityChange }: { onAvailabilityChange: (ava
       const next = await api!.updatePreferences({ [type]: enabled });
       setPreferences(next.types);
     } catch (cause) {
-      setError(messageOf(cause));
+      if (optionalServiceUnavailable(cause)) {
+        setState("unavailable");
+        onAvailabilityChange(false);
+      } else {
+        setError(messageOf(cause));
+      }
     } finally {
       setBusy(null);
     }
@@ -111,13 +116,6 @@ function PreferencesPanel({ onAvailabilityChange }: { onAvailabilityChange: (ava
         <p className="kv-muted">Hangi isteğe bağlı bildirimleri görmek istediğini seç.</p>
       </div>
       <ErrorMessage message={error} />
-      {targetNotice ? (
-        <section className="kv-card kv-state" role="status">
-          <h2>Bildirim hedefi artık erişilebilir değil.</h2>
-          <p className="kv-muted">{targetNotice}</p>
-          <Link href="/">Akışa dön</Link>
-        </section>
-      ) : null}
       <div className="notification-preferences">
         {optionalPreferenceTypes.map((type) => {
           const checked = preferences[type] ?? true;
@@ -321,6 +319,13 @@ export function NotificationsScreen() {
       </div>
 
       <ErrorMessage message={error} />
+      {targetNotice ? (
+        <section className="kv-card kv-state" role="status">
+          <h2>Bildirim hedefi artık erişilebilir değil.</h2>
+          <p className="kv-muted">{targetNotice}</p>
+          <Link href="/">Akışa dön</Link>
+        </section>
+      ) : null}
       {loading ? <Loading label="Bildirimler yükleniyor…" /> : null}
       {!loading && error ? <button className="kv-button kv-button--secondary" onClick={() => retry((n) => n + 1)}>Tekrar dene</button> : null}
       {!loading && !error && items.length === 0 ? (
