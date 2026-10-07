@@ -62,10 +62,11 @@ test("premium onboarding saves real category ids once after login and never cast
 
 test("existing interests are preserved instead of being silently overwritten",async({page})=>{
   const mock=await api(page);
-  const categories=sample("categories.list").data as {id:string;name:string}[];
+  const existingCategoryId="01998b9a-0000-7000-8000-000000000001";
+  const draftedCategoryId="01998b9a-0000-7000-8000-000000000099";
   let interestWrites=0;
   mock.handlers.set("me.get",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
-  mock.handlers.set("interests.get",r=>r.fulfill({json:{data:{categoryIds:[categories[0].id]}}}));
+  mock.handlers.set("interests.get",r=>r.fulfill({json:{data:{categoryIds:[existingCategoryId]}}}));
   mock.handlers.set("interests.put",async r=>{
     interestWrites++;
     await r.fulfill({json:{data:{categoryIds:(await r.request().postDataJSON()).categoryIds}}});
@@ -79,7 +80,7 @@ test("existing interests are preserved instead of being silently overwritten",as
       demoChoice:"wait",
       returnTo:"/",
     }));
-  },{categoryId:categories[1].id});
+  },{categoryId:draftedCategoryId});
 
   await page.goto("/giris?onboarding=1&returnTo=%2F");
   await page.getByLabel("E-posta",{exact:true}).fill("existing@example.test");
