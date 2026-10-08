@@ -132,6 +132,11 @@ test("admin: connection failure differs from permission denial; modal names, Esc
   await expect(page.getByRole("dialog",{name:"Yönetim işlemi"})).toBeVisible();
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
   await page.keyboard.press("Escape");await expect(page.getByRole("dialog")).toHaveCount(0);await expect(trigger).toBeFocused();
+  const rowTrigger=page.getByRole("button",{name:"İncele",exact:true}).last();
+  await rowTrigger.click();
+  await page.getByRole("button",{name:"Vazgeç",exact:true}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(rowTrigger).toBeFocused();
 });
 
 test("session outage retry and anonymous permission states",async({page})=>{
