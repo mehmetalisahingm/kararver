@@ -9,6 +9,7 @@ import type { AdminClient } from "./admin-client.ts";
 import { adminNav, canEnterAdmin, canSeeAdminItem, type AdminRole, type AdminSectionId } from "./admin-model";
 import styles from "./admin-shell.module.css";
 import { AdminRolesContext } from "./admin-ui";
+import { AuditPanel } from "./audit-panel";
 import { CategoriesPanel } from "./categories-panel";
 import { CommunitiesPanel } from "./communities-panel";
 import { ContentPanel } from "./content-panel";
@@ -133,6 +134,8 @@ function livePanel(section: AdminSectionId, admin: AdminClient) {
       return <ContentPanel admin={admin} kind="comments" />;
     case "featured":
       return <FeaturedPanel admin={admin} />;
+    case "audit":
+      return <AuditPanel admin={admin} />;
     default:
       return null;
   }

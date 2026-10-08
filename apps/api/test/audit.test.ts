@@ -58,7 +58,8 @@ function scenarios(name: string, setup: () => Promise<Backend>, teardown: () => 
       const [row, ...rest] = await b.store.list({ targetType: "USER", targetId: target, after: null }, 10);
       assert.deepEqual(rest, []);
       assert.deepEqual(
-        { ...row!, id: undefined },
+        // actor (admin.audit.list görünümü) yalnız Prisma store'da dolar; burada yazılan kayıt karşılaştırılır.
+        (({ actor: _actor, ...r }) => ({ ...r, id: undefined }))(row!),
         {
           id: undefined,
           source: "API",

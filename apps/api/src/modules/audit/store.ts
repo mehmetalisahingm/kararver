@@ -1,12 +1,16 @@
 // Audit modülünün veri erişim arayüzü — KV-39 (#41). Yazma: write.ts (çağıranın transaction'ında), okuma: prisma-store.ts.
-// Kurallar: contracts audit.ts (assertAuditEntry), DATA_MODEL §9.2. Okuma endpoint'i (admin.audit.list) ayrı PR'da gelir.
+// Kurallar: contracts audit.ts (assertAuditEntry), DATA_MODEL §9.2. Okuma endpoint'i: routes.ts (admin.audit.list).
 import type { AuditEntryInput, CheckedAuditEntry } from "@kararver/contracts";
 import type { Prisma } from "@kararver/db";
 
 /** Mutation'ın transaction'ında yazılacak kayıt. `at` verilmezse DB saati (CLI). */
 export type AuditWrite = AuditEntryInput & { at?: Date };
 
-export type AuditRecord = CheckedAuditEntry & { id: string; createdAt: Date };
+/** Aktörün görünen bilgisi (admin.audit.list). Silinmiş hesap da gösterilir: hesap verebilirlik için kim yaptı bilinmeli. */
+export type AuditActorRef = { id: string; username: string; displayName: string; avatarPublicKey: string | null };
+
+/** `actor`: Prisma store doldurur; bellek store'u (testler) yalnız actorId verir. */
+export type AuditRecord = CheckedAuditEntry & { id: string; createdAt: Date; actor?: AuditActorRef | null };
 
 export type AuditQuery = {
   actorId?: string;

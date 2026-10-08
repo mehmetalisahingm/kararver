@@ -1,5 +1,6 @@
 // RevisionStore'un PostgreSQL uygulaması: poll_revisions, comment_revisions (append-only).
 import type { PrismaClient } from "@kararver/db";
+import { writeAudit } from "../audit/write.ts";
 import type { RevisionRecord, RevisionStore } from "./store.ts";
 
 const editorSelect = {
@@ -27,6 +28,17 @@ const toRecord = (r: Row): RevisionRecord => ({
 
 export function createPrismaRevisionStore(prisma: PrismaClient): RevisionStore {
   return {
+    async recordRead(target, id, { actorId, requestId, at }) {
+      await writeAudit(prisma, {
+        source: "API",
+        actorId,
+        action: "revision.read",
+        target: { type: target === "poll" ? "POLL" : "COMMENT", id },
+        requestId,
+        at,
+      });
+    },
+
     async exists(target, id) {
       return target === "poll"
         ? (await prisma.poll.count({ where: { id } })) > 0

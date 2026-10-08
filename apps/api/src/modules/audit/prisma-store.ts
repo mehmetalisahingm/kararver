@@ -19,7 +19,14 @@ export function createPrismaAuditStore(prisma: PrismaClient): AuditStore {
           ? { OR: [{ createdAt: { lt: q.after.createdAt } }, { createdAt: q.after.createdAt, id: { lt: q.after.id } }] }
           : {}),
       };
-      const rows = await prisma.auditLog.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit });
+      const rows = await prisma.auditLog.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit,
+        include: {
+          actor: { select: { id: true, username: true, displayName: true, avatarMedia: { select: { status: true, publicObjectKey: true } } } },
+        },
+      });
       return rows.map(
         (r): AuditRecord => ({
           id: r.id,
@@ -33,6 +40,14 @@ export function createPrismaAuditStore(prisma: PrismaClient): AuditStore {
           after: (r.after as AuditSummary | null) ?? null,
           requestId: r.requestId,
           createdAt: r.createdAt,
+          actor: r.actor
+            ? {
+                id: r.actor.id,
+                username: r.actor.username,
+                displayName: r.actor.displayName,
+                avatarPublicKey: r.actor.avatarMedia?.status === "APPROVED" ? r.actor.avatarMedia.publicObjectKey : null,
+              }
+            : null,
         }),
       );
     },
