@@ -9,6 +9,13 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.20.0 — 2026-10-08 (Mert, KV-38 görsel risk eşikleri, #40)
+
+Kırıcı değişiklik yok: kayıt defterine iki yeni ayar (yeni anahtar minör); endpoint ve şema değişmedi.
+
+- **Eklendi:** `media.riskMediumPercent` (10–60, varsayılan 35) ve `media.riskHighPercent` (40–95, varsayılan 65): worker'ın görsel risk eşikleri (MEDIA_MODERATION §6.1), yüzde olarak. Alanlar arası kural: `riskMediumPercent ≤ riskHighPercent`. Üst sınırlar bilerek düşüktür (fail-closed taban): hiçbir ayar yüksek güvenli (≥ %95) tespiti otomatik yayına bırakamaz.
+- Değişiklik `admin.settings.update` ile yapılır: gerekçe zorunlu, audit `settings.update` (önce/sonra), sürümlü.
+
 ## 1.19.0 — 2026-10-08 (Faruk, KV-19 hız sınırı, #21)
 
 Kırıcı değişiklik yok: yalnız yeni ayar anahtarları. `RATE_LIMITED` (429) zaten her uç noktanın ortak hatasıydı.

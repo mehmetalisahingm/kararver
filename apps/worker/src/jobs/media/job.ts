@@ -25,7 +25,8 @@ export type MediaJobDeps = {
   now: () => Date;
   /** Sistem ayarı media.maxBytes (KV-40); worker indirmeden önce de uygular. */
   maxBytes: () => Promise<number>;
-  thresholds?: RiskThresholds;
+  /** Risk eşikleri: sabit değer (testler) veya her işte okunan ayar (media.risk*Percent, KV-38). Verilmezse varsayılan. */
+  thresholds?: RiskThresholds | (() => Promise<RiskThresholds>);
   log: (message: string, fields: Record<string, unknown>) => void;
 };
 
@@ -113,7 +114,8 @@ async function decide(id: string, originalKey: string, deps: MediaJobDeps): Prom
     throw err;
   }
 
-  const risk = assessRisk(detections, deps.thresholds ?? DEFAULT_THRESHOLDS);
+  const thresholds = typeof deps.thresholds === "function" ? await deps.thresholds() : (deps.thresholds ?? DEFAULT_THRESHOLDS);
+  const risk = assessRisk(detections, thresholds);
   Object.assign(facts, {
     riskLevel: risk.level,
     riskScore: risk.score,

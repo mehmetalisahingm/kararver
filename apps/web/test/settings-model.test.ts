@@ -52,6 +52,8 @@ test("aralık metni ve değer biçimi", () => {
   assert.equal(formatValue("polls.voteChangeAllowed", true), "Açık");
   assert.equal(formatValue("media.allowedTypes", ["image/png", "image/webp"]), "image/png, image/webp");
   assert.match(formatValue("media.maxBytes", 8 * 1024 * 1024), /8 MB/);
+  assert.equal(formatValue("media.riskHighPercent", 65), "%65 (güven 0,65)");
+  assert.equal(rangeOf("media.riskHighPercent"), "40–95");
   assert.equal(sameValue(["a"], ["a"]), true);
   assert.equal(sameValue(1, 2), false);
 });

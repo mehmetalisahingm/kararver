@@ -160,6 +160,8 @@ Payload şemaları `events.ts` içindedir (strict zod). Kabul koşulundaki alanl
 | `comments.bodyMaxLength` | integer | 1 – 2000 | 2000 | `comments.bodyMaxLength` | `comments.ts` Body `.min(1).max(2000)` |
 | `media.maxBytes` | integer | 1 B – 50 MB | 8 MB | `media.maxBytes` | MEDIA_MODERATION §5 madde 2; `media.ts` sizeBytes yorumu, `.max(50 MB)` |
 | `media.maxPerPoll` | integer | 0 – 10 | 10 | `media.maxPerPoll` | `polls.ts` mediaIds `.max(10)` (varsayılan şu an tavana eşit) |
+| `media.riskMediumPercent` | integer | 10 – 60 | 35 | hayır | MEDIA_MODERATION §6.1 MEDIUM_THRESHOLD 0,35 (yüzde); ≤ `riskHighPercent`. KV-38 (#40) |
+| `media.riskHighPercent` | integer | 40 – 95 | 65 | hayır | MEDIA_MODERATION §6.1 HIGH_THRESHOLD 0,65 (yüzde). Üst sınır 95: yüksek güvenli tespit otomatik yayına bırakılamaz. KV-38 (#40) |
 | `media.allowedTypes` | mimeTypes | 1 – 3 | jpeg, png, webp | `media.allowedTypes` | `media.ts` AllowedMimeType; MEDIA_MODERATION §5 madde 1 |
 | `points.initialGrant` | integer | 0 – sınırsız | 20 | `points.initialGrant` | V1_USER_FLOW "Başlangıç puanı ve yayın maliyeti — V1" |
 | `points.publishCost` | integer | 0 – sınırsız | 10 | `points.publishCost` | V1_USER_FLOW "Başlangıç puanı ve yayın maliyeti — V1" |
