@@ -319,6 +319,7 @@ describe("bildirim verisi (KV-21 PR-3)", () => {
     MODERATION_APPLIED: { action: "HIDE", toStatus: "HIDDEN" },
     COMMUNITY_FEATURED: { communityId: OPTION_B },
     SANCTION_APPLIED: { sanctionType: "WARNING", endsAt: null },
+    ANNOUNCEMENT_PUBLISHED: { level: "INFO" },
   };
 
   test("her bildirim tipinin data şeması var; örnek hem tipe özgü şemadan hem NotificationView.data'dan geçer", () => {
