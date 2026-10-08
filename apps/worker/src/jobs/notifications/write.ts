@@ -112,3 +112,40 @@ export async function fanoutToVoters(
   }
   return result;
 }
+
+/**
+ * Announcement broadcast: fan out to currently active registered accounts,
+ * respecting type opt-outs and the shared actor/deleted/BANNED policy.
+ * Stable UUID cursor and per-recipient dedupe make retries and concurrent jobs safe.
+ * The 50k default cap follows other mass-notification limits.
+ */
+export async function fanoutToActiveUsers(
+  tx: Tx,
+  draft: NotificationDraft,
+  opts: { policy: NotificationPolicy; slice?: number; limit?: number },
+): Promise<FanoutResult> {
+  const slice = opts.slice ?? MASS_SLICE;
+  const limit = opts.limit ?? MASS_LIMIT;
+  const result: FanoutResult = { written: 0, recipients: 0, truncated: false };
+  let cursor: string | null = null;
+  while (result.recipients < limit) {
+    const take = Math.min(slice, limit - result.recipients);
+    const after = cursor ? Prisma.sql`AND id > ${cursor}::uuid` : Prisma.empty;
+    const rows = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id::text AS id FROM users
+      WHERE deleted_at IS NULL AND status <> 'BANNED'
+        AND (${draft.eventActorId}::uuid IS NULL OR id <> ${draft.eventActorId}::uuid)
+        ${after}
+      ORDER BY id LIMIT ${take + 1}`;
+    const page = rows.slice(0, take);
+    result.recipients += page.length;
+    result.written += await writeNotifications(tx, draft, page.map(r => r.id), opts.policy);
+    if (rows.length <= take) return result;
+    if (result.recipients >= limit) {
+      result.truncated = true;
+      return result;
+    }
+    cursor = page[page.length - 1]!.id;
+  }
+  return result;
+}
