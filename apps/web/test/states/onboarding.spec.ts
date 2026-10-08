@@ -126,7 +126,7 @@ test("post-login interests API failure keeps draft and allows retry without logg
   await page.getByLabel("Şifre", {exact: true}).fill("test-password");
   await page.getByRole("button", {name: "Giriş yap", exact: true}).click();
 
-  await expect(page.getByRole("alert")).toContainText("Giriş başarılı, ancak ilgi alanların kaydedilemedi");
+  await expect(page.getByRole("alert").filter({hasText: "Giriş başarılı, ancak ilgi alanların kaydedilemedi"})).toHaveCount(1);
   await expect(page.getByRole("button", {name: "İlgi alanlarını yeniden kaydet"})).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).not.toBeNull();
 
