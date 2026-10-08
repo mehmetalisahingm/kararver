@@ -20,6 +20,7 @@ import {
 } from "./jobs/events/job.ts";
 import { MEDIA_PROCESS_QUEUE, MEDIA_QUEUE_OPTIONS, processMedia } from "./jobs/media/job.ts";
 import { createSubprocessModerator } from "./jobs/media/moderator.ts";
+import { thresholdsFromPercent } from "./jobs/media/policy.ts";
 import { createS3WorkerStorage } from "./jobs/media/storage.ts";
 import { createPrismaMediaJobStore } from "./jobs/media/store.ts";
 import { expirePolls, POLLS_EXPIRE_CRON, POLLS_EXPIRE_QUEUE } from "./jobs/polls/expire.ts";
@@ -70,6 +71,9 @@ await boss.work<{ mediaId: string }>(MEDIA_PROCESS_QUEUE, { batchSize: 1, localC
     moderator,
     now: () => new Date(),
     maxBytes: () => settings.get<number>("media.maxBytes"),
+    // Risk eşikleri her işte ayardan okunur (KV-38): panelden değişince deploy gerekmez, ≤ 5 sn'de worker'a ulaşır.
+    thresholds: async () =>
+      thresholdsFromPercent(await settings.get<number>("media.riskMediumPercent"), await settings.get<number>("media.riskHighPercent")),
     log: (msg, fields) => log("warn", msg, fields),
   });
   log("info", "media.process", { mediaId, result, ms: Date.now() - started, attempt: job!.retryCount });
