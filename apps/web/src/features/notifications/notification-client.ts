@@ -18,6 +18,7 @@ export const notificationTypeLabels: Record<NotificationType, string> = {
   MODERATION_APPLIED: "Moderasyon",
   COMMUNITY_FEATURED: "Toplulukta öne çıkarma",
   SANCTION_APPLIED: "Hesap bildirimi",
+  ANNOUNCEMENT_PUBLISHED: "Platform duyuruları",
 };
 
 export const optionalPreferenceTypes = (Object.keys(notificationTypeLabels) as NotificationType[]).filter(
@@ -62,6 +63,8 @@ export function notificationCopy(notification: NotificationItem): { title: strin
       return { title: "Anketin bir toplulukta öne çıkarıldı.", detail: "İçeriği görüntüle." };
     case "SANCTION_APPLIED":
       return { title: "Hesabınla ilgili yeni bir bildirim var.", detail: "Hesap durumunu görüntüle." };
+    case "ANNOUNCEMENT_PUBLISHED":
+      return { title: "KararVer'den yeni bir duyuru var.", detail: "Duyuruyu ana sayfada görüntüle." };
     default:
       return { title: "Yeni bir bildirimin var.", detail: "Ayrıntıları görüntüle." };
   }
