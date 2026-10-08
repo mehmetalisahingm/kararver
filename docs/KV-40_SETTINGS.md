@@ -67,3 +67,12 @@ Değerler teyit edilince `contracts settings.ts` kayıt defterine resmî varsay�
 - Çok süreçli dağıtımda değişiklik diğer süreçlerde ≤ 5 sn gecikir; anlık yayılım (Postgres `LISTEN/NOTIFY`) gerekirse ayrı iş.
 - Bakım modu istemciye `GET /config` ile yansır; web'in bakım ekranı bu PR'da yok (panel: ayrı PR).
 - Görsel risk eşikleri (`media.risk*`) bu işte yoktur; #40 kapsamında eklenir.
+
+## Yönetim paneli (`/admin/settings`)
+
+`apps/web/src/features/admin/settings-panel.tsx`, saf kurallar `settings-model.ts`. ADMIN salt okunur görür; **yalnız SUPER_ADMIN** değiştirir (sunucu 403 verir, düğmeler yalnız gizlenir).
+
+- **Acil durum anahtarları:** beş anahtar, durum (bakımda açık / diğerlerinde kapalı "riskli" işaretlenir), etkisi; her değişiklik gerekçeli pencereyle `PUT /admin/emergency`.
+- **Ayarlar:** gruplu tablolar (anket, yorum, görsel, puan, trend, feed, hız sınırları); açıklama, aralık, sürüm ("Varsayılan" = hiç değişmemiş), son değiştiren. "Değiştir" tipine göre giriş açar (tam sayı, açık/kapalı, görsel türü onay kutuları), aralığı istemcide de denetler; sunucu 400 verirse mesaj pencerede kalır.
+- **Eşzamanlı değişiklik:** eski sürüm 409 `VERSION_CONFLICT` verir; panel listeyi güncel sürümle yeniler, pencere mesajla açık kalır.
+- Anahtar ve açıklamalar contracts kayıt defterinden gelir; yeni ayar eklenince panelde otomatik görünür (testle korunur: her anahtarın açıklaması ve grubu var).
