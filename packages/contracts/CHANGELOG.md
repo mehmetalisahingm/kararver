@@ -9,6 +9,12 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.20.1 — 2026-10-08 (Faruk, KV-19 değerleri resmî, #21)
+
+Kırıcı değişiklik yok; şekil aynı, yalnız varsayılan değerler resmîleşti.
+
+- **Değişti:** `limits.*` (18 anahtar) artık `default: null` + öneri değil, kaynağıyla resmî varsayılan (Mehmet onayı, #21, 2026-10-08; PR #152 tablosu referans). Değerler aynı. KV-04 açık konu 10 kapandı.
+
 ## 1.20.0 — 2026-10-08 (Faruk, KV-34 bildirim tercihleri ve anket sessizi, #36)
 
 Kırıcı değişiklik yok.
