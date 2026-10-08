@@ -137,6 +137,7 @@ enum NotificationType {
   COMMUNITY_FEATURED
   // KV-21 PR-3: yalnız WARNING / RESTRICT_* yaptırımı (kapatılamaz).
   SANCTION_APPLIED
+  ANNOUNCEMENT_PUBLISHED
 
   @@map("notification_type")
 }
