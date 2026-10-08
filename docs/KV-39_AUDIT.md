@@ -8,7 +8,7 @@
 |---|---|---|
 | Admin kendi logunu değiştiremiyor/silemiyor | ✅ | `UPDATE`, `DELETE` ve `TRUNCATE` trigger ile reddediliyor (`KV_AUDIT_LOGS_APPEND_ONLY`). API'de yazma/silme endpoint'i yok (`POST`/`PUT /admin/audit` → 404). Test: `audit-list.test.ts`, DB testi. |
 | Kritik işlemin kaydı kaybolmadan tamamlanması (transaction/outbox) | ✅ | `writeAudit(tx, …)` işlemle aynı transaction'da çalışıyor. İşlem geri alınırsa kayıt da yok, kayıt yazılamazsa işlem de olmuyor (`audit.test.ts`, Utku #116). Olay outbox'ı (KV-21) ayrı; audit, olay tüketicisi değil. |
-| Loglar sır içermiyor; users/content/settings/featured/community işlemleri kapsanıyor | ✅ (settings: KV-40 bekliyor) | Hassas anahtarları (`password`, `token`, `secret`, `email`, `cookie`, `ip`, `userAgent`, `sessionId`, `…optionId`) `assertAuditEntry` yazmadan önce reddediyor. API cevabında e-posta veya sır yok (test). Kapsam tablosu aşağıda. |
+| Loglar sır içermiyor; users/content/settings/featured/community işlemleri kapsanıyor | ✅ | Hassas anahtarları (`password`, `token`, `secret`, `email`, `cookie`, `ip`, `userAgent`, `sessionId`, `…optionId`) `assertAuditEntry` yazmadan önce reddediyor. API cevabında e-posta veya sır yok (test). Kapsam tablosu aşağıda. |
 | PR, test, kanıt | ✅ | #116 (altyapı), bu PR (liste, ekran, `revision.read`), modül PR'ları (aşağıda). |
 
 ## `GET /admin/audit` (`admin.audit.list`)
@@ -40,7 +40,7 @@
 | `featured.manage`, `announcement.manage` | `admin.featured.*`, `admin.announcements.*` | featured (Mehmet #147) |
 | `points.adjust` | `admin.points.adjust` | points (Mehmet) |
 | `revision.read` | `admin.revisions.polls`, `admin.revisions.comments` | revisions (**bu PR**): geçmişin ilk sayfası açılınca bir kayıt; sonraki sayfalar aynı okumanın devamı |
-| `settings.update`, `emergency.update` | `admin.settings.update`, `admin.emergency.put` | **Bekliyor:** Uç noktalar henüz yok (KV-40, #42). İşlemler `auditOperations`'ta hazır; uç noktayı yazan kişi `writeAudit` ekler. Contracts testi, gerekçe zorunlu her işlemin haritada olduğunu zorluyor. |
+| `settings.update`, `emergency.update` | `admin.settings.update`, `admin.emergency.put` | settings (Mert #153): değer ve sürüm aynı transaction'da, önce/sonra özetiyle |
 
 ## Açık konular
 
