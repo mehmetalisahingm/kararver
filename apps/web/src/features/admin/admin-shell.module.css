@@ -10,3 +10,5 @@
 .noPreview{display:grid;place-items:center;min-height:120px;border-radius:10px;border:1px dashed var(--kv-border);opacity:.7}
 .toolbar .check{display:flex;flex-direction:row;align-items:center;gap:8px;min-height:40px}
 .timeline{list-style:none;padding:0;margin:12px 0;display:grid;gap:10px}.timeline li{padding:10px 12px;border:1px solid var(--kv-border);border-radius:12px}.timeline time{font-size:.8rem;opacity:.7}.timeline p{margin:4px 0 0}
+
+.table th.settingsHeader{opacity:1}
