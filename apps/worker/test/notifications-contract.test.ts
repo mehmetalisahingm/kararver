@@ -17,9 +17,9 @@ const example = <T extends EventType>(t: T, overrides: Record<string, unknown> =
   createEvent({ ...eventExamples[t], ...overrides } as Parameters<typeof createEvent<T>>[0]);
 
 /** DB CHECK notifications_subject_type_check ile aynı küme. */
-const SUBJECT_TYPES = ["POLL", "COMMENT", "COMMUNITY", "USER"];
+const SUBJECT_TYPES = ["POLL", "COMMENT", "COMMUNITY", "USER", "ANNOUNCEMENT"];
 /** Bildirimde gösterilmeyen aktör (KV-21 §4 karar 3). */
-const HIDDEN_ACTOR = new Set(["MODERATION_APPLIED", "SANCTION_APPLIED", "COMMUNITY_FEATURED"]);
+const HIDDEN_ACTOR = new Set(["MODERATION_APPLIED", "SANCTION_APPLIED", "COMMUNITY_FEATURED", "ANNOUNCEMENT_PUBLISHED"]);
 
 describe("bildirim adapter'ları: sözleşme", () => {
   test("katalogda bildirim üreten her olay tipinin tam bir adapter'ı var; her adapter katalogdaki tipiyle eşleşir", () => {
