@@ -90,6 +90,7 @@ export function formatValue(key: string, value: unknown): string {
   if (typeof value === "boolean") return value ? "Açık" : "Kapalı";
   if (Array.isArray(value)) return value.join(", ");
   if (key === "media.maxBytes" && typeof value === "number") return `${value.toLocaleString("tr-TR")} bayt (${(value / 1024 / 1024).toLocaleString("tr-TR", { maximumFractionDigits: 1 })} MB)`;
+  if (typeof value === "number" && key.endsWith("Percent") && key.startsWith("media.risk")) return `%${value} (güven ${(value / 100).toLocaleString("tr-TR")})`;
   return typeof value === "number" ? value.toLocaleString("tr-TR") : String(value);
 }
 
