@@ -16,13 +16,16 @@ export type ScoreRow = { poll_id: string; rank: number; score: number; component
 
 const C = TREND_CONFIG;
 
+/** Haftanın Değişkenleri eşikleri (sistem ayarları trends.moversMin*, KV-40); verilmezse kayıt defteri varsayılanı. */
+export type MoversThresholds = { minVotes: number; minActiveAccounts: number };
+
 export function windowStart(format: ComputedFormat, windowEnd: Date): Date {
   return new Date(windowEnd.getTime() - C.windowHours[format] * 60 * 60 * 1000);
 }
 
 /** Formatın sıralama sorgusu: ilk topN satır, rank 1'den. */
-export function scoreQuery(format: ComputedFormat, windowEnd: Date): Prisma.Sql {
-  if (format === "WEEKLY_MOVERS") return moversQuery(windowEnd);
+export function scoreQuery(format: ComputedFormat, windowEnd: Date, movers: MoversThresholds = C.movers): Prisma.Sql {
+  if (format === "WEEKLY_MOVERS") return moversQuery(windowEnd, movers);
   // Zaman ISO-8601 metni olarak gider ve açıkça timestamptz'ye çevrilir (DATA_MODEL §2.2).
   const end = Prisma.sql`${windowEnd.toISOString()}::timestamptz`;
   const start = Prisma.sql`${windowStart(format, windowEnd).toISOString()}::timestamptz`;
@@ -123,10 +126,9 @@ function ranked(withScored: Prisma.Sql): Prisma.Sql {
  * - Puan: en çok değişen seçeneğin yüzde puan farkının mutlak değeri; eşitlikte seçenek sırası. Yüzde 2 basamak
  *   (contracts helpers.ts ile aynı yuvarlama). Snapshot yoksa satır yoktur: eksik geçmiş uydurulmaz.
  */
-function moversQuery(windowEnd: Date): Prisma.Sql {
+function moversQuery(windowEnd: Date, m: MoversThresholds): Prisma.Sql {
   const end = Prisma.sql`${windowEnd.toISOString()}::timestamptz`;
   const start = Prisma.sql`${windowStart("WEEKLY_MOVERS", windowEnd).toISOString()}::timestamptz`;
-  const m = C.movers;
   return ranked(Prisma.sql`
     WITH eligible AS (
       SELECT p.id, p.opens_at

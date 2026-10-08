@@ -7,7 +7,7 @@ import type { z } from "zod";
 import type { SessionUser } from "../modules/auth/session.ts";
 import { createAccess, LEGACY_RESOURCE_CHECKS, needsResource, type ModerationScope } from "../modules/rbac/access.ts";
 import type { RbacStore } from "../modules/rbac/store.ts";
-import { validationError } from "./errors.ts";
+import { ApiError, validationError } from "./errors.ts";
 
 export type RouteContext = {
   request: FastifyRequest;
@@ -40,9 +40,14 @@ type RouteOptions = {
   authenticator: Authenticator;
   rbac: RbacStore;
   now: () => Date;
+  /** Bakım modu (maintenance.enabled, KV-40): açıkken yazma istekleri 503 MAINTENANCE; okuma, giriş/çıkış ve /admin açık kalır. */
+  maintenance?: () => Promise<boolean>;
   /** KV-19 (#21) hız sınırı; oturum çözüldükten sonra, yetki ve gövde doğrulamasından önce. Verilmezse sınır yok. */
   rateLimit?: (input: { endpointId: string; method: string; viewer: SessionUser | null; request: FastifyRequest }) => Promise<void>;
 };
+
+/** Bakım modunda da çalışan yazma endpoint'leri: yönetici (modu kapatabilsin) ve oturum açma/kapama. */
+const MAINTENANCE_EXEMPT = (id: string) => id.startsWith("admin.") || id === "auth.login" || id === "auth.logout";
 
 function toFastifyPath(path: string): string {
   return `/v1${path}`;
@@ -67,6 +72,9 @@ export function createRouter(app: FastifyInstance, options: RouteOptions) {
       url: toFastifyPath(endpoint.path),
       handler: async (request, reply) => {
         reply.header("Cache-Control", "private, no-store");
+        if (options.maintenance && endpoint.method !== "GET" && !MAINTENANCE_EXEMPT(id) && (await options.maintenance())) {
+          throw new ApiError("MAINTENANCE", "Bakım çalışması nedeniyle şu an yeni işlem yapılamıyor. Birazdan tekrar deneyin.");
+        }
         const viewer = await options.authenticator.resolve(request, reply);
         if (options.rateLimit) await options.rateLimit({ endpointId: id, method: endpoint.method, viewer, request });
         const access = createAccess(options.rbac, viewer, action, options.now());

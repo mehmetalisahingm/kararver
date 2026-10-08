@@ -55,7 +55,12 @@ export interface AuthStore {
   issueToken(userId: string, token: NewToken, now: Date): Promise<void>;
 
   /** Oturum + last_login + ilk giriş puanı aynı transaction'da işlenir. */
-  createSession(session: { userId: string; tokenHash: string; expiresAt: Date; ipAddress: string | null; userAgent: string | null }, now: Date): Promise<void>;
+  createSession(
+    session: { userId: string; tokenHash: string; expiresAt: Date; ipAddress: string | null; userAgent: string | null },
+    now: Date,
+    /** İlk giriş puanı (points.initialGrant, KV-40); verilmezse resmî varsayılan. */
+    initialGrant?: number,
+  ): Promise<void>;
   findSession(tokenHash: string): Promise<SessionRecord | null>;
   touchSession(id: string, now: Date): Promise<void>;
   revokeSession(id: string, now: Date): Promise<void>;
@@ -70,7 +75,8 @@ export interface AuthStore {
   updateProfile(userId: string, patch: ProfilePatch): Promise<UserRecord>;
 
   /** V1 #67: yayın puanı bakiyesi ve append-only hareket listesi. */
-  getPointsSummary(userId: string): Promise<{ balance: number; publishCost: number }>;
+  /** publishCost: points.publishCost (KV-40); verilmezse resmî varsayılan. */
+  getPointsSummary(userId: string, publishCost?: number): Promise<{ balance: number; publishCost: number }>;
   listPointLedger(
     userId: string,
     after: { createdAt: Date; id: string } | null,

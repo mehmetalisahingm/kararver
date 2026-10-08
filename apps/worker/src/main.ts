@@ -2,10 +2,10 @@
 // media.process (Mert, KV-16), trends.refresh (Faruk, KV-28), snapshots.daily (Faruk, KV-29), sanctions.expire (Utku, KV-33)
 // ve olay outbox'ı events.dispatch / events.cleanup, bildirim saklaması notifications.cleanup ve anket süre dolumu olayı polls.expire (Utku, KV-21). Diğer job'lar kendi klasörlerinde eklenir ve burada kaydedilir.
 import path from "node:path";
-import { defaultSettings } from "@kararver/contracts";
 import { createPrismaClient } from "@kararver/db";
 import { PgBoss } from "pg-boss";
 import { loadWorkerConfig } from "./config.ts";
+import { createWorkerSettings } from "./settings.ts";
 import { cleanupEvents } from "./jobs/events/cleanup.ts";
 import { productionConsumers } from "./jobs/events/registry.ts";
 import { cleanupNotifications, NOTIFICATIONS_CLEANUP_CRON, NOTIFICATIONS_CLEANUP_QUEUE } from "./jobs/notifications/cleanup.ts";
@@ -56,7 +56,8 @@ const moderator = createSubprocessModerator({
   startupTimeoutMs: 60_000,
   onStderr: (line) => log("warn", "moderasyon stderr", { line: line.slice(0, 500) }),
 });
-const maxBytes = defaultSettings().values["media.maxBytes"] as number;
+// Sistem ayarları (KV-40): API ile aynı system_settings tablosu; kısa önbellek, DB okunamazsa varsayılan.
+const settings = createWorkerSettings(prisma, { now: () => new Date(), onError: (error) => log("error", "ayarlar okunamadı, son bilinen/varsayılan değerler", { error: String(error) }) });
 
 await boss.start();
 await boss.createQueue(MEDIA_PROCESS_QUEUE, MEDIA_QUEUE_OPTIONS);
@@ -68,8 +69,7 @@ await boss.work<{ mediaId: string }>(MEDIA_PROCESS_QUEUE, { batchSize: 1, localC
     storage: createS3WorkerStorage(config.storage),
     moderator,
     now: () => new Date(),
-    // Sistem ayarları servisi gelene kadar (KV-40) sözleşmedeki varsayılan.
-    maxBytes: async () => maxBytes,
+    maxBytes: () => settings.get<number>("media.maxBytes"),
     log: (msg, fields) => log("warn", msg, fields),
   });
   log("info", "media.process", { mediaId, result, ms: Date.now() - started, attempt: job!.retryCount });
@@ -79,7 +79,15 @@ await boss.createQueue(TRENDS_QUEUE, { policy: "singleton", retryLimit: 0 });
 await boss.schedule(TRENDS_QUEUE, TRENDS_CRON, null, { tz: "Europe/Istanbul" });
 await boss.work(TRENDS_QUEUE, { batchSize: 1 }, async () => {
   const started = Date.now();
-  await refreshTrends({ prisma, now: () => new Date(), log });
+  await refreshTrends({
+    prisma,
+    now: () => new Date(),
+    log,
+    moversThresholds: async () => ({
+      minVotes: await settings.get<number>("trends.moversMinVotes"),
+      minActiveAccounts: await settings.get<number>("trends.moversMinActiveAccounts"),
+    }),
+  });
   log("info", "trends.refresh bitti", { ms: Date.now() - started });
 });
 // snapshots.daily: her gün 00:05 İstanbul; son günleri upsert eder (tekrar çalışması güvenli).

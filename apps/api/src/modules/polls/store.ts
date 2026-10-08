@@ -17,6 +17,14 @@ export type PollSettings = {
   newAccountCooldownMinutes: number;
   dailyLimit: number;
   cooldownMinutes: number;
+  /** Acil durum anahtarı features.pollCreation (KV-40): kapalıyken yeni anket/tartışma 503 FEATURE_DISABLED. */
+  creationEnabled: boolean;
+  /** İçerik sınırları (KV-40). Sözleşme şemaları (2–6 seçenek, 200/5000 karakter, 10 görsel) üst sınırdır; ayar yalnız daraltır. */
+  minOptions: number;
+  maxOptions: number;
+  titleMaxLength: number;
+  descriptionMaxLength: number;
+  maxMediaPerPoll: number;
 };
 
 /** Varsayılanlar contracts ayar kayıt defterindeki resmî değerlerdir (voteChangeAllowed hariç: resmî değer yok). */
@@ -30,6 +38,12 @@ export const DEFAULT_POLL_SETTINGS: PollSettings = {
   newAccountCooldownMinutes: 30,
   dailyLimit: 10,
   cooldownMinutes: 10,
+  creationEnabled: true,
+  minOptions: 2,
+  maxOptions: 6,
+  titleMaxLength: 200,
+  descriptionMaxLength: 5000,
+  maxMediaPerPoll: 10,
 };
 
 /**

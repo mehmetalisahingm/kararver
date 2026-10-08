@@ -82,13 +82,13 @@ export function createPrismaAuthStore(prisma: PrismaClient): AuthStore {
       ]);
     },
 
-    async createSession(session, now) {
+    async createSession(session, now, initialGrant) {
       await prisma.$transaction(async (tx) => {
         // Login grant'i hesap başına tam bir kez: paralel loginleri kullanıcı satırı üzerinden sırala.
         await tx.$queryRaw`SELECT id FROM users WHERE id = ${session.userId}::uuid FOR UPDATE`;
         await tx.session.create({ data: { ...session, lastSeenAt: now } });
         await tx.user.update({ where: { id: session.userId }, data: { lastLoginAt: now } });
-        await grantInitialLoginPoints(tx, session.userId, now);
+        await grantInitialLoginPoints(tx, session.userId, now, initialGrant);
       });
     },
 
@@ -138,9 +138,9 @@ export function createPrismaAuthStore(prisma: PrismaClient): AuthStore {
       return toRecord(user);
     },
 
-    async getPointsSummary(userId) {
+    async getPointsSummary(userId, publishCost) {
       const account = await prisma.pointAccount.findUnique({ where: { userId }, select: { balance: true } });
-      return { balance: account?.balance ?? 0, publishCost: PUBLISH_COST };
+      return { balance: account?.balance ?? 0, publishCost: publishCost ?? PUBLISH_COST };
     },
 
     async listPointLedger(userId, after, limit) {

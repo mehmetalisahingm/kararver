@@ -123,6 +123,8 @@ model User {
   sanctionsLifted          Sanction[]            @relation("SanctionLifter")
   // Utku — admin.prisma (KV-39)
   auditLogs                AuditLog[]            @relation("AuditActor")
+  // Utku — admin.prisma (KV-40)
+  settingsEdited           SystemSetting[]       @relation("SystemSettingEditor")
   // Utku — admin.prisma (KV-21)
   notifications            Notification[]        @relation("NotificationRecipient")
   notificationsCaused      Notification[]        @relation("NotificationActor")

@@ -20,6 +20,8 @@ export type AuthDeps = {
   rolesOf?: RolesOf;
   /** Sistem ayarı `registration.enabled` (KV-40, #42). Ayar servisi gelene kadar her zaman açık. */
   isRegistrationEnabled: () => Promise<boolean>;
+  /** points.initialGrant (KV-40); verilmezse resmî varsayılan. */
+  initialGrant?: () => Promise<number>;
   /** KV-19 (#21) başarısız giriş sınırı; verilmezse sınır yok (auth-only test düzenekleri). */
   loginGuard?: LoginGuard;
 };
@@ -136,6 +138,7 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
         userAgent: request.headers["user-agent"]?.slice(0, 512) ?? null,
       },
       at,
+      deps.initialGrant ? await deps.initialGrant() : undefined,
     );
     cookies.set(reply, raw);
     // İlk giriş puanı (#67, 20 puan) puan defteriyle birlikte gelecek; tablo henüz yok.
