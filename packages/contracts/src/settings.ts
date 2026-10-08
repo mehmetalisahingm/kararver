@@ -168,6 +168,24 @@ export const settingsRegistry = Object.freeze({
     `${POLLS} → commonCreate.mediaIds .max(10)`,
     ["media", "maxPerPoll"],
   ),
+  // KV-38 (#40): görsel risk eşikleri, yüzde olarak (tamsayı; 35 = 0,35). Alt sınırlar fail-closed tabandır: orta eşik en
+  // fazla 60, yüksek eşik en fazla 95 olabilir, yani hiçbir ayar yüksek güvenli (≥ %95) çıplaklık tespitini otomatik yayına bırakamaz.
+  "media.riskMediumPercent": int(
+    "Görsel risk: yüksek riskli sınıfta bu güven yüzdesinden (dahil) itibaren görsel inceleme kuyruğuna düşer",
+    10,
+    60,
+    35,
+    "docs/MEDIA_MODERATION.md §6.1 MEDIUM_THRESHOLD varsayılanı 0,35",
+    null,
+  ),
+  "media.riskHighPercent": int(
+    "Görsel risk: yüksek riskli sınıfta bu güven yüzdesinden (dahil) itibaren otomatik karantina (yüksek risk)",
+    40,
+    95,
+    65,
+    "docs/MEDIA_MODERATION.md §6.1 HIGH_THRESHOLD varsayılanı 0,65",
+    null,
+  ),
   "media.allowedTypes": {
     type: "mimeTypes",
     description: "İzin verilen görsel türleri (AllowedMimeType alt kümesi)",
@@ -298,6 +316,7 @@ export function parseSettingValue(key: string, value: unknown): SettingResult {
 const crossRules: readonly [SettingKey, SettingKey, string][] = [
   ["polls.minOptions", "polls.maxOptions", "minOptions ≤ maxOptions"],
   ["polls.minDurationHours", "polls.maxDurationHours", "minDurationHours ≤ maxDurationHours"],
+  ["media.riskMediumPercent", "media.riskHighPercent", "riskMediumPercent ≤ riskHighPercent"],
 ];
 
 /** Bütün değer kümesini doğrular: bilinmeyen anahtar, tip/aralık ve alanlar arası kurallar. */
