@@ -39,7 +39,7 @@ Endpoint'ler contracts'ta hazırdı (`packages/contracts/src/domains/notificatio
 
 **İzolasyon:** her sorgunun ilk koşulu `recipient_id = oturumdaki kullanıcı`. Tekil bildirim endpoint'i yoktur. Başka kullanıcının id'si okundu işaretine verilirse satır değişmez, `updated`'a girmez ve hata dönmez; böylece bildirim id'sinin varlığı sızmaz. Testler: `apps/api/test/notifications.test.ts`.
 
-Kapsam dışı: `notifications.preferences.*`, `notifications.mutes.*` (KV-34; route kaydedilmez).
+Tercih ve sessize alma (`notifications.preferences.*`, `notifications.mutes.*`): §8 (KV-34).
 
 ## 4. Kararlar (2026-10-03)
 
@@ -138,7 +138,7 @@ Olay → adapter → alıcılar (teslim anında DB'den) → ortak süzgeç ve po
 
 - **Ortak süzgeç** (SQL'de): olayın gerçek aktörü alıcı olmaz (aktörü gizlenen tiplerde de); silinmiş (`deleted_at`) ve BANNED hesap bildirim almaz; SUSPENDED / RESTRICTED alır.
 - **Görünürlük:** yorum, cevap, öneri ve anket konulu bildirimler konu içerik teslimde `ACTIVE` veya `LOCKED` değilse yazılmaz; moderasyon bildirimi hariç (gizlenen içeriğin sahibi bilmeli).
-- **KV-34 politika kancası:** `policy.ts` (`NotificationPolicy`, bugün `allowAll`). Tüketici her alıcı diliminde çağırır; KV-34 tip tercihi ve anket sessizini (`poll_id`) yalnız bu dosyada uygular. `MODERATION_APPLIED` ve `SANCTION_APPLIED` kapatılamaz (contracts `MANDATORY_NOTIFICATION_TYPES`): politikaya hiç sorulmaz.
+- **KV-34 politika kancası:** `policy.ts` (`NotificationPolicy`; üretimde `preferencePolicy`, §8). Tüketici her alıcı diliminde çağırır; KV-34 tip tercihi ve anket sessizini (`poll_id`) yalnız bu dosyada uygular. `MODERATION_APPLIED` ve `SANCTION_APPLIED` kapatılamaz (contracts `MANDATORY_NOTIFICATION_TYPES`): politikaya hiç sorulmaz.
 
 ### 6.3 Kitlesel fan-out ve ölçüm
 
@@ -199,3 +199,26 @@ Her üretici için: (1) olay mutation ile aynı transaction'da, kilitlerden sonr
 - `apps/api/test/kv21-producers.test.ts`: her API üreticisi için olay birebir, geri alma (geçici `AFTER INSERT` trigger'ı yalnız işaretlenen konu için hata verir; ne mutation satırı ne olay kalır), tekrar eden işlem tek olay; 12 eşzamanlı oy → tek kilometre taşı; geçersiz sayma sonrası yeniden geçiş → tek olay.
 - `apps/worker/test/kv21-producers.test.ts`: `polls.expire` (tek olay, ikinci tur, atlananlar, eşzamanlı iki tur, elle kapatma ile aynı natural key, alt sınır kuralı) ve trend girişleri (giriş/kalan/düşen, yeniden giriş → yeni olay ama tek bildirim, ilk tur taban).
 - `apps/api/test/kv21-e2e.test.ts` (uçtan uca): `POST /polls/:id/comments` → olay → worker dağıtıcısı ve bildirim tüketicisi → anket sahibinin `GET /notifications`'ı ve okunmamış sayısı; elle kapatma → oy verenlerin `POLL_CLOSED`'u; worker ve API yazıcısının aynı satırı yazması. Worker kaynakları yalnız bu testte göreli yolla import edilir.
+
+## 8. Tercihler ve anket sessizi (KV-34, #36)
+
+Sahip: Faruk (Utku'nun geçici inaktifliği süresince). Tüketici: bildirim merkezi (Mehmet, KV-35 #37; `NotificationClient` adapter'ları doğrudan kullanır).
+
+| Uç nokta | Davranış |
+|---|---|
+| `GET /notifications/preferences` | Kapatılabilir **bütün** tipler açıkça `true`/`false` döner; kapatılamayan tipler (`MANDATORY_NOTIFICATION_TYPES`: `MODERATION_APPLIED`, `SANCTION_APPLIED`) listede yoktur. |
+| `PATCH /notifications/preferences` | Gönderilen tipler değişir, diğerleri aynı kalır. Kapatılamayan tip gönderilirse istek bütünüyle reddedilir (400 `VALIDATION_ERROR`, `details[].field = types.<tip>`, `code: not_configurable`). Cevap güncel tam tercih haritasıdır. |
+| `PUT /notifications/mutes/:pollId` | Anketi sessize alır. Anket yoksa 404 `NOT_FOUND` (contracts 1.20.0'da eklendi). Tekrar çağrı aynı cevabı verir. |
+| `DELETE /notifications/mutes/:pollId` | Sessizi kaldırır; yoksa da `{ muted: false }`. |
+
+- **Saklama:**
+  - `notification_type_opt_outs`: satır var = tip kapalı; açmak satırı siler, varsayılan açık. Kapatılamayan tip bir CHECK ile de engellenir.
+  - `notification_poll_mutes`: kullanıcı ve anket çifti.
+  - İkisi de kişisel ayardır, iz değildir; kullanıcı ya da anket silinince satır da silinir (CASCADE).
+- **Uygulama yeri:** Teslim anında, worker'daki `preferencePolicy` (`apps/worker/src/jobs/notifications/policy.ts`). Her alıcı dilimi için tek sorgu yapılır: kapalı tip ∪ bildirimin `poll_id`'sini sessize alanlar düşürülür, alıcı sırası korunur. Üretimdeki tüketici (`registry.ts`) bunu varsayılan olarak kullanır.
+- **Etki alanı:** Yalnız yeni bildirimler etkilenir. Mevcut bildirimler, okundu durumu ve okunmamış sayısı değişmez. Sessize alma, `poll_id`'si o anket olan bütün kapatılabilir tipleri kapsar: yorum, cevap, öneri, kilometre taşı, trend, kapanış, karar.
+- **Kapatılamayan tipler:** Politikaya hiç sorulmaz (`write.ts`). Anket sessizde ve bütün tipler kapalıyken de moderasyon ve yaptırım bildirimi gelir (test).
+- **Tekrar koruması:** Retry, aynı olayı aynı `dedupe_key` ile yeniden yazar ve `UNIQUE (recipient_id, dedupe_key)` ikinciyi atlar. Arada tercih değişse de çift bildirim oluşmaz (test: kapanış ve karar olayları üç kez yeniden kuyruğa alınıyor, araya sessize alma ve geri alma giriyor).
+- **Okundu işareti düzeltmesi:** `read_at = GREATEST(şimdi, created_at)`. `created_at` olayın anıdır (başka süreç ya da saat); API saati birkaç ms geride kalınca `notifications_read_after_created_check` ihlal ediliyor ve istek 500 dönüyordu. KV-34 uçtan uca testi bunu yakaladı.
+- **Kapsam dışı:** Topluluk bazlı sessize alma sözleşmede yok; topluluk konulu tek bildirim `COMMUNITY_FEATURED`, tip tercihiyle kapatılabilir. Duyurular (KV-42) bildirim tipi değildir; uygulama içi duyuru alanında görünür.
+- **Testler:** `apps/api/test/notification-preferences.test.ts` (API, yetki ve izolasyon, uçtan uca süzgeç, kapatılamayan tipler, retry'da tekrar koruması). Politika kaldırılınca 2 test düşüyor (mutasyon testi).

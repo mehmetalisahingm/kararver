@@ -1,10 +1,17 @@
 // Bildirimler — KV-21 (#23): liste, okunmamış sayısı, okundu işaretleme. Tüketici: bildirim merkezi (Mehmet, KV-35).
 // Kullanıcı izolasyonu: her işlem oturumdaki kullanıcının satırlarıyla sınırlıdır. Tekil bildirim endpoint'i yoktur;
 // başka kullanıcının id'si okundu işaretine verilirse satır değişmez ve sayıya girmez (varlık sızdırılmaz, hata dönmez).
-// Kapsam dışı: tercih ve sessize alma (notifications.preferences.*, notifications.mutes.*, KV-34 #36), teslim (KV-21 PR-3).
+// KV-34 (#36): tip tercihi ve anket sessizi. Teslim anında worker politikası uygular (yalnız yeni bildirimler); mevcut
+// bildirimler ve okundu durumları değişmez. Kapatılamayan tipler (moderasyon, yaptırım) 400 VALIDATION_ERROR.
+// Kapsam dışı: teslim (worker, KV-21 PR-3).
+import { MANDATORY_NOTIFICATION_TYPES, NotificationType } from "@kararver/contracts";
 import { decodeCursor, encodeCursor, invalidCursor } from "../../http/cursor.ts";
+import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
-import type { NotificationRecord, NotificationStore } from "./store.ts";
+import type { NotificationPreferenceMap, NotificationRecord, NotificationStore } from "./store.ts";
+
+/** Kullanıcının açıp kapatabildiği tipler; cevapta hepsi açıkça yer alır (istemci eksik tipi açık sayar). */
+const OPTIONAL_TYPES = NotificationType.options.filter((t) => !MANDATORY_NOTIFICATION_TYPES.includes(t));
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -66,5 +73,38 @@ export function registerNotificationRoutes(
   route("notifications.markRead", async ({ body, viewer }) => {
     const target = "all" in body ? { all: true as const } : { ids: [...new Set(body.ids as string[])] };
     return { status: 200, body: { data: { updated: await store.markRead(viewer!.id, target, deps.now()) } } };
+  });
+
+  async function preferences(userId: string) {
+    const off = new Set(await store.optedOut(userId));
+    return { types: Object.fromEntries(OPTIONAL_TYPES.map((t) => [t, !off.has(t)])) as NotificationPreferenceMap };
+  }
+
+  route("notifications.preferences.get", async ({ viewer }) => {
+    return { status: 200, body: { data: await preferences(viewer!.id) } };
+  });
+
+  route("notifications.preferences.update", async ({ body, viewer }) => {
+    const types = body.types as NotificationPreferenceMap;
+    const mandatory = Object.keys(types).filter((t) => MANDATORY_NOTIFICATION_TYPES.includes(t as NotificationRecord["type"]));
+    if (mandatory.length > 0) {
+      throw new ApiError(
+        "VALIDATION_ERROR",
+        "Moderasyon ve yaptırım bildirimleri kapatılamaz.",
+        mandatory.map((t) => ({ field: `types.${t}`, code: "not_configurable" })),
+      );
+    }
+    await store.setPreferences(viewer!.id, types);
+    return { status: 200, body: { data: await preferences(viewer!.id) } };
+  });
+
+  route("notifications.mutes.put", async ({ params, viewer }) => {
+    if (!(await store.mutePoll(viewer!.id, params.pollId))) throw new ApiError("NOT_FOUND", "Anket bulunamadı.");
+    return { status: 200, body: { data: { muted: true as const } } };
+  });
+
+  route("notifications.mutes.delete", async ({ params, viewer }) => {
+    await store.unmutePoll(viewer!.id, params.pollId);
+    return { status: 200, body: { data: { muted: false as const } } };
   });
 }

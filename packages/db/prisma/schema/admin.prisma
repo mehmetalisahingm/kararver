@@ -178,6 +178,39 @@ model Notification {
   @@map("notifications")
 }
 
+// ─── Bildirim tercihleri ve anket sessizi (KV-34, #36) ─────────────────────
+// Sahip: Faruk (Utku'nun geçici inaktifliği süresince). Kurallar: docs/KV-21_NOTIFICATIONS.md §8.
+// Teslim anında uygulanır (worker notifications politikası): yalnız yeni bildirimleri etkiler; mevcut satırlar ve
+// okundu durumları değişmez. Kişisel ayardır, iz değildir: kullanıcı/anket silinirse satır da silinir (CASCADE).
+
+// Kullanıcının kapattığı bildirim tipi. Satır var = kapalı; açmak satırı siler (varsayılan açık).
+// Kapatılamayan tipler (contracts MANDATORY_NOTIFICATION_TYPES) CHECK ile yazılamaz.
+model NotificationTypeOptOut {
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, type])
+  @@map("notification_type_opt_outs")
+}
+
+// Kullanıcının sessize aldığı anket: o anketin (poll_id) kapatılabilir bildirimleri yazılmaz.
+model NotificationPollMute {
+  userId    String   @map("user_id") @db.Uuid
+  pollId    String   @map("poll_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  poll Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@id([userId, pollId])
+  // Teslimde süzgeç (poll_id, user_id = ANY(...)).
+  @@index([pollId, userId])
+  @@map("notification_poll_mutes")
+}
+
 // ─── Olay outbox'ı (KV-21 PR-2, #23) ────────────────────────────────────────
 
 // Değerler worker dağıtıcısının teslim durumlarıdır (apps/worker/src/jobs/events/dispatch.ts).

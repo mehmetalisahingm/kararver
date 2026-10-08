@@ -9,6 +9,13 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.20.0 — 2026-10-08 (Faruk, KV-34 bildirim tercihleri ve anket sessizi, #36)
+
+Kırıcı değişiklik yok.
+
+- **Değişti:** `notifications.mutes.put` hata listesine `NOT_FOUND` eklendi (anket yoksa 404); davranış notları eklendi (yalnız yeni bildirimler, kapatılamayan tipler sessizde de gelir).
+- **Uygulama:** `notifications.preferences.get|update` ve `notifications.mutes.put|delete` API'de kayıtlı (ready). Ayrıntı: `docs/KV-21_NOTIFICATIONS.md` §8.
+
 ## 1.19.0 — 2026-10-08 (Faruk, KV-19 hız sınırı, #21)
 
 Kırıcı değişiklik yok: yalnız yeni ayar anahtarları. `RATE_LIMITED` (429) zaten her uç noktanın ortak hatasıydı.

@@ -4,7 +4,7 @@
 import type { EventType } from "@kararver/contracts";
 import { PermanentEventError, type EventConsumer } from "../events/consumers.ts";
 import { notificationAdapters } from "./adapters.ts";
-import { allowAll, type NotificationPolicy } from "./policy.ts";
+import { preferencePolicy, type NotificationPolicy } from "./policy.ts";
 import { eligibleUsers, fanoutToVoters, writeNotifications } from "./write.ts";
 
 export const NOTIFICATIONS_CONSUMER = "notifications";
@@ -17,7 +17,7 @@ export type NotificationsConsumerOptions = {
 };
 
 export function createNotificationsConsumer(opts: NotificationsConsumerOptions = {}): EventConsumer {
-  const policy = opts.policy ?? allowAll;
+  const policy = opts.policy ?? preferencePolicy;
   return {
     name: NOTIFICATIONS_CONSUMER,
     types: Object.keys(notificationAdapters) as EventType[],
