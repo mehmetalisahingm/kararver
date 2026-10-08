@@ -169,6 +169,8 @@ export function ProductProvider({
     return <ProductContext.Provider value={context}><WelcomeEntry returnTo="/" /></ProductContext.Provider>;
   if (!demo && sessionReady && !user && pathname === "/" && welcomeSeen === true)
     return <ProductContext.Provider value={context}><WelcomeResume fallbackReturnTo="/" /></ProductContext.Provider>;
+  // Giriş sonrası interests kaydı hata verirse AuthScreen retry UI'sı kalmalı.
+  // Oturum geçişi sırasında giriş sayfasını remount etmek hata/taslak durumunu kaybettirir.
   return (
     <ProductContext.Provider value={context}>
       <div className="product" data-theme={theme}>
@@ -255,7 +257,7 @@ export function ProductProvider({
             <div className="announcement" role="status">
               {message}
             </div>
-            {sessionReady ? <Fragment key={user?.id ?? "guest"}>{children}</Fragment> : <div className="kv-card kv-state">
+            {sessionReady ? <Fragment key={pathname === "/giris" ? "login-session" : (user?.id ?? "guest")}>{children}</Fragment> : <div className="kv-card kv-state">
               <h1>{sessionError ? "Bağlantı kurulamadı." : "Oturum kontrol ediliyor…"}</h1>
               {sessionError && <><p role="alert">{sessionError}</p><button className="kv-button" onClick={() => retrySession(n => n + 1)}>Tekrar dene</button></>}
             </div>}

@@ -101,3 +101,80 @@ test("direct content links bypass onboarding even for first-time guests",async({
   await expect(page.locator("main h1").first()).toBeVisible();
   expect(mock.unexpected).toEqual([]);
 });
+
+test("post-login interests API failure keeps draft and allows retry without logging in again", async ({page}) => {
+  const mock = await api(page);
+  const categoryId = sample("categories.list").data[0].id as string;
+  let writes = 0;
+  let successfulWrites = 0;
+  mock.handlers.set("me.get", r => r.fulfill({status: 401, json: failure("UNAUTHENTICATED")}));
+  mock.handlers.set("interests.get", r => r.fulfill({json: {data: {categoryIds: []}}}));
+  mock.handlers.set("interests.put", async r => {
+    writes++;
+    if (writes === 1) return r.fulfill({status: 503, json: failure("INTERNAL_ERROR")});
+    successfulWrites++;
+    await r.fulfill({json: {data: {categoryIds: [categoryId]}}});
+  });
+  await page.addInitScript(({categoryId}) => {
+    localStorage.setItem("kv-welcome-v1", "1");
+    localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({
+      version: 1, categoryIds: [categoryId], demoChoice: "wait", returnTo: "/",
+    }));
+  }, {categoryId});
+  await page.goto("/giris?onboarding=1&returnTo=%2F");
+  await page.getByLabel("E-posta", {exact: true}).fill("retry@example.test");
+  await page.getByLabel("Şifre", {exact: true}).fill("test-password");
+  await page.getByRole("button", {name: "Giriş yap", exact: true}).click();
+
+  await expect(page.getByRole("alert").filter({hasText: "Giriş başarılı, ancak ilgi alanların kaydedilemedi"})).toHaveCount(1);
+  await expect(page.getByRole("button", {name: "İlgi alanlarını yeniden kaydet"})).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).not.toBeNull();
+
+  await page.getByRole("button", {name: "İlgi alanlarını yeniden kaydet"}).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(writes).toBe(2);
+  expect(successfulWrites).toBe(1);
+  expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).toBeNull();
+  expect(mock.unexpected).toEqual([]);
+});
+
+test("401 during post-login interest save returns to login and keeps draft for another session", async ({page}) => {
+  const mock = await api(page);
+  const categoryId = sample("categories.list").data[0].id as string;
+  let interestReads = 0;
+  let writes = 0;
+  mock.handlers.set("me.get", r => r.fulfill({status: 401, json: failure("UNAUTHENTICATED")}));
+  mock.handlers.set("interests.get", r => {
+    interestReads++;
+    return r.fulfill(interestReads === 1
+      ? {status: 401, json: failure("UNAUTHENTICATED")}
+      : {json: {data: {categoryIds: []}}});
+  });
+  mock.handlers.set("interests.put", async r => {
+    writes++;
+    await r.fulfill({json: {data: {categoryIds: [categoryId]}}});
+  });
+  await page.addInitScript(({categoryId}) => {
+    localStorage.setItem("kv-welcome-v1", "1");
+    localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({
+      version: 1, categoryIds: [categoryId], demoChoice: "wait", returnTo: "/",
+    }));
+  }, {categoryId});
+  await page.goto("/giris?onboarding=1&returnTo=%2F");
+  await page.getByLabel("E-posta", {exact: true}).fill("expired@example.test");
+  await page.getByLabel("Şifre", {exact: true}).fill("test-password");
+  await page.getByRole("button", {name: "Giriş yap", exact: true}).click();
+
+  await expect(page.getByText("Oturumun sona erdi. İlgi alanı seçimlerin korundu; yeniden giriş yap.")).toBeVisible();
+  await expect(page.getByRole("button", {name: "İlgi alanlarını yeniden kaydet"})).toHaveCount(0);
+  await expect(page.getByRole("button", {name: "Giriş yap", exact: true})).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).not.toBeNull();
+
+  await page.getByLabel("Şifre", {exact: true}).fill("test-password");
+  await page.getByRole("button", {name: "Giriş yap", exact: true}).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(interestReads).toBe(2);
+  expect(writes).toBe(1);
+  expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).toBeNull();
+  expect(mock.unexpected).toEqual([]);
+});

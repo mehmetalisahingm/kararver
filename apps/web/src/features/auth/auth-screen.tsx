@@ -84,6 +84,18 @@ export function AuthScreen({
     notify("Tanıtımda seçtiğin ilgi alanları hesabına kaydedildi.");
   }
 
+  function onWelcomeSaveFailure(reason: unknown) {
+    setPassword("");
+    if (!client.current()) {
+      // 401 invalidates the API session synchronously. Retrying without login
+      // would loop forever; keep the draft but restore the login form.
+      setPostLoginError("");
+      setError("Oturumun sona erdi. İlgi alanı seçimlerin korundu; yeniden giriş yap.");
+      return;
+    }
+    setPostLoginError((reason as Error).message);
+  }
+
   async function retryWelcomeSelection() {
     if (busy) return;
     setBusy(true);
@@ -92,7 +104,7 @@ export function AuthScreen({
       await applyWelcomeSelection();
       router.push(destination);
     } catch (reason) {
-      setPostLoginError((reason as Error).message);
+      onWelcomeSaveFailure(reason);
     } finally {
       setBusy(false);
     }
@@ -111,8 +123,7 @@ export function AuthScreen({
           try {
             await applyWelcomeSelection();
           } catch (reason) {
-            setPostLoginError((reason as Error).message);
-            setPassword("");
+            onWelcomeSaveFailure(reason);
             return;
           }
         }
