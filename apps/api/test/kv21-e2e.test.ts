@@ -98,7 +98,8 @@ describe("KV-21 uçtan uca: mutation → olay → dağıtıcı → bildirim (pos
     const list = await notificationsOf(owner);
     assert.deepEqual(
       list.map((n) => [n.type, n.subject, n.actor?.id, n.data, n.readAt]),
-      [["COMMENT_ON_POLL", { type: "COMMENT", id: comment.id }, alice.id, {}, null]],
+      // #138: bildirim, hedef ankete gitmek için data.pollId taşır.
+      [["COMMENT_ON_POLL", { type: "COMMENT", id: comment.id }, alice.id, { pollId: poll.id }, null]],
     );
     assert.equal(await unread(owner), 1);
     assert.deepEqual(await notificationsOf(alice), [], "kendi eylemine bildirim yok");
@@ -115,7 +116,7 @@ describe("KV-21 uçtan uca: mutation → olay → dağıtıcı → bildirim (pos
     await drain();
     for (const u of [alice, bob]) {
       const closed = (await notificationsOf(u)).filter((n) => n.type === "POLL_CLOSED");
-      assert.deepEqual(closed.map((n) => [n.subject, n.actor?.id, n.data]), [[{ type: "POLL", id: poll.id }, owner.id, { reason: "OWNER" }]]);
+      assert.deepEqual(closed.map((n) => [n.subject, n.actor?.id, n.data]), [[{ type: "POLL", id: poll.id }, owner.id, { reason: "OWNER", pollId: poll.id }]]);
     }
     assert.equal((await notificationsOf(owner)).filter((n) => n.type === "POLL_CLOSED").length, 0);
   });
