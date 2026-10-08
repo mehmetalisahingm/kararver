@@ -1302,3 +1302,14 @@ progress::-webkit-progress-value {
     margin: 0 14px 14px 34px;
   }
 }
+
+.product[data-theme="light"] select.kv-input {
+  color: #181b25;
+  -webkit-text-fill-color: #181b25;
+  background-color: #f5f6fa;
+  color-scheme: light;
+}
+.product[data-theme="light"] select.kv-input option {
+  color: #181b25;
+  background: #fff;
+}

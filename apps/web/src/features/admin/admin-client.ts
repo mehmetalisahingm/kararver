@@ -15,6 +15,7 @@ import type {
   ContentHistoryItem,
   MediaView,
   ReportView,
+  Setting,
 } from "@kararver/contracts";
 import type { HttpClient } from "../../lib/http-client.ts";
 
@@ -31,6 +32,8 @@ export type HistoryItem = ReturnType<typeof ContentHistoryItem.parse>;
 export type Featured = ReturnType<typeof FeaturedPlacement.parse>;
 export type AnnouncementView = ReturnType<typeof Announcement.parse>;
 export type AuditRecord = ReturnType<typeof AuditEntry.parse>;
+export type SettingView = ReturnType<typeof Setting.parse>;
+export type EmergencyState = { registration: boolean; pollCreation: boolean; comments: boolean; uploads: boolean; maintenance: boolean };
 /** admin.audit.list süzgeçleri (KV-39). from dahil, to hariç (ISO zaman). */
 export type AuditSearch = { action?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string };
 
@@ -219,5 +222,19 @@ export class AdminClient {
   }
   async deleteAnnouncement(id: string) {
     await this.http.request("admin.announcements.delete", { params: { id } });
+  }
+
+  // ── Sistem ayarları ve acil durum (KV-40) ──
+  /** Bütün ayarlar (sayfalanmaz); satırı olmayan ayar sürüm 1 ve varsayılanla gelir. */
+  async settings(signal?: AbortSignal) {
+    return data<SettingView[]>(await this.http.request("admin.settings.list", { signal }));
+  }
+  /** version: listede görülen sürüm (iyimser kilit); eski ise VERSION_CONFLICT. Yalnız SUPER_ADMIN. */
+  async updateSetting(key: string, value: unknown, version: number, reason: string) {
+    return data<SettingView>(await this.http.request("admin.settings.update", { params: { key }, body: { value, version, reason } }));
+  }
+  /** Yalnız SUPER_ADMIN. Gönderilmeyen anahtar değişmez; yanıt bütün anahtarların güncel durumudur. */
+  async putEmergency(switches: Partial<EmergencyState>, reason: string) {
+    return data<EmergencyState>(await this.http.request("admin.emergency.put", { body: { switches, reason } }));
   }
 }
