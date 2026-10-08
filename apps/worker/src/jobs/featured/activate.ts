@@ -77,7 +77,7 @@ export async function activateAnnouncement(deps: ActivationDeps, announcementId:
       id: newEventId(at), type: "announcement.published", occurredAt: at.toISOString(),
       actorId: row.createdBy, subject: { type: "ANNOUNCEMENT", id: row.id },
       payload: {
-        level: row.level, startsAt: row.startsAt.toISOString(),
+        level: row.level, audience: row.audience, startsAt: row.startsAt.toISOString(),
         endsAt: row.endsAt?.toISOString() ?? null,
       },
     }));
