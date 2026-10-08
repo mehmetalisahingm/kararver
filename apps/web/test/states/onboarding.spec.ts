@@ -104,12 +104,11 @@ test("direct content links bypass onboarding even for first-time guests",async({
 
 test("post-login interests API failure keeps draft and allows retry without logging in again", async ({page}) => {
   const mock = await api(page);
-  const categoryId = "01998b9a-0000-7000-8000-000000000001";
+  const categoryId = sample("categories.list").data[0].id as string;
   let writes = 0;
   let successfulWrites = 0;
   mock.handlers.set("me.get", r => r.fulfill({status: 401, json: failure("UNAUTHENTICATED")}));
   mock.handlers.set("interests.get", r => r.fulfill({json: {data: {categoryIds: []}}}));
-  mock.handlers.set("categories.list", r => r.fulfill({json: {data: [{id: categoryId, name: "Teknoloji"}], page: {nextCursor: null, hasMore: false}}}));
   mock.handlers.set("interests.put", async r => {
     writes++;
     if (writes === 1) return r.fulfill({status: 503, json: failure("INTERNAL_ERROR")});
