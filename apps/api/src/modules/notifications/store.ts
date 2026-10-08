@@ -22,9 +22,19 @@ export type NotificationPage = { unreadOnly: boolean; after: { createdAt: Date; 
 
 export type MarkReadTarget = { ids: string[] } | { all: true };
 
+/** Kapatılabilir tiplerin durumu (KV-34). Kapatılamayan tipler (MANDATORY_NOTIFICATION_TYPES) burada yoktur. */
+export type NotificationPreferenceMap = Partial<Record<z.infer<typeof NotificationType>, boolean>>;
+
 export interface NotificationStore {
   list(recipientId: string, page: NotificationPage): Promise<NotificationRecord[]>;
   unreadCount(recipientId: string): Promise<number>;
   /** Yalnız alıcının okunmamış satırları işaretlenir; dönen sayı yeni okunanlardır (tekrar çağrı 0). */
   markRead(recipientId: string, target: MarkReadTarget, now: Date): Promise<number>;
+  /** KV-34: kullanıcının kapattığı tipler. */
+  optedOut(userId: string): Promise<z.infer<typeof NotificationType>[]>;
+  /** KV-34: tip başına aç/kapat; tek transaction'da. Kapatılamayan tip buraya gelmez (route 400 döner). */
+  setPreferences(userId: string, types: NotificationPreferenceMap): Promise<void>;
+  /** KV-34: anket sessizi. Anket yoksa false (route 404). Tekrar çağrı değişiklik yapmaz. */
+  mutePoll(userId: string, pollId: string): Promise<boolean>;
+  unmutePoll(userId: string, pollId: string): Promise<void>;
 }
