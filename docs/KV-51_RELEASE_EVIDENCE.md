@@ -218,7 +218,7 @@ Tablo yalnız başlığı açıkça okunan testlere dayanır; "kısmi" satırlar
 | F03 | `discussions.test.ts`: seçeneksiz tartışma, yorum, beğeni/dislike, eşzamanlı sayaç | AUTOMATED PASS | staging davranışı |
 | F04 | `points.test.ts`: ilk login +20; tekrar ve paralel login grant'i çoğaltmaz | AUTOMATED PASS | staging DB ve audit |
 | F05 | `points.test.ts`: iki yayın = 0, üçüncü atomik reddedilir; tartışma da 10 harcar | AUTOMATED PASS | |
-| F06 | `points.test.ts`: retry çift harcamaz, son 10 puana iki paralel yayın yalnız biri commit olur; ledger append-only | AUTOMATED PASS | ağ kesintisi senaryosu; admin düzeltme auditi (`points-admin.test.ts`) |
+| F06 | `points.test.ts`: retry çift harcamaz, son 10 puana iki paralel yayın yalnız biri commit olur; ledger append-only | AUTOMATED PASS | gerçek ağ kesintisi senaryosu (cihaz/staging). Admin düzeltme ayrıca kanıtlı: `points-admin.test.ts` gerekçeli, idempotent, audit'li |
 | F07 | `revisions.test.ts` (içerik geçmişi), `audit-list.test.ts` (yetki) | KISMİ | kullanıcının kendi içerik geçmişi ekranı |
 | F09 | `communities.test.ts` (üye listesi görünürlüğü sunucuda), `admin-content-moderation.test.ts` (moderatör yalnız kendi topluluğu) | AUTOMATED PASS | #46 gerçek hesap izolasyonu |
 | F01, F02, F08, F10 | CI `ui`/`browser-accessibility` yeşil (demo ve API'li Playwright) | NOT RUN / BLOCKED | gerçek staging tarayıcı akışı, cihaz, ürün kararı (`F01`) |
