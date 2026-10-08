@@ -35,6 +35,17 @@ function notAPoll(fields: readonly string[]): ApiError {
   return new ApiError("NOT_A_POLL", "Bu bir tartışma gönderisi; seçenek, oy ve süre yok.", fields.map((field) => ({ field, code: "not_a_poll" })));
 }
 
+/** Ayarla daraltılmış içerik sınırları (KV-40). Gönderilmeyen alan denetlenmez (kısmi güncelleme). */
+function assertWithinLimits(body: { title?: string; description?: string | null; options?: unknown[]; mediaIds?: unknown[]; kind?: string }, s: PollSettings): void {
+  const fail = (field: string, message: string) => new ApiError("VALIDATION_ERROR", message, [{ field, code: "out_of_range", message }]);
+  if (body.title !== undefined && body.title.length > s.titleMaxLength) throw fail("title", `Başlık en fazla ${s.titleMaxLength} karakter olabilir.`);
+  if (body.description && body.description.length > s.descriptionMaxLength) throw fail("description", `Açıklama en fazla ${s.descriptionMaxLength} karakter olabilir.`);
+  if (body.options !== undefined && body.kind !== "DISCUSSION" && (body.options.length < s.minOptions || body.options.length > s.maxOptions)) {
+    throw fail("options", `Seçenek sayısı ${s.minOptions}–${s.maxOptions} arasında olmalı.`);
+  }
+  if (body.mediaIds !== undefined && body.mediaIds.length > s.maxMediaPerPoll) throw fail("mediaIds", `En fazla ${s.maxMediaPerPoll} görsel eklenebilir.`);
+}
+
 export function registerPollRoutes(route: Route, deps: PollDeps): void {
   const { store, now } = deps;
 
@@ -136,6 +147,9 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
       return { status: 201, body: { data: await detail({ id: resourceId }, viewer) } };
     }
     const settings = await deps.settings();
+    // Acil durum anahtarı (KV-40): yeni anket/tartışma kapalı; başarılı isteğin tekrarı (yukarıda) etkilenmez.
+    if (!settings.creationEnabled) throw new ApiError("FEATURE_DISABLED", "Yeni anket ve tartışma açma geçici olarak kapalı.");
+    assertWithinLimits(body, settings);
     // Tartışma (#66) süresizdir; süre sınırı sadece ankete uygulanır.
     if (isPoll && (body.durationHours < settings.minDurationHours || body.durationHours > settings.maxDurationHours)) {
       throw new ApiError("VALIDATION_ERROR", `Süre ${settings.minDurationHours}–${settings.maxDurationHours} saat arasında olmalı.`, [
@@ -209,6 +223,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
         throw new ApiError("VALIDATION_ERROR", "Seçenek bu ankete ait değil.", [{ field: "options", code: "unknown_option" }]);
       }
     }
+    assertWithinLimits(body, await deps.settings());
     await validateReferences(ctx, { categoryId: body.categoryId });
 
     const patch: PollPatch = {};

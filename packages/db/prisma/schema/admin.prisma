@@ -298,3 +298,18 @@ model Announcement {
   @@index([createdAt(sort: Desc), id(sort: Desc)], map: "announcements_created_at_id_idx")
   @@map("announcements")
 }
+
+// KV-40 (#42): sistem ayarları. Yalnız değiştirilmiş (veya ilk kez dokunulmuş) ayarlar satır olur; satırı olmayan ayar
+// contracts settings.ts varsayılanıyla (sürüm 1) çalışır. Anahtar, tip ve aralık uygulamada contracts kayıt defteriyle
+// doğrulanır (key CHECK'i yalnız biçimi korur). Her değişiklik sürümü artırır (iyimser kilit) ve audit'e yazılır.
+model SystemSetting {
+  key         String   @id @db.VarChar(80)
+  value       Json
+  version     Int      @default(1)
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  updatedBy User? @relation("SystemSettingEditor", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@map("system_settings")
+}

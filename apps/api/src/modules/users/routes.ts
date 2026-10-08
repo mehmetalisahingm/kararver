@@ -7,7 +7,7 @@ import { toMe, type RolesOf } from "./me.ts";
 
 const POINTS_LEDGER_CURSOR = "points-ledger:v1";
 
-export function registerUserRoutes(route: Route, deps: { store: AuthStore; mediaPublicBaseUrl: string; rolesOf: RolesOf }): void {
+export function registerUserRoutes(route: Route, deps: { store: AuthStore; mediaPublicBaseUrl: string; rolesOf: RolesOf; publishCost?: () => Promise<number> }): void {
   const { store, mediaPublicBaseUrl, rolesOf } = deps;
 
   route("me.get", async ({ viewer }) => ({ status: 200, body: { data: toMe(viewer!.user, mediaPublicBaseUrl, await rolesOf(viewer!.id)) } }));
@@ -25,7 +25,7 @@ export function registerUserRoutes(route: Route, deps: { store: AuthStore; media
   });
 
   route("points.get", async ({ viewer }) => {
-    const summary = await store.getPointsSummary(viewer!.id);
+    const summary = await store.getPointsSummary(viewer!.id, deps.publishCost ? await deps.publishCost() : undefined);
     return { status: 200, body: { data: summary } };
   });
 

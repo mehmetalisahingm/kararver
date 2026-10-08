@@ -25,6 +25,8 @@ import { createPrismaModerationStore } from "./modules/moderation/prisma-store.t
 import { createPrismaNotificationStore } from "./modules/notifications/prisma-store.ts";
 import { createPrismaReportStore } from "./modules/reports/prisma-store.ts";
 import { createPrismaSearchStore } from "./modules/search/prisma-store.ts";
+import { createSettingsService } from "./modules/settings/service.ts";
+import { createPrismaSettingsStore } from "./modules/settings/prisma-store.ts";
 import { createPrismaShareStore } from "./modules/shares/prisma-store.ts";
 import { createPrismaTrendStore } from "./modules/trends/prisma-store.ts";
 import { createPrismaRevisionStore } from "./modules/revisions/prisma-store.ts";
@@ -44,8 +46,13 @@ const prisma = createPrismaClient();
 const mediaQueue = config.storage
   ? await startPgBossMediaQueue(process.env.DATABASE_URL!, (err) => console.error("media kuyruğu hatası", err))
   : null;
+const settingsService = createSettingsService(createPrismaSettingsStore(prisma), {
+  now: () => new Date(),
+  onError: (error) => console.error("ayarlar okunamadı, son bilinen/varsayılan değerler kullanılıyor", error),
+});
 const app = buildApp({
   config,
+  settingsService,
   authStore: createPrismaAuthStore(prisma),
   rbacStore: createPrismaRbacStore(prisma),
   pollStore: createPrismaPollStore(prisma),

@@ -27,7 +27,7 @@ export class InsufficientPointsError extends ApiError {
  * Çağıran transaction kullanıcı satırını FOR UPDATE kilitlemelidir. Böylece iki paralel login aynı
  * hesabın ilk grant'ini yarıştıramaz. Unique (user_id, idempotency_key) ikinci savunma hattıdır.
  */
-export async function grantInitialLoginPoints(tx: Tx, userId: string, now: Date): Promise<void> {
+export async function grantInitialLoginPoints(tx: Tx, userId: string, now: Date, amount: number = INITIAL_LOGIN_GRANT): Promise<void> {
   await tx.pointAccount.upsert({
     where: { userId },
     create: { userId, balance: 0, updatedAt: now },
@@ -39,16 +39,18 @@ export async function grantInitialLoginPoints(tx: Tx, userId: string, now: Date)
     select: { id: true },
   });
   if (alreadyGranted) return;
+  // points.initialGrant = 0 (KV-40): ledger'a sıfır girişi yazılmaz.
+  if (amount <= 0) return;
 
   const account = await tx.pointAccount.update({
     where: { userId },
-    data: { balance: { increment: INITIAL_LOGIN_GRANT }, updatedAt: now },
+    data: { balance: { increment: amount }, updatedAt: now },
     select: { balance: true },
   });
   await tx.pointLedgerEntry.create({
     data: {
       userId,
-      delta: INITIAL_LOGIN_GRANT,
+      delta: amount,
       balanceAfter: account.balance,
       reason: "INITIAL_GRANT",
       referenceId: null,

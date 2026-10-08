@@ -45,6 +45,8 @@ import type { ModerationStore } from "./modules/moderation/store.ts";
 import { registerNotificationRoutes } from "./modules/notifications/routes.ts";
 import type { NotificationStore } from "./modules/notifications/store.ts";
 import { registerReportRoutes } from "./modules/reports/routes.ts";
+import { registerSettingsRoutes } from "./modules/settings/routes.ts";
+import type { SettingsService } from "./modules/settings/service.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
 import { registerRoleRoutes } from "./modules/rbac/roles-routes.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
@@ -71,6 +73,8 @@ export type AppDeps = {
   hasher: PasswordHasher;
   mailer: Mailer;
   now?: () => Date;
+  /** Sistem ayarları servisi (KV-40, #42). Verilirse ayar kancaları (aşağıdaki `is*`/`*Settings`) ondan türetilir; açıkça verilen kanca önceliklidir (testler). */
+  settingsService?: SettingsService;
   isRegistrationEnabled?: () => Promise<boolean>;
   /** Verilmezse anket route'ları kaydedilmez (ör. sadece auth'u test eden düzenek). */
   pollStore?: PollStore;
@@ -168,7 +172,16 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     authenticator: createAuthenticator(deps.authStore, session, now),
     rbac: deps.rbacStore,
     now,
+    maintenance: deps.settingsService ? () => deps.settingsService!.isMaintenance() : undefined,
   });
+
+  // Ayar kancaları: açık kanca > ayar servisi > güvenli varsayılan.
+  const settings = deps.settingsService;
+  const pollSettings = deps.pollSettings ?? (settings ? () => settings.pollSettings() : async () => DEFAULT_POLL_SETTINGS);
+  const feedSettings = deps.feedSettings ?? (settings ? () => settings.feedSettings() : async () => DEFAULT_FEED_SETTINGS);
+  const mediaSettings = deps.media?.settings ?? (settings ? () => settings.mediaSettings() : async () => DEFAULT_MEDIA_SETTINGS);
+  const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
+  const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
   const rolesOf = async (userId: string) => {
     const { roles } = await deps.rbacStore.grants(userId, now());
@@ -184,24 +197,30 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     session,
     webUrl: config.webUrl,
     mediaPublicBaseUrl: config.mediaPublicBaseUrl,
-    isRegistrationEnabled: deps.isRegistrationEnabled ?? (async () => true),
+    isRegistrationEnabled,
+    initialGrant: settings ? async () => (await settings.pointSettings()).initialGrant : undefined,
   });
-  registerUserRoutes(route, { store: deps.authStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl, rolesOf });
+  registerUserRoutes(route, {
+    store: deps.authStore,
+    mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+    rolesOf,
+    publishCost: settings ? async () => (await settings.pointSettings()).publishCost : undefined,
+  });
   if (deps.pointAdminStore) registerPointAdminRoutes(route, { store: deps.pointAdminStore, now });
   if (deps.pollStore) {
     registerPollRoutes(route, {
       store: deps.pollStore,
       now,
       mediaPublicBaseUrl: config.mediaPublicBaseUrl,
-      settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+      settings: pollSettings,
     });
     registerFeedRoutes(route, {
       store: deps.pollStore,
       now,
       mediaPublicBaseUrl: config.mediaPublicBaseUrl,
-      settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+      settings: pollSettings,
       feed: deps.feedStore
-        ? { store: deps.feedStore, settings: deps.feedSettings ?? (async () => DEFAULT_FEED_SETTINGS) }
+        ? { store: deps.feedStore, settings: feedSettings }
         : undefined,
     });
     if (deps.profileStore) {
@@ -210,7 +229,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         polls: deps.pollStore,
         now,
         mediaPublicBaseUrl: config.mediaPublicBaseUrl,
-        settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+        settings: pollSettings,
       });
     }
     if (deps.trendStore) {
@@ -219,7 +238,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         polls: deps.pollStore,
         now,
         mediaPublicBaseUrl: config.mediaPublicBaseUrl,
-        settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+        settings: pollSettings,
       });
     }
     if (deps.searchStore) {
@@ -228,7 +247,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         polls: deps.pollStore,
         now,
         mediaPublicBaseUrl: config.mediaPublicBaseUrl,
-        settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+        settings: pollSettings,
       });
     }
   }
@@ -242,7 +261,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       polls: deps.pollStore
         ? {
             store: deps.pollStore,
-            settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS),
+            settings: pollSettings,
             mediaPublicBaseUrl: config.mediaPublicBaseUrl,
           }
         : undefined,
@@ -250,7 +269,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   }
   if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.voteStore) {
-    registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
+    registerVoteRoutes(route, { store: deps.voteStore, now, settings: pollSettings });
     registerVoteAdminRoutes(route, { store: deps.voteStore, now });
   }
   if (deps.communityStore) {
@@ -272,7 +291,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       store: deps.commentStore,
       now,
       mediaPublicBaseUrl: config.mediaPublicBaseUrl,
-      commentsEnabled: deps.isCommentsEnabled ?? (async () => true),
+      commentsEnabled: isCommentsEnabled,
+      commentMaxLength: settings ? () => settings.commentMaxLength() : undefined,
     });
   }
   if (deps.media) {
@@ -282,10 +302,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       queue: deps.media.queue,
       now,
       mediaPublicBaseUrl: config.mediaPublicBaseUrl,
-      settings: deps.media.settings ?? (async () => DEFAULT_MEDIA_SETTINGS),
+      settings: mediaSettings,
     });
     registerMediaAdminRoutes(route, { store: deps.media.store, storage: deps.media.storage, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
+
+  if (settings) registerSettingsRoutes(route, { service: settings, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
 
   app.get("/health", async (_request, reply) => reply.header("Cache-Control", "no-store").send({ status: "ok" }));
   return app;

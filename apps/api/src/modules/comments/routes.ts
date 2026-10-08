@@ -14,7 +14,12 @@ export type CommentDeps = {
   mediaPublicBaseUrl: string;
   /** Acil durum anahtarı `features.comments` (KV-40, #42). Ayar servisi gelene kadar açık. */
   commentsEnabled: () => Promise<boolean>;
+  /** Yorum üst sınırı (comments.bodyMaxLength, KV-40); verilmezse yalnız sözleşme şeması (2000). */
+  commentMaxLength?: () => Promise<number>;
 };
+
+const tooLong = (max: number) =>
+  new ApiError("VALIDATION_ERROR", `Yorum en fazla ${max} karakter olabilir.`, [{ field: "body", code: "too_long", message: `En fazla ${max} karakter.` }]);
 
 const rejections: Record<CommentRejection, () => ApiError> = {
   POLL_NOT_FOUND: () => new ApiError("NOT_FOUND", "İçerik bulunamadı."),
@@ -103,6 +108,8 @@ export function registerCommentRoutes(route: Route, deps: CommentDeps): void {
   route("comments.create", async ({ params, body, viewer, request }) => {
     const scope = readIdempotencyScope(request, { userId: viewer!.id, route: `comments.create:${params.id}`, body, now: now(), required: false });
     if (!(await deps.commentsEnabled())) throw new ApiError("FEATURE_DISABLED", "Yorumlar şu an kapalı.");
+    const max = deps.commentMaxLength ? await deps.commentMaxLength() : null;
+    if (max !== null && body.body.length > max) throw tooLong(max);
     const id = unwrap(
       await withDbErrors(() =>
         store.createComment({ pollId: params.id, authorId: viewer!.id, body: body.body, kind: body.kind, parentId: body.parentId ?? null }, scope),
@@ -113,6 +120,8 @@ export function registerCommentRoutes(route: Route, deps: CommentDeps): void {
   });
 
   route("comments.update", async ({ params, body, viewer }) => {
+    const max = deps.commentMaxLength ? await deps.commentMaxLength() : null;
+    if (max !== null && body.body.length > max) throw tooLong(max);
     unwrap(await store.updateComment(params.id, viewer!.id, body.body, now()));
     return { status: 200, body: { data: view((await store.findComment(params.id, viewer!.id))!, viewer) } };
   });

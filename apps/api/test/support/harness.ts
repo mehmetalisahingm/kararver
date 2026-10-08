@@ -39,6 +39,8 @@ import { createPrismaVoteStore } from "../../src/modules/votes/prisma-store.ts";
 import { createFakeQueue, createFakeStorage, type FakeStorage } from "./fake-storage.ts";
 import { createMemoryRbacStore } from "./memory-rbac-store.ts";
 import { createMemoryAuthStore } from "./memory-store.ts";
+import { createSettingsService, type SettingsService } from "../../src/modules/settings/service.ts";
+import { createPrismaSettingsStore } from "../../src/modules/settings/prisma-store.ts";
 import { resolveTestDatabaseUrl } from "./test-db.ts";
 
 export const WEB_ORIGIN = "http://localhost:3000";
@@ -60,6 +62,8 @@ type Backend = {
 
 export type Harness = Backend & {
   app: FastifyInstance;
+  /** options.realSettings açıkken gerçek ayar servisi. */
+  settings: SettingsService | undefined;
   mails: Mail[];
   logs: string[];
   clock: { now: Date; advance(ms: number): void };
@@ -155,7 +159,15 @@ export function prismaBackend(): BackendFactory | null {
   };
 }
 
-export async function createHarness(factory: BackendFactory): Promise<Harness> {
+export type HarnessOptions = {
+  /**
+   * true: ayar kancaları (kayıt, yorum, anket limitleri, feed, medya) test nesneleri yerine gerçek ayar servisinden
+   * (system_settings) gelir; KV-40 testleri için. Varsayılan false: eski testler sabit ayarla çalışır.
+   */
+  realSettings?: boolean;
+};
+
+export async function createHarness(factory: BackendFactory, options: HarnessOptions = {}): Promise<Harness> {
   const backend = await factory.create();
   const mails: Mail[] = [];
   const logs: string[] = [];
@@ -194,14 +206,18 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     MAIL_FROM: "KararVer <no-reply@localhost>",
     MEDIA_PUBLIC_BASE_URL: "http://cdn.test/media",
   });
+  const settingsService =
+    options.realSettings && backend.prisma ? createSettingsService(createPrismaSettingsStore(backend.prisma), { now: () => clock.now, ttlMs: 5_000 }) : undefined;
+  const fixed = !settingsService;
   const app = buildApp({
     config,
+    settingsService,
     authStore: backend.store,
     rbacStore: backend.rbac,
     hasher: createArgon2Hasher(),
     mailer: { send: async (mail) => void mails.push(mail) },
     now: () => clock.now,
-    isRegistrationEnabled: async () => registrationEnabled.value,
+    isRegistrationEnabled: fixed ? async () => registrationEnabled.value : undefined,
     decisionStore: backend.prisma ? createPrismaDecisionStore(backend.prisma) : undefined,
     pollStore: backend.prisma ? createPrismaPollStore(backend.prisma) : undefined,
     searchStore: backend.prisma ? createPrismaSearchStore(backend.prisma) : undefined,
@@ -210,7 +226,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     pointAdminStore: backend.prisma ? createPrismaPointAdminStore(backend.prisma) : undefined,
     featuredAdminStore: backend.prisma ? createPrismaFeaturedAdminStore(backend.prisma) : undefined,
     feedStore: backend.prisma ? createPrismaFeedStore(backend.prisma) : undefined,
-    feedSettings: async () => feedSettings,
+    feedSettings: fixed ? async () => feedSettings : undefined,
     trendStore: backend.prisma ? createPrismaTrendStore(backend.prisma) : undefined,
     voteStore: backend.prisma ? createPrismaVoteStore(backend.prisma) : undefined,
     communityStore: backend.prisma ? createPrismaCommunityStore(backend.prisma) : undefined,
@@ -219,11 +235,11 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     moderationStore: backend.prisma ? createPrismaModerationStore(backend.prisma) : undefined,
     adminUserStore: backend.prisma ? createPrismaAdminUserStore(backend.prisma) : undefined,
     notificationStore: backend.prisma ? createPrismaNotificationStore(backend.prisma) : undefined,
-    pollSettings: async () => pollSettings,
+    pollSettings: fixed ? async () => pollSettings : undefined,
     commentStore: backend.prisma ? createPrismaCommentStore(backend.prisma) : undefined,
-    isCommentsEnabled: async () => commentsEnabled.value,
+    isCommentsEnabled: fixed ? async () => commentsEnabled.value : undefined,
     media: backend.prisma
-      ? { store: createPrismaMediaStore(backend.prisma), storage, queue, settings: async () => mediaSettings }
+      ? { store: createPrismaMediaStore(backend.prisma), storage, queue, settings: fixed ? async () => mediaSettings : undefined }
       : undefined,
     logger: {
       level: "info",
@@ -239,6 +255,7 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
   return {
     ...backend,
     app,
+    settings: settingsService,
     mails,
     logs,
     clock,
