@@ -142,6 +142,11 @@ export function AdminSection({ section }: { section: AdminSectionId }) {
   const meta = sectionMeta[section];
   const { client } = useProduct();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const dialogTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const openDialog = (trigger: HTMLButtonElement) => {
+    dialogTriggerRef.current = trigger;
+    dialogRef.current?.showModal();
+  };
   const live = client.admin ? livePanel(section, client.admin) : null;
   if (live) {
     return (
@@ -157,7 +162,7 @@ export function AdminSection({ section }: { section: AdminSectionId }) {
     <>
       <header className={styles.hero}>
         <div><span className="eyebrow">YÖNETİM</span><h1>{meta.title}</h1><p className="kv-muted">{meta.intro}</p></div>
-        <button className="kv-button" onClick={() => dialogRef.current?.showModal()}>Örnek işlem</button>
+        <button className="kv-button" onClick={(event) => openDialog(event.currentTarget)}>Örnek işlem</button>
       </header>
       <div className={styles.grid} aria-label="Özet metrikler">
         {meta.metric.map(([label, value]) => <div className={styles.metric} key={label}><span className="kv-muted">{label}</span><strong>{value}</strong></div>)}
@@ -171,12 +176,12 @@ export function AdminSection({ section }: { section: AdminSectionId }) {
         <table className={styles.table}>
           <thead><tr><th>Kayıt</th><th>Durum</th><th>Güncelleme</th><th>İşlem</th></tr></thead>
           <tbody>
-            <tr><td>{meta.title} örnek kaydı</td><td>Aktif</td><td>Az önce</td><td><button className="kv-button kv-button--ghost" onClick={() => dialogRef.current?.showModal()}>İncele</button></td></tr>
-            <tr><td>İkinci örnek kayıt</td><td>İncelemede</td><td>12 dk önce</td><td><button className="kv-button kv-button--ghost" onClick={() => dialogRef.current?.showModal()}>İncele</button></td></tr>
+            <tr><td>{meta.title} örnek kaydı</td><td>Aktif</td><td>Az önce</td><td><button className="kv-button kv-button--ghost" onClick={(event) => openDialog(event.currentTarget)}>İncele</button></td></tr>
+            <tr><td>İkinci örnek kayıt</td><td>İncelemede</td><td>12 dk önce</td><td><button className="kv-button kv-button--ghost" onClick={(event) => openDialog(event.currentTarget)}>İncele</button></td></tr>
           </tbody>
         </table>
       </div>
-      <dialog ref={dialogRef} className={styles.dialog} aria-labelledby="admin-dialog-title" onCancel={() => dialogRef.current?.close()}>
+      <dialog ref={dialogRef} className={styles.dialog} aria-labelledby="admin-dialog-title" onClose={() => dialogTriggerRef.current?.focus()}>
         <div className={styles.dialogBody}>
           <span className="eyebrow">ORTAK MODAL KALIBI</span>
           <h2 id="admin-dialog-title">Yönetim işlemi</h2>
