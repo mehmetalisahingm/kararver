@@ -181,10 +181,10 @@ export function registerFeaturedAdminRoutes(route: Route, deps: FeaturedAdminDep
     const input: AnnouncementInput = {
       title: body.title,
       body: body.body,
-      level: body.level,
-      audience: body.audience,
+      level: body.level ?? "INFO",
+      audience: body.audience ?? "ALL",
       startsAt: date(body.startsAt, "startsAt")!,
-      endsAt: body.endsAt === null ? null : date(body.endsAt, "endsAt")!,
+      endsAt: body.endsAt == null ? null : date(body.endsAt, "endsAt")!,
     };
     validateAnnouncement(input);
     const scope = readIdempotencyScope(request, { userId: viewer!.id, route: "admin.announcements.create", body, now: at, required: false });
