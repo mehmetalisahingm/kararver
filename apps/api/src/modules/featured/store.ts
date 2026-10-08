@@ -17,6 +17,8 @@ export type FeaturedRow = {
   badge: string | null;
   startsAt: Date;
   endsAt: Date;
+  /** One-time activation marker; internal, not exposed to public response. */
+  activatedAt?: Date | null;
   createdAt: Date;
 };
 
@@ -29,6 +31,8 @@ export type AnnouncementRow = {
   audience: AnnouncementAudience;
   startsAt: Date;
   endsAt: Date | null;
+  /** One-time publication marker, null for future schedules. */
+  activatedAt?: Date | null;
   createdAt: Date;
 };
 

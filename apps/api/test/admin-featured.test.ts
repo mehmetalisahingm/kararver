@@ -95,6 +95,12 @@ describe("KV-42 öne çıkarma ve duyurular (postgres)", { skip: backend ? false
     assert.equal(a.id, b.id);
     assert.equal(await h.prisma!.featuredPlacement.count({ where: { pollId, surface: "HOME_SPOTLIGHT" } }), 1);
     assert.equal(await h.prisma!.auditLog.count({ where: { action: "featured.manage", targetId: a.id } }), 1);
+    assert.equal(await h.prisma!.domainEvent.count({
+      where: { naturalKey: `featured.applied:${a.id}`, type: "featured.applied" },
+    }), 1);
+    assert.equal(await h.prisma!.domainEvent.count({
+      where: { type: "community.featured", subjectId: pollId },
+    }), 0);
 
     const publicList = await send("GET", "/featured?surface=HOME_SPOTLIGHT");
     assert.equal(publicList.statusCode, 200, publicList.body);
@@ -115,6 +121,46 @@ describe("KV-42 öne çıkarma ve duyurular (postgres)", { skip: backend ? false
 
     const missingPoll = await send("POST", "/admin/featured", { ...base, pollId: randomUUID(), surface: "FEED_TOP", scopeId: null }, admin.cookie);
     assert.equal(missingPoll.statusCode, 409, missingPoll.body);
+  });
+
+  test("toplulukta öne çıkarma owner bildirimi için tek outbox olayı üretir", async () => {
+    const communityId = randomUUID();
+    const body = {
+      pollId,
+      surface: "COMMUNITY",
+      scopeId: communityId,
+      priority: 30,
+      badge: "Topluluk seçimi",
+      startsAt: at(-1),
+      endsAt: at(60),
+      reason: "Toplulukta öne çıkarma",
+    };
+    const first = await send("POST", "/admin/featured", body, admin.cookie);
+    const replay = await send("POST", "/admin/featured", body, admin.cookie);
+    assert.equal(first.statusCode, 201, first.body);
+    assert.equal(replay.statusCode, 201, replay.body);
+    const placement = FeaturedPlacement.parse(first.json().data);
+    assert.equal(FeaturedPlacement.parse(replay.json().data).id, placement.id);
+
+    const communityEvents = await h.prisma!.domainEvent.findMany({
+      where: { naturalKey: `community.featured:${placement.id}` },
+    });
+    assert.equal(communityEvents.length, 1);
+    assert.equal(communityEvents[0]!.type, "community.featured");
+    assert.equal(communityEvents[0]!.subjectId, pollId);
+    assert.equal((communityEvents[0]!.payload as Record<string, unknown>).communityId, communityId);
+    assert.equal(await h.prisma!.domainEvent.count({
+      where: { naturalKey: `featured.applied:${placement.id}` },
+    }), 1);
+
+    const update = await send("PATCH", `/admin/featured/${placement.id}`, {
+      badge: "Yeni etiket",
+      reason: "Etiket düzenleme",
+    }, admin.cookie);
+    assert.equal(update.statusCode, 200, update.body);
+    assert.equal(await h.prisma!.domainEvent.count({
+      where: { naturalKey: `community.featured:${placement.id}` },
+    }), 1);
   });
 
   test("duyurular: hedef grup, zaman penceresi ve public aktif liste doğru", async () => {
@@ -149,6 +195,53 @@ describe("KV-42 öne çıkarma ve duyurular (postgres)", { skip: backend ? false
     assert.ok(memberIds.includes(publicActive.id));
     assert.ok(memberIds.includes(memberActive.id));
     assert.equal(memberIds.length, 2);
+  });
+
+  test("geleceğe planlanan topluluk yerleşimi erken bildirmez; tarih aktif edilince bir kez üretir", async () => {
+    const response = await send("POST", "/admin/featured", {
+      pollId, surface: "COMMUNITY", scopeId: randomUUID(), priority: 0, badge: "Planlı",
+      startsAt: at(15), endsAt: at(90), reason: "Planlı topluluk yayın",
+    }, admin.cookie);
+    assert.equal(response.statusCode, 201, response.body);
+    const id = FeaturedPlacement.parse(response.json().data).id;
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `community.featured:${id}` } }), 0);
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `featured.applied:${id}` } }), 0);
+
+    const active = await send("PATCH", `/admin/featured/${id}`, {
+      startsAt: at(-2), reason: "Tarihi öne al",
+    }, admin.cookie);
+    assert.equal(active.statusCode, 200, active.body);
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `community.featured:${id}` } }), 1);
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `featured.applied:${id}` } }), 1);
+
+    const replay = await send("PATCH", `/admin/featured/${id}`, {
+      badge: "Planlı, güncel", reason: "Etiket güncelle",
+    }, admin.cookie);
+    assert.equal(replay.statusCode, 200, replay.body);
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `community.featured:${id}` } }), 1);
+  });
+
+  test("duyuru aktivasyonu zamanı gelmeden olay üretmez; canlıya çekilince tek yayın olayı", async () => {
+    const response = await send("POST", "/admin/announcements", {
+      title: "İleri tarihli duyuru", body: "Üyelere bilgi",
+      level: "WARNING", audience: "AUTHENTICATED", startsAt: at(25), endsAt: at(75),
+      reason: "Planlı bildirim",
+    }, admin.cookie);
+    assert.equal(response.statusCode, 201, response.body);
+    const id = Announcement.parse(response.json().data).id;
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `announcement.published:${id}` } }), 0);
+    const activate = await send("PATCH", `/admin/announcements/${id}`, {
+      startsAt: at(-1), reason: "Şimdi yayınla",
+    }, admin.cookie);
+    assert.equal(activate.statusCode, 200, activate.body);
+    const events = await h.prisma!.domainEvent.findMany({ where: { naturalKey: `announcement.published:${id}` } });
+    assert.equal(events.length, 1);
+    assert.equal((events[0]!.payload as { audience: string }).audience, "AUTHENTICATED");
+    const edit = await send("PATCH", `/admin/announcements/${id}`, {
+      title: "Güncel duyuru", reason: "Yazım düzeltmesi",
+    }, admin.cookie);
+    assert.equal(edit.statusCode, 200, edit.body);
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `announcement.published:${id}` } }), 1);
   });
 
   test("duyuru/öne çıkarma endpointleri yetkisiz kullanıcıya kapalı", async () => {

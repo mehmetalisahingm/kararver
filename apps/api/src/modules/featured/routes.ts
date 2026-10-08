@@ -123,9 +123,9 @@ export function registerFeaturedAdminRoutes(route: Route, deps: FeaturedAdminDep
     const input: FeaturedInput = {
       pollId: body.pollId,
       surface: body.surface,
-      scopeId: body.scopeId,
-      priority: body.priority,
-      badge: body.badge,
+      scopeId: body.scopeId ?? null,
+      priority: body.priority ?? 0,
+      badge: body.badge ?? null,
       startsAt: date(body.startsAt, "startsAt")!,
       endsAt: date(body.endsAt, "endsAt")!,
     };
@@ -181,10 +181,10 @@ export function registerFeaturedAdminRoutes(route: Route, deps: FeaturedAdminDep
     const input: AnnouncementInput = {
       title: body.title,
       body: body.body,
-      level: body.level,
-      audience: body.audience,
+      level: body.level ?? "INFO",
+      audience: body.audience ?? "ALL",
       startsAt: date(body.startsAt, "startsAt")!,
-      endsAt: body.endsAt === null ? null : date(body.endsAt, "endsAt")!,
+      endsAt: body.endsAt == null ? null : date(body.endsAt, "endsAt")!,
     };
     validateAnnouncement(input);
     const scope = readIdempotencyScope(request, { userId: viewer!.id, route: "admin.announcements.create", body, now: at, required: false });

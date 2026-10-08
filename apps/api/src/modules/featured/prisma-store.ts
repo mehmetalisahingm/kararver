@@ -1,6 +1,8 @@
+import { createEvent, newEventId } from "@kararver/contracts";
 import { Prisma, type PrismaClient } from "@kararver/db";
 import { runIdempotent } from "../../http/idempotency.ts";
 import { writeAudit } from "../audit/write.ts";
+import { writeEvent } from "../events/write.ts";
 import type {
   AnnouncementInput,
   AnnouncementRow,
@@ -20,6 +22,7 @@ const featuredSelect = {
   badge: true,
   startsAt: true,
   endsAt: true,
+  activatedAt: true,
   createdAt: true,
 } as const satisfies Prisma.FeaturedPlacementSelect;
 
@@ -31,6 +34,7 @@ const announcementSelect = {
   audience: true,
   startsAt: true,
   endsAt: true,
+  activatedAt: true,
   createdAt: true,
 } as const satisfies Prisma.AnnouncementSelect;
 
@@ -55,6 +59,68 @@ const announcementAudit = (row: AnnouncementRow | AnnouncementInput) => ({
   startsAt: row.startsAt.toISOString(),
   endsAt: row.endsAt?.toISOString() ?? null,
 });
+
+
+async function emitFeaturedEvents(
+  tx: Tx,
+  placement: FeaturedInput & { id: string },
+  actorId: string,
+  at: Date,
+) {
+  const details = {
+    placementId: placement.id,
+    surface: placement.surface,
+    scopeId: placement.scopeId,
+    startsAt: placement.startsAt.toISOString(),
+    endsAt: placement.endsAt.toISOString(),
+  };
+  await writeEvent(tx, createEvent({
+    id: newEventId(at),
+    type: "featured.applied",
+    occurredAt: at.toISOString(),
+    actorId,
+    subject: { type: "POLL", id: placement.pollId },
+    payload: details,
+  }));
+  // KV-21 tüketicisi bu olayı sadece anket sahibine ve bildirim tercihini
+  // kontrol ederek teslim eder. Diğer yüzeyler topluluk bildirimi üretmez.
+  if (placement.surface === "COMMUNITY" && placement.scopeId) {
+    await writeEvent(tx, createEvent({
+      id: newEventId(at),
+      type: "community.featured",
+      occurredAt: at.toISOString(),
+      actorId,
+      subject: { type: "POLL", id: placement.pollId },
+      payload: {
+        placementId: placement.id,
+        communityId: placement.scopeId,
+        startsAt: details.startsAt,
+        endsAt: details.endsAt,
+      },
+    }));
+  }
+}
+
+async function emitAnnouncementEvent(
+  tx: Tx,
+  announcement: AnnouncementInput & { id: string },
+  actorId: string,
+  at: Date,
+) {
+  await writeEvent(tx, createEvent({
+    id: newEventId(at),
+    type: "announcement.published",
+    occurredAt: at.toISOString(),
+    actorId,
+    subject: { type: "ANNOUNCEMENT", id: announcement.id },
+    payload: {
+      level: announcement.level,
+      audience: announcement.audience,
+      startsAt: announcement.startsAt.toISOString(),
+      endsAt: announcement.endsAt?.toISOString() ?? null,
+    },
+  }));
+}
 
 function featuredNaturalKey(input: FeaturedInput) {
   return ["featured", input.pollId, input.surface, input.scopeId ?? "-", input.startsAt.toISOString(), input.endsAt.toISOString()].join(":");
@@ -116,7 +182,10 @@ export function createPrismaFeaturedAdminStore(prisma: PrismaClient): FeaturedAd
         });
         if (duplicate) return { ok: true, value: duplicate.id };
         if (!(await pollAvailable(tx, input.pollId))) return { ok: false, reason: "POLL_NOT_AVAILABLE" };
-        const created = await tx.featuredPlacement.create({ data: { ...input, createdBy: trail.actorId }, select: { id: true } });
+        const active = input.startsAt <= trail.now && input.endsAt > trail.now;
+        const created = await tx.featuredPlacement.create({ data: { ...input, createdBy: trail.actorId, activatedAt: active ? trail.now : null }, select: { id: true } });
+        // A future placement has no outbox entry until its start time.
+        if (active) await emitFeaturedEvents(tx, { ...input, id: created.id }, trail.actorId, trail.now);
         await writeAudit(tx, {
           source: "API",
           actorId: trail.actorId,
@@ -139,7 +208,17 @@ export function createPrismaFeaturedAdminStore(prisma: PrismaClient): FeaturedAd
         if (!current) return "NOT_FOUND" as const;
         if (patch.pollId !== undefined && !(await pollAvailable(tx, patch.pollId))) return "POLL_NOT_AVAILABLE" as const;
         if (Object.keys(patch).length === 0) return "OK" as const;
-        await tx.featuredPlacement.update({ where: { id }, data: patch });
+        const startsAt = patch.startsAt ?? current.startsAt;
+        const endsAt = patch.endsAt ?? current.endsAt;
+        const activating = !current.activatedAt && startsAt <= trail.now && endsAt > trail.now;
+        const updated = await tx.featuredPlacement.update({
+          where: { id }, data: { ...patch, ...(activating ? { activatedAt: trail.now } : {}) }, select: featuredSelect,
+        });
+        // Activation or moving an already active placement onto COMMUNITY produces
+        // the relevant event once. Natural keys prevent duplicates on retry.
+        if (activating || (current.surface !== "COMMUNITY" && updated.surface === "COMMUNITY" && updated.activatedAt && updated.startsAt <= trail.now && updated.endsAt > trail.now)) {
+          await emitFeaturedEvents(tx, updated, trail.actorId, trail.now);
+        }
         await writeAudit(tx, {
           source: "API",
           actorId: trail.actorId,
@@ -212,7 +291,9 @@ export function createPrismaFeaturedAdminStore(prisma: PrismaClient): FeaturedAd
 
     async createAnnouncement(scope, input, trail) {
       const result = await runIdempotent(prisma, scope, 201, async (tx) => {
-        const created = await tx.announcement.create({ data: { ...input, createdBy: trail.actorId }, select: { id: true } });
+        const active = input.startsAt <= trail.now && (!input.endsAt || input.endsAt > trail.now);
+        const created = await tx.announcement.create({ data: { ...input, createdBy: trail.actorId, activatedAt: active ? trail.now : null }, select: { id: true } });
+        if (active) await emitAnnouncementEvent(tx, { ...input, id: created.id }, trail.actorId, trail.now);
         await writeAudit(tx, {
           source: "API",
           actorId: trail.actorId,
@@ -236,7 +317,11 @@ export function createPrismaFeaturedAdminStore(prisma: PrismaClient): FeaturedAd
         const current = await tx.announcement.findUnique({ where: { id }, select: announcementSelect });
         if (!current) return "NOT_FOUND" as const;
         if (Object.keys(patch).length === 0) return "OK" as const;
-        await tx.announcement.update({ where: { id }, data: patch });
+        const startsAt = patch.startsAt ?? current.startsAt;
+        const endsAt = patch.endsAt !== undefined ? patch.endsAt : current.endsAt;
+        const activating = !current.activatedAt && startsAt <= trail.now && (!endsAt || endsAt > trail.now);
+        await tx.announcement.update({ where: { id }, data: { ...patch, ...(activating ? { activatedAt: trail.now } : {}) } });
+        if (activating) await emitAnnouncementEvent(tx, { ...current, ...patch, id }, trail.actorId, trail.now);
         await writeAudit(tx, {
           source: "API",
           actorId: trail.actorId,

@@ -7,7 +7,7 @@ import type { z } from "zod";
 export type NotificationRecord = {
   id: string;
   type: z.infer<typeof NotificationType>;
-  subject: { type: "POLL" | "COMMENT" | "COMMUNITY" | "USER"; id: string };
+  subject: { type: "POLL" | "COMMENT" | "COMMUNITY" | "USER" | "ANNOUNCEMENT"; id: string };
   /** Yorum bildirimini doğru ankete döndürmek ve anket sessizini uygulamak için; DB'de zaten tutulur. */
   pollId: string | null;
   /** Silinmiş aktör veya sistem bildirimi: null. */

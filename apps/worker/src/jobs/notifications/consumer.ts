@@ -5,7 +5,7 @@ import type { EventType } from "@kararver/contracts";
 import { PermanentEventError, type EventConsumer } from "../events/consumers.ts";
 import { notificationAdapters } from "./adapters.ts";
 import { preferencePolicy, type NotificationPolicy } from "./policy.ts";
-import { eligibleUsers, fanoutToVoters, writeNotifications } from "./write.ts";
+import { eligibleUsers, fanoutToVoters, fanoutToActiveUsers, writeNotifications } from "./write.ts";
 
 export const NOTIFICATIONS_CONSUMER = "notifications";
 
@@ -30,6 +30,14 @@ export function createNotificationsConsumer(opts: NotificationsConsumerOptions =
       if (!recipients) return;
       const draft = recipients.pollId !== undefined ? { ...base, pollId: recipients.pollId } : base;
       await writeNotifications(tx, draft, await eligibleUsers(tx, recipients.userIds, draft.eventActorId), policy);
+      if (recipients.broadcast) {
+        const result = await fanoutToActiveUsers(tx, draft, { policy, slice: opts.slice, limit: opts.limit });
+        if (result.truncated) {
+          log("warn", "duyuru bildirim sınırı aşıldı; yalnız ilk alıcılara iletildi", {
+            eventId: event.id, type: event.type, recipients: result.recipients,
+          });
+        }
+      }
       if (recipients.voters) {
         const result = await fanoutToVoters(tx, draft, { pollId: recipients.voters.pollId, policy, slice: opts.slice, limit: opts.limit });
         if (result.truncated) {

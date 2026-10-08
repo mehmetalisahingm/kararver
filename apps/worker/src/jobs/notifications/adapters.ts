@@ -21,6 +21,8 @@ export type Recipients = {
   userIds: string[];
   /** Kitlesel: anketin bütün geçerli oy verenleri (dilimli fan-out). */
   voters?: { pollId: string };
+  /** Active announcement broadcast to registered accounts; delivered in bounded slices. */
+  broadcast?: boolean;
   /** Taslaktaki poll_id'yi DB'den çözülen değerle değiştirir (yorum moderasyonu). */
   pollId?: string;
 };
@@ -190,6 +192,24 @@ export const notificationAdapters: Readonly<Partial<Record<EventType, Notificati
     draft: (e) =>
       draftOf(e, "COMMUNITY_FEATURED", { subject: { type: "POLL", id: e.subject.id }, pollId: e.subject.id, actorId: null, data: { communityId: e.payload.communityId } }),
     recipients: (tx, e) => toPollAuthor(tx, e.subject.id),
+  }),
+  "announcement.published": define({
+    eventType: "announcement.published",
+    type: "ANNOUNCEMENT_PUBLISHED",
+    draft: (e) => draftOf(e, "ANNOUNCEMENT_PUBLISHED", {
+      subject: { type: "ANNOUNCEMENT", id: e.subject.id },
+      pollId: null, actorId: null, data: { level: e.payload.level },
+    }),
+    recipients: async (tx, e) => {
+      const announcement = await tx.announcement.findUnique({ where: { id: e.subject.id } });
+      const now = new Date();
+      // Deletion, rescheduling or expiry before dispatch must not broadcast stale content.
+      if (!announcement?.activatedAt || announcement.startsAt > now ||
+          (announcement.endsAt && announcement.endsAt <= now)) return null;
+      // ALL also appears to guests as a banner. Both audiences notify signed-in accounts;
+      // anonymous visitors have no inbox or recipient identity.
+      return { userIds: [], broadcast: true };
+    },
   }),
   "sanction.applied": define({
     eventType: "sanction.applied",
