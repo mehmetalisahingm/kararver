@@ -233,3 +233,38 @@ test("KV-42 admin client: duyuru hedef grubu API gövdesine gider", async () => 
   assert.equal(create.calls[0].headers["Idempotency-Key"], "announcement-key-123");
   assert.equal((create.calls[0].body as any).audience, "ALL");
 });
+
+// ─── KV-40 (#42): sistem ayarları ve acil durum ───
+
+test("ayarlar: liste sözleşme şemasıyla okunur", async () => {
+  const { admin, calls } = client(() => reply("admin.settings.list", "ok"));
+  const list = await admin.settings();
+  assert.ok(calls[0].url.endsWith("/v1/admin/settings"));
+  assert.equal(calls[0].method, "GET");
+  assert.equal(list[0].key, "polls.voteChangeAllowed");
+  assert.equal(list[0].version, 3);
+});
+
+test("ayar güncelleme: PATCH, anahtar yolda; değer, sürüm ve gerekçe gövdede", async () => {
+  const { admin, calls } = client(() => reply("admin.settings.update", "ok"));
+  const out = await admin.updateSetting("polls.voteChangeAllowed", false, 3, "Beta kararı");
+  assert.equal(calls[0].method, "PATCH");
+  assert.ok(calls[0].url.endsWith("/v1/admin/settings/polls.voteChangeAllowed"));
+  assert.deepEqual(calls[0].body, { value: false, version: 3, reason: "Beta kararı" });
+  assert.equal(out.version, 4);
+});
+
+test("eski sürüm VERSION_CONFLICT olarak yüzeye çıkar (panel listeyi yeniler)", async () => {
+  const { admin } = client(() => reply("admin.settings.update", "stale"));
+  await assert.rejects(admin.updateSetting("polls.voteChangeAllowed", false, 2, "Beta kararı"), (e: UiError) => e.code === "VERSION_CONFLICT");
+});
+
+test("acil durum: yalnız verilen anahtarlar PUT gövdesinde; yanıt bütün anahtarları verir", async () => {
+  const { admin, calls } = client(() => reply("admin.emergency.put", "ok"));
+  const state = await admin.putEmergency({ uploads: false }, "Görsel saldırısı");
+  assert.equal(calls[0].method, "PUT");
+  assert.ok(calls[0].url.endsWith("/v1/admin/emergency"));
+  assert.deepEqual(calls[0].body, { switches: { uploads: false }, reason: "Görsel saldırısı" });
+  assert.equal(state.uploads, false);
+  assert.equal(state.maintenance, false);
+});
