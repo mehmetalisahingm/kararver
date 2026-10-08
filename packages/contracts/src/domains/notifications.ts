@@ -18,6 +18,7 @@ export const NotificationType = z.enum([
   "MODERATION_APPLIED",
   "COMMUNITY_FEATURED",
   "SANCTION_APPLIED",
+  "ANNOUNCEMENT_PUBLISHED",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 
@@ -41,13 +42,14 @@ export const notificationData = Object.freeze({
   DECISION_UPDATED: z.strictObject({ first: z.boolean() }),
   MODERATION_APPLIED: z.strictObject({ action: ModerationAction, toStatus: ContentStatus }),
   COMMUNITY_FEATURED: z.strictObject({ communityId: Id }),
+  ANNOUNCEMENT_PUBLISHED: z.strictObject({ level: z.enum(["INFO", "WARNING"]) }),
   SANCTION_APPLIED: z.strictObject({ sanctionType: SanctionType.extract(["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING"]), endsAt: Timestamp.nullable() }),
 } satisfies Record<NotificationType, z.ZodObject>);
 
 export const NotificationView = z.strictObject({
   id: Id,
   type: NotificationType,
-  subject: z.strictObject({ type: z.enum(["POLL", "COMMENT", "COMMUNITY", "USER"]), id: Id }),
+  subject: z.strictObject({ type: z.enum(["POLL", "COMMENT", "COMMUNITY", "USER", "ANNOUNCEMENT"]), id: Id }),
   actor: PublicUser.nullable(),
   /** Tipe göre küçük özet alanlar (ör. milestone: 100). Oy seçimi veya özel veri içermez. */
   data: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
