@@ -123,9 +123,9 @@ export function registerFeaturedAdminRoutes(route: Route, deps: FeaturedAdminDep
     const input: FeaturedInput = {
       pollId: body.pollId,
       surface: body.surface,
-      scopeId: body.scopeId,
-      priority: body.priority,
-      badge: body.badge,
+      scopeId: body.scopeId ?? null,
+      priority: body.priority ?? 0,
+      badge: body.badge ?? null,
       startsAt: date(body.startsAt, "startsAt")!,
       endsAt: date(body.endsAt, "endsAt")!,
     };
