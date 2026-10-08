@@ -141,9 +141,9 @@ export const FeaturedPlacement = z.strictObject({
 const FeaturedBody = z.strictObject({
   pollId: Id,
   surface: FeaturedSurface,
-  scopeId: Id.nullable().default(null),
-  priority: z.number().int().min(0).max(1000).default(0),
-  badge: z.string().trim().max(30).nullable().default(null),
+  scopeId: Id.nullable().optional(),
+  priority: z.number().int().min(0).max(1000).optional(),
+  badge: z.string().trim().max(30).nullable().optional(),
   startsAt: Timestamp,
   endsAt: Timestamp,
 });
