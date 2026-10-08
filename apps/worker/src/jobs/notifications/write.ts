@@ -24,7 +24,7 @@ export type NotificationDraft = {
   eventActorId: string | null;
   /** Bildirimde gösterilen aktör; moderasyon, yaptırım ve öne çıkarmada NULL. */
   actorId: string | null;
-  subject: { type: "POLL" | "COMMENT" | "COMMUNITY" | "USER"; id: string };
+  subject: { type: "POLL" | "COMMENT" | "COMMUNITY" | "USER" | "ANNOUNCEMENT"; id: string };
   pollId: string | null;
   data: Record<string, NotificationScalar>;
   dedupeKey: string;
@@ -99,7 +99,7 @@ export async function fanoutToVoters(
         ${after}
       ORDER BY v.created_at, v.user_id
       LIMIT ${take + 1}`;
-    const page = rows.slice(0, take);
+    const page: { id: string }[] = rows.slice(0, take);
     result.recipients += page.length;
     result.written += await writeNotifications(tx, draft, page.map((r) => r.userId), opts.policy);
     if (rows.length <= take) return result;
@@ -130,8 +130,8 @@ export async function fanoutToActiveUsers(
   let cursor: string | null = null;
   while (result.recipients < limit) {
     const take = Math.min(slice, limit - result.recipients);
-    const after = cursor ? Prisma.sql`AND id > ${cursor}::uuid` : Prisma.empty;
-    const rows = await tx.$queryRaw<{ id: string }[]>`
+    const after: Prisma.Sql = cursor ? Prisma.sql`AND id > ${cursor}::uuid` : Prisma.empty;
+    const rows: { id: string }[] = await tx.$queryRaw<{ id: string }[]>`
       SELECT id::text AS id FROM users
       WHERE deleted_at IS NULL AND status <> 'BANNED'
         AND (${draft.eventActorId}::uuid IS NULL OR id <> ${draft.eventActorId}::uuid)
