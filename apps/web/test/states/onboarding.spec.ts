@@ -101,3 +101,40 @@ test("direct content links bypass onboarding even for first-time guests",async({
   await expect(page.locator("main h1").first()).toBeVisible();
   expect(mock.unexpected).toEqual([]);
 });
+
+test("post-login interests API failure keeps draft and allows retry without logging in again", async ({page}) => {
+  const mock = await api(page);
+  const categoryId = "01998b9a-0000-7000-8000-000000000001";
+  let writes = 0;
+  let successfulWrites = 0;
+  mock.handlers.set("me.get", r => r.fulfill({status: 401, json: failure("UNAUTHENTICATED")}));
+  mock.handlers.set("interests.get", r => r.fulfill({json: {data: {categoryIds: []}}}));
+  mock.handlers.set("categories.list", r => r.fulfill({json: {data: [{id: categoryId, name: "Teknoloji"}], page: {nextCursor: null, hasMore: false}}}));
+  mock.handlers.set("interests.put", async r => {
+    writes++;
+    if (writes === 1) return r.fulfill({status: 503, json: failure("INTERNAL_ERROR")});
+    successfulWrites++;
+    await r.fulfill({json: {data: {categoryIds: [categoryId]}}});
+  });
+  await page.addInitScript(({categoryId}) => {
+    localStorage.setItem("kv-welcome-v1", "1");
+    localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({
+      version: 1, categoryIds: [categoryId], demoChoice: "wait", returnTo: "/",
+    }));
+  }, {categoryId});
+  await page.goto("/giris?onboarding=1&returnTo=%2F");
+  await page.getByLabel("E-posta", {exact: true}).fill("retry@example.test");
+  await page.getByLabel("Şifre", {exact: true}).fill("test-password");
+  await page.getByRole("button", {name: "Giriş yap", exact: true}).click();
+
+  await expect(page.getByRole("alert")).toContainText("Giriş başarılı, ancak ilgi alanların kaydedilemedi");
+  await expect(page.getByRole("button", {name: "İlgi alanlarını yeniden kaydet"})).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).not.toBeNull();
+
+  await page.getByRole("button", {name: "İlgi alanlarını yeniden kaydet"}).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(writes).toBe(2);
+  expect(successfulWrites).toBe(1);
+  expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).toBeNull();
+  expect(mock.unexpected).toEqual([]);
+});
