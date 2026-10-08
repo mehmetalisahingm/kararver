@@ -9,6 +9,13 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.19.0 — 2026-10-08 (Faruk, KV-19 hız sınırı, #21)
+
+Kırıcı değişiklik yok: yalnız yeni ayar anahtarları. `RATE_LIMITED` (429) zaten her uç noktanın ortak hatasıydı.
+
+- **Eklendi:** `limits.*` (18 anahtar, `settings.ts`): giriş (e-posta/IP başına başarısız deneme), kayıt, şifre sıfırlama/doğrulama tekrarı, oy, yorum (dakika ve gün), şikâyet, görsel yükleme, arama ve diğer yazma işlemleri; yeni hesap için ayrı değerler. Resmî değer yok (`default: null`): plan sınır ister, sayı vermez. Öneriler `missing` alanında; Mehmet teyidi bekliyor (KV-04 açık konu 10). Public değil.
+- **Belge:** `docs/KV-19_RATE_LIMIT.md` (kurallar, pencereler, 429 + `Retry-After`).
+
 ## 1.18.0 — 2026-10-06 (Mert, KV-37 gelişmiş admin içerik işlemleri, #39)
 
 Kırıcı değişiklik yok: yeni uç noktalar, `ModerationAction` enum'unda yeni değerler (açık enum, API_CONTRACTS §5) ve yanıtlara eklenen alanlar; `admin.sanctions.create` gövdesine isteğe bağlı alan. Reviewer: Faruk (polls/comments, `allowComments` etkin değer), Utku (`admin.sanctions.create` + `reportId`, `sanction.applied`).

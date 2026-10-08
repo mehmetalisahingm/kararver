@@ -12,6 +12,10 @@ import { buildApp } from "../../src/app.ts";
 import { loadConfig } from "../../src/config.ts";
 import type { Mail } from "../../src/mail/mailer.ts";
 import { createArgon2Hasher } from "../../src/modules/auth/crypto.ts";
+import { DEFAULT_RATE_LIMIT_SETTINGS, type RateLimitSettings } from "../../src/modules/rate-limit/policy.ts";
+import { createPrismaRateLimitStore } from "../../src/modules/rate-limit/prisma-store.ts";
+import type { RateLimitStore } from "../../src/modules/rate-limit/store.ts";
+import { createMemoryRateLimitStore } from "./memory-rate-limit-store.ts";
 import { createPrismaAdminUserStore } from "../../src/modules/admin-users/prisma-store.ts";
 import { createPrismaAuthStore } from "../../src/modules/auth/prisma-store.ts";
 import { createPrismaCategoryAdminStore } from "../../src/modules/categories/prisma-store.ts";
@@ -71,6 +75,12 @@ export type Harness = Backend & {
   /** "Senin İçin" keşif payı ve tekrar sınırları (KV-40 gelene kadar). */
   feedSettings: FeedSettings;
   mediaSettings: MediaSettings;
+  /**
+   * KV-19 hız sınırları. Varsayılan gevşektir (diğer testler aynı IP'den çok hesap açar); rate-limit.test.ts
+   * gerçek değerleri açar: `Object.assign(h.rateLimitSettings, DEFAULT_RATE_LIMIT_SETTINGS)`.
+   */
+  rateLimitSettings: RateLimitSettings;
+  rateLimitStore: RateLimitStore;
   /** Medya route'ları sadece PostgreSQL backend'inde kayıtlıdır. */
   storage: FakeStorage;
   queue: { enqueued: string[] };
@@ -194,8 +204,14 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     MAIL_FROM: "KararVer <no-reply@localhost>",
     MEDIA_PUBLIC_BASE_URL: "http://cdn.test/media",
   });
+  const rateLimitSettings: RateLimitSettings = Object.fromEntries(
+    Object.keys(DEFAULT_RATE_LIMIT_SETTINGS).map((k) => [k, 1_000_000]),
+  ) as RateLimitSettings;
+  const rateLimitStore = backend.prisma ? createPrismaRateLimitStore(backend.prisma) : createMemoryRateLimitStore();
   const app = buildApp({
     config,
+    rateLimitStore,
+    rateLimitSettings: async () => rateLimitSettings,
     authStore: backend.store,
     rbacStore: backend.rbac,
     hasher: createArgon2Hasher(),
@@ -247,6 +263,8 @@ export async function createHarness(factory: BackendFactory): Promise<Harness> {
     commentsEnabled,
     feedSettings,
     mediaSettings,
+    rateLimitSettings,
+    rateLimitStore,
     storage,
     queue,
     async close() {
