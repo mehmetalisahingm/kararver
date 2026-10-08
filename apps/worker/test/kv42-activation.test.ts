@@ -20,7 +20,8 @@ describe("KV-42 scheduled activation and outbox (postgres)", { skip: url ? false
     const f = fixtures(db);
     const [owner] = await f.users(1);
     userId = owner!;
-    const poll = await f.poll({ opensAt: at(-120) });
+    const categoryId = await f.category();
+    const poll = await f.poll({ opensAt: at(-120), categoryId, authorId: userId });
     pollId = poll.id;
   });
   after(async () => { await db?.$disconnect(); });
