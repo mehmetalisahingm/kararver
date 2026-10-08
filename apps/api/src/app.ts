@@ -49,6 +49,8 @@ import type { ReportStore } from "./modules/reports/store.ts";
 import { registerRoleRoutes } from "./modules/rbac/roles-routes.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
 import { registerRevisionRoutes } from "./modules/revisions/routes.ts";
+import { registerAuditRoutes } from "./modules/audit/routes.ts";
+import type { AuditStore } from "./modules/audit/store.ts";
 import type { RevisionStore } from "./modules/revisions/store.ts";
 import { registerSearchRoutes } from "./modules/search/routes.ts";
 import type { SearchStore } from "./modules/search/store.ts";
@@ -93,6 +95,8 @@ export type AppDeps = {
   searchStore?: SearchStore;
   /** Verilmezse içerik sürüm geçmişi (admin.revisions.*, #66) kaydedilmez. */
   revisionStore?: RevisionStore;
+  /** Verilmezse audit okuma (admin.audit.list, KV-39) kaydedilmez. */
+  auditStore?: AuditStore;
   /** Verilmezse admin kategori route'ları (admin.categories.*) kaydedilmez. */
   categoryAdminStore?: CategoryAdminStore;
   /** Verilmezse KV-42 öne çıkarma/duyuru admin route'ları kaydedilmez. */
@@ -267,7 +271,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         : undefined,
     });
   }
-  if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl, now });
+  if (deps.auditStore) registerAuditRoutes(route, { store: deps.auditStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.voteStore) {
     registerVoteRoutes(route, { store: deps.voteStore, now, settings: deps.pollSettings ?? (async () => DEFAULT_POLL_SETTINGS) });
     registerVoteAdminRoutes(route, { store: deps.voteStore, now });

@@ -233,3 +233,21 @@ test("KV-42 admin client: duyuru hedef grubu API gövdesine gider", async () => 
   assert.equal(create.calls[0].headers["Idempotency-Key"], "announcement-key-123");
   assert.equal((create.calls[0].body as any).audience, "ALL");
 });
+
+test("audit (KV-39): yalnız dolu süzgeçler gönderilir; kayıt sözleşmeden okunur", async () => {
+  const { admin, calls } = client(() => reply("admin.audit.list", "ok"));
+  const page = await admin.audit({ action: "user.sanction", targetType: "USER", source: "API", from: "2026-10-01T00:00:00.000Z", targetId: "" }, "cur_1");
+  const url = new URL(calls[0].url);
+  assert.equal(calls[0].method, "GET");
+  assert.equal(url.pathname, "/v1/admin/audit");
+  assert.deepEqual(Object.fromEntries(url.searchParams), {
+    limit: "30",
+    action: "user.sanction",
+    targetType: "USER",
+    source: "API",
+    from: "2026-10-01T00:00:00.000Z",
+    cursor: "cur_1",
+  });
+  assert.equal(page.items[0]!.action, "user.sanction");
+  assert.equal(page.items[0]!.reason, "Tekrarlayan spam");
+});

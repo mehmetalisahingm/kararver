@@ -13,4 +13,6 @@ export interface RevisionStore {
   exists(target: RevisionTarget, id: string): Promise<boolean>;
   /** En yeni sürüm önce; `beforeVersion` verilirse ondan küçükler. */
   list(target: RevisionTarget, id: string, beforeVersion: number | null, limit: number): Promise<RevisionRecord[]>;
+  /** Geçmiş okumasının izi (audit revision.read, KV-39): kim, hangi içeriğin geçmişini açtı. */
+  recordRead(target: RevisionTarget, id: string, reader: { actorId: string; requestId: string; at: Date }): Promise<void>;
 }

@@ -5,6 +5,7 @@ import type {
   AdminCategory,
   AdminCommentItem,
   AdminPollItem,
+  AuditEntry,
   Announcement,
   BannedMediaView,
   FeaturedPlacement,
@@ -29,6 +30,9 @@ export type AdminComment = ReturnType<typeof AdminCommentItem.parse>;
 export type HistoryItem = ReturnType<typeof ContentHistoryItem.parse>;
 export type Featured = ReturnType<typeof FeaturedPlacement.parse>;
 export type AnnouncementView = ReturnType<typeof Announcement.parse>;
+export type AuditRecord = ReturnType<typeof AuditEntry.parse>;
+/** admin.audit.list süzgeçleri (KV-39). from dahil, to hariç (ISO zaman). */
+export type AuditSearch = { action?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string };
 
 export type Page<T> = { items: T[]; next: string | null };
 type Wire<T> = { data: T[]; page: { nextCursor: string | null } };
@@ -92,6 +96,14 @@ const data = <T>(wire: unknown) => (wire as { data: T }).data;
 const flag = (value: boolean | undefined) => (value === undefined ? undefined : String(value));
 
 export class AdminClient {
+  /** Değiştirilemez yönetim geçmişi (KV-39); yalnız ADMIN+. Boş süzgeç gönderilmez. */
+  async audit(search: AuditSearch, cursor?: string, signal?: AbortSignal) {
+    const query: Record<string, string> = { limit: "30" };
+    for (const [k, v] of Object.entries(search)) if (v) query[k] = v;
+    if (cursor) query.cursor = cursor;
+    return page<AuditRecord>(await this.http.request("admin.audit.list", { query, signal }));
+  }
+
   private http: HttpClient;
   constructor(http: HttpClient) {
     this.http = http;
