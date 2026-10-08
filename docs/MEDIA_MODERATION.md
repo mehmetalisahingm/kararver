@@ -201,7 +201,36 @@ dHash 9×8 gri tona indirilmiş görselde komşu piksel karşılaştırmasıdır
 - **Yanlış negatifler (bilinen sınırlar):** büyük kırpma (≥ %10), yatay çevirme ve döndürme yakalanmaz; dHash yön ve büyük çerçeve değişimine dayanıklı değildir. Bunlar için sha256 + moderatör kuyruğu devrededir; gerekirse V1.1'de çevrilmiş/döndürülmüş hash'ler de saklanabilir.
 - **Sınır:** küme sentetik (şekil + bulanıklık). Gerçek fotoğraflarda ve ekran görüntülerinde mesafe dağılımı farklıdır (benzer sahneler yakın düşer); eşik 6 bilerek dardır ve §8 madde 1'deki etiketli doğrulama seti hazır olunca yeniden ölçülmelidir. Düz renk görselin dHash'i 0'dır: yasaklı düz renk görseli diğer düz renkleri de incelemeye düşürür (zararsız, kuyruk).
 - **Ölçek:** yasak listesi worker'da bellekte karşılaştırılır (V1'de elle eklenen küçük liste). Binlerce satıra çıkarsa dHash karşılaştırması SQL'e (`bit_count`) taşınmalıdır.
-- **Açık:** risk eşiklerinin admin ayarıyla değiştirilmesi ve her değişimin gerekçeyle kaydı `admin.settings.*` (KV-40, #42, Utku) ile gelecek; eşikler şimdilik `DEFAULT_THRESHOLDS`. Görsel operasyon ekranı (#16 layout) ayrı iş.
+- **Risk eşikleri artık ayardır:** bkz. §10.1. Görsel manuel kararı ve yasak listesi §9, kesinti güvenliği §10.2.
+
+### 10.1 Risk eşikleri ayarı (KV-38 / #40)
+
+Eşikler `media.riskMediumPercent` (varsayılan **35**) ve `media.riskHighPercent` (varsayılan **65**) ayarlarıdır (yüzde, tamsayı; 35 = 0,35). Yönetim paneli → Ayarlar → "Görsel"; değiştirmek SUPER_ADMIN işidir.
+
+- **Gerekçe ve iz:** her değişiklik `admin.settings.update` ile yapılır: gerekçe zorunlu, audit `settings.update` (önce/sonra, değiştiren, istek kimliği), sürümlü (iyimser kilit). Manuel karar (görseli onaylama/reddetme, karantina) ayrı yoldur ve zaten gerekçelidir: `admin.media.decide` → `moderation_actions` + audit (§9).
+- **Yayılma:** worker eşikleri her işte okur (5 sn önbellek); deploy gerekmez. Değişiklik yalnız o andan sonra işlenen görselleri etkiler; kuyruktaki ve onaylı görseller yeniden değerlendirilmez.
+- **Sınırlar (fail-closed taban):** orta eşik 10–60, yüksek eşik 40–95, orta ≤ yüksek (aksi 400). Yani hiçbir ayar, güveni ≥ %95 olan yüksek riskli tespiti otomatik yayına bırakamaz; en gevşek ayarda (60/95) yüksek riskli sınıfta 0,60–0,95 güven **inceleme kuyruğuna**, ≥ 0,95 karantinaya düşer. Bunun altındaki tespit (< 0,60) en gevşek ayarda LOW olur: bu bilinen ve kabul edilmiş taban; gevşetmeden önce kuyruktaki yanlış pozitif oranına bakılmalı.
+- **Hatalı ayar güvenliği:** ayar okunamazsa son bilinen değer, hiç yoksa varsayılan (0,35/0,65) kullanılır; eşik değeri geçersiz çıkarsa (orta > yüksek) orta eşik yüksek eşiğe indirilir. İş içinde eşik okuması hata verirse iş geçici hata sayılır: yayın yok, yeniden denenir.
+- **Test:** `apps/worker/test/policy.test.ts` (yüzde dönüşümü, en gevşek ayarda taban, eşik değişince sonuç değişir), `test/job.test.ts` ("risk eşikleri her işte ayardan okunur", okunamayan eşik), `apps/api/test/admin-settings.test.ts` (sınırlar, orta ≤ yüksek, audit, yetki).
+- **Bilinen sınır:** işlenen görselin kaydı hangi eşikle karar verildiğini taşımaz; denetim için ayar audit'i ve karar zamanı (`moderated_at`) birlikte okunur.
+
+### 10.2 Servis kesintisi ve yeniden deneme güvenliği
+
+Hiçbir arıza yolu bir görseli yayına almaz (fail-closed); yayın yalnız tüm adımlar başarılıysa ve kayıt hâlâ `PENDING` ise olur.
+
+| Arıza | Davranış | Kanıt |
+|---|---|---|
+| Model takıldı / zaman aşımı (8 sn) | `QUARANTINED` (`MODERATION_TIMEOUT`); süreç öldürülür, sonraki iş yeniden başlatır | `job.test.ts`, `moderator.test.ts`; ölçüm: KV-47 Medya bölümü |
+| Model süreci çöktü / başlamadı | `QUARANTINED` (`MODEL_ERROR` / `MODERATION_TIMEOUT`) | aynı |
+| Depolama geçici hata (okuma/yazma) | iş hata verir, pg-boss yeniden dener (30 sn, artan); son denemede `QUARANTINED` (`PROCESSING_FAILED`) | `job.test.ts` "geçici hata yeniden denenir" |
+| Depolama takılı (bağlantı) | S3 istemcisi 5 sn bağlantı / 30 sn istek zaman aşımıyla hata verir → yukarıdaki satır | KV-47 (#142) |
+| Ayar (eşik) okunamadı | son bilinen/varsayılan; iş içinde hata → geçici hata, yayın yok | `job.test.ts` |
+| Yeniden çalışan iş (aynı görsel) | `claim` yalnız `PENDING` kaydı alır; işlenmiş görsel atlanır, çift yayın ve çift deneme sayacı yok | `job.test.ts` "işlenmiş veya olmayan görsel atlanır" |
+| İşlem sırasında başka karar yazıldı (moderatör) | yayına alınan kopya geri çekilir (`deletePublic`), kayıt değişmez | `job.test.ts` "başka bir karar yazılırsa…" |
+| Reddedilen görsel | public nesne silinir, `public_object_key` null (DB CHECK); erişim 404 | `admin-moderation.test.ts`, DB testleri |
+
+Erişim güvenliği: private bucket'taki orijinal ve işlenmiş kopya yalnız moderatöre imzalı, kısa ömürlü URL'le açılır (her erişim audit'e yazılır, §9); public bucket yalnız `APPROVED` görseli taşır.
+
 
 ## 11. Referanslar
 
