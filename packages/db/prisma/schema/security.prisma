@@ -1,0 +1,17 @@
+// Sahip: Faruk (@farukkemree) — KV-19 (#21) hız sınırı; Utku'nun geçici inaktifliği süresince devralındı.
+// Kurallar ve değerler: docs/KV-19_RATE_LIMIT.md · Ayarlar: packages/contracts/src/settings.ts (limits.*)
+
+// Sabit pencereli sayaç. Bütün API süreçleri aynı satırı tek SQL ifadesiyle artırır (INSERT … ON CONFLICT
+// DO UPDATE … RETURNING): çoklu süreçte limit tutarlıdır, Redis gerekmez.
+// key ham IP/e-posta içermez: "<kural>:<pepper'lı sha256 özetinin ilk 32 hanesi>".
+// Süresi geçen pencereler API tarafından ara ara silinir (expires_at index'i).
+model RateLimitCounter {
+  key         String   @db.VarChar(120)
+  windowStart DateTime @map("window_start") @db.Timestamptz(3)
+  count       Int      @default(0)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@id([key, windowStart])
+  @@index([expiresAt])
+  @@map("rate_limit_counters")
+}

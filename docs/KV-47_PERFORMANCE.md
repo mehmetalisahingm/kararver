@@ -180,7 +180,8 @@ Bir iş 3 depolama çağrısı yapar (özgün okuma, işlenmiş yazma, public ya
 DATABASE_URL=postgresql://.../kararver_perf pnpm --filter @kararver/db exec prisma migrate deploy
 PERF_DATABASE_URL=postgresql://.../kararver_perf pnpm --filter @kararver/api perf:seed     # ~80 sn
 # 2) API (4 süreç)
-WEB_CONCURRENCY=4 APP_ENV=local DATABASE_URL=... (diğer .env değerleri) pnpm --filter @kararver/api start:cluster
+# KV-19 hız sınırı tek IP'den gelen 50 sanal kullanıcıyı keser; yük testinde kapatılır (yalnız local/test'te mümkün)
+WEB_CONCURRENCY=4 APP_ENV=local RATE_LIMIT_ENABLED=false DATABASE_URL=... (diğer .env değerleri) pnpm --filter @kararver/api start:cluster
 # 3) Yük (gerçekçi), sonra doğrulama
 PERF_DATABASE_URL=... PERF_API=http://127.0.0.1:4100/v1 PERF_THINK_MS=1000 PERF_DURATION_S=120 pnpm --filter @kararver/api perf:load
 PERF_DATABASE_URL=... PERF_API=http://127.0.0.1:4100/v1 pnpm --filter @kararver/api exec node perf/verify.ts

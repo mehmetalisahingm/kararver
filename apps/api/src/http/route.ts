@@ -40,6 +40,8 @@ type RouteOptions = {
   authenticator: Authenticator;
   rbac: RbacStore;
   now: () => Date;
+  /** KV-19 (#21) hız sınırı; oturum çözüldükten sonra, yetki ve gövde doğrulamasından önce. Verilmezse sınır yok. */
+  rateLimit?: (input: { endpointId: string; method: string; viewer: SessionUser | null; request: FastifyRequest }) => Promise<void>;
 };
 
 function toFastifyPath(path: string): string {
@@ -66,6 +68,7 @@ export function createRouter(app: FastifyInstance, options: RouteOptions) {
       handler: async (request, reply) => {
         reply.header("Cache-Control", "private, no-store");
         const viewer = await options.authenticator.resolve(request, reply);
+        if (options.rateLimit) await options.rateLimit({ endpointId: id, method: endpoint.method, viewer, request });
         const access = createAccess(options.rbac, viewer, action, options.now());
         await access.gate();
         const ctx: RouteContext = {

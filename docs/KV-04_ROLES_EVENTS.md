@@ -173,6 +173,24 @@ Payload şemaları `events.ts` içindedir (strict zod). Kabul koşulundaki alanl
 | `feed.explorationPercent` | integer | 0 – 50 | **yok** | hayır | PRODUCT_TEAM_PLAN §7 ve #29 ayar olarak ister, değer vermez. Öneri 20 (Faruk, KV-27) |
 | `feed.maxSameAuthorPerWindow` | integer | 1 – 10 | **yok** | hayır | aynı. Öneri 2 |
 | `feed.maxSameCategoryPerWindow` | integer | 1 – 10 | **yok** | hayır | aynı. Öneri 4 |
+| `limits.loginFailuresPerEmail` | integer | 1 – 100 | **yok** | hayır | Giriş: aynı e-posta için 15 dakikada en fazla başarısız deneme. KV-19 (#21) öneri 5; Mehmet teyidi |
+| `limits.loginFailuresPerIp` | integer | 1 – 1000 | **yok** | hayır | Giriş: aynı IP'den 15 dakikada en fazla başarısız deneme. KV-19 (#21) öneri 20; Mehmet teyidi |
+| `limits.registerPerIpHour` | integer | 1 – 1000 | **yok** | hayır | Kayıt: aynı IP'den saatte en fazla. KV-19 (#21) öneri 5; Mehmet teyidi |
+| `limits.recoveryPerEmailHour` | integer | 1 – 100 | **yok** | hayır | Şifre sıfırlama / doğrulama tekrarı: aynı e-posta veya hesap için saatte en fazla. KV-19 (#21) öneri 3; Mehmet teyidi |
+| `limits.recoveryPerIpHour` | integer | 1 – 1000 | **yok** | hayır | Şifre sıfırlama / doğrulama tekrarı: aynı IP'den saatte en fazla. KV-19 (#21) öneri 10; Mehmet teyidi |
+| `limits.votesPerMinute` | integer | 1 – 1000 | **yok** | hayır | Oy: normal hesap dakikada en fazla. KV-19 (#21) öneri 30; Mehmet teyidi |
+| `limits.newAccountVotesPerMinute` | integer | 1 – 1000 | **yok** | hayır | Oy: yeni hesap dakikada en fazla. KV-19 (#21) öneri 15; Mehmet teyidi |
+| `limits.commentsPerMinute` | integer | 1 – 1000 | **yok** | hayır | Yorum: normal hesap dakikada en fazla (burst). KV-19 (#21) öneri 6; Mehmet teyidi |
+| `limits.newAccountCommentsPerMinute` | integer | 1 – 1000 | **yok** | hayır | Yorum: yeni hesap dakikada en fazla (burst). KV-19 (#21) öneri 3; Mehmet teyidi |
+| `limits.commentsPerDay` | integer | 1 – 100000 | **yok** | hayır | Yorum: normal hesap günde en fazla. KV-19 (#21) öneri 200; Mehmet teyidi |
+| `limits.newAccountCommentsPerDay` | integer | 1 – 100000 | **yok** | hayır | Yorum: yeni hesap günde en fazla. KV-19 (#21) öneri 30; Mehmet teyidi |
+| `limits.reportsPerHour` | integer | 1 – 1000 | **yok** | hayır | Şikâyet: normal hesap saatte en fazla. KV-19 (#21) öneri 10; Mehmet teyidi |
+| `limits.newAccountReportsPerHour` | integer | 1 – 1000 | **yok** | hayır | Şikâyet: yeni hesap saatte en fazla. KV-19 (#21) öneri 5; Mehmet teyidi |
+| `limits.uploadsPerHour` | integer | 1 – 1000 | **yok** | hayır | Görsel yükleme: normal hesap saatte en fazla. KV-19 (#21) öneri 20; Mehmet teyidi |
+| `limits.newAccountUploadsPerHour` | integer | 1 – 1000 | **yok** | hayır | Görsel yükleme: yeni hesap saatte en fazla. KV-19 (#21) öneri 5; Mehmet teyidi |
+| `limits.searchesPerMinute` | integer | 1 – 10000 | **yok** | hayır | Arama: kullanıcı veya IP dakikada en fazla. KV-19 (#21) öneri 60; Mehmet teyidi |
+| `limits.writesPerMinute` | integer | 1 – 10000 | **yok** | hayır | Diğer yazma işlemleri: normal hesap dakikada en fazla. KV-19 (#21) öneri 60; Mehmet teyidi |
+| `limits.newAccountWritesPerMinute` | integer | 1 – 10000 | **yok** | hayır | Diğer yazma işlemleri: yeni hesap dakikada en fazla. KV-19 (#21) öneri 30; Mehmet teyidi |
 
 Kaynaklardaki dosyalar `packages/contracts/src/domains/` altındadır. Kayıtta **olmayanlar**: trend katsayıları ve feed sıralama ağırlıkları (§5). Cooldown ve günlük anket limiti KV-20 (#22), `feed.*` keşif payı ve tekrar sınırları KV-27 (#29) ile eklendi.
 
@@ -220,3 +238,4 @@ Issue numaraları mevcut eşlemeye göredir (KV-N → #N+2).
 | 7 | **Puan tavanı**: `points.initialGrant` ve `points.publishCost` için üst sınır kaynakta yok (kayıtta sınırsız). | Mehmet | #67 |
 | 8 | **Eksik 9 varsayılan**: `polls.voteChangeAllowed`, `features.registration`, `features.pollCreation`, `features.comments`, `features.uploads`, `maintenance.enabled`; KV-27 ile `feed.explorationPercent`, `feed.maxSameAuthorPerWindow`, `feed.maxSameCategoryPerWindow` (öneri 20 / 2 / 4, API geçici olarak bunları kullanır; Mehmet teyidi). Değer belgeye yazılınca `settings.test.ts`'teki `todo` kaldırılır. **PR bu yüzden taslaktır.** | Utku (kayıt), Mehmet (ürün), Faruk (`voteChangeAllowed`, KV-11 #13; `feed.*`, KV-27 #29) | KV-40 (#42) |
 | 9 | **Kayıtta olmayan ayarlar**: ~~anket cooldown ve günlük anket limiti~~ (KV-20 ile eklendi: `polls.newAccount*`, `polls.dailyLimit`, `polls.cooldownMinutes`), trend katsayıları, feed sıralama ağırlıkları (~~`feed.*`~~ keşif payı/tekrar sınırı KV-27 ile eklendi, değerleri açık konu 8). Değerleri belirlenince kaynağıyla kayda eklenir (minor). | Faruk (polls, trends, feed), Utku (rate-limit) | KV-10 (#12), KV-28 (#30), #22 |
+| 10 | **Hız sınırı değerleri (KV-19)**: `limits.loginFailuresPerEmail`, `limits.loginFailuresPerIp`, `limits.registerPerIpHour`, `limits.recoveryPerEmailHour`, `limits.recoveryPerIpHour`, `limits.votesPerMinute`, `limits.newAccountVotesPerMinute`, `limits.commentsPerMinute`, `limits.newAccountCommentsPerMinute`, `limits.commentsPerDay`, `limits.newAccountCommentsPerDay`, `limits.reportsPerHour`, `limits.newAccountReportsPerHour`, `limits.uploadsPerHour`, `limits.newAccountUploadsPerHour`, `limits.searchesPerMinute`, `limits.writesPerMinute`, `limits.newAccountWritesPerMinute`. Plan (PRODUCT_TEAM_PLAN §13) sınır ister, sayı vermez; Mehmet geçici limitleri onayladı (#21, 2026-10-07), sayılar Faruk'un önerisi, API geçici olarak bunları kullanır. Değerler teyit edilince `default` ve kaynak yazılır. | Mehmet (ürün), Faruk (KV-19, Utku'dan geçici devir) | KV-19 (#21), KV-40 (#42) |
