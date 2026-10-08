@@ -80,7 +80,7 @@ export const eventExamples: { [T in EventType]: EventExample<T> } = {
     toStatus: "HIDDEN",
     reportId: REPORT,
   }),
-  "announcement.published": ex("announcement.published", ADMIN, { type: "ANNOUNCEMENT", id: ANNOUNCEMENT }, { level: "INFO", startsAt: T0, endsAt: null }),
+  "announcement.published": ex("announcement.published", ADMIN, { type: "ANNOUNCEMENT", id: ANNOUNCEMENT }, { level: "INFO", audience: "ALL", startsAt: T0, endsAt: null }),
   "report.created": ex("report.created", USER, { type: "REPORT", id: REPORT }, { targetType: "POLL", targetId: POLL, reason: "SPAM", communityId: COMMUNITY }),
   "report.resolved": ex("report.resolved", ADMIN, { type: "REPORT", id: REPORT }, { resolution: "ACTIONED", targetType: "POLL", targetId: POLL }),
   "points.granted": ex("points.granted", null, user, { ...ledger, delta: 20, balanceAfter: 20, reason: "INITIAL_GRANT" }),
