@@ -16,6 +16,7 @@ import { ContentPanel } from "./content-panel";
 import { FeaturedPanel } from "./featured-panel";
 import { MediaPanel } from "./media-panel";
 import { ReportsPanel } from "./reports-panel";
+import { SettingsPanel } from "./settings-panel";
 
 function currentRoles(demo: boolean, email: string | undefined): AdminRole[] {
   if (!demo || !email) return [];
@@ -136,6 +137,8 @@ function livePanel(section: AdminSectionId, admin: AdminClient) {
       return <FeaturedPanel admin={admin} />;
     case "audit":
       return <AuditPanel admin={admin} />;
+    case "settings":
+      return <SettingsPanel admin={admin} />;
     default:
       return null;
   }
