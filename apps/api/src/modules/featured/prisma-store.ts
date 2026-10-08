@@ -115,6 +115,7 @@ async function emitAnnouncementEvent(
     subject: { type: "ANNOUNCEMENT", id: announcement.id },
     payload: {
       level: announcement.level,
+      audience: announcement.audience,
       startsAt: announcement.startsAt.toISOString(),
       endsAt: announcement.endsAt?.toISOString() ?? null,
     },
