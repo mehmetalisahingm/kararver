@@ -85,7 +85,6 @@ describe("KV-21 uçtan uca: mutation → olay → dağıtıcı → bildirim (pos
     assert.equal(res.statusCode, 200, res.body);
     return (res.json().data as unknown[]).map((n) => NotificationView.parse(n));
   }
-  const unread = async (user: User) => (await send("GET", "/notifications/unread-count", undefined, user.cookie)).json().data.count as number;
 
   test("yorum: POST /polls/:id/comments → anket sahibi GET /notifications'ta COMMENT_ON_POLL görür (aktör yorumcu)", async () => {
     const [owner, alice] = [await signUp(), await signUp()];
