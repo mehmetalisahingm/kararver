@@ -12,6 +12,7 @@ import { after, before, describe, test } from "node:test";
 import { createPrismaClient, type PrismaClient } from "@kararver/db";
 import sharp from "sharp";
 import { MAX_ATTEMPTS, processMedia, type MediaJobDeps } from "../src/jobs/media/job.ts";
+import { thresholdsFromPercent } from "../src/jobs/media/policy.ts";
 import { ModerationFailedError, ModerationTimeoutError, type Moderator } from "../src/jobs/media/moderator.ts";
 import type { Detection } from "../src/jobs/media/policy.ts";
 import { ObjectTooLargeError, type WorkerStorage } from "../src/jobs/media/storage.ts";
@@ -159,6 +160,37 @@ describe("media.process (postgres)", { skip: url ? false : "TEST_DATABASE_URL yo
       assert.ok(r.processedObjectKey, "moderatör işlenmiş kopyayı inceleyebilir");
       assert.equal(s.pub.size, 0);
     }
+  });
+
+  test("risk eşikleri her işte ayardan okunur: aynı tespit eşik değişince farklı sonuç verir (KV-38)", async () => {
+    let percent = { medium: 35, high: 65 };
+    const read = async () => thresholdsFromPercent(percent.medium, percent.high);
+    const detect = fakeModerator(async () => [{ class: "BUTTOCKS_EXPOSED", score: 0.5 }]);
+
+    const first = fakeStorage();
+    const a = await pendingMedia(await photo(), first);
+    assert.equal(await processMedia(a, deps(first, detect, { thresholds: read })), "QUARANTINED");
+    assert.equal((await row(a)).riskLevel, "MEDIUM");
+
+    percent = { medium: 55, high: 65 };
+    const second = fakeStorage();
+    const b = await pendingMedia(await photo(), second);
+    assert.equal(await processMedia(b, deps(second, detect, { thresholds: read })), "APPROVED");
+
+    percent = { medium: 35, high: 45 };
+    const third = fakeStorage();
+    const c = await pendingMedia(await photo(), third);
+    assert.equal(await processMedia(c, deps(third, detect, { thresholds: read })), "QUARANTINED");
+    assert.equal((await row(c)).riskLevel, "HIGH");
+  });
+
+  test("eşik ayarı okunamazsa (throw) iş geçici hata sayılır: yayın yok, yeniden denenir (fail-closed)", async () => {
+    const s = fakeStorage();
+    const id = await pendingMedia(await photo(), s);
+    const moderator = fakeModerator(async () => []);
+    await assert.rejects(processMedia(id, deps(s, moderator, { thresholds: async () => { throw new Error("ayar yok"); } })), /ayar yok/);
+    assert.equal(s.pub.size, 0, "okunamayan eşikle görsel yayına çıkmaz");
+    assert.equal((await row(id)).status, "PENDING");
   });
 
   test("moderasyon zaman aşımı ve model hatası fail-closed: karantina, risk yazılmaz", async () => {
