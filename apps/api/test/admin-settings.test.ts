@@ -29,6 +29,8 @@ describe("sistem ayarları servisi (önbellek ve fail-safe)", () => {
     for (const key of settingKeys) assert.ok(key in defaults, key);
     assert.equal(defaults["features.registration"], true);
     assert.equal(defaults["maintenance.enabled"], false);
+    // Hız sınırı (limits.*) varsayılanları KV-19 politikasından gelir.
+    assert.equal(defaults["limits.loginFailuresPerEmail"], 5);
     assert.deepEqual(Object.keys(SAFE_DEFAULTS).sort(), [
       "feed.explorationPercent",
       "feed.maxSameAuthorPerWindow",

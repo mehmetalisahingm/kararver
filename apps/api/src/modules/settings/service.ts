@@ -14,6 +14,7 @@ import {
   type SettingKey,
 } from "@kararver/contracts";
 import type { FeedSettings } from "../feed/for-you.ts";
+import { DEFAULT_RATE_LIMIT_SETTINGS, type RateLimitSettings } from "../rate-limit/policy.ts";
 import type { MediaSettings } from "../media/store.ts";
 import type { PollSettings } from "../polls/store.ts";
 import type { EmergencyOutcome, SettingsStore, StoredSetting, UpdateOutcome } from "./store.ts";
@@ -31,11 +32,14 @@ export const SAFE_DEFAULTS: Readonly<Partial<Record<SettingKey, unknown>>> = Obj
   "feed.maxSameCategoryPerWindow": 4,
 });
 
+/** Hız sınırı (KV-19) önerileri `limits.<ad>` anahtarlarının güvenli varsayılanıdır (Mehmet geçici limitleri onayladı, #21). */
+const RATE_LIMIT_DEFAULTS = Object.fromEntries(Object.entries(DEFAULT_RATE_LIMIT_SETTINGS).map(([k, v]) => [`limits.${k}`, v]));
+
 export type SettingValues = Readonly<Record<SettingKey, unknown>>;
 
 /** Etkin varsayılanlar: resmî + güvenli. Eksik anahtar programlama hatasıdır. */
 export function effectiveDefaults(): SettingValues {
-  const merged: Record<string, unknown> = { ...defaultSettings().values, ...SAFE_DEFAULTS };
+  const merged: Record<string, unknown> = { ...defaultSettings().values, ...SAFE_DEFAULTS, ...RATE_LIMIT_DEFAULTS };
   const missing = settingKeys.filter((k) => !(k in merged));
   if (missing.length > 0) throw new Error(`ayar varsayılanı yok: ${missing.join(", ")}`);
   return merged as SettingValues;
@@ -61,6 +65,8 @@ export type SettingsService = {
   feedSettings(): Promise<FeedSettings>;
   mediaSettings(): Promise<MediaSettings>;
   pointSettings(): Promise<{ initialGrant: number; publishCost: number }>;
+  /** Hız sınırı değerleri (`limits.*`, KV-19). */
+  rateLimitSettings(): Promise<RateLimitSettings>;
   isRegistrationEnabled(): Promise<boolean>;
   isCommentsEnabled(): Promise<boolean>;
   isMaintenance(): Promise<boolean>;
@@ -182,6 +188,11 @@ export function createSettingsService(store: SettingsStore, options: SettingsSer
     async pointSettings() {
       const v = await service.values();
       return { initialGrant: num(v, "points.initialGrant"), publishCost: num(v, "points.publishCost") };
+    },
+
+    async rateLimitSettings() {
+      const v = await service.values();
+      return Object.fromEntries(Object.keys(DEFAULT_RATE_LIMIT_SETTINGS).map((k) => [k, num(v, `limits.${k}` as SettingKey)])) as RateLimitSettings;
     },
 
     async isRegistrationEnabled() {

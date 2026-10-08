@@ -55,5 +55,5 @@ Test düzeneği, eski senaryolar etkilenmesin diye limitleri varsayılan olarak 
 |---|---|
 | `rising` sekmesi ve trend listeleri | KV-28 (#30) |
 | Ayar servisi (admin değişikliği) | KV-40 (#42), Utku |
-| IP/istek hız sınırı (rate limit) | KV-19 (#21), Utku |
+| IP/istek hız sınırı (rate limit) | KV-19 (#21): [`KV-19_RATE_LIMIT.md`](./KV-19_RATE_LIMIT.md) |
 | Aynı başlık kuralının ürün teyidi | Mehmet |

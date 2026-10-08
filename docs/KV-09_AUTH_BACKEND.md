@@ -51,7 +51,7 @@ Route'lar sözleşme registry'sinden kaydedilir (`apps/api/src/http/route.ts`). 
 | İlk girişte 20 puan (`points.granted`) | Puan defteri tablosu yok | #67 (Mehmet) |
 | `registration.enabled` ayarı | `isRegistrationEnabled` kancası hazır, şimdilik hep açık | KV-40 #42 (Utku) |
 | Rol listesi (`roles`) | Sabit `["USER"]` | KV-04 #6, KV-12 #14 (Utku) |
-| Giriş/kayıt/mail rate limit ve brute-force koruması | Yok | KV-19 #21 (Utku) |
+| Giriş/kayıt/mail rate limit ve brute-force koruması | Var: [`KV-19_RATE_LIMIT.md`](./KV-19_RATE_LIMIT.md) | KV-19 #21 (Faruk, Utku'dan geçici devir) |
 | `user.registered` domain olayı (outbox) | Olay altyapısı yok | KV-04 #6 (Utku) |
 | SMTP ile mail gönderimi | Sağlayıcı seçilmedi | TECH_DECISIONS §10 #2 |
 | Staging'de iki gerçek hesapla kabul | Staging yok | KV-06 #8 (Utku) |

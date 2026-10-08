@@ -42,6 +42,8 @@ type RouteOptions = {
   now: () => Date;
   /** Bakım modu (maintenance.enabled, KV-40): açıkken yazma istekleri 503 MAINTENANCE; okuma, giriş/çıkış ve /admin açık kalır. */
   maintenance?: () => Promise<boolean>;
+  /** KV-19 (#21) hız sınırı; oturum çözüldükten sonra, yetki ve gövde doğrulamasından önce. Verilmezse sınır yok. */
+  rateLimit?: (input: { endpointId: string; method: string; viewer: SessionUser | null; request: FastifyRequest }) => Promise<void>;
 };
 
 /** Bakım modunda da çalışan yazma endpoint'leri: yönetici (modu kapatabilsin) ve oturum açma/kapama. */
@@ -74,6 +76,7 @@ export function createRouter(app: FastifyInstance, options: RouteOptions) {
           throw new ApiError("MAINTENANCE", "Bakım çalışması nedeniyle şu an yeni işlem yapılamıyor. Birazdan tekrar deneyin.");
         }
         const viewer = await options.authenticator.resolve(request, reply);
+        if (options.rateLimit) await options.rateLimit({ endpointId: id, method: endpoint.method, viewer, request });
         const access = createAccess(options.rbac, viewer, action, options.now());
         await access.gate();
         const ctx: RouteContext = {

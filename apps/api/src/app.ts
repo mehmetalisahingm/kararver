@@ -59,6 +59,9 @@ import type { ShareStore } from "./modules/shares/store.ts";
 import { registerTrendRoutes } from "./modules/trends/routes.ts";
 import type { TrendStore } from "./modules/trends/store.ts";
 import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
+import { createRateLimiter } from "./modules/rate-limit/limiter.ts";
+import { DEFAULT_RATE_LIMIT_SETTINGS, type RateLimitSettings } from "./modules/rate-limit/policy.ts";
+import type { RateLimitStore } from "./modules/rate-limit/store.ts";
 import { registerUserRoutes } from "./modules/users/routes.ts";
 import { registerVoteAdminRoutes } from "./modules/votes/admin-routes.ts";
 import { registerVoteRoutes } from "./modules/votes/routes.ts";
@@ -86,6 +89,10 @@ export type AppDeps = {
   pointAdminStore?: PointAdminStore;
   /** Sistem ayarları (KV-40, #42); ayar servisi gelene kadar DEFAULT_POLL_SETTINGS. */
   pollSettings?: () => Promise<PollSettings>;
+  /** KV-19 (#21) hız sınırı sayaçları; verilmezse hız sınırı yok (ör. auth-only web test sunucusu). */
+  rateLimitStore?: RateLimitStore;
+  /** `limits.*` (KV-40, #42); ayar servisi gelene kadar DEFAULT_RATE_LIMIT_SETTINGS. */
+  rateLimitSettings?: () => Promise<RateLimitSettings>;
   /** pollStore ile birlikte verilirse kategori ve arama route'ları kaydedilir. */
   searchStore?: SearchStore;
   /** Verilmezse içerik sürüm geçmişi (admin.revisions.*, #66) kaydedilmez. */
@@ -166,15 +173,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerSecurity(app, config.allowedOrigins, { hsts: config.session.secure });
 
   const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper };
-  const route = createRouter(app, {
-    validateResponses: config.appEnv !== "production",
-    enforceResourceChecks: config.appEnv !== "production",
-    authenticator: createAuthenticator(deps.authStore, session, now),
-    rbac: deps.rbacStore,
-    now,
-    maintenance: deps.settingsService ? () => deps.settingsService!.isMaintenance() : undefined,
-  });
-
   // Ayar kancaları: açık kanca > ayar servisi > güvenli varsayılan.
   const settings = deps.settingsService;
   const pollSettings = deps.pollSettings ?? (settings ? () => settings.pollSettings() : async () => DEFAULT_POLL_SETTINGS);
@@ -182,6 +180,25 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const mediaSettings = deps.media?.settings ?? (settings ? () => settings.mediaSettings() : async () => DEFAULT_MEDIA_SETTINGS);
   const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
+
+  const limiter = deps.rateLimitStore
+    ? createRateLimiter({
+        store: deps.rateLimitStore,
+        settings: deps.rateLimitSettings ?? (deps.settingsService ? () => deps.settingsService!.rateLimitSettings() : async () => DEFAULT_RATE_LIMIT_SETTINGS),
+        newAccountDays: async () => (await pollSettings()).newAccountPeriodDays,
+        pepper: config.authTokenPepper,
+        now,
+      })
+    : null;
+  const route = createRouter(app, {
+    validateResponses: config.appEnv !== "production",
+    enforceResourceChecks: config.appEnv !== "production",
+    authenticator: createAuthenticator(deps.authStore, session, now),
+    rbac: deps.rbacStore,
+    now,
+    maintenance: deps.settingsService ? () => deps.settingsService!.isMaintenance() : undefined,
+    rateLimit: limiter?.enforce,
+  });
 
   const rolesOf = async (userId: string) => {
     const { roles } = await deps.rbacStore.grants(userId, now());
@@ -198,6 +215,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     webUrl: config.webUrl,
     mediaPublicBaseUrl: config.mediaPublicBaseUrl,
     isRegistrationEnabled,
+    loginGuard: limiter?.login,
     initialGrant: settings ? async () => (await settings.pointSettings()).initialGrant : undefined,
   });
   registerUserRoutes(route, {

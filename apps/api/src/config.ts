@@ -20,6 +20,8 @@ const Env = z.object({
   // MAIL_TRANSPORT=smtp iken zorunlu: smtp://kullanici:parola@host:587 (STARTTLS) veya smtps://...:465 (TLS).
   SMTP_URL: z.string().default(""),
   MEDIA_PUBLIC_BASE_URL: z.url(),
+  // KV-19 (#21): yalnız local/test'te kapatılabilir (ör. KV-47 yük testi); staging/production'da her zaman açık.
+  RATE_LIMIT_ENABLED: bool.default(true),
   // Object storage (TECH_DECISIONS §3.6). Local'de verilmezse medya endpoint'leri kapalıdır.
   S3_ENDPOINT: z.url().optional(),
   S3_REGION: z.string().min(1).default("us-east-1"),
@@ -56,6 +58,8 @@ export type Config = {
   session: { cookieName: string; cookieDomain: string | null; secure: boolean; ttlMs: number };
   authTokenPepper: string;
   mail: MailConfig;
+  /** KV-19 hız sınırı açık mı (staging/production'da zorunlu). */
+  rateLimitEnabled: boolean;
   mediaPublicBaseUrl: string;
   /** null: S3 değişkenleri yok (sadece local/test); medya endpoint'leri kaydedilmez. */
   storage: StorageConfig | null;
@@ -75,6 +79,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const deployed = e.APP_ENV === "staging" || e.APP_ENV === "production";
   if (deployed && !e.SESSION_COOKIE_SECURE) {
     throw new Error("API yapılandırması geçersiz → SESSION_COOKIE_SECURE staging/production'da true olmalı");
+  }
+  if (deployed && !e.RATE_LIMIT_ENABLED) {
+    throw new Error("API yapılandırması geçersiz → RATE_LIMIT_ENABLED staging/production'da kapatılamaz");
   }
   if (deployed && e.MAIL_TRANSPORT === "console") {
     // Console mailer doğrulama/sıfırlama bağlantısını loga yazar; sadece local ve test içindir.
@@ -117,6 +124,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         ? { transport: "smtp", from: e.MAIL_FROM, smtpUrl: e.SMTP_URL, requireTls: deployed }
         : { transport: "console", from: e.MAIL_FROM },
     mediaPublicBaseUrl: e.MEDIA_PUBLIC_BASE_URL.replace(/\/$/, ""),
+    rateLimitEnabled: e.RATE_LIMIT_ENABLED,
     storage:
       missingStorage.length > 0
         ? null

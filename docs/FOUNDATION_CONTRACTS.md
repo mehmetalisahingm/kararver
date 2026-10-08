@@ -78,7 +78,7 @@ ayrıca recipient kontrol edilir. Teslim en az bir kezdir; exactly-once iddiası
 Oy seçimi/kişisel veri notification payloadına gereksiz kopyalanmaz. Analytics sözlüğü
 KV-07 PR #60'taki ürün metrikleriyle eşlenir; domain ve analytics isimleri adapterla ayrılır.
 
-Settings namespace'leri: `polls.*`, `comments.*`, `media.*`, `points.*`, `trends.*`, `feed.*`,
+Settings namespace'leri: `polls.*`, `comments.*`, `media.*`, `points.*`, `trends.*`, `feed.*`, `limits.*`,
 `features.*` (`features.registration`, `features.pollCreation`, `features.comments`,
 `features.uploads`) ve `maintenance.enabled`. Tip, alt/üst sınır, varsayılan ve sürüm
 KV-40'da saklanır. Bilinmeyen anahtar reddedilir; değişiklik auditli ve cache invalidationlıdır.

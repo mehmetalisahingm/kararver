@@ -31,6 +31,7 @@ import { createPrismaShareStore } from "./modules/shares/prisma-store.ts";
 import { createPrismaTrendStore } from "./modules/trends/prisma-store.ts";
 import { createPrismaRevisionStore } from "./modules/revisions/prisma-store.ts";
 import { createPrismaVoteStore } from "./modules/votes/prisma-store.ts";
+import { createPrismaRateLimitStore } from "./modules/rate-limit/prisma-store.ts";
 
 // Local'de repo kökündeki .env okunur; staging/production'da değerler ortamdan gelir.
 if (!process.env.APP_ENV) {
@@ -67,6 +68,7 @@ const app = buildApp({
   feedStore: createPrismaFeedStore(prisma),
   trendStore: createPrismaTrendStore(prisma),
   voteStore: createPrismaVoteStore(prisma),
+  rateLimitStore: config.rateLimitEnabled ? createPrismaRateLimitStore(prisma) : undefined,
   communityStore: createPrismaCommunityStore(prisma),
   onboardingStore: createPrismaOnboardingStore(prisma),
   reportStore: createPrismaReportStore(prisma),

@@ -2,6 +2,7 @@
 import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
 import { sendSafely, type Mailer } from "../../mail/mailer.ts";
+import type { LoginGuard } from "../rate-limit/limiter.ts";
 import { toMe, type RolesOf } from "../users/me.ts";
 import { hashToken, newToken, type PasswordHasher } from "./crypto.ts";
 import { createSessionCookies, type SessionSettings } from "./session.ts";
@@ -21,6 +22,8 @@ export type AuthDeps = {
   isRegistrationEnabled: () => Promise<boolean>;
   /** points.initialGrant (KV-40); verilmezse resmî varsayılan. */
   initialGrant?: () => Promise<number>;
+  /** KV-19 (#21) başarısız giriş sınırı; verilmezse sınır yok (auth-only test düzenekleri). */
+  loginGuard?: LoginGuard;
 };
 
 const TOKEN_TTL_MS: Record<TokenPurpose, number> = {
@@ -111,11 +114,16 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
   });
 
   route("auth.login", async ({ body, request, reply }) => {
+    // KV-19: sınır doluysa parola hiç doğrulanmaz (doğru parola da beklemek zorunda; argon2 yükü de olmaz).
+    await deps.loginGuard?.check(body.email, request.ip, request.log);
     const user = await store.findUserByEmail(normalizeEmail(body.email));
     const passwordOk = await hasher.verify(user?.passwordHash ?? (await dummyHash), body.password);
     if (!user || !passwordOk || user.deletedAt) {
+      // Var olmayan hesap da sayılır: hesap varlığı sınırın davranışından anlaşılmaz.
+      await deps.loginGuard?.fail(body.email, request.ip);
       throw new ApiError("INVALID_CREDENTIALS", "E-posta veya şifre hatalı.");
     }
+    await deps.loginGuard?.succeed(body.email);
     if (RESTRICTED.has(user.status)) {
       throw new ApiError("ACCOUNT_RESTRICTED", "Hesabınız askıya alınmış.", [{ code: "login" }]);
     }
