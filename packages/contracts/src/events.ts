@@ -285,6 +285,7 @@ export const eventCatalog = Object.freeze({
     consumers: ["cache"],
     analytics: [],
     sensitive: [],
+    naturalKey: (e) => `announcement.published:${e.subject.id}`,
   }),
   "report.created": define({
     summary: "Rapor oluşturuldu veya kapanmış rapor yeniden açıldı",
