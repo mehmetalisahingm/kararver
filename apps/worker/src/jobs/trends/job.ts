@@ -9,12 +9,14 @@ import type { PrismaClient } from "@kararver/db";
 import { recomputeStaleSnapshots } from "../snapshots/job.ts";
 import { COMPUTED_FORMATS, slotEnd, TREND_CONFIG, type ComputedFormat } from "./config.ts";
 import { emitTrendEntries } from "./entries.ts";
-import { scoreQuery, windowStart, type ScoreRow } from "./score.ts";
+import { scoreQuery, windowStart, type MoversThresholds, type ScoreRow } from "./score.ts";
 
 export type TrendJobDeps = {
   prisma: PrismaClient;
   now: () => Date;
   log: (level: "info" | "warn" | "error", message: string, fields: Record<string, unknown>) => void;
+  /** Haftanın Değişkenleri eşikleri (sistem ayarları, KV-40); verilmezse kayıt defteri varsayılanı. */
+  moversThresholds?: () => Promise<MoversThresholds>;
 };
 
 export type FormatResult =
@@ -52,9 +54,11 @@ export async function refreshFormat(deps: TrendJobDeps, format: ComputedFormat, 
   if (opened === "already_done" || opened === "in_progress") return { format, status: "SKIPPED", reason: opened };
   const runId = opened;
   try {
+    // Eşikler her çalıştırmada ayarlardan okunur (KV-40): panelden değişince deploy gerekmez.
+    const movers = deps.moversThresholds ? await deps.moversThresholds() : TREND_CONFIG.movers;
     const count = await deps.prisma.$transaction(
       async (tx) => {
-        const rows = await tx.$queryRaw<ScoreRow[]>(scoreQuery(format, windowEnd));
+        const rows = await tx.$queryRaw<ScoreRow[]>(scoreQuery(format, windowEnd, movers));
         await tx.trendScore.createMany({
           data: rows.map((r) => ({ runId, pollId: r.poll_id, rank: r.rank, score: r.score, components: r.components })),
         });
