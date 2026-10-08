@@ -150,10 +150,10 @@ const FeaturedBody = z.strictObject({
 const AnnouncementBody = z.strictObject({
   title: z.string().trim().min(3).max(120),
   body: z.string().trim().min(1).max(2000),
-  level: z.enum(["INFO", "WARNING"]).default("INFO"),
-  audience: AnnouncementAudience.default("ALL"),
+  level: z.enum(["INFO", "WARNING"]).optional(),
+  audience: AnnouncementAudience.optional(),
   startsAt: Timestamp,
-  endsAt: Timestamp.nullable().default(null),
+  endsAt: Timestamp.nullable().optional(),
 });
 
 export const AdminCategory = z.strictObject({ ...Category.shape, isActive: z.boolean(), pollCount: Count });
