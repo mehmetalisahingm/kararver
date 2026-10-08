@@ -305,6 +305,7 @@ model FeaturedPlacement {
   badge     String?         @db.VarChar(30)
   startsAt  DateTime        @map("starts_at") @db.Timestamptz(3)
   endsAt    DateTime        @map("ends_at") @db.Timestamptz(3)
+  activatedAt DateTime?      @map("activated_at") @db.Timestamptz(3)
   createdBy String          @map("created_by") @db.Uuid
   createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -323,6 +324,7 @@ model Announcement {
   audience  AnnouncementAudience @default(ALL)
   startsAt  DateTime             @map("starts_at") @db.Timestamptz(3)
   endsAt    DateTime?            @map("ends_at") @db.Timestamptz(3)
+  activatedAt DateTime?         @map("activated_at") @db.Timestamptz(3)
   createdBy String               @map("created_by") @db.Uuid
   createdAt DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
