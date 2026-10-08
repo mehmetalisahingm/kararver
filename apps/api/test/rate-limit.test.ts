@@ -243,6 +243,30 @@ describe("hız sınırı: içerik ve çoklu süreç (postgres)", { skip: postgre
     }
   });
 
+  test("rapor (KV-24, #26): normal hesap saatte 10, yeni hesap 5; sınırdan sonra 429, saat dönünce açılır; rapor içeriği silmez", async () => {
+    const c = client(h, freshIp());
+    const owner = await c.signUp();
+    const polls = [];
+    for (let i = 0; i < 11; i++) polls.push(await poll(c, owner));
+    const [veteran, newbie] = [await c.signUp(), await c.signUp()];
+    await age(veteran);
+    strict();
+    try {
+      const report = (u: User, id: string) => c.send("POST", "/reports", { target: { type: "POLL", id }, reason: "SPAM" }, u.cookie);
+      for (let i = 0; i < 10; i++) assert.equal((await report(veteran, polls[i]!.id)).statusCode, 202);
+      assertLimited(await report(veteran, polls[10]!.id), 3600);
+      for (let i = 0; i < 5; i++) assert.equal((await report(newbie, polls[i]!.id)).statusCode, 202);
+      assertLimited(await report(newbie, polls[5]!.id), 3600);
+      // Hesap başına: başka hesap etkilenmez; saat dönünce yeniden açılır.
+      h.clock.advance(60 * MINUTE);
+      assert.equal((await report(newbie, polls[5]!.id)).statusCode, 202);
+      // Rapor içeriği gizlemez/silmez (hard delete yok): anket hâlâ ACTIVE.
+      assert.equal((await h.prisma!.poll.findUniqueOrThrow({ where: { id: polls[0]!.id } })).status, "ACTIVE");
+    } finally {
+      relaxed();
+    }
+  });
+
   test("yorum günlük sınır: Retry-After UTC gün sonuna kadar", async () => {
     const c = client(h, freshIp());
     const owner = await c.signUp();
