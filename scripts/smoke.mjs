@@ -9,9 +9,7 @@ import { getEndpoint } from "../packages/contracts/src/index.ts";
 
 // Sözleşmede olup API'de henüz olmayan uçlar. 404 dönerse SKIP yazılır; uç gelince (200) listeden
 // çıkarılması için FAIL verilir. Listede olmayan her uç zorunludur.
-const KNOWN_MISSING = {
-  "/v1/config": "KV-40 (#42): buildPublicConfig 6 varsayılan için karar bekliyor (KV-04 açık konu 8)",
-};
+const KNOWN_MISSING = {};
 
 const { values } = parseArgs({
   options: { api: { type: "string" }, web: { type: "string" }, strict: { type: "boolean", default: false } },
