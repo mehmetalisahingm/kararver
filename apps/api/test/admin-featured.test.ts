@@ -197,6 +197,53 @@ describe("KV-42 öne çıkarma ve duyurular (postgres)", { skip: backend ? false
     assert.equal(memberIds.length, 2);
   });
 
+  test("geleceğe planlanan topluluk yerleşimi erken bildirmez; tarih aktif edilince bir kez üretir", async () => {
+    const response = await send("POST", "/admin/featured", {
+      pollId, surface: "COMMUNITY", scopeId: randomUUID(), priority: 0, badge: "Planlı",
+      startsAt: at(15), endsAt: at(90), reason: "Planlı topluluk yayın",
+    }, admin.cookie);
+    assert.equal(response.statusCode, 201, response.body);
+    const id = FeaturedPlacement.parse(response.json().data).id;
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `community.featured:${id}` } }), 0);
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `featured.applied:${id}` } }), 0);
+
+    const active = await send("PATCH", `/admin/featured/${id}`, {
+      startsAt: at(-2), reason: "Tarihi öne al",
+    }, admin.cookie);
+    assert.equal(active.statusCode, 200, active.body);
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `community.featured:${id}` } }), 1);
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `featured.applied:${id}` } }), 1);
+
+    const replay = await send("PATCH", `/admin/featured/${id}`, {
+      badge: "Planlı, güncel", reason: "Etiket güncelle",
+    }, admin.cookie);
+    assert.equal(replay.statusCode, 200, replay.body);
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `community.featured:${id}` } }), 1);
+  });
+
+  test("duyuru aktivasyonu zamanı gelmeden olay üretmez; canlıya çekilince tek yayın olayı", async () => {
+    const response = await send("POST", "/admin/announcements", {
+      title: "İleri tarihli duyuru", body: "Üyelere bilgi",
+      level: "WARNING", audience: "AUTHENTICATED", startsAt: at(25), endsAt: at(75),
+      reason: "Planlı bildirim",
+    }, admin.cookie);
+    assert.equal(response.statusCode, 201, response.body);
+    const id = Announcement.parse(response.json().data).id;
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `announcement.published:${id}` } }), 0);
+    const activate = await send("PATCH", `/admin/announcements/${id}`, {
+      startsAt: at(-1), reason: "Şimdi yayınla",
+    }, admin.cookie);
+    assert.equal(activate.statusCode, 200, activate.body);
+    const events = await h.prisma!.domainEvent.findMany({ where: { naturalKey: `announcement.published:${id}` } });
+    assert.equal(events.length, 1);
+    assert.equal((events[0]!.payload as { audience: string }).audience, "AUTHENTICATED");
+    const edit = await send("PATCH", `/admin/announcements/${id}`, {
+      title: "Güncel duyuru", reason: "Yazım düzeltmesi",
+    }, admin.cookie);
+    assert.equal(edit.statusCode, 200, edit.body);
+    assert.equal(await h.prisma!.domainEvent.count({ where: { naturalKey: `announcement.published:${id}` } }), 1);
+  });
+
   test("duyuru/öne çıkarma endpointleri yetkisiz kullanıcıya kapalı", async () => {
     const user = await signUp();
     assert.equal((await send("GET", "/admin/featured", undefined, user.cookie)).statusCode, 403);
