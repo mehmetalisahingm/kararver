@@ -38,24 +38,6 @@ const MISSING_DEFAULTS: SettingKey[] = [
   "feed.explorationPercent",
   "feed.maxSameAuthorPerWindow",
   "feed.maxSameCategoryPerWindow",
-  "limits.loginFailuresPerEmail",
-  "limits.loginFailuresPerIp",
-  "limits.registerPerIpHour",
-  "limits.recoveryPerEmailHour",
-  "limits.recoveryPerIpHour",
-  "limits.votesPerMinute",
-  "limits.newAccountVotesPerMinute",
-  "limits.commentsPerMinute",
-  "limits.newAccountCommentsPerMinute",
-  "limits.commentsPerDay",
-  "limits.newAccountCommentsPerDay",
-  "limits.reportsPerHour",
-  "limits.newAccountReportsPerHour",
-  "limits.uploadsPerHour",
-  "limits.newAccountUploadsPerHour",
-  "limits.searchesPerMinute",
-  "limits.writesPerMinute",
-  "limits.newAccountWritesPerMinute",
 ];
 
 function leafPaths(schema: z.ZodObject, prefix: string[] = []): string[] {
@@ -145,12 +127,11 @@ describe("anahtar ve kaynak kuralları", () => {
     assert.ok(!section.includes("registration.enabled"), "eski ad registration.enabled kaldırılmalı");
   });
 
-  test("limits.* (KV-19) kayıtta, resmî değeri yok, öneri yazılı ve public değil", () => {
+  test("limits.* (KV-19) kayıtta, Mehmet onaylı varsayılanla ve public değil", () => {
     const rate = settingKeys.filter((k) => k.startsWith("limits."));
     assert.equal(rate.length, 18);
     for (const k of rate) {
-      assert.equal(def(k).default, null, `${k}: kaynağı olmayan değer uydurulmaz`);
-      assert.match(def(k).missing!, /Öneri \d+ \(Faruk, KV-19 #21/, k);
+      assert.match(def(k).default!.source, /Mehmet onayı, #21/, k);
       assert.equal(def(k).publicPath, null, `${k} public değil`);
       assert.ok(def(k).min! >= 1, `${k}: 0 limit uç noktayı tamamen kapatır; kapatma acil durum anahtarıyla yapılır`);
     }

@@ -10,9 +10,9 @@
 | Yeni/normal kullanıcı politikası ve admin ayar anahtarları | ✅ Yeni hesap = açılıştan sonraki ilk `polls.newAccountPeriodDays` (7) gün (Mehmet kararı, #21). 18 ayar anahtarı contracts `limits.*` altında. KV-40 (#42) ayar servisi gelince panelden değiştirilebilir; o zamana kadar API önerilen değerleri kullanıyor. |
 | Başarısız giriş ve yoğun yorum testli; hassas bilgi loglanmıyor | ✅ Testler: giriş kaba kuvvet (e-posta ve IP), başarılı girişte sıfırlama, kayıt, şifre sıfırlama, yorum burst ve günlük sınır, oy, genel yazma. Sayaç anahtarı ve log ham IP/e-posta/kullanıcı kimliği içermiyor (pepper'lı sha256 özeti, test). |
 
-## Değerler (geçici)
+## Değerler
 
-Plan (PRODUCT_TEAM_PLAN §13 "Ek kontroller") sınırları ister ama sayı vermez. Mehmet geçici limitleri onayladı (#21, 2026-10-07). Aşağıdaki sayılar Faruk'un önerisi; contracts'ta `default: null` + öneri olarak yazılı, teyit gelince resmîleşir (KV-04 açık konu 10).
+Plan (PRODUCT_TEAM_PLAN §13 "Ek kontroller") sınırları ister ama sayı vermez. Sayılar Faruk'un önerisiydi; **Mehmet onayladı (#21, 2026-10-08; PR #152 tablosu referans)**. Contracts'ta `limits.*` varsayılanı olarak kaynağıyla yazılı. KV-40 (#42) gelince panelden değiştirilebilir.
 
 | Kural | Kimin sayıldığı | Pencere | Normal hesap | Yeni hesap | Ayar |
 |---|---|---|---|---|---|
@@ -68,7 +68,6 @@ Anket yayın limitleri (cooldown, günlük sınır) ayrıdır: KV-20, `polls.*`.
 
 ## Kalanlar
 
-- **Değerlerin teyidi:** Mehmet (KV-04 açık konu 10). Teyit gelince contracts'ta `default` ve kaynak yazılır.
 - **Panelden ayar:** KV-40 (#42) ayar servisi `limits.*` değerlerini okuyunca `rateLimitSettings` oradan beslenir.
 - **Bypass:** Admin veya servis hesapları için ayrı bir istisna yok. Gerekirse eklenir; şu an admin yazma sınırı da 60/dk.
 - **Fastify istek logu:** Fastify'ın kendi `incoming request` logu istemci adresini (`remoteAddress`) yazar. Bu KV-19 öncesi davranış; log saklama politikası #51 kapsamında.

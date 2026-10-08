@@ -342,9 +342,9 @@ describe("hız sınırı: yapılandırma", () => {
     const keys = settingKeys.filter((k: string) => k.startsWith("limits.")).map((k: string) => k.slice("limits.".length)).sort();
     assert.deepEqual(keys, Object.keys(DEFAULT_RATE_LIMIT_SETTINGS).sort());
     for (const [k, v] of Object.entries(DEFAULT_RATE_LIMIT_SETTINGS)) {
-      const d = (settingsRegistry as unknown as Record<string, { min: number; max: number; missing: string }>)[`limits.${k}`]!;
+      const d = (settingsRegistry as unknown as Record<string, { min: number; max: number; default: { value: number } }>)[`limits.${k}`]!;
       assert.ok(v >= d.min && v <= d.max, k);
-      assert.match(d.missing, new RegExp(`Öneri ${v} \\(`), `${k}: API değeri contracts önerisiyle aynı`);
+      assert.equal(d.default.value, v, `${k}: API değeri contracts varsayılanıyla aynı`);
     }
   });
 });

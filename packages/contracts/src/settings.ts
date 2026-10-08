@@ -63,12 +63,11 @@ const FEED_PROPOSAL = (value: number) =>
   `PRODUCT_TEAM_PLAN §7 ve #29 kabul koşulu bunu admin ayarı olarak ister, değer vermez. Öneri ${value} (Faruk, KV-27; API geçici olarak bunu kullanır), Mehmet teyidi bekliyor`;
 
 /**
- * KV-19 (#21) hız sınırları. Plan (PRODUCT_TEAM_PLAN §13 "Ek kontroller") sınırları ister, sayı vermez. Mehmet geçici
- * limitleri onayladı (#21, 2026-10-07; yeni hesap = ilk `polls.newAccountPeriodDays` gün); sayılar Faruk'un önerisi,
- * API geçici olarak bunları kullanır. Pencereler sabittir (dakika/15 dk/saat/gün), ayar yalnız üst sınırdır.
+ * KV-19 (#21) hız sınırları. Plan (PRODUCT_TEAM_PLAN §13 "Ek kontroller") sınırları ister, sayı vermez; değerler Faruk'un
+ * önerisi, Mehmet onayladı (#21, 2026-10-08; PR #152 tablosu referans). Yeni hesap = ilk `polls.newAccountPeriodDays` gün.
+ * Pencereler sabittir (dakika/15 dk/saat/gün), ayar yalnız üst sınırdır.
  */
-const RATE_PROPOSAL = (value: number) =>
-  `PRODUCT_TEAM_PLAN §13 "Ek kontroller" hız sınırı ister, değer vermez. Öneri ${value} (Faruk, KV-19 #21; API geçici olarak bunu kullanır), Mehmet teyidi bekliyor`;
+const RATE_SOURCE = "docs/KV-19_RATE_LIMIT.md \"Değerler\": Mehmet onayı, #21 (2026-10-08; PR #152 tablosu referans)";
 
 const NO_SWITCH_DEFAULT =
   "PRODUCT_TEAM_PLAN §16 'Sistem ayarları' ve 'Acil durum kontrolleri' anahtarı tanımlar, varsayılan değer vermez";
@@ -225,24 +224,24 @@ export const settingsRegistry = Object.freeze({
   ),
   "feed.maxSameAuthorPerWindow": proposedInt("Senin İçin: art arda 10 kartta aynı yazardan en fazla", 1, 10, FEED_PROPOSAL(2)),
   "feed.maxSameCategoryPerWindow": proposedInt("Senin İçin: art arda 10 kartta aynı kategoriden en fazla", 1, 10, FEED_PROPOSAL(4)),
-  "limits.loginFailuresPerEmail": proposedInt("Giriş: aynı e-posta için 15 dakikada en fazla başarısız deneme", 1, 100, RATE_PROPOSAL(5)),
-  "limits.loginFailuresPerIp": proposedInt("Giriş: aynı IP'den 15 dakikada en fazla başarısız deneme", 1, 1000, RATE_PROPOSAL(20)),
-  "limits.registerPerIpHour": proposedInt("Kayıt: aynı IP'den saatte en fazla", 1, 1000, RATE_PROPOSAL(5)),
-  "limits.recoveryPerEmailHour": proposedInt("Şifre sıfırlama / doğrulama tekrarı: aynı e-posta veya hesap için saatte en fazla", 1, 100, RATE_PROPOSAL(3)),
-  "limits.recoveryPerIpHour": proposedInt("Şifre sıfırlama / doğrulama tekrarı: aynı IP'den saatte en fazla", 1, 1000, RATE_PROPOSAL(10)),
-  "limits.votesPerMinute": proposedInt("Oy: normal hesap dakikada en fazla", 1, 1000, RATE_PROPOSAL(30)),
-  "limits.newAccountVotesPerMinute": proposedInt("Oy: yeni hesap dakikada en fazla", 1, 1000, RATE_PROPOSAL(15)),
-  "limits.commentsPerMinute": proposedInt("Yorum: normal hesap dakikada en fazla (burst)", 1, 1000, RATE_PROPOSAL(6)),
-  "limits.newAccountCommentsPerMinute": proposedInt("Yorum: yeni hesap dakikada en fazla (burst)", 1, 1000, RATE_PROPOSAL(3)),
-  "limits.commentsPerDay": proposedInt("Yorum: normal hesap günde en fazla", 1, 100000, RATE_PROPOSAL(200)),
-  "limits.newAccountCommentsPerDay": proposedInt("Yorum: yeni hesap günde en fazla", 1, 100000, RATE_PROPOSAL(30)),
-  "limits.reportsPerHour": proposedInt("Şikâyet: normal hesap saatte en fazla", 1, 1000, RATE_PROPOSAL(10)),
-  "limits.newAccountReportsPerHour": proposedInt("Şikâyet: yeni hesap saatte en fazla", 1, 1000, RATE_PROPOSAL(5)),
-  "limits.uploadsPerHour": proposedInt("Görsel yükleme: normal hesap saatte en fazla", 1, 1000, RATE_PROPOSAL(20)),
-  "limits.newAccountUploadsPerHour": proposedInt("Görsel yükleme: yeni hesap saatte en fazla", 1, 1000, RATE_PROPOSAL(5)),
-  "limits.searchesPerMinute": proposedInt("Arama: kullanıcı veya IP dakikada en fazla", 1, 10000, RATE_PROPOSAL(60)),
-  "limits.writesPerMinute": proposedInt("Diğer yazma işlemleri: normal hesap dakikada en fazla", 1, 10000, RATE_PROPOSAL(60)),
-  "limits.newAccountWritesPerMinute": proposedInt("Diğer yazma işlemleri: yeni hesap dakikada en fazla", 1, 10000, RATE_PROPOSAL(30)),
+  "limits.loginFailuresPerEmail": int("Giriş: aynı e-posta için 15 dakikada en fazla başarısız deneme", 1, 100, 5, RATE_SOURCE, null),
+  "limits.loginFailuresPerIp": int("Giriş: aynı IP'den 15 dakikada en fazla başarısız deneme", 1, 1000, 20, RATE_SOURCE, null),
+  "limits.registerPerIpHour": int("Kayıt: aynı IP'den saatte en fazla", 1, 1000, 5, RATE_SOURCE, null),
+  "limits.recoveryPerEmailHour": int("Şifre sıfırlama / doğrulama tekrarı: aynı e-posta veya hesap için saatte en fazla", 1, 100, 3, RATE_SOURCE, null),
+  "limits.recoveryPerIpHour": int("Şifre sıfırlama / doğrulama tekrarı: aynı IP'den saatte en fazla", 1, 1000, 10, RATE_SOURCE, null),
+  "limits.votesPerMinute": int("Oy: normal hesap dakikada en fazla", 1, 1000, 30, RATE_SOURCE, null),
+  "limits.newAccountVotesPerMinute": int("Oy: yeni hesap dakikada en fazla", 1, 1000, 15, RATE_SOURCE, null),
+  "limits.commentsPerMinute": int("Yorum: normal hesap dakikada en fazla (burst)", 1, 1000, 6, RATE_SOURCE, null),
+  "limits.newAccountCommentsPerMinute": int("Yorum: yeni hesap dakikada en fazla (burst)", 1, 1000, 3, RATE_SOURCE, null),
+  "limits.commentsPerDay": int("Yorum: normal hesap günde en fazla", 1, 100000, 200, RATE_SOURCE, null),
+  "limits.newAccountCommentsPerDay": int("Yorum: yeni hesap günde en fazla", 1, 100000, 30, RATE_SOURCE, null),
+  "limits.reportsPerHour": int("Şikâyet: normal hesap saatte en fazla", 1, 1000, 10, RATE_SOURCE, null),
+  "limits.newAccountReportsPerHour": int("Şikâyet: yeni hesap saatte en fazla", 1, 1000, 5, RATE_SOURCE, null),
+  "limits.uploadsPerHour": int("Görsel yükleme: normal hesap saatte en fazla", 1, 1000, 20, RATE_SOURCE, null),
+  "limits.newAccountUploadsPerHour": int("Görsel yükleme: yeni hesap saatte en fazla", 1, 1000, 5, RATE_SOURCE, null),
+  "limits.searchesPerMinute": int("Arama: kullanıcı veya IP dakikada en fazla", 1, 10000, 60, RATE_SOURCE, null),
+  "limits.writesPerMinute": int("Diğer yazma işlemleri: normal hesap dakikada en fazla", 1, 10000, 60, RATE_SOURCE, null),
+  "limits.newAccountWritesPerMinute": int("Diğer yazma işlemleri: yeni hesap dakikada en fazla", 1, 10000, 30, RATE_SOURCE, null),
 } satisfies Record<string, SettingDefinition>);
 
 export type SettingKey = keyof typeof settingsRegistry;
