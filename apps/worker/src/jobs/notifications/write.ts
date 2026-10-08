@@ -99,7 +99,7 @@ export async function fanoutToVoters(
         ${after}
       ORDER BY v.created_at, v.user_id
       LIMIT ${take + 1}`;
-    const page: { id: string }[] = rows.slice(0, take);
+    const page = rows.slice(0, take);
     result.recipients += page.length;
     result.written += await writeNotifications(tx, draft, page.map((r) => r.userId), opts.policy);
     if (rows.length <= take) return result;
