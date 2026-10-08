@@ -216,7 +216,7 @@ export function createPrismaFeaturedAdminStore(prisma: PrismaClient): FeaturedAd
         });
         // Activation or moving an already active placement onto COMMUNITY produces
         // the relevant event once. Natural keys prevent duplicates on retry.
-        if (activating || (current.surface !== "COMMUNITY" && updated.surface === "COMMUNITY" && updated.activatedAt)) {
+        if (activating || (current.surface !== "COMMUNITY" && updated.surface === "COMMUNITY" && updated.activatedAt && updated.startsAt <= trail.now && updated.endsAt > trail.now)) {
           await emitFeaturedEvents(tx, updated, trail.actorId, trail.now);
         }
         await writeAudit(tx, {
