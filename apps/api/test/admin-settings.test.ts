@@ -419,6 +419,25 @@ describe("sistem ayarları ve acil durum (postgres)", { skip: backend ? false : 
     assert.equal((await get("/me/points", fresh.cookie)).json().data.balance, 7);
   });
 
+  test("görsel risk eşikleri (KV-38): sınırlar, orta ≤ yüksek kuralı, gerekçeli audit", async () => {
+    const base = await auditCount("media.riskHighPercent", "settings.update");
+    // Üst sınır: yüksek eşik 95'i, orta eşik 60'ı aşamaz (fail-closed taban).
+    assertError(await update(superAdmin.cookie, "media.riskHighPercent", 96, 1), 400, "VALIDATION_ERROR");
+    assertError(await update(superAdmin.cookie, "media.riskMediumPercent", 61, 1), 400, "VALIDATION_ERROR");
+    assertError(await update(superAdmin.cookie, "media.riskMediumPercent", 5, 1), 400, "VALIDATION_ERROR");
+    // Orta eşik yüksek eşiği aşamaz.
+    assert.equal((await update(superAdmin.cookie, "media.riskHighPercent", 45, 1, "Daha sıkı tarama")).statusCode, 200);
+    assertError(await update(superAdmin.cookie, "media.riskMediumPercent", 50, 1), 400, "VALIDATION_ERROR");
+    assert.equal((await update(superAdmin.cookie, "media.riskMediumPercent", 30, 1)).statusCode, 200);
+
+    const rows = await audit("media.riskHighPercent", "settings.update");
+    assert.equal(rows.length, base + 1);
+    const last = rows.at(-1)!;
+    assert.deepEqual([last.actorId, last.reason, last.before, last.after], [superAdmin.id, "Daha sıkı tarama", { value: 65, version: 1 }, { value: 45, version: 2 }]);
+    // ADMIN değiştiremez.
+    assertError(await update(admin.cookie, "media.riskHighPercent", 50, 2), 403, "FORBIDDEN");
+  });
+
   test("medya ayarı: media.maxBytes düşünce daha büyük dosya reddedilir", async () => {
     const user = await signUp();
     assert.equal((await send("POST", "/media/uploads", { purpose: "POLL", mimeType: "image/webp", sizeBytes: 2_000_000 }, user.cookie)).statusCode, 201);
