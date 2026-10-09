@@ -1,45 +1,46 @@
-/* UI-V2: premium-first presentation layer. Existing semantic components and API contracts stay intact.
-   Default: airy light. Dark is still available via explicit user choice. */
+/* UI-V2: Champagne + anthracite identity. Main surface is light ivory;
+   champagne accents always pair with dark text, while dark mode remains optional.
+   Existing semantic components and API contracts stay intact. */
 .product[data-theme="light"] {
   color-scheme: light;
-  --kv-background: #f7f8fc;
+  --kv-background: #faf8f2;
   --kv-surface: #ffffff;
-  --kv-surface-2: #f1f3f9;
-  --kv-text: #181b2b;
-  --kv-muted: #586179;
-  --kv-border: #e4e7f0;
-  --kv-control-border: #a5aec1;
-  --kv-primary: #4d40c7;
-  --kv-primary-hover: #392da8;
-  --kv-primary-light: #7367e0;
-  --kv-accent: #4335bc;
-  --kv-focus: #4d40c7;
-  --kv-soft: #eeeefe;
+  --kv-surface-2: #f3f0e9;
+  --kv-text: #292826;
+  --kv-muted: #615a50;
+  --kv-border: #e6dfd2;
+  --kv-control-border: #82796c;
+  --kv-primary: #d9ba7f;
+  --kv-primary-hover: #caa666;
+  --kv-primary-light: #e5cb97;
+  --kv-accent: #815b21;
+  --kv-focus: #d9ba7f;
+  --kv-soft: #f6ecd9;
   --kv-success: #147c5d;
   --kv-danger: #b02546;
   --kv-warning: #8c5606;
   --kv-radius-sm: 12px;
   --kv-radius-md: 16px;
   --kv-radius-lg: 22px;
-  --kv-shadow: 0 16px 48px rgba(32, 37, 76, .07);
-  background: radial-gradient(ellipse at 7% 0%, rgba(118, 105, 227, .07), transparent 38%),
-              radial-gradient(ellipse at 93% 7%, rgba(69, 167, 155, .045), transparent 30%),
+  --kv-shadow: 0 16px 48px rgba(44, 37, 25, .085);
+  background: radial-gradient(ellipse at 7% 0%, rgba(181, 139, 72, .075), transparent 38%),
+              radial-gradient(ellipse at 93% 7%, rgba(148, 119, 78, .05), transparent 30%),
               var(--kv-background);
 }
 .product[data-theme="dark"] {
   color-scheme: dark;
-  --kv-background: #10121c;
-  --kv-surface: #1a1d2b;
-  --kv-surface-2: #242839;
-  --kv-text: #f4f5fb;
-  --kv-muted: #b3bdd0;
-  --kv-border: #363b50;
-  --kv-control-border: #7b849b;
-  --kv-primary: #7569ed;
-  --kv-primary-hover: #6658db;
-  --kv-accent: #c3baff;
-  --kv-focus: #c6baff;
-  --kv-soft: #30294b;
+  --kv-background: #181715;
+  --kv-surface: #23211d;
+  --kv-surface-2: #302c26;
+  --kv-text: #f7f2e8;
+  --kv-muted: #c6bdaf;
+  --kv-border: #494338;
+  --kv-control-border: #948977;
+  --kv-primary: #e4c48f;
+  --kv-primary-hover: #d3af74;
+  --kv-accent: #e8cd99;
+  --kv-focus: #e8cd99;
+  --kv-soft: #3d3325;
   --kv-success: #8de6bf;
   --kv-danger: #ffadbe;
   --kv-warning: #f7d891;
@@ -57,7 +58,7 @@
 .product .kv-card {
   border: 1px solid var(--kv-border);
   border-radius: var(--kv-radius-lg);
-  box-shadow: 0 8px 30px rgba(37, 44, 94, .035);
+  box-shadow: 0 8px 30px rgba(52, 43, 29, .04);
   padding: clamp(20px, 2.4vw, 28px);
 }
 .product[data-theme="dark"] .kv-card { box-shadow: 0 8px 30px rgba(0,0,0,.11); }
@@ -84,13 +85,13 @@
 .product .kv-input:focus { border-color: var(--kv-primary); }
 .product .kv-input:focus-visible { outline-offset: 2px; }
 .product[data-theme="light"] .kv-badge {
-  background: var(--kv-soft); border-color: #ccc9fa; color: var(--kv-accent);
+  background: var(--kv-soft); border-color: #e2c991; color: var(--kv-accent);
 }
 .product[data-theme="light"] .kv-badge--success { background: #e8f7ef; border-color: #b9dccb; color: #13684f; }
 .product[data-theme="light"] .kv-badge--danger { background: #fff0f2; border-color: #efbec9; color: #9f1e3c; }
 .product[data-theme="light"] .kv-badge--warning { background: #fff7e5; border-color: #ebd39c; color: #785008; }
-.product[data-theme="light"] .kv-notice { background: #f0eeff; color: #352b91; }
-.product[data-theme="light"] .kv-skeleton { background: #e5e8f2; }
+.product[data-theme="light"] .kv-notice { background: #f6ecd9; color: #72501e; }
+.product[data-theme="light"] .kv-skeleton { background: #e8e1d5; }
 .product[data-theme="light"] .kv-dialog::backdrop { background: rgba(18,24,47,.48); }
 .product :is(.kv-field, .kv-card, .screen-stack, .poll-card) { min-width: 0; }
 
@@ -108,8 +109,8 @@
 .brand { font-size: 25px; font-weight: 850; letter-spacing: -.058em; color: var(--kv-text); }
 .brand span {
   width: 39px; height: 39px; border-radius: 13px;
-  background: linear-gradient(135deg, #7869f2, #4031b0);
-  box-shadow: 0 6px 16px rgba(79,66,185,.22);
+  background: linear-gradient(135deg, #e9cf9e, #bd914a);
+  box-shadow: 0 6px 16px rgba(111, 77, 34, .22);
   font-size: 22px;
 }
 .header-caption { font-size: 12px; letter-spacing: .015em; margin-left: 6px; }
@@ -170,12 +171,12 @@
 .vote-option:has(input:checked) { outline: 2px solid var(--kv-primary); background: var(--kv-soft); }
 .vote-option span { font-size: 14px; font-weight: 600; padding: 16px; }
 .vote-option input { width: 20px; height: 20px; }
-.poll-card .avatar { background: linear-gradient(140deg, #9988e7, #4d40c7); border: 2px solid var(--kv-surface); }
+.poll-card .avatar { background: linear-gradient(140deg, #d8b87a, #d9ba7f); border: 2px solid var(--kv-surface); }
 .poll-card .author { font-size: 13px; }
 .poll-card .author small { font-size: 12px; }
 .photo-options img, .vote-option img { border-radius: 13px; }
 .product progress { height: 10px; border-radius: 999px; }
-.product progress::-webkit-progress-value { background: linear-gradient(90deg, #5144ca, #988ef6); }
+.product progress::-webkit-progress-value { background: linear-gradient(90deg, #b78c45, #f2dbab); }
 .result { animation-duration: 230ms; }
 .reaction-button { border-radius: 12px; background: var(--kv-surface); }
 .reaction-button:hover:not(:disabled) { background: var(--kv-surface-2); border-color: var(--kv-control-border); }
@@ -196,8 +197,8 @@
 .discovery-nav { gap: 7px; }
 .discovery-nav a { border-radius: 12px; }
 .trend-card { border-radius: var(--kv-radius-lg); }
-.product[data-theme="light"] .chart-bar { background: #594cd1; }
-.product[data-theme="light"] .chart-bar-1 { background: #127e72; }
+.product[data-theme="light"] .chart-bar { background: #b98f4c; }
+.product[data-theme="light"] .chart-bar-1 { background: #51514b; }
 
 /* Mobile nav: six destinations in six real columns; no two-line overflow. */
 @media (max-width: 1199px) {
@@ -245,4 +246,46 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .product .kv-button, .app-sidebar nav a, .vote-option, .reaction-button { transition: none !important; }
+}
+
+/* Brand safety: dark ink on champagne creates an accessible call to action in both themes. */
+.product .kv-button:not(.kv-button--secondary):not(.kv-button--ghost):not(.kv-button--danger) {
+  color: #252525;
+  border-color: #b69359;
+}
+.product .kv-button:not(.kv-button--secondary):not(.kv-button--ghost):not(.kv-button--danger):hover:not(:disabled) {
+  color: #252525;
+  border-color: #a78144;
+}
+.product .kv-button--danger { color: #fff; }
+.product .feed-tabs a[aria-current] {
+  background: var(--kv-primary);
+  border-color: #ae8c52;
+  color: #252525;
+  font-weight: 750;
+}
+.product .brand span {
+  color: #292826;
+  background: linear-gradient(135deg, #f0d9ad, #c9a163);
+}
+.product .avatar {
+  color: #292826;
+  background: linear-gradient(135deg, #ead2a5, #bf9555);
+}
+.product .app-mobile a[href="/olustur"] span {
+  color: #252525;
+  background: var(--kv-primary);
+}
+.product .reaction-button[aria-pressed="true"],
+.product .gallery-thumb[aria-pressed="true"] { color: var(--kv-accent); border-color: var(--kv-accent); }
+.product .category-glyph-1 { color: #614820; background: #f4e5c5; }
+.product .category-glyph-2 { color: #484237; background: #eee8de; }
+.product[data-theme="dark"] .category-glyph-1 { color: #edce91; background: #413624; }
+.product[data-theme="dark"] .category-glyph-2 { color: #efebe1; background: #38342f; }
+.product[data-theme="light"] .chart-bar-1 { background: #777166; }
+.product .rank-badge { color: var(--kv-accent); background: var(--kv-soft); }
+.product .vote-option:hover:not(:has(input:disabled)) { box-shadow: 0 5px 18px rgba(78, 62, 37, .07); }
+.product .app-sidebar nav a[aria-current="page"] { border-left: 3px solid #bd9759; }
+@media (prefers-reduced-motion: reduce) {
+  .product .kv-button, .product .vote-option { transform: none !important; }
 }
