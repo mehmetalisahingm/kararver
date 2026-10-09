@@ -114,7 +114,10 @@
   color: #fff !important;
   box-shadow: 0 11px 24px rgba(71, 58, 187, .20);
   text-decoration: none;
-  font: 750 16px/1.45 inherit;
+  font-size: 16px;
+  font-weight: 750;
+  line-height: 1.45;
+  font-family: inherit;
   cursor: pointer;
   transition: transform .2s ease, background-color .2s ease, box-shadow .2s ease;
 }
@@ -175,7 +178,10 @@
   border-radius: 19px;
   background: #f7f8fc;
   color: var(--ink);
-  font: 700 18px/1.45 inherit;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.45;
+  font-family: inherit;
   cursor: pointer;
   text-align: left;
   transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease;
@@ -203,7 +209,10 @@
   border: 1px solid #d9dce9;
   background: var(--panel);
   color: var(--ink);
-  font: 680 16px/1.45 inherit;
+  font-size: 16px;
+  font-weight: 680;
+  line-height: 1.45;
+  font-family: inherit;
   cursor: pointer;
 }
 .interests button:hover { background: #f2f1fc; border-color: #8377db; }
@@ -227,7 +236,9 @@
   border-radius: 8px;
   min-height: 44px;
   padding: 9px 13px;
-  font: 700 13px inherit;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
   cursor: pointer;
 }
 .footer button:hover { background: #eeecfc; }
@@ -286,3 +297,9 @@
 @media (prefers-reduced-motion: reduce) {
   .welcome *, .welcome::before { animation: none !important; transition: none !important; transform: none !important; }
 }
+
+/* The first impression explains value without fabricated participation counts. */
+.benefits { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+.benefits span { display: inline-flex; align-items: center; gap: 10px; min-height: 42px; padding: 9px 14px; border: 1px solid #e0e2ef; border-radius: 999px; background: rgba(255,255,255,.9); color: #363b54; font-size: 13px; font-weight: 650; }
+.benefits strong { color: #4534ac; font-variant-numeric: tabular-nums; font-weight: 850; }
+@media(max-width: 600px) { .benefits { gap: 7px; } .benefits span { font-size: 12px; min-height: 39px; padding: 7px 11px; } }
