@@ -1,0 +1,294 @@
+{
+  "kind": "UNPUBLISHED_CONTENT_DRAFTS",
+  "warning": "NOT REAL USERS OR LIVE CONTENT. Confirm category IDs/moderation and beta gate before publication; exclude seed from organic analytics.",
+  "items": [
+    {
+      "id": "P01",
+      "type": "POLL",
+      "stage": "D0",
+      "categoryTheme": "teknoloji",
+      "title": "Günlük not tutmak için hangi yaklaşım daha kullanışlı?",
+      "description": "Günlük işlerde tercihleri kıyaslama",
+      "options": [
+        "Not uygulaması",
+        "Kâğıt defter",
+        "İkisini birlikte"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P02",
+      "type": "POLL",
+      "stage": "D0",
+      "categoryTheme": "egitim",
+      "title": "Yeni bir konuyu öğrenirken ilk tercihin hangisi?",
+      "description": "Öğrenme deneyimlerini karşılaştırma",
+      "options": [
+        "Kısa video",
+        "Yazılı rehber",
+        "Uygulamalı örnek"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P03",
+      "type": "POLL",
+      "stage": "D0",
+      "categoryTheme": "spor",
+      "title": "Haftalık egzersizde hangi düzeni tercih edersin?",
+      "description": "Genel tercih, sağlık tavsiyesi değil",
+      "options": [
+        "3 gün düzenli",
+        "4 gün kısa",
+        "Esnek program"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P04",
+      "type": "POLL",
+      "stage": "D0",
+      "categoryTheme": "oyun",
+      "title": "Arkadaşlarla bir akşam oyunu seçerken hangisi?",
+      "description": "Topluluk etkileşimi için",
+      "options": [
+        "Co-op macera",
+        "Rekabetçi maç",
+        "Bilgi yarışması"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P05",
+      "type": "POLL",
+      "stage": "D0",
+      "categoryTheme": "yasam",
+      "title": "Plan yaparken en çok hangi biçim işine yarıyor?",
+      "description": "Planlama tercihleri",
+      "options": [
+        "Günlük yapılacaklar",
+        "Haftalık takvim",
+        "Serbest notlar"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P06",
+      "type": "POLL",
+      "stage": "D0",
+      "categoryTheme": "eglence",
+      "title": "Bir diziye başlarken hangisi daha cazip?",
+      "description": "Genel içerik tercihleri",
+      "options": [
+        "Kısa sezon",
+        "Uzun sezon",
+        "Tek bölümlük antoloji"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P07",
+      "type": "POLL",
+      "stage": "D1-D2",
+      "categoryTheme": "teknoloji",
+      "title": "Yeni bir uygulamayı denerken ilk olarak neye bakarsın?",
+      "description": "Karar kriteri",
+      "options": [
+        "Kullanım kolaylığı",
+        "Gizlilik ayarları",
+        "Hız ve performans"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P08",
+      "type": "POLL",
+      "stage": "D1-D2",
+      "categoryTheme": "egitim",
+      "title": "Grup ödevinde iş takibini nereden yapmak istersin?",
+      "description": "Takım çalışması",
+      "options": [
+        "Ortak kanban",
+        "Mesajlaşma",
+        "Paylaşılan belge"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P09",
+      "type": "POLL",
+      "stage": "D1-D2",
+      "categoryTheme": "spor",
+      "title": "Takım sporunda hangi özellik daha önemli?",
+      "description": "Takım dinamikleri",
+      "options": [
+        "İletişim",
+        "Planlama",
+        "Bireysel beceri"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P10",
+      "type": "POLL",
+      "stage": "D1-D2",
+      "categoryTheme": "oyun",
+      "title": "Bir oyunun tekrar oynanmasını en çok ne sağlar?",
+      "description": "Oyun deneyimi",
+      "options": [
+        "Farklı senaryolar",
+        "Arkadaşlarla oynama",
+        "Skor/başarı hissi"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P11",
+      "type": "POLL",
+      "stage": "D3-D4",
+      "categoryTheme": "yasam",
+      "title": "Yeni bir alışkanlığı sürdürmeyi ne kolaylaştırıyor?",
+      "description": "Genel alışkanlık tercihleri",
+      "options": [
+        "Küçük hedefler",
+        "Takip çizelgesi",
+        "Birlikte ilerlemek"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "P12",
+      "type": "POLL",
+      "stage": "D3-D4",
+      "categoryTheme": "eglence",
+      "title": "Arkadaşlarla etkinlik belirlerken hangisini seçersin?",
+      "description": "Sosyal kararlar",
+      "options": [
+        "Oylama yapmak",
+        "Sırayla seçmek",
+        "Önceden planlamak"
+      ],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "D01",
+      "type": "DISCUSSION",
+      "stage": "D0",
+      "categoryTheme": "teknoloji",
+      "title": "Bir uygulamaya güvenmeden önce hangi işaretlere bakarsın?",
+      "description": "Deneyimlerini ve bakılmasını önerdiğin noktaları paylaş.",
+      "options": [],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "D02",
+      "type": "DISCUSSION",
+      "stage": "D0",
+      "categoryTheme": "egitim",
+      "title": "Grup projelerinde iş bölümünü adil kılmak için neler yapılabilir?",
+      "description": "Farklı yöntemleri ve işe yarayan deneyimleri tartışalım.",
+      "options": [],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "D03",
+      "type": "DISCUSSION",
+      "stage": "D0",
+      "categoryTheme": "oyun",
+      "title": "Bir oyunun ilk 10 dakikasını başarılı kılan nedir?",
+      "description": "Giriş tasarımı ve oyuncuya yol gösterme üzerine fikirlerini yaz.",
+      "options": [],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "D04",
+      "type": "DISCUSSION",
+      "stage": "D0",
+      "categoryTheme": "yasam",
+      "title": "Günlük planın sık sık değişiyorsa nasıl uyum sağlarsın?",
+      "description": "Kısa ve uygulanabilir düzenleme yöntemleri önerebilirsin.",
+      "options": [],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "D05",
+      "type": "DISCUSSION",
+      "stage": "D1-D2",
+      "categoryTheme": "spor",
+      "title": "Takım içi iletişimi güçlendiren pratikler neler?",
+      "description": "Katıldığın oyunlarda işe yarayan yöntemleri paylaş.",
+      "options": [],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "D06",
+      "type": "DISCUSSION",
+      "stage": "D1-D2",
+      "categoryTheme": "eglence",
+      "title": "Arkadaş grubunda ortak etkinlik seçmek nasıl kolaylaşır?",
+      "description": "Oylama, dönüşümlü seçim ve diğer fikirleri tartışalım.",
+      "options": [],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "D07",
+      "type": "DISCUSSION",
+      "stage": "D3-D4",
+      "categoryTheme": "egitim",
+      "title": "Yeni bir beceriyi öğrenirken karşılaştığın zorlukları nasıl aşıyorsun?",
+      "description": "Kendi öğrenme yöntemlerini açıklayabilirsin.",
+      "options": [],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    },
+    {
+      "id": "D08",
+      "type": "DISCUSSION",
+      "stage": "D3-D4",
+      "categoryTheme": "teknoloji",
+      "title": "Bir web sitesinde en iyi ilk kullanıcı deneyimi sence nasıl olmalı?",
+      "description": "Örnek davranışları ve kaçınılması gereken noktaları paylaş.",
+      "options": [],
+      "commentsEnabled": true,
+      "actorType": "seed",
+      "publishStatus": "DRAFT"
+    }
+  ]
+}
