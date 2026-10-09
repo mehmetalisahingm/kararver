@@ -192,6 +192,7 @@ model Category {
 
   polls     Poll[]
   interests UserInterest[]
+  communityRequests CommunityRequest[]
 
   @@index([isActive, sortOrder])
   @@map("categories")
