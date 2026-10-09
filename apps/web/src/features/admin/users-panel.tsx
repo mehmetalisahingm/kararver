@@ -52,6 +52,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       <p>{user.status} · Roller: {user.roles.join(", ")} · Son giriş: {formatDate(user.lastLoginAt)}</p>
       <p>{user.stats.pollCount} gönderi · {user.stats.commentCount} yorum · {user.stats.voteCount} oy</p>
       {canAssign ? <button className="kv-button" onClick={() => setAction("role")}>Yetkilendir / rolü değiştir</button> : null}
+      {canAssign ? <UserSessions id={id} admin={admin} /> : null}
       <button className="kv-button" onClick={() => setAction("sanction")}>Uyar / kısıtla / askıya al / yasakla</button>
       {user.activeSanctions.map(s => <article key={s.id}><p>{s.type} · {s.reason} · Bitiş: {formatDate(s.endsAt)}</p><button onClick={() => { setTarget(s.id); setAction("lift"); }}>Yaptırımı kaldır</button></article>)}
       <h3>Gönderiler ve yorumlar</h3>
@@ -68,5 +69,25 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       {action === "role" ? <label>Rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value as AdminRole)}>{["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"].map(r => <option key={r}>{r}</option>)}</select></label> : null}
       {action === "sanction" ? <><label>Yaptırım<select className="kv-input" value={sanction} onChange={e => setSanction(e.target.value as typeof sanction)}>{["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING", "SUSPEND", "BAN"].map(s => <option key={s}>{s}</option>)}</select></label>{sanction === "SUSPEND" ? <label>Bitiş<input className="kv-input" type="datetime-local" value={endsAt} onChange={e => setEndsAt(e.target.value)} /></label> : null}</> : null}
     </ActionDialog>
+  </section>;
+}
+
+function UserSessions({ id, admin }: { id: string; admin: AdminClient }) {
+  const sessions = useRemoteList(useCallback((cursor, signal) => admin.userSessions(id, cursor, signal), [admin, id]));
+  const [selection, setSelection] = useState<string | null>(null);
+  return <section className="kv-stack" aria-label="Aktif oturumlar">
+    <h3>Aktif oturumlar</h3>
+    <p className="kv-muted">Kapatılan oturumda kullanıcı yeniden giriş yapmalıdır.</p>
+    <button className="kv-button" disabled={!sessions.items.length} onClick={() => setSelection("all")}>Tüm oturumları kapat</button>
+    {sessions.items.map(session => <article className="kv-card" key={session.id}>
+      <p>{session.userAgent ?? "Bilinmeyen cihaz"}</p>
+      <p>IP: {session.ipAddress ?? "Kaydedilmedi"} · Son etkinlik: {formatDate(session.lastSeenAt)} · Bitiş: {formatDate(session.expiresAt)}</p>
+      <button className="kv-button kv-button--secondary" onClick={() => setSelection(session.id)}>Bu oturumu kapat</button>
+    </article>)}
+    <ListState remote={sessions} empty="Aktif oturum bulunmuyor." />
+    <ActionDialog open={selection !== null} title={selection === "all" ? "Tüm oturumları kapat" : "Oturumu kapat"} submitLabel="Oturumu kapat" onClose={() => setSelection(null)} onSubmit={async reason => {
+      await admin.revokeUserSessions(id, reason, selection === "all" ? undefined : selection ?? undefined);
+      sessions.reload();
+    }}><p>Kullanıcının erişimi kesilecek. İşlem gerekçesi yönetim geçmişine kaydedilir.</p></ActionDialog>
   </section>;
 }

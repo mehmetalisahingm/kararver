@@ -175,6 +175,7 @@ export const actions = Object.freeze({
     requires: ["targetUserId", "targetRoles", "newRole", "activeSuperAdminCount"],
   }),
   "settings.update": rule("super_admin", "Sistem ayarı değiştirme"),
+  "user.sessions.manage": rule("super_admin", "Kullanıcı oturumlarını yönetme"),
   "emergency.update": rule("super_admin", "Acil durum anahtarları"),
 } satisfies Record<string, ActionRule>);
 
@@ -291,6 +292,8 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.sanctions.create": "user.sanction",
   "admin.sanctions.lift": "user.sanction.lift",
   "admin.roles.put": "user.role.assign",
+  "admin.users.sessions.list": "user.sessions.manage",
+  "admin.users.sessions.revoke": "user.sessions.manage",
   "admin.settings.list": "settings.read",
   "admin.settings.update": "settings.update",
   "admin.emergency.put": "emergency.update",

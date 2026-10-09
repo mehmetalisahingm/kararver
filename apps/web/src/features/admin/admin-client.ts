@@ -2,7 +2,7 @@
 // cevap sözleşme şemasıyla doğrulanır (HttpClient). Yetki sunucudadır: istemci rol kontrolü yalnız menü/düğme
 // gizlemedir, ret 403 olarak gelir ve ekranda gösterilir.
 import type {
-  AdminUserSummary, AdminUserDetail, AdminUserActivity, Sanction, Metrics,
+  AdminUserSummary, AdminUserDetail, AdminUserActivity, AdminSession, Sanction, Metrics,
   AdminCategory,
   AdminCommentItem,
   AdminPollItem,
@@ -109,6 +109,12 @@ const flag = (value: boolean | undefined) => (value === undefined ? undefined : 
 export class AdminClient {
   async users(q?: string, cursor?: string, signal?: AbortSignal) {
     return page<UserSummary>(await this.http.request("admin.users.list", { query: { q: q || undefined, cursor, limit: "20" }, signal }));
+  }
+  async userSessions(id: string, cursor?: string, signal?: AbortSignal) {
+    return page<ReturnType<typeof AdminSession.parse>>(await this.http.request("admin.users.sessions.list", { params: { id }, query: { cursor, limit: "20" }, signal }));
+  }
+  async revokeUserSessions(id: string, reason: string, sessionId?: string) {
+    return this.http.request("admin.users.sessions.revoke", { params: { id }, body: { reason, ...(sessionId ? { sessionId } : {}) } });
   }
   async user(id: string, signal?: AbortSignal) {
     return data<UserDetail>(await this.http.request("admin.users.get", { params: { id }, signal }));

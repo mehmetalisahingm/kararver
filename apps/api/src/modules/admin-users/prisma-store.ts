@@ -30,6 +30,7 @@ import { Prisma, type PrismaClient, type Role, type SanctionType, type UserStatu
 import { linkSanctionToReport, ownerOfTarget, targetOfReport } from "../moderation/trail.ts";
 import { assertNoCommittedKey, runIdempotent } from "../../http/idempotency.ts";
 import { writeAudit } from "../audit/write.ts";
+import { ApiError } from "../../http/errors.ts";
 import { normalizeEmail } from "../auth/routes.ts";
 import { writeEvent } from "../events/write.ts";
 import { likeLiteral } from "../search/prisma-store.ts";
@@ -397,6 +398,20 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
       }, { maxWait: 10_000, timeout: 30_000 });
     },
 
+    async listSessions(userId, afterId, limit, now) {
+      return prisma.session.findMany({ where: { userId, revokedAt: null, expiresAt: { gt: now }, ...(afterId ? { id: { lt: afterId } } : {}) }, orderBy: { id: "desc" }, take: limit,
+        select: { id: true, createdAt: true, expiresAt: true, lastSeenAt: true, ipAddress: true, userAgent: true } });
+    },
+    async revokeSessions(input) {
+      return prisma.$transaction(async tx => {
+        if (!(await lockTarget(tx, input.userId))) return null;
+        const decision = await decide(tx, input.actorId, "user.sessions.manage", {}, input.now);
+        if (!decision.allowed) throw new ApiError("FORBIDDEN", "Oturum yönetimi için süper admin yetkisi gerekli.");
+        const result = await tx.session.updateMany({ where: { userId: input.userId, revokedAt: null, expiresAt: { gt: input.now }, ...(input.sessionId ? { id: input.sessionId } : {}) }, data: { revokedAt: input.now } });
+        await writeAudit(tx, { source: "API", actorId: input.actorId, action: "user.sessions.manage", operation: "revoke", target: { type: "USER", id: input.userId }, reason: input.reason, before: null, after: { revokedCount: result.count, scope: input.sessionId ? "single" : "all" }, requestId: input.requestId, at: input.now });
+        return result.count;
+      });
+    },
     async setRole(input) {
       const { userId, role, actorId, now } = input;
       return prisma.$transaction(async (tx) => {

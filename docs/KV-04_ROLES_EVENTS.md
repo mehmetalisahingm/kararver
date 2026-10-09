@@ -81,7 +81,7 @@ route("admin.reports.resolve", async ({ params, authorize }) => {
 | owner | `poll.update` (kısıt: POSTING) · `poll.close` · `poll.delete` · `poll.addendum.create` (kısıt: POSTING) · `comment.update` (kısıt: COMMENTS) · `comment.delete` · `decision.set` (kısıt: POSTING) · `media.complete` (kısıt: POSTING, avatar hariç) · `media.read` |
 | moderator | `report.queue.read` (kapsam: queue) · `report.resolve` (kapsam: community) · `moderation.poll.apply` (kapsam: community) · `moderation.comment.apply` (kapsam: community) · `moderation.content.search` (kapsam: queue) · `moderation.content.history` (kapsam: community) · `moderation.poll.move` (kapsam: community) · `moderation.user.warn` (kapsam: community, kural: sanctionTarget) · `media.queue.read` (kapsam: queue) · `media.review` (kapsam: community) |
 | admin | `revision.read` · `vote.invalidate` · `media.ban.manage` · `community.create` · `community.update` · `community.moderator.assign` · `community.request.queue` · `community.request.review` · `user.read` · `user.sanction` (kural: sanctionTarget) · `user.sanction.lift` (kural: sanctionTarget) · `settings.read` · `audit.read` · `points.adjust` · `metrics.read` · `featured.manage` · `announcement.manage` · `category.manage` |
-| super_admin | `user.role.assign` (kural: roleAssignment) · `settings.update` · `emergency.update` |
+| super_admin | `user.role.assign` (kural: roleAssignment) · `user.sessions.manage` · `settings.update` · `emergency.update` |
 
 ---
 

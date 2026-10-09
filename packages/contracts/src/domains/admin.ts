@@ -190,6 +190,11 @@ export const Metrics = z.strictObject({
   ),
 });
 
+export const AdminSession = z.strictObject({
+  id: Id, createdAt: Timestamp, expiresAt: Timestamp, lastSeenAt: Timestamp.nullable(),
+  ipAddress: z.string().nullable(), userAgent: z.string().nullable(),
+});
+
 const settings = { owner: "Utku", module: "settings" } as const;
 const adminUsers = { owner: "Utku", module: "admin-users" } as const;
 const mehmet = (module: string) => ({ owner: "Mehmet", module }) as const;
@@ -340,6 +345,18 @@ export const adminEndpoints = [
     errors: [],
     idempotency: "none",
     cache: "private",
+  }),
+  defineEndpoint({
+    id: "admin.users.sessions.list", domain: "admin", method: "GET", path: "/admin/users/:id/sessions",
+    summary: "Aktif kullanıcı oturumları", auth: "super_admin", provider: adminUsers, consumers: utkuUi, unblocks: ["#35"],
+    availability: { status: "ready" }, request: { params: IdParams, query: CursorQuery },
+    responses: { 200: pageOf(AdminSession) }, errors: ["INVALID_CURSOR"], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
+    id: "admin.users.sessions.revoke", domain: "admin", method: "POST", path: "/admin/users/:id/sessions/revoke",
+    summary: "Tek veya tüm aktif oturumları kapat", auth: "super_admin", provider: adminUsers, consumers: utkuUi, unblocks: ["#35"],
+    availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ sessionId: Id.optional(), reason: Reason }) },
+    responses: { 200: dataOf(z.strictObject({ revokedCount: Count })) }, errors: [], idempotency: "natural", cache: "private",
   }),
   ...(["sanctions", "reports", "activity"] as const).map((sub) =>
     defineEndpoint({
