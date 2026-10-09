@@ -155,10 +155,10 @@ export function ContentPanel({ admin, kind }: { admin: AdminClient; kind: Conten
   );
 }
 
-function RowActions({ canAct, canMove, onOpen }: { canAct: boolean; canMove: boolean; onOpen: (type: "action" | "move" | "history") => void }) {
+function RowActions({ canAct, canMove, onOpen, label = "İşlem" }: { canAct: boolean; canMove: boolean; onOpen: (type: "action" | "move" | "history") => void; label?: string }) {
   return (
     <div className={styles.rowActions}>
-      {canAct ? <button className="kv-button kv-button--ghost" onClick={() => onOpen("action")}>İşlem</button> : null}
+      {canAct ? <button className="kv-button kv-button--ghost" onClick={() => onOpen("action")}>{label}</button> : null}
       {canMove ? <button className="kv-button kv-button--ghost" onClick={() => onOpen("move")}>Taşı</button> : null}
       <button className="kv-button kv-button--ghost" onClick={() => onOpen("history")}>Geçmiş</button>
     </div>
@@ -202,7 +202,7 @@ function CommentRow({ item, onOpen, isAdmin }: { item: AdminComment; onOpen: (ty
       <td><small>{item.pollTitle}</small></td>
       <td>{item.openReportCount}</td>
       <td>{formatDate(item.createdAt)}</td>
-      <td><RowActions canAct={availableActions("comments", item, isAdmin).length > 0} canMove={false} onOpen={onOpen} /></td>
+      <td><RowActions canAct={availableActions("comments", item, isAdmin).length > 0} canMove={false} onOpen={onOpen} label="Yorumu yönet / kaldır" /></td>
     </tr>
   );
 }

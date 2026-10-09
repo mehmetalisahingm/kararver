@@ -2,6 +2,7 @@
 // cevap sözleşme şemasıyla doğrulanır (HttpClient). Yetki sunucudadır: istemci rol kontrolü yalnız menü/düğme
 // gizlemedir, ret 403 olarak gelir ve ekranda gösterilir.
 import type {
+  AdminUserSummary, AdminUserDetail, AdminUserActivity, Sanction, Metrics,
   AdminCategory,
   AdminCommentItem,
   AdminPollItem,
@@ -35,6 +36,11 @@ export type Featured = ReturnType<typeof FeaturedPlacement.parse>;
 export type AnnouncementView = ReturnType<typeof Announcement.parse>;
 export type AuditRecord = ReturnType<typeof AuditEntry.parse>;
 export type SettingView = ReturnType<typeof Setting.parse>;
+export type UserSummary = ReturnType<typeof AdminUserSummary.parse>;
+export type UserDetail = ReturnType<typeof AdminUserDetail.parse>;
+export type UserActivity = ReturnType<typeof AdminUserActivity.parse>;
+export type UserSanction = ReturnType<typeof Sanction.parse>;
+export type MetricsView = ReturnType<typeof Metrics.parse>;
 export type EmergencyState = { registration: boolean; pollCreation: boolean; comments: boolean; uploads: boolean; maintenance: boolean };
 /** admin.audit.list süzgeçleri (KV-39). from dahil, to hariç (ISO zaman). */
 export type AuditSearch = { action?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string };
@@ -101,6 +107,27 @@ const data = <T>(wire: unknown) => (wire as { data: T }).data;
 const flag = (value: boolean | undefined) => (value === undefined ? undefined : String(value));
 
 export class AdminClient {
+  async users(q?: string, cursor?: string, signal?: AbortSignal) {
+    return page<UserSummary>(await this.http.request("admin.users.list", { query: { q: q || undefined, cursor, limit: "20" }, signal }));
+  }
+  async user(id: string, signal?: AbortSignal) {
+    return data<UserDetail>(await this.http.request("admin.users.get", { params: { id }, signal }));
+  }
+  async userActivity(id: string, cursor?: string, signal?: AbortSignal) {
+    return page<UserActivity>(await this.http.request("admin.users.activity", { params: { id }, query: { cursor, limit: "20" }, signal }));
+  }
+  async setUserRole(id: string, role: "USER" | "MODERATOR" | "ADMIN" | "SUPER_ADMIN", reason: string) {
+    return this.http.request("admin.roles.put", { params: { id }, body: { role, reason } });
+  }
+  async sanctionUser(id: string, type: "WARNING" | StrongSanction, reason: string, endsAt: string | null) {
+    return data<UserSanction>(await this.http.request("admin.sanctions.create", { params: { id }, body: { type, reason, endsAt } }));
+  }
+  async liftSanction(id: string, sanctionId: string, reason: string) {
+    return this.http.request("admin.sanctions.lift", { params: { id, sanctionId }, body: { reason } });
+  }
+  async metrics(signal?: AbortSignal) {
+    return data<MetricsView>(await this.http.request("admin.metrics.get", { query: { range: "7d" }, signal }));
+  }
   /** Değiştirilemez yönetim geçmişi (KV-39); yalnız ADMIN+. Boş süzgeç gönderilmez. */
   async audit(search: AuditSearch, cursor?: string, signal?: AbortSignal) {
     const query: Record<string, string> = { limit: "30" };

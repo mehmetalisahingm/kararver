@@ -17,6 +17,8 @@ import { FeaturedPanel } from "./featured-panel";
 import { MediaPanel } from "./media-panel";
 import { ReportsPanel } from "./reports-panel";
 import { SettingsPanel } from "./settings-panel";
+import { UsersPanel } from "./users-panel";
+import { DashboardPanel } from "./dashboard-panel";
 
 function currentRoles(demo: boolean, email: string | undefined): AdminRole[] {
   if (!demo || !email) return [];
@@ -121,6 +123,8 @@ const sectionMeta: Record<AdminSectionId, { title: string; intro: string; metric
 /** Gerçek API'ye bağlı bölümler. Diğerleri kendi işlerinde bağlanır. */
 function livePanel(section: AdminSectionId, admin: AdminClient) {
   switch (section) {
+    case "users": return <UsersPanel admin={admin} />;
+    case "dashboard": return <DashboardPanel admin={admin} />;
     case "reports":
       return <ReportsPanel admin={admin} />;
     case "media":

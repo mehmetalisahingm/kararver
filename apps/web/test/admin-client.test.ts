@@ -8,6 +8,19 @@ import { UiError } from "../src/lib/model.ts";
 
 type Seen = { url: string; method: string; body: unknown; headers: Record<string, string> };
 
+test("user list and role assignment use real admin contracts", async () => {
+  const listing = client(() => reply("admin.users.list", "ok"));
+  await listing.admin.users("faruk");
+  assert.equal(new URL(listing.calls[0].url).pathname, "/v1/admin/users");
+  assert.equal(new URL(listing.calls[0].url).searchParams.get("q"), "faruk");
+  const id = "01998b9a-0000-7000-8000-000000000020";
+  const assigning = client(() => new Response(JSON.stringify({ data: { userId: id, roles: ["ADMIN"] } }), { status: 200 }));
+  await assigning.admin.setUserRole(id, "ADMIN", "Test yönetici ataması");
+  assert.equal(assigning.calls[0].method, "PUT");
+  assert.ok(assigning.calls[0].url.endsWith(`/admin/users/${id}/role`));
+  assert.deepEqual(assigning.calls[0].body, { role: "ADMIN", reason: "Test yönetici ataması" });
+});
+
 function fixture(endpoint: string, name: string) {
   return structuredClone(examples.find((e) => e.endpoint === endpoint && e.name === name)!);
 }
