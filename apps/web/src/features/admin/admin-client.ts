@@ -125,8 +125,9 @@ export class AdminClient {
   async liftSanction(id: string, sanctionId: string, reason: string) {
     return this.http.request("admin.sanctions.lift", { params: { id, sanctionId }, body: { reason } });
   }
-  async metrics(signal?: AbortSignal) {
-    return data<MetricsView>(await this.http.request("admin.metrics.get", { query: { range: "7d" }, signal }));
+  /** Return server-calculated aggregates; never substitute demo counters on API errors. */
+  async metrics(signal?: AbortSignal, range: "7d" | "30d" = "7d") {
+    return data<MetricsView>(await this.http.request("admin.metrics.get", { query: { range }, signal }));
   }
   /** Değiştirilemez yönetim geçmişi (KV-39); yalnız ADMIN+. Boş süzgeç gönderilmez. */
   async audit(search: AuditSearch, cursor?: string, signal?: AbortSignal) {
