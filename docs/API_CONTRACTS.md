@@ -161,6 +161,11 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `PUT /admin/communities/:id/moderators/:userId`<br>Topluluk moderatörü ata · `admin.communities.moderators.put` | A | 200 | doğal | Mert `communities` | Mert (admin UI, KV-32) | #34 | hazır |
 | `DELETE /admin/communities/:id/moderators/:userId`<br>Topluluk moderatörlüğünü kaldır · `admin.communities.moderators.delete` | A | 204 | doğal | Mert `communities` | Mert (admin UI, KV-32) | #34 | hazır |
 
+| `POST /communities/requests`<br>Topluluk oluşturma başvurusu · `communities.requests.create` | U | 200/201 | doğal | Mehmet `community-requests` | KararVer web | #172 | hazır |
+| `GET /communities/requests/mine`<br>Kendi topluluk başvurularım · `communities.requests.mine` | U | 200 | — | Mehmet `community-requests` | KararVer web | #172 | hazır |
+| `GET /admin/communities/requests`<br>Topluluk başvuru kuyruğu · `admin.communities.requests.list` | A | 200 | — | Mehmet `community-requests` | KararVer admin | #172 | hazır |
+| `PATCH /admin/communities/requests/:id`<br>Topluluk başvurusu onay / red · `admin.communities.requests.decide` | A | 200 | doğal | Mehmet `community-requests` | KararVer admin | #172 | hazır |
+
 ### Bildirimler
 
 | Endpoint | Yetki | Başarı | Idempotency | Sağlayıcı | Tüketici | Açtığı iş | Durum |
@@ -249,6 +254,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #45 | `GET /admin/polls`, `GET /admin/comments`, `POST /admin/votes/invalidate`, `POST /admin/votes/restore` |
 | #66 | `POST /polls`, `PUT /polls/:id/reaction`, `DELETE /polls/:id/reaction`, `PUT /comments/:id/reaction`, `DELETE /comments/:id/reaction` |
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
+| #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
 <!-- END:unblocks -->
 
 Bağımlılığı olmayan KV-03 tüketicileri: #8 (KV-06, mock fixture ve CI) bu paketin `examples` ve şemalarını mock sunucu için kullanır; #6 (KV-04) olay ve yetki sözleşmesini bu envanterdeki `auth` seviyeleriyle eşler.
