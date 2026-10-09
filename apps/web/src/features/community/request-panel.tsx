@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useProduct } from "../../components/product-provider";
 import type { CommunityRequestItem } from "./community-client.ts";
@@ -38,7 +38,7 @@ export function CommunityRequestPanel() {
     return () => { active = false; };
   }, [api, client, user]);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!api || busy) return;
     setError("");
