@@ -114,7 +114,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     if (!url || url.protocol !== "https:" || url.username || url.password || url.search || url.hash || !url.hostname.endsWith(".up.railway.app")) {
       throw new Error("API yapılandırması geçersiz → MAILPIT_SEND_URL: Railway HTTPS adresi gerekli");
     }
-    if (!/^[^:\\s]+:[^\\s]+$/.test(e.MAILPIT_SEND_AUTH)) {
+    if (!/^[^:\s]+:[^\s]+$/.test(e.MAILPIT_SEND_AUTH)) {
       throw new Error("API yapılandırması geçersiz → MAILPIT_SEND_AUTH: kimlik bilgisi gerekli");
     }
   }
