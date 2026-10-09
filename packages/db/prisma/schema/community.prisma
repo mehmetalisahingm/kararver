@@ -77,6 +77,7 @@ model CommunityRequest {
 
   requester User       @relation(fields: [requesterId], references: [id], onDelete: Restrict)
   community Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  category  Category?  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   @@index([requesterId, status, createdAt(sort: Desc)])
   @@index([status, approvalDeadline])
