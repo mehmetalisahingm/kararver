@@ -4,10 +4,11 @@
  */
 import assert from "node:assert/strict";
 import { createServer, type AddressInfo, type Server } from "node:net";
+import { createServer as createHttpServer } from "node:http";
 import { after, before, describe, test } from "node:test";
 import type { FastifyBaseLogger } from "fastify";
 import { loadConfig } from "../src/config.ts";
-import { createMailer, createSmtpMailer, sendSafely } from "../src/mail/mailer.ts";
+import { createMailer, createMailpitApiMailer, createSmtpMailer, sendSafely } from "../src/mail/mailer.ts";
 
 type Session = { auth: string[]; mailFrom?: string; rcptTo: string[]; data?: string; commands: string[] };
 
@@ -164,5 +165,67 @@ describe("SMTP yapılandırması", () => {
     // Local'de (ör. Mailpit) TLS zorunlu değil.
     const local = loadConfig({ ...base, APP_ENV: "local", MAIL_TRANSPORT: "smtp", SMTP_URL: "smtp://localhost:1025?ignoreTLS=true" }).mail;
     assert.equal(local.transport === "smtp" && local.requireTls, false);
+  });
+});
+
+describe("HTTPS Mailpit staging capture", () => {
+  test("send API uses separate Basic auth and retains the original verification link", async () => {
+    const calls: { path: string | undefined; auth: string | undefined; body: Record<string, unknown> }[] = [];
+    const server = createHttpServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("end", () => {
+        calls.push({ path: req.url, auth: req.headers.authorization, body: JSON.parse(Buffer.concat(chunks).toString("utf8")) });
+        res.writeHead(200).end('{"ID":"capture"}');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const mailer = createMailpitApiMailer({ sendUrl: `http://127.0.0.1:${port}`, sendAuth: "capture:secret", from: FROM });
+      await mailer.send(MAIL);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0]!.path, "/api/v1/send");
+      assert.equal(calls[0]!.auth, "Basic " + Buffer.from("capture:secret").toString("base64"));
+      assert.deepEqual(calls[0]!.body, {
+        From: { Email: "no-reply@kararver.test", Name: "KararVer" },
+        To: [{ Email: "ayse@example.com" }],
+        Subject: MAIL.subject,
+        Text: MAIL.text,
+      });
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  test("non-success Mailpit HTTP response fails closed without logging credentials", async () => {
+    const server = createHttpServer((_req, res) => res.writeHead(401).end("secret body"));
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const mailer = createMailpitApiMailer({ sendUrl: `http://127.0.0.1:${port}`, sendAuth: "send:topsecret", from: FROM });
+      await assert.rejects(mailer.send(MAIL), (error: Error) =>
+        /401/.test(error.message) && !error.message.includes("topsecret") && !error.message.includes("secret body"));
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  test("Mailpit route allowed only in staging with HTTPS and independent send credentials", () => {
+    const base = {
+      APP_ENV: "staging", WEB_URL: "https://kararver-staging.vercel.app",
+      API_URL: "https://api-staging.up.railway.app", SESSION_COOKIE_SECURE: "true",
+      AUTH_TOKEN_PEPPER: "test-pepper-0123456789-abcdefghijklmnop",
+      MAIL_FROM: FROM, MEDIA_PUBLIC_BASE_URL: "https://cdn.test/media",
+      S3_ENDPOINT: "https://s3.test", S3_ACCESS_KEY_ID: "k", S3_SECRET_ACCESS_KEY: "s",
+      S3_BUCKET_PRIVATE: "priv", S3_BUCKET_PUBLIC: "pub",
+      MAIL_TRANSPORT: "mailpit_api", MAILPIT_SEND_AUTH: "sender:strongrandompassword",
+      MAILPIT_SEND_URL: "https://mailpit-staging-f6ae.up.railway.app",
+    };
+    assert.equal(loadConfig(base).mail.transport, "mailpit_api");
+    assert.throws(() => loadConfig({ ...base, APP_ENV: "production" }), /yalnız staging/);
+    assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "http://mailpit-staging-f6ae.up.railway.app" }), /MAILPIT_SEND_URL/);
+    assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "https://evil.example" }), /MAILPIT_SEND_URL/);
+    assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_AUTH: "" }), /MAILPIT_SEND_AUTH/);
   });
 });
