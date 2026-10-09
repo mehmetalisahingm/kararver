@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AdminClient, type CommunityRequestRecord } from "./admin-client.ts";
+import styles from "./admin-shell.module.css";
 
 const STATUS_LABEL = {
   PENDING: "Beklemede",
@@ -42,7 +43,7 @@ export function CommunityRequestQueue({ admin }: { admin: AdminClient }) {
   }
 
   return (
-    <section className="screen-stack" aria-labelledby="community-queue-heading">
+    <section className={`screen-stack ${styles.communityRequestQueue}`} aria-labelledby="community-queue-heading">
       <h3 id="community-queue-heading">Kullanıcı topluluk başvuruları</h3>
       <label>Durum filtresi
         <select className="kv-input" value={status} onChange={(event) => setStatus(event.target.value as keyof typeof STATUS_LABEL)}>
