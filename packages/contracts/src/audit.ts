@@ -31,7 +31,7 @@ export const auditTargetTypes = Object.freeze([
 export type AuditTargetType = (typeof auditTargetTypes)[number];
 
 /** KV-04 kataloğunda olmayan, aktörsüz (CLI/worker) işlemler. API isteği bunları yazamaz. */
-export const systemAuditActions = Object.freeze(["user.status.sync"] as const);
+export const systemAuditActions = Object.freeze(["user.status.sync", "community.request.expire"] as const);
 export type SystemAuditAction = (typeof systemAuditActions)[number];
 export type AuditAction = ActionId | SystemAuditAction;
 
@@ -65,6 +65,7 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   "moderation.user.warn": ["warn"],
   "community.create": ["create"],
   "community.update": ["update"],
+  "community.request.review": ["approve", "reject"],
   "settings.update": ["update"],
   "emergency.update": ["update"],
   "points.adjust": ["adjust"],
@@ -108,6 +109,7 @@ export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditActi
   "media.review",
   "report.resolve",
   "community.update",
+  "community.request.review",
 ]);
 
 /** before/after'da bulunamayacak anahtarlar (büyük/küçük harf ve `_` yok sayılır; iç içe nesnelere de bakılır). */
