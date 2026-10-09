@@ -16,3 +16,8 @@
 :global(.product[data-theme="light"]) .toolbar > label { color: #181b25; }
 
 .table th.settingsHeader{opacity:1}
+
+/* WebKit may retain the previous dark text color after switching to light theme. */
+.communityRequestQueue label { color: var(--kv-text); }
+:global(.product[data-theme="light"]) .communityRequestQueue label { color: #181b25; }
+:global(.product[data-theme="dark"]) .communityRequestQueue label { color: #f8fafc; }
