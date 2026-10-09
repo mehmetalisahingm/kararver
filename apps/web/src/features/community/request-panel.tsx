@@ -28,7 +28,7 @@ export function CommunityRequestPanel() {
   useEffect(() => {
     if (!api || !user) return;
     let active = true;
-    Promise.all([api.myRequests(), client.publicationCategories()])
+    Promise.all([api.myRequests(), api.categories()])
       .then(([mine, categories]) => {
         if (!active) return;
         setRequests(mine);
