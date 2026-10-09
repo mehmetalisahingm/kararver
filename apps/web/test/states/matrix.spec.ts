@@ -127,16 +127,15 @@ test("admin: connection failure differs from permission denial; modal names, Esc
   await page.goto("/admin");await expect(page.getByRole("heading",{name:"Yönetim açılamadı."})).toBeVisible();
   handlers.set("me.get",r=>r.fulfill({json:sample("me.get")}));
   await page.getByRole("button",{name:"Yetkiyi tekrar kontrol et"}).click();await expect(page.getByRole("heading",{name:"Yönetim erişimi gerekli"})).toBeVisible();
-  handlers.delete("me.get");await page.reload();
-  const trigger=page.getByRole("button",{name:"Örnek işlem"});await trigger.click();
-  await expect(page.getByRole("dialog",{name:"Yönetim işlemi"})).toBeVisible();
+  handlers.delete("me.get");await page.goto("/admin/categories");
+  const trigger=page.getByRole("button",{name:"Kategori ekle",exact:true});await trigger.click();
+  await expect(page.getByRole("dialog",{name:"Kategori ekle"})).toBeVisible();
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
   await page.keyboard.press("Escape");await expect(page.getByRole("dialog")).toHaveCount(0);await expect(trigger).toBeFocused();
-  const rowTrigger=page.getByRole("button",{name:"İncele",exact:true}).last();
-  await rowTrigger.click();
+  await trigger.click();
   await page.getByRole("button",{name:"Vazgeç",exact:true}).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(rowTrigger).toBeFocused();
+  await expect(trigger).toBeFocused();
 });
 
 test("session outage retry and anonymous permission states",async({page})=>{

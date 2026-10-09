@@ -71,7 +71,7 @@
   transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 .product .kv-button:not(:disabled):active { transform: translateY(1px); }
-.product .kv-button--secondary { background: var(--kv-surface-2); border-color: var(--kv-border); color: var(--kv-text); }
+.product .kv-button--secondary { background: var(--kv-surface-2); border-color: var(--kv-border); color: var(--kv-text); transition: none; }
 .product .kv-button--secondary:hover:not(:disabled) { background: var(--kv-soft); border-color: var(--kv-control-border); }
 .product .kv-button--ghost { background: transparent; color: var(--kv-muted); }
 .product .kv-button--ghost:hover:not(:disabled) { background: var(--kv-surface-2); color: var(--kv-text); }
