@@ -1,0 +1,38 @@
+# Bağımlılıklar ve build çıktıları
+node_modules/
+.next/
+dist/
+build/
+coverage/
+state-report/
+media-report/
+*.tsbuildinfo
+
+# Ortam dosyaları: sadece *.example commit edilir
+.env
+.env.*
+!.env.example
+!.env.staging.example
+
+# Prisma
+packages/db/generated/
+
+# Python spike/araştırma sanal ortamları
+.venv/
+.spike-venv/
+
+# Loglar / işletim sistemi
+*.log
+.DS_Store
+Thumbs.db
+
+# KV-48 staging tatbikatı raporları ve yedekleri
+drill/
+
+# Browser visual acceptance recordings
+acceptance-results/
+onboarding-results/
+
+# KV-45: private beta measurements and derived reports (never commit participant records)
+beta-private/
+beta-reports/

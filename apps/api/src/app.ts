@@ -1,0 +1,361 @@
+import { registerDecisionRoutes } from "./modules/decisions/routes.ts";
+import type { DecisionStore } from "./modules/decisions/store.ts";
+// Fastify uygulaması. Bağımlılıklar dışarıdan verilir; server.ts gerçeklerini, testler kendi
+// store/mailer/saatini bağlar. Yeni modül: src/modules/<modül>/routes.ts + aşağıya bir satır.
+import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import { headers } from "@kararver/contracts";
+import Fastify, { type FastifyInstance } from "fastify";
+import type { Config } from "./config.ts";
+import { registerErrorHandling } from "./http/errors.ts";
+import { createRouter } from "./http/route.ts";
+import { registerSecurity } from "./http/security.ts";
+import type { Mailer } from "./mail/mailer.ts";
+import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import type { AdminUserStore } from "./modules/admin-users/store.ts";
+import type { PasswordHasher } from "./modules/auth/crypto.ts";
+import { registerAuthRoutes } from "./modules/auth/routes.ts";
+import { registerCommunityAdminRoutes } from "./modules/communities/admin-routes.ts";
+import { registerCommunityRoutes } from "./modules/communities/routes.ts";
+import type { CommunityStore } from "./modules/communities/store.ts";
+import { registerCommunityRequestRoutes, type CommunityRequestStore } from "./modules/communities/request-routes.ts";
+import type { MediaQueue } from "./modules/media/queue.ts";
+import { registerMediaAdminRoutes } from "./modules/media/admin-routes.ts";
+import { registerMediaRoutes } from "./modules/media/routes.ts";
+import type { MediaStorage } from "./modules/media/storage.ts";
+import { DEFAULT_MEDIA_SETTINGS, type MediaSettings, type MediaStore } from "./modules/media/store.ts";
+import { createAuthenticator, type SessionSettings } from "./modules/auth/session.ts";
+import type { AuthStore } from "./modules/auth/store.ts";
+import { registerCategoryAdminRoutes } from "./modules/categories/routes.ts";
+import type { CategoryAdminStore } from "./modules/categories/store.ts";
+import { registerFeaturedAdminRoutes } from "./modules/featured/routes.ts";
+import type { FeaturedAdminStore } from "./modules/featured/store.ts";
+import { registerCommentRoutes } from "./modules/comments/routes.ts";
+import type { CommentStore } from "./modules/comments/store.ts";
+import { DEFAULT_FEED_SETTINGS, type FeedSettings } from "./modules/feed/for-you.ts";
+import { registerFeedRoutes } from "./modules/feed/routes.ts";
+import { registerOnboardingRoutes } from "./modules/onboarding/routes.ts";
+import type { OnboardingStore } from "./modules/onboarding/store.ts";
+import type { FeedStore } from "./modules/feed/store.ts";
+import { registerPointAdminRoutes } from "./modules/points/admin-routes.ts";
+import type { PointAdminStore } from "./modules/points/admin-store.ts";
+import { registerPollRoutes } from "./modules/polls/routes.ts";
+import { registerProfileRoutes } from "./modules/profiles/routes.ts";
+import type { ProfileStore } from "./modules/profiles/store.ts";
+import { registerModerationRoutes } from "./modules/moderation/routes.ts";
+import type { ModerationStore } from "./modules/moderation/store.ts";
+import { registerNotificationRoutes } from "./modules/notifications/routes.ts";
+import type { NotificationStore } from "./modules/notifications/store.ts";
+import { registerReportRoutes } from "./modules/reports/routes.ts";
+import { registerSettingsRoutes } from "./modules/settings/routes.ts";
+import type { SettingsService } from "./modules/settings/service.ts";
+import type { ReportStore } from "./modules/reports/store.ts";
+import { registerRoleRoutes } from "./modules/rbac/roles-routes.ts";
+import type { RbacStore } from "./modules/rbac/store.ts";
+import { registerRevisionRoutes } from "./modules/revisions/routes.ts";
+import { registerAuditRoutes } from "./modules/audit/routes.ts";
+import type { AuditStore } from "./modules/audit/store.ts";
+import type { RevisionStore } from "./modules/revisions/store.ts";
+import { registerSearchRoutes } from "./modules/search/routes.ts";
+import type { SearchStore } from "./modules/search/store.ts";
+import { registerShareRoutes } from "./modules/shares/routes.ts";
+import type { ShareStore } from "./modules/shares/store.ts";
+import { registerTrendRoutes } from "./modules/trends/routes.ts";
+import type { TrendStore } from "./modules/trends/store.ts";
+import { DEFAULT_POLL_SETTINGS, type PollSettings, type PollStore } from "./modules/polls/store.ts";
+import { createRateLimiter } from "./modules/rate-limit/limiter.ts";
+import { DEFAULT_RATE_LIMIT_SETTINGS, type RateLimitSettings } from "./modules/rate-limit/policy.ts";
+import type { RateLimitStore } from "./modules/rate-limit/store.ts";
+import { registerUserRoutes } from "./modules/users/routes.ts";
+import { registerVoteAdminRoutes } from "./modules/votes/admin-routes.ts";
+import { registerVoteRoutes } from "./modules/votes/routes.ts";
+import type { VoteStore } from "./modules/votes/store.ts";
+
+export type AppDeps = {
+ decisionStore?: DecisionStore;
+  config: Config;
+  authStore: AuthStore;
+  /** Rol, yaptırım ve topluluk moderatörlüğü (KV-12); her istekte okunur. */
+  rbacStore: RbacStore;
+  hasher: PasswordHasher;
+  mailer: Mailer;
+  now?: () => Date;
+  /** Sistem ayarları servisi (KV-40, #42). Verilirse ayar kancaları (aşağıdaki `is*`/`*Settings`) ondan türetilir; açıkça verilen kanca önceliklidir (testler). */
+  settingsService?: SettingsService;
+  isRegistrationEnabled?: () => Promise<boolean>;
+  /** Verilmezse anket route'ları kaydedilmez (ör. sadece auth'u test eden düzenek). */
+  pollStore?: PollStore;
+  /** KV-22 public profil/private bookmark store'u; pollStore ile birlikte route'ları açar. */
+  profileStore?: ProfileStore;
+  /** KV-25 kaynak ölçümlü paylaşım linkleri; public route olduğu için oturum gerekmez. */
+  shareStore?: ShareStore;
+  /** V1 #67 gerekçeli admin puan düzeltmesi; verilmezse admin.points.adjust kaydedilmez. */
+  pointAdminStore?: PointAdminStore;
+  /** Sistem ayarları (KV-40, #42); ayar servisi gelene kadar DEFAULT_POLL_SETTINGS. */
+  pollSettings?: () => Promise<PollSettings>;
+  /** KV-19 (#21) hız sınırı sayaçları; verilmezse hız sınırı yok (ör. auth-only web test sunucusu). */
+  rateLimitStore?: RateLimitStore;
+  /** `limits.*` (KV-40, #42); ayar servisi gelene kadar DEFAULT_RATE_LIMIT_SETTINGS. */
+  rateLimitSettings?: () => Promise<RateLimitSettings>;
+  /** pollStore ile birlikte verilirse kategori ve arama route'ları kaydedilir. */
+  searchStore?: SearchStore;
+  /** Verilmezse içerik sürüm geçmişi (admin.revisions.*, #66) kaydedilmez. */
+  revisionStore?: RevisionStore;
+  /** Verilmezse audit okuma (admin.audit.list, KV-39) kaydedilmez. */
+  auditStore?: AuditStore;
+  /** Verilmezse admin kategori route'ları (admin.categories.*) kaydedilmez. */
+  categoryAdminStore?: CategoryAdminStore;
+  /** Verilmezse KV-42 öne çıkarma/duyuru admin route'ları kaydedilmez. */
+  featuredAdminStore?: FeaturedAdminStore;
+  /** pollStore ile birlikte verilirse "Senin İçin" sıralaması (KV-27) açılır; yoksa for_you "new" sırasıdır. */
+  feedStore?: FeedStore;
+  /** Keşif payı ve tekrar sınırları (KV-40, #42); ayar servisi gelene kadar DEFAULT_FEED_SETTINGS. */
+  feedSettings?: () => Promise<FeedSettings>;
+  /** pollStore ile birlikte verilirse trend listeleri (trends.list, KV-28) kaydedilir. */
+  trendStore?: TrendStore;
+  /** Verilmezse oy route'u kaydedilmez. */
+  voteStore?: VoteStore;
+  /** Verilmezse topluluk route'ları kaydedilmez. */
+  communityStore?: CommunityStore;
+  communityRequestStore?: CommunityRequestStore;
+  /** Verilmezse onboarding/ilgi route'ları kaydedilmez. */
+  onboardingStore?: OnboardingStore;
+  /** Verilmezse rapor route'u kaydedilmez. */
+  reportStore?: ReportStore;
+  /** Verilmezse admin kullanıcı, yaptırım ve rol route'ları (admin.users.*, admin.sanctions.*, admin.roles.put; KV-33) kaydedilmez. */
+  adminUserStore?: AdminUserStore;
+  /** Verilmezse admin içerik moderasyonu (anket/yorum) route'ları kaydedilmez. */
+  moderationStore?: ModerationStore;
+  /** Verilmezse bildirim okuma route'ları (notifications.*; KV-21) kaydedilmez. */
+  notificationStore?: NotificationStore;
+  /** Verilmezse yorum route'u kaydedilmez. */
+  commentStore?: CommentStore;
+  /** Acil durum anahtarı features.comments (KV-40, #42); verilmezse açık. */
+  isCommentsEnabled?: () => Promise<boolean>;
+  /** Üçü birlikte verilirse medya route'ları kaydedilir (config.storage yoksa server vermez). */
+  media?: { store: MediaStore; storage: MediaStorage; queue: MediaQueue; settings?: () => Promise<MediaSettings> };
+  /** Log seviyesi/hedefi; verilmezse config.logLevel ile stdout. Testler log akışını yakalar. */
+  logger?: false | { level: string; stream: NodeJS.WritableStream };
+};
+
+const REQUEST_ID = /^[A-Za-z0-9._-]{8,128}$/;
+
+export function buildApp(deps: AppDeps): FastifyInstance {
+  const { config } = deps;
+  const now = deps.now ?? (() => new Date());
+
+  const app = Fastify({
+    logger:
+      deps.logger === false
+        ? false
+        : {
+            level: deps.logger?.level ?? config.logLevel,
+            ...(deps.logger?.stream ? { stream: deps.logger.stream } : {}),
+            redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]', "*.password", "*.token"],
+            // KV-49 (#51): istek logu IP, port ve başlık içermez (IP kişisel veridir). İstek kimliği, yöntem, yol ve
+            // süre yeterli; kötüye kullanım izi hız sınırı logundaki anahtar özetindedir (KV-19).
+            serializers: {
+              req: (req: { id: string; method: string; url: string }) => ({
+                id: req.id,
+                method: req.method,
+                // Raw req.url includes query strings (e.g. ?token=...); never log them.
+                url: req.url.split(/[?#]/, 1)[0] || "/",
+              }),
+            },
+          },
+    bodyLimit: 64 * 1024,
+    trustProxy: config.appEnv === "staging" || config.appEnv === "production",
+    requestIdHeader: false,
+    genReqId: (req) => {
+      const incoming = req.headers[headers.requestId.toLowerCase()];
+      return typeof incoming === "string" && REQUEST_ID.test(incoming) ? incoming : randomUUID();
+    },
+  });
+
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+    if (body === "") return done(null, undefined);
+    try {
+      done(null, JSON.parse(body as string));
+    } catch {
+      const err = Object.assign(new Error("Geçersiz JSON"), { statusCode: 400, code: "invalid_json" });
+      done(err, undefined);
+    }
+  });
+
+  app.addHook("onRequest", async (request, reply) => {
+    reply.header(headers.requestId, request.id);
+  });
+
+  registerErrorHandling(app);
+  registerSecurity(app, config.allowedOrigins, { hsts: config.session.secure });
+
+  const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper };
+  // Ayar kancaları: açık kanca > ayar servisi > güvenli varsayılan.
+  const settings = deps.settingsService;
+  const pollSettings = deps.pollSettings ?? (settings ? () => settings.pollSettings() : async () => DEFAULT_POLL_SETTINGS);
+  const feedSettings = deps.feedSettings ?? (settings ? () => settings.feedSettings() : async () => DEFAULT_FEED_SETTINGS);
+  const mediaSettings = deps.media?.settings ?? (settings ? () => settings.mediaSettings() : async () => DEFAULT_MEDIA_SETTINGS);
+  const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
+  const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
+
+  const limiter = deps.rateLimitStore
+    ? createRateLimiter({
+        store: deps.rateLimitStore,
+        settings: deps.rateLimitSettings ?? (deps.settingsService ? () => deps.settingsService!.rateLimitSettings() : async () => DEFAULT_RATE_LIMIT_SETTINGS),
+        newAccountDays: async () => (await pollSettings()).newAccountPeriodDays,
+        pepper: config.authTokenPepper,
+        now,
+      })
+    : null;
+  const route = createRouter(app, {
+    validateResponses: config.appEnv !== "production",
+    enforceResourceChecks: config.appEnv !== "production",
+    authenticator: createAuthenticator(deps.authStore, session, now),
+    rbac: deps.rbacStore,
+    now,
+    maintenance: deps.settingsService ? () => deps.settingsService!.isMaintenance() : undefined,
+    rateLimit: limiter?.enforce,
+  });
+
+  const rolesOf = async (userId: string) => {
+    const { roles } = await deps.rbacStore.grants(userId, now());
+    return roles.length > 0 ? roles : ["USER" as const];
+  };
+
+  registerAuthRoutes(route, {
+    rolesOf,
+    store: deps.authStore,
+    hasher: deps.hasher,
+    mailer: deps.mailer,
+    now,
+    session,
+    webUrl: config.webUrl,
+    mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+    isRegistrationEnabled,
+    loginGuard: limiter?.login,
+    initialGrant: settings ? async () => (await settings.pointSettings()).initialGrant : undefined,
+  });
+  registerUserRoutes(route, {
+    store: deps.authStore,
+    mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+    rolesOf,
+    publishCost: settings ? async () => (await settings.pointSettings()).publishCost : undefined,
+  });
+  if (deps.pointAdminStore) registerPointAdminRoutes(route, { store: deps.pointAdminStore, now });
+  if (deps.pollStore) {
+    registerPollRoutes(route, {
+      store: deps.pollStore,
+      now,
+      mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+      settings: pollSettings,
+    });
+    registerFeedRoutes(route, {
+      store: deps.pollStore,
+      now,
+      mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+      settings: pollSettings,
+      feed: deps.feedStore
+        ? { store: deps.feedStore, settings: feedSettings }
+        : undefined,
+    });
+    if (deps.profileStore) {
+      registerProfileRoutes(route, {
+        store: deps.profileStore,
+        polls: deps.pollStore,
+        now,
+        mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+        settings: pollSettings,
+      });
+    }
+    if (deps.trendStore) {
+      registerTrendRoutes(route, {
+        store: deps.trendStore,
+        polls: deps.pollStore,
+        now,
+        mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+        settings: pollSettings,
+      });
+    }
+    if (deps.searchStore) {
+      registerSearchRoutes(route, {
+        store: deps.searchStore,
+        polls: deps.pollStore,
+        now,
+        mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+        settings: pollSettings,
+      });
+    }
+  }
+  if (deps.decisionStore) registerDecisionRoutes(route, { store: deps.decisionStore, now });
+  if (deps.shareStore) registerShareRoutes(route, { store: deps.shareStore, webUrl: config.webUrl });
+  if (deps.categoryAdminStore) registerCategoryAdminRoutes(route, { store: deps.categoryAdminStore, now });
+  if (deps.featuredAdminStore) {
+    registerFeaturedAdminRoutes(route, {
+      store: deps.featuredAdminStore,
+      now,
+      polls: deps.pollStore
+        ? {
+            store: deps.pollStore,
+            settings: pollSettings,
+            mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+          }
+        : undefined,
+    });
+  }
+  if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl, now });
+  if (deps.auditStore) registerAuditRoutes(route, { store: deps.auditStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  if (deps.voteStore) {
+    registerVoteRoutes(route, { store: deps.voteStore, now, settings: pollSettings });
+    registerVoteAdminRoutes(route, { store: deps.voteStore, now });
+  }
+  if (deps.communityStore) {
+    registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+    registerCommunityAdminRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  }
+  if (deps.communityRequestStore) registerCommunityRequestRoutes(route, deps.communityRequestStore, now);
+  if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
+  if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
+  if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  if (deps.notificationStore) {
+    registerNotificationRoutes(route, { store: deps.notificationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  }
+  if (deps.adminUserStore) {
+    registerAdminUserRoutes(route, { store: deps.adminUserStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+    registerRoleRoutes(route, { store: deps.adminUserStore, now });
+  }
+  if (deps.commentStore) {
+    registerCommentRoutes(route, {
+      store: deps.commentStore,
+      now,
+      mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+      commentsEnabled: isCommentsEnabled,
+      commentMaxLength: settings ? () => settings.commentMaxLength() : undefined,
+    });
+  }
+  if (deps.media) {
+    registerMediaRoutes(route, {
+      store: deps.media.store,
+      storage: deps.media.storage,
+      queue: deps.media.queue,
+      now,
+      mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+      settings: mediaSettings,
+    });
+    registerMediaAdminRoutes(route, { store: deps.media.store, storage: deps.media.storage, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  }
+
+  if (settings) registerSettingsRoutes(route, { service: settings, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+
+  app.get("/health", async (_request, reply) => {
+    let worker: { status: string; at: string; ageMs: number } | { status: "unknown" } = { status: "unknown" };
+    try {
+      const file = process.env.WORKER_HEARTBEAT_PATH ?? "/tmp/kararver-worker-heartbeat.json";
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { status: string; at: string };
+      worker = { status: parsed.status, at: parsed.at, ageMs: Date.now() - Date.parse(parsed.at) };
+    } catch { /* worker may be disabled or separate */ }
+    // KV-49 (#51): hangi sürümün çalıştığı (deploy SHA). Railway GitHub entegrasyonu RAILWAY_GIT_COMMIT_SHA verir.
+    const sha = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null;
+    return reply.header("Cache-Control", "no-store").send({ status: "ok", worker, release: { sha: sha ? sha.slice(0, 12) : null, env: config.appEnv } });
+  });
+  return app;
+}

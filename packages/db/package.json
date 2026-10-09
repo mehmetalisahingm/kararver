@@ -1,0 +1,34 @@
+{
+  "name": "@kararver/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset",
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:db": "node --test --test-concurrency=1 test/db.integration.test.ts test/ops.test.ts",
+    "db:backup": "node ops/backup.ts",
+    "db:restore": "node ops/restore.ts",
+    "db:verify": "node ops/verify.ts",
+    "db:check-migrations": "node ops/check-migrations.ts",
+    "test:ops": "node --test --test-concurrency=1 test/ops.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "prisma": "7.10.0",
+    "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

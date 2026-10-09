@@ -1,0 +1,188 @@
+// Frontend view models mapped from validated wire contracts.
+import type { EngagementClient } from "../features/social/model.ts";
+import type { DiscoveryClient } from "../features/discovery/model.ts";
+export type GalleryItem =
+  | { id: string; status: "ready"; src: string; alt: string }
+  | { id: string; status: "pending" | "removed"; alt: string };
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  verified: boolean;
+  balance: number | null;
+  publishCost?: number | null;
+  username?: string;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  createdAt?: string;
+};
+export type PublicProfile = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  joinedAt: string;
+  stats: { pollCount: number; votesReceived: number; commentCount: number };
+};
+export type ProfileComment = {
+  id: string;
+  pollId: string;
+  body: string;
+  createdAt: string;
+  likes: number;
+  dislikes: number;
+};
+export type PageResult<T> = {
+  data: T[];
+  page: { nextCursor: string | null; hasMore: boolean };
+};
+export type Results =
+  | { visible: false }
+  | {
+      visible: true;
+      total: number;
+      options: { id: string; votes: number; percent: number }[];
+    };
+export type Poll = {
+  id: string;
+  canonicalPath?: string;
+  canVote?: boolean;
+  voteBlockedReason?: string | null;
+  title: string;
+  description: string;
+  kind: "poll" | "discussion";
+  author: string;
+  category: string;
+  status: "ACTIVE" | "LOCKED" | "CLOSED";
+  closesAt: string;
+  createdAt?: string;
+  options: { id: string; label: string; image?: string }[];
+  visibility: "always" | "after_vote";
+  results: Results;
+  ownVote: string | null;
+  commentsEnabled: boolean;
+  comments: { id: string; author: string; text: string }[];
+  commentCount?: number;
+  gallery?: GalleryItem[];
+  details?: { label: string; value: string }[];
+  price?: { amount: string; currency: "TRY"; note: string };
+};
+export type Draft = {
+  mediaIds?: string[];
+  categoryId?: string;
+  kind: "poll" | "discussion";
+  title: string;
+  description: string;
+  options: string[];
+  category: string;
+  hours: number;
+  visibility: "always" | "after_vote";
+  commentsEnabled: boolean;
+};
+export const emptyDraft = (): Draft => ({
+  kind: "poll",
+  title: "",
+  description: "",
+  options: ["", ""],
+  category: "Teknoloji",
+  hours: 72,
+  visibility: "after_vote",
+  commentsEnabled: true,
+});
+export const categories = [
+  "Teknoloji",
+  "Otomobil",
+  "Alışveriş",
+  "Eğitim",
+  "Üniversite",
+  "Yaşam",
+  "Seyahat",
+  "Oyun",
+  "Spor",
+  "Yemek",
+  "Ev / Emlak",
+  "Kariyer",
+  "Diğer",
+];
+export type FieldErrors = Record<string, string>;
+export class UiError extends Error {
+  code: string;
+  fields: FieldErrors;
+  constructor(code: string, message: string, fields: FieldErrors = {}) {
+    super(message);
+    this.name = "UiError";
+    this.code = code;
+    this.fields = fields;
+  }
+}
+export function validateDraft(draft: Draft): FieldErrors {
+  const errors: FieldErrors = {};
+  if (draft.title.trim().length < 10 || draft.title.trim().length > 140)
+    errors.title = "Sorun 10–140 karakter arasında olmalı.";
+  if (draft.description.length > 2000)
+    errors.description = "Açıklama en fazla 2.000 karakter olabilir.";
+  if (draft.kind === "poll") {
+    if (draft.options.length < 2 || draft.options.length > 6)
+      errors.options = "2–6 seçenek eklemelisin.";
+    draft.options.forEach((value, i) => {
+      if (!value.trim() || value.trim().length > 120)
+        errors[`option-${i}`] = "Seçenek 1–120 karakter olmalı.";
+    });
+    if (
+      new Set(draft.options.map((v) => v.trim().toLocaleLowerCase("tr")))
+        .size !== draft.options.length
+    )
+      errors.options = "Seçenekler birbirinden farklı olmalı.";
+    if (!Number.isFinite(draft.hours) || draft.hours < 1 || draft.hours > 720)
+      errors.hours = "Süre 1 saat ile 30 gün arasında olmalı.";
+  }
+  if (!draft.categoryId && !categories.includes(draft.category))
+    errors.category = "Bir kategori seçmelisin.";
+  return errors;
+}
+export function safeReturnTo(value: string | null): string {
+  return value &&
+    (/^\/$/.test(value) ||
+      /^\/olustur$/.test(value) ||
+      /^\/hesap$/.test(value) ||
+      /^\/bildirimler$/.test(value) ||
+      /^\/ilgi-alanlari$/.test(value) ||
+      /^\/profil\/[a-z0-9_]{3,30}$/.test(value) ||
+      /^\/admin(?:\/[A-Za-z0-9_-]+)?$/.test(value) ||
+      /^\/karar\/[A-Za-z0-9_-]+$/.test(value))
+    ? value
+    : "/";
+}
+export type Decision = { pollId: string; chosenOptionId: string | null; note: string; updatedAt: string };
+export type DecisionState = { decision: Decision | null; following: boolean; isAuthor: boolean };
+export interface ProductClient extends EngagementClient, DiscoveryClient {
+  /** Gerçek API'de dolu (yönetim ekranları); demo adapter'da tanımsız. */
+  admin?: import("../features/admin/admin-client.ts").AdminClient;
+  /** Topluluk ekranları ve rapor gönderme; yalnız gerçek API client'ında (demo'da ekran/düğme gösterilmez). */
+  community?: import("../features/community/community-client.ts").CommunityClient;
+  reports?: import("../features/community/community-client.ts").ReportClient;
+  /** Bildirim merkezi; yalnız gerçek API client'ında. */
+  notifications?: import("../features/notifications/notification-client.ts").NotificationClient;
+  list(): Promise<Poll[]>;
+  get(id: string): Promise<Poll>;
+  login(email: string, password: string): Promise<User>;
+  register(name: string, email: string, password: string, username?: string): Promise<void>;
+  verify(email: string, code: string): Promise<void>;
+  requestReset(email: string): Promise<void>;
+  reset(email: string, code: string, password: string): Promise<void>;
+  logout(): Promise<void>;
+  current(): User | null;
+  create(draft: Draft, requestId: string): Promise<Poll>;
+  vote(id: string, optionId: string): Promise<Poll>;
+  // KV-22 gerçek API client'ta zorunludur; demo adapter bu modüller için placeholder gösterebilir.
+  getProfile?(username: string): Promise<PublicProfile>;
+  updateProfile?(input: { displayName?: string; bio?: string | null }): Promise<User>;
+  getProfilePolls?(username: string, cursor?: string): Promise<PageResult<Poll>>;
+  getProfileComments?(username: string, cursor?: string): Promise<PageResult<ProfileComment>>;
+  getDecision?(id: string, signal?: AbortSignal): Promise<DecisionState>;
+  setDecision?(id: string, input: { chosenOptionId: string | null; note: string }): Promise<Decision>;
+  setFollow?(id: string, following: boolean): Promise<boolean>;
+  getBookmarks?(cursor?: string): Promise<PageResult<Poll>>;
+  setBookmark?(id: string, saved: boolean): Promise<boolean>;
+}

@@ -1,0 +1,5 @@
+# Prisma migration checksum'ı dosya baytlarından hesaplanır. Windows (CRLF) ile
+# Linux CI/staging (LF) aynı migration'ı farklı görmesin diye satır sonu sabittir.
+packages/db/prisma/migrations/**/*.sql  text eol=lf
+packages/db/prisma/migrations/*.toml    text eol=lf
+*.prisma                                text eol=lf

@@ -1,0 +1,101 @@
+// Sahip: Mehmet — growth alanı. İlk tablo KV-15 (#17) onboarding/ilgi seçimi; KV-27 (#29) feed bu tabloyu salt-okur.
+model UserInterest {
+  userId     String   @map("user_id") @db.Uuid
+  categoryId String   @map("category_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([userId, categoryId])
+  @@index([categoryId])
+  @@map("user_interests")
+}
+
+// KV-22 (#24) — kullanıcının private kaydetme listesi.
+// Çekirdek User/Poll modellerini modül sahipliği dışında büyütmemek için scalar kimliklerle tutulur.
+// Uygulama görünürlük/mevcut-kayıt kontrolünü transaction içinde yapar; ürün hard delete yerine soft-delete kullanır.
+model Bookmark {
+  userId    String   @map("user_id") @db.Uuid
+  pollId    String   @map("poll_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([userId, pollId])
+  @@index([userId, createdAt(sort: Desc), pollId(sort: Desc)])
+  @@index([pollId])
+  @@map("bookmarks")
+}
+
+// KV-25 (#27) — paylaşım kaynağı. pollId bilinçli olarak scalar: ortak Poll modeline
+// growth modülünden ters ilişki eklemiyoruz. Store, görünür poll satırını FOR SHARE ile doğrular.
+model ShareLink {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  pollId    String   @map("poll_id") @db.Uuid
+  channel   String   @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([pollId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("share_links")
+}
+
+// V1 #67 — yayın puanı, güven/itibar puanından tamamen ayrıdır.
+enum PointLedgerReason {
+  INITIAL_GRANT
+  PUBLISH
+  ADMIN_ADJUSTMENT
+  MODERATION_REFUND
+
+  @@map("point_ledger_reason")
+}
+
+// Güncel bakiye hızlı okuma/atomik harcama için ayrı tutulur; gerçek hareket kaynağı append-only ledger'dır.
+model PointAccount {
+  userId    String   @id @map("user_id") @db.Uuid
+  balance   Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("point_accounts")
+}
+
+model PointLedgerEntry {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  userId         String            @map("user_id") @db.Uuid
+  delta          Int
+  balanceAfter   Int               @map("balance_after")
+  reason         PointLedgerReason
+  referenceId    String?           @map("reference_id") @db.Uuid
+  idempotencyKey String            @map("idempotency_key") @db.VarChar(200)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("point_ledger_entries")
+}
+
+model PollFollow {
+  userId    String   @map("user_id") @db.Uuid
+  pollId    String   @map("poll_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user      User     @relation("PollFollowUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  poll      Poll     @relation("PollFollowPoll", fields: [pollId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, pollId])
+  @@index([pollId, createdAt, userId])
+  @@map("poll_follows")
+}
+
+model PollDecision {
+  pollId         String      @id @map("poll_id") @db.Uuid
+  chosenOptionId String?     @map("chosen_option_id") @db.Uuid
+  note           String      @db.VarChar(1000)
+  updatedAt      DateTime    @map("updated_at") @db.Timestamptz(3)
+  poll           Poll        @relation("PollDecisionPoll", fields: [pollId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  chosenOption   PollOption? @relation("PollDecisionOption", fields: [pollId, chosenOptionId], references: [pollId, id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@map("poll_decisions")
+}

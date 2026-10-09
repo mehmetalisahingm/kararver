@@ -1,0 +1,275 @@
+name: Foundation checks
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+  workflow_dispatch:
+    inputs:
+      staging_api_url:
+        description: 'Staging smoke: API adresi (örn. https://api-staging.example). Boşsa staging-smoke çalışmaz.'
+        required: false
+        default: ''
+      staging_web_url:
+        description: 'Staging smoke: web adresi'
+        required: false
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.11-alpine
+        env:
+          POSTGRES_USER: kararver
+          POSTGRES_PASSWORD: kararver_local
+          POSTGRES_DB: kararver
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kararver -d kararver"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://kararver:kararver_local@127.0.0.1:5432/kararver_ci_test
+      DATABASE_URL: postgresql://kararver:kararver_local@127.0.0.1:5432/kararver_ci_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @kararver/db run db:validate
+      # Repoda henüz lint script'i yok (--if-present ile boş geçer); ESLint kararı ekipte (KV-06).
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Frontend adapters against real API and PostgreSQL
+        run: pnpm --filter @kararver/web test
+      - run: pnpm mock:test
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm beta:test
+      - run: pnpm security:test
+      - run: pnpm --filter @kararver/web test
+      - run: pnpm --filter @kararver/web build
+      - name: Demo koruması — APP_ENV=production + demo build hata vermeli
+        run: |
+          if APP_ENV=production NEXT_PUBLIC_KV_DATA_MODE=demo pnpm --filter @kararver/web build > demo-build.log 2>&1; then
+            cat demo-build.log
+            echo "::error::APP_ENV=production + NEXT_PUBLIC_KV_DATA_MODE=demo build başarılı oldu"
+            exit 1
+          fi
+          grep -F "NEXT_PUBLIC_KV_DATA_MODE=demo APP_ENV=production ortamında kullanılamaz" demo-build.log
+      - name: Demo koruması — APP_ENV=preview + demo build geçmeli
+        run: pnpm --filter @kararver/web build
+        env:
+          APP_ENV: preview
+          NEXT_PUBLIC_KV_DATA_MODE: demo
+      - run: pnpm --filter @kararver/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @kararver/web test:e2e
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-e2e-demo-results
+          path: apps/web/test-results
+          if-no-files-found: ignore
+  browser-accessibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      CI: 'true'
+      KV_BROWSER: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @kararver/web exec playwright install --with-deps ${{ matrix.browser }}
+      - name: Premium onboarding visual and keyboard acceptance
+        run: pnpm --filter @kararver/web exec playwright test test/browser/onboarding-acceptance.spec.ts --output onboarding-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: onboarding-${{ matrix.browser }}
+          path: apps/web/onboarding-results
+          if-no-files-found: error
+      - name: API screen states, desktop/mobile and both themes
+        run: pnpm --filter @kararver/web exec playwright test -c playwright.states.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: states-${{ matrix.browser }}
+          path: |
+            apps/web/test-results
+            apps/web/state-report
+      - name: Auth, votes, social, discovery and admin browser regressions
+        if: matrix.browser != 'chromium'
+        run: pnpm --filter @kararver/web test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.browser != 'chromium'
+        with:
+          name: flows-${{ matrix.browser }}
+          path: apps/web/test-results
+      - name: Media upload and gallery browser matrix
+        if: matrix.browser != 'chromium'
+        run: pnpm --filter @kararver/web exec playwright test -c playwright.media.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.browser != 'chromium'
+        with:
+          name: media-${{ matrix.browser }}
+          path: |
+            apps/web/test-results
+            apps/web/media-report
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17.11-alpine
+        env:
+          POSTGRES_USER: kararver
+          POSTGRES_PASSWORD: kararver_local
+          POSTGRES_DB: kararver
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kararver -d kararver"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://kararver:kararver_local@127.0.0.1:5432/kararver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @kararver/db run db:deploy
+      - run: pnpm --filter @kararver/web build
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+      # Gerçek API: Prisma store'ları + yukarıda migrate edilen DATABASE_URL, NODE_ENV=production.
+      # APP_ENV=production/staging bugün açılamıyor (SMTP mailer yok, TECH_DECISIONS §10 #2); o yüzden APP_ENV=test.
+      - name: Start API (production build modu, gerçek Postgres)
+        run: nohup node apps/api/src/server.ts > api.log 2>&1 &
+        env:
+          NODE_ENV: production
+          APP_ENV: test
+          LOG_LEVEL: info
+          WEB_URL: http://127.0.0.1:3000
+          API_URL: http://127.0.0.1:4000
+          SESSION_COOKIE_SECURE: 'true'
+          AUTH_TOKEN_PEPPER: ci-smoke-pepper-not-a-secret-0123456789
+          MAIL_TRANSPORT: console
+          MAIL_FROM: ci@localhost
+          MEDIA_PUBLIC_BASE_URL: http://127.0.0.1:4000/media
+      - name: Start web (next start)
+        working-directory: apps/web
+        run: nohup node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000 > ../../web.log 2>&1 &
+      - name: Wait for API and web
+        run: |
+          for i in $(seq 60); do
+            curl -sf http://127.0.0.1:4000/health > /dev/null && curl -sf -o /dev/null http://127.0.0.1:3000/ && exit 0
+            sleep 1
+          done
+          exit 1
+      - run: pnpm smoke --api http://127.0.0.1:4000 --web http://127.0.0.1:3000
+      - run: pnpm --filter @kararver/web exec playwright install --with-deps chromium
+      # Gerçek auth HTTP + Argon2, bellek store'u (scripts/test-auth-server.mjs); Postgres yolunu smoke ve database işi doğrular.
+      - run: pnpm --filter @kararver/web exec playwright test -c playwright.api.config.ts
+        env:
+          CI: 'true'
+      - name: Media upload and gallery UI states (desktop/mobile)
+        run: pnpm --filter @kararver/web exec playwright test -c playwright.media.config.ts
+        env:
+          CI: 'true'
+      - name: Logs
+        if: always()
+        run: |
+          echo "── api.log"; cat api.log || true
+          echo "── web.log"; cat web.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-e2e-api-results
+          path: |
+            apps/web/test-results
+            apps/web/media-report
+          if-no-files-found: ignore
+  staging-smoke:
+    if: github.event_name == 'workflow_dispatch' && inputs.staging_api_url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      # Sadece public uçlar; secret kullanılmaz. Girdiler env ile verilir (komuta doğrudan gömülmez).
+      # https adreste HSTS ve Secure cookie zorunludur: ilk koşuda FAIL verirse bu kod değil,
+      # hosting/proxy (Vercel/Railway, TLS sonlandırma) ayarı bulgusudur; issue #8'e kaydedilir.
+      - run: pnpm smoke --api "$STAGING_API_URL" --web "$STAGING_WEB_URL"
+        env:
+          STAGING_API_URL: ${{ inputs.staging_api_url }}
+          STAGING_WEB_URL: ${{ inputs.staging_web_url }}
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci --prefix ui/design-system
+      - run: npx --prefix ui/design-system playwright install --with-deps chromium
+      - run: node scripts/test-ui.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-test-results
+          path: ui/design-system/test-results
+  storage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install boto3==1.42.0
+      - run: docker compose up -d seaweedfs seaweedfs-init
+      - name: Wait for bucket initialization
+        run: |
+          id=$(docker compose ps -aq seaweedfs-init)
+          test -n "$id"
+          code=$(timeout 180 docker wait "$id")
+          test "$code" = 0
+      - run: python scripts/storage-smoke.py
+      - name: Logs
+        if: always()
+        run: docker compose logs --no-color
+      - name: Cleanup isolated CI services
+        if: always()
+        run: docker compose down

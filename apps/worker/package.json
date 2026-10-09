@@ -1,0 +1,27 @@
+{
+  "name": "@kararver/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/main.ts",
+    "start": "node src/main.ts",
+    "test": "node --test --test-concurrency=1 \"test/*.test.ts\"",
+    "hash:eval": "node scripts/hash-eval.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "media:check": "node scripts/media-consistency.ts",
+    "media:latency": "node scripts/media-latency.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1141.0",
+    "@kararver/contracts": "workspace:*",
+    "@kararver/db": "workspace:*",
+    "pg-boss": "12.35.0",
+    "sharp": "0.35.5",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "typescript": "6.0.3"
+  }
+}

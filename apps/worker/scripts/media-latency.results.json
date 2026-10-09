@@ -1,0 +1,246 @@
+{
+  "environment": {
+    "date": "2026-10-06T12:04:59.648Z",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13500H",
+    "logicalCores": 16,
+    "ramGB": 16,
+    "os": "Windows_NT 10.0.26300",
+    "node": "v24.11.0",
+    "sharp": "0.35.5",
+    "python": "C:/Users/Mert/AppData/Local/Temp/claude/C--Users-Mert-Desktop-Kararver/45166529-cf8c-4274-8220-d2a3dbb3551e/scratchpad/modvenv/Scripts/python.exe",
+    "sampleSizePerCell": 40,
+    "note": "DB ve object storage bellek içidir; storage gecikmesi parametriktir. Gerçek S3/R2 gecikmesi staging'de ölçülmelidir."
+  },
+  "coldStart": {
+    "firstJobMs": 500,
+    "secondJobMs": 124,
+    "firstResult": "APPROVED"
+  },
+  "bySize": {
+    "küçük 800x600": {
+      "inputKB": 163,
+      "totalMs": {
+        "n": 40,
+        "min": 99.9,
+        "p50": 116.1,
+        "p95": 132.3,
+        "p99": 148.7,
+        "max": 148.7
+      },
+      "classifyMs": {
+        "n": 40,
+        "min": 19.2,
+        "p50": 24,
+        "p95": 28,
+        "p99": 29.6,
+        "max": 29.6
+      },
+      "results": {
+        "APPROVED": 40
+      }
+    },
+    "orta 1920x1080": {
+      "inputKB": 698,
+      "totalMs": {
+        "n": 40,
+        "min": 275.8,
+        "p50": 344.2,
+        "p95": 366.6,
+        "p99": 393,
+        "max": 393
+      },
+      "classifyMs": {
+        "n": 40,
+        "min": 47.4,
+        "p50": 61.3,
+        "p95": 66.5,
+        "p99": 76,
+        "max": 76
+      },
+      "results": {
+        "APPROVED": 40
+      }
+    },
+    "büyük 4000x3000": {
+      "inputKB": 3547,
+      "totalMs": {
+        "n": 40,
+        "min": 341.4,
+        "p50": 437.5,
+        "p95": 489.1,
+        "p99": 505.2,
+        "max": 505.2
+      },
+      "classifyMs": {
+        "n": 40,
+        "min": 37.5,
+        "p50": 53,
+        "p95": 68.3,
+        "p99": 73.6,
+        "max": 73.6
+      },
+      "results": {
+        "APPROVED": 40
+      }
+    }
+  },
+  "byConcurrency": {
+    "eşzamanlılık 1": {
+      "jobs": 48,
+      "wallSeconds": 30.9,
+      "jobsPerSecond": 1.6,
+      "totalMs": {
+        "n": 48,
+        "min": 306.8,
+        "p50": 471.6,
+        "p95": 1059.3,
+        "p99": 1086.8,
+        "max": 1086.8
+      },
+      "classifyMs": {
+        "n": 49,
+        "min": 54.7,
+        "p50": 79.4,
+        "p95": 208,
+        "p99": 457.3,
+        "max": 457.3
+      },
+      "results": {
+        "APPROVED": 48
+      },
+      "errors": {}
+    },
+    "eşzamanlılık 2": {
+      "jobs": 48,
+      "wallSeconds": 9.2,
+      "jobsPerSecond": 5.2,
+      "totalMs": {
+        "n": 48,
+        "min": 319.4,
+        "p50": 376.7,
+        "p95": 430,
+        "p99": 440.2,
+        "max": 440.2
+      },
+      "classifyMs": {
+        "n": 49,
+        "min": 51.3,
+        "p50": 65.4,
+        "p95": 97.6,
+        "p99": 462,
+        "max": 462
+      },
+      "results": {
+        "APPROVED": 48
+      },
+      "errors": {}
+    },
+    "eşzamanlılık 4": {
+      "jobs": 48,
+      "wallSeconds": 5.1,
+      "jobsPerSecond": 9.5,
+      "totalMs": {
+        "n": 48,
+        "min": 288.5,
+        "p50": 414.4,
+        "p95": 473.3,
+        "p99": 540.2,
+        "max": 540.2
+      },
+      "classifyMs": {
+        "n": 49,
+        "min": 51.3,
+        "p50": 80.7,
+        "p95": 136.3,
+        "p99": 419.2,
+        "max": 419.2
+      },
+      "results": {
+        "APPROVED": 48
+      },
+      "errors": {}
+    }
+  },
+  "storageLatency": {
+    "storage 0 ms/çağrı": {
+      "totalMs": {
+        "n": 10,
+        "min": 311.4,
+        "p50": 315.5,
+        "p95": 332.1,
+        "p99": 332.1,
+        "max": 332.1
+      },
+      "storageCallsPerJob": 3,
+      "expectedStorageShareMs": 0
+    },
+    "storage 200 ms/çağrı": {
+      "totalMs": {
+        "n": 10,
+        "min": 872.7,
+        "p50": 876.1,
+        "p95": 895.6,
+        "p99": 895.6,
+        "max": 895.6
+      },
+      "storageCallsPerJob": 3,
+      "expectedStorageShareMs": 600
+    },
+    "storage 1000 ms/çağrı": {
+      "totalMs": {
+        "n": 10,
+        "min": 3280.4,
+        "p50": 3288,
+        "p95": 3295.4,
+        "p99": 3295.4,
+        "max": 3295.4
+      },
+      "storageCallsPerJob": 3,
+      "expectedStorageShareMs": 3000
+    },
+    "storage 3000 ms/çağrı": {
+      "totalMs": {
+        "n": 10,
+        "min": 9279.9,
+        "p50": 9286.8,
+        "p95": 9297.9,
+        "p99": 9297.9,
+        "max": 9297.9
+      },
+      "storageCallsPerJob": 3,
+      "expectedStorageShareMs": 9000
+    }
+  },
+  "timeoutBehaviour": {
+    "takılan model (timeout 1,5 sn)": {
+      "result": "QUARANTINED",
+      "error": "MODERATION_TIMEOUT",
+      "elapsedMs": 1644,
+      "approved": false
+    },
+    "süreç hemen kapanıyor": {
+      "result": "QUARANTINED",
+      "error": "MODEL_ERROR",
+      "elapsedMs": 143,
+      "approved": false
+    },
+    "model hazır olmuyor (başlangıç timeout 1,5 sn)": {
+      "result": "QUARANTINED",
+      "error": "MODERATION_TIMEOUT",
+      "elapsedMs": 1581,
+      "approved": false
+    },
+    "12 eşzamanlı iş, model 400 ms, timeout 2 sn (sıra beklemesi)": {
+      "distribution": {
+        "APPROVED": 4,
+        "MODERATION_TIMEOUT": 8
+      },
+      "maxElapsedMs": 2224,
+      "afterRecovery": {
+        "result": "APPROVED",
+        "error": null,
+        "elapsedMs": 543
+      }
+    }
+  }
+}

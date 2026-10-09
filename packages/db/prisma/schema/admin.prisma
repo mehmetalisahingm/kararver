@@ -1,0 +1,350 @@
+// Sahip: Utku — KV-12 (#14)
+// Global roller ve kullanıcı yaptırımları. Rol, durum ve yaptırım istemci iddiasından değil,
+// bu tablolardan okunur (TrustedActor, packages/contracts/src/permissions.ts).
+// Kurallar: docs/DATA_MODEL.md §9.1 · Yetki matrisi: docs/FOUNDATION_CONTRACTS.md, docs/KV-04_ROLES_EVENTS.md
+//
+// Audit (KV-39) bu dosyada; sistem ayarları (KV-40) ve bildirimler (KV-21) sonra eklenir.
+// users'a giden bütün FK'ler RESTRICT'tir: kullanıcı soft delete edilir, rol ve yaptırım izi korunur.
+// Prisma'nın ifade edemediği CHECK kısıtları ve trigger migration SQL'inde elle yazılıdır.
+
+// Değerler contracts Role ile birebir aynıdır (test). USER satırı yazılmaz (CHECK): satır yoksa USER.
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+
+  @@map("user_role")
+}
+
+// Değerler contracts SanctionType ile birebir aynıdır (test).
+// WARNING yetkiyi etkilemez; RESTRICT_* işlem kısıtıdır; SUSPEND süreli, BAN kalıcıdır (CHECK).
+enum SanctionType {
+  WARNING
+  RESTRICT_COMMENTS
+  RESTRICT_POSTING
+  SUSPEND
+  BAN
+
+  @@map("sanction_type")
+}
+
+// Kullanıcı başına tek global rol (PK user_id). Roller hiyerarşiktir; atama satırı değiştirir,
+// USER'a düşürme satırı siler. Topluluk moderatörlüğü burada değil, community_memberships'tedir.
+model UserRole {
+  userId      String   @id @map("user_id") @db.Uuid
+  role        Role
+  // Rolü veren SUPER_ADMIN. Sadece ilk SUPER_ADMIN (bootstrap) için boş olabilir (CHECK).
+  grantedById String?  @map("granted_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user      User  @relation("UserRoleHolder", fields: [userId], references: [id], onDelete: Restrict)
+  grantedBy User? @relation("UserRoleGranter", fields: [grantedById], references: [id], onDelete: Restrict)
+
+  // Aktif SUPER_ADMIN sayımı ve rol listeleri.
+  @@index([role])
+  @@index([grantedById])
+  @@map("user_roles")
+}
+
+// Yaptırım geçmişi. Silinmez ve güncellenemez; sadece kaldırma alanları bir kez NULL'dan
+// doluya geçebilir (trigger). Aktif = lifted_at IS NULL AND (ends_at IS NULL OR ends_at > now()).
+// users.status bu tablonun özetidir ve servis tarafından aynı transaction'da güncellenir (§9).
+model Sanction {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  type        SanctionType
+  reason      String       @db.VarChar(500)
+  startsAt    DateTime     @default(now()) @map("starts_at") @db.Timestamptz(3)
+  // NULL = kalıcı. SUSPEND'de zorunlu, BAN'da yasak (CHECK).
+  endsAt      DateTime?    @map("ends_at") @db.Timestamptz(3)
+  createdById String       @map("created_by_id") @db.Uuid
+  // Kaldırma bilgisi; üçü birlikte dolar (CHECK).
+  liftedAt    DateTime?    @map("lifted_at") @db.Timestamptz(3)
+  liftedById  String?      @map("lifted_by_id") @db.Uuid
+  liftReason  String?      @map("lift_reason") @db.VarChar(500)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user      User  @relation("SanctionTarget", fields: [userId], references: [id], onDelete: Restrict)
+  createdBy User  @relation("SanctionIssuer", fields: [createdById], references: [id], onDelete: Restrict)
+  liftedBy  User? @relation("SanctionLifter", fields: [liftedById], references: [id], onDelete: Restrict)
+
+  // Aktif yaptırımlar (TrustedActor.sanctions, AdminUserDetail.activeSanctions).
+  @@index([userId, liftedAt, endsAt])
+  @@index([createdById])
+  @@index([liftedById])
+  @@map("sanctions")
+}
+
+// ─── Audit (KV-39, #41) ───────────────────────────────────────────────
+// Kurallar: docs/DATA_MODEL.md §9.2 · sözleşme: packages/contracts/src/audit.ts
+
+// Kaydı kim üretti. Değerler contracts AuditSource ile birebir aynıdır (test).
+// API: aktör dolu + request_id; CLI/WORKER: aktör NULL (CHECK).
+enum AuditSource {
+  API
+  CLI
+  WORKER
+
+  @@map("audit_source")
+}
+
+// Değiştirilemez yönetim geçmişi. Kayıt, işlemle aynı transaction'da yazılır (KV-04 §4.4): işlem geri alınırsa
+// kayıt da yoktur. Silinemez ve güncellenemez (trigger audit_logs_append_only, TRUNCATE da reddedilir).
+// action: KV-04 işlem kimliği veya sistem işlemi; operation: işlemin türü (ör. invalidate | restore), ayrı sorgulanır.
+// Hedef polimorfiktir (target_type + target_id, FK yok; DATA_MODEL §9); SETTING hedefinde id ayar anahtarıdır.
+model AuditLog {
+  id         String      @id @default(uuid(7)) @db.Uuid
+  // NULL = sistem (CLI/worker).
+  actorId    String?     @map("actor_id") @db.Uuid
+  source     AuditSource
+  action     String      @db.VarChar(80)
+  operation  String      @db.VarChar(40)
+  targetType String      @map("target_type") @db.VarChar(40)
+  targetId   String      @map("target_id") @db.VarChar(64)
+  // Zorunluluğu işleme bağlıdır (contracts reasonRequiredActions); DB yalnız biçimi zorlar.
+  reason     String?     @db.VarChar(500)
+  // Önce/sonra özeti: JSON nesnesi, hassas alan yok (contracts assertAuditEntry).
+  before     Json?
+  after      Json?
+  // API'de X-Request-Id.
+  requestId  String?     @map("request_id") @db.VarChar(128)
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  // Hedefin geçmişi, aktörün işlemleri, işlem/tür filtresi ve zaman sıralı liste (admin.audit.list).
+  @@index([targetType, targetId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, operation, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── Bildirimler (KV-21, #23) ───────────────────────────────────────────────
+
+// Değerler contracts NotificationType ile birebir ve aynı sıradadır (test).
+enum NotificationType {
+  COMMENT_ON_POLL
+  REPLY_TO_COMMENT
+  ALTERNATIVE_ON_POLL
+  POLL_MILESTONE
+  POLL_TRENDING
+  POLL_CLOSED
+  DECISION_UPDATED
+  MODERATION_APPLIED
+  COMMUNITY_FEATURED
+  // KV-21 PR-3: yalnız WARNING / RESTRICT_* yaptırımı (kapatılamaz).
+  SANCTION_APPLIED
+  ANNOUNCEMENT_PUBLISHED
+
+  @@map("notification_type")
+}
+
+// Uygulama içi bildirim: alıcı başına bir satır. Satırı yalnız teslim job'u (worker, KV-21 PR-3) yazar; API yalnız
+// alıcının kendi satırlarını okur ve read_at'i doldurur. Tekrarlanan olay (UNIQUE recipient_id + dedupe_key) tek
+// satır üretir; anahtar kuralı contracts dedupeKey/naturalKey (docs/KV-21_NOTIFICATIONS.md §2).
+// type ve poll_id KV-34 tercih/sessize alma filtresi içindir. Kısıtlar, okunmamış ve okunmuş (saklama) index'leri migration
+// SQL'inde elle. created_at = olayın occurredAt'i (sırasız teslimde liste doğru sırada). Saklama: okunmuş 90 gün, silinmiş
+// hesabın bütün bildirimleri silinmeden 30 gün sonra (worker notifications.cleanup).
+model Notification {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  recipientId String           @map("recipient_id") @db.Uuid
+  type        NotificationType
+  // Kaynak domain olayı (outbox, KV-21 PR-2). FK yok: outbox satırları 30 gün sonra temizlenir.
+  eventId     String           @map("event_id") @db.Uuid
+  // NULL = sistem (milestone, trend, süre dolumu). Alıcıyla aynı olamaz (CHECK).
+  actorId     String?          @map("actor_id") @db.Uuid
+  // POLL | COMMENT | COMMUNITY | USER (contracts NotificationView.subject, CHECK).
+  subjectType String           @map("subject_type") @db.VarChar(20)
+  subjectId   String           @map("subject_id") @db.Uuid
+  // Bildirimin ait olduğu anket (sessize alma, KV-34); anketsiz bildirimde NULL.
+  pollId      String?          @map("poll_id") @db.Uuid
+  // Tipe göre küçük özet; oy seçimi, serbest metin veya kişisel veri içermez. JSON nesnesi (CHECK).
+  data        Json             @default("{}")
+  dedupeKey   String           @map("dedupe_key") @db.VarChar(250)
+  readAt      DateTime?        @map("read_at") @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+  actor     User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  poll      Poll? @relation(fields: [pollId], references: [id], onDelete: Restrict)
+
+  @@unique([recipientId, dedupeKey])
+  // Liste: alıcının bildirimleri yeniden eskiye (cursor created_at + id).
+  @@index([recipientId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([pollId])
+  @@index([actorId])
+  @@map("notifications")
+}
+
+// ─── Bildirim tercihleri ve anket sessizi (KV-34, #36) ─────────────────────
+// Sahip: Faruk (Utku'nun geçici inaktifliği süresince). Kurallar: docs/KV-21_NOTIFICATIONS.md §8.
+// Teslim anında uygulanır (worker notifications politikası): yalnız yeni bildirimleri etkiler; mevcut satırlar ve
+// okundu durumları değişmez. Kişisel ayardır, iz değildir: kullanıcı/anket silinirse satır da silinir (CASCADE).
+
+// Kullanıcının kapattığı bildirim tipi. Satır var = kapalı; açmak satırı siler (varsayılan açık).
+// Kapatılamayan tipler (contracts MANDATORY_NOTIFICATION_TYPES) CHECK ile yazılamaz.
+model NotificationTypeOptOut {
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, type])
+  @@map("notification_type_opt_outs")
+}
+
+// Kullanıcının sessize aldığı anket: o anketin (poll_id) kapatılabilir bildirimleri yazılmaz.
+model NotificationPollMute {
+  userId    String   @map("user_id") @db.Uuid
+  pollId    String   @map("poll_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  poll Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@id([userId, pollId])
+  // Teslimde süzgeç (poll_id, user_id = ANY(...)).
+  @@index([pollId, userId])
+  @@map("notification_poll_mutes")
+}
+
+// ─── Olay outbox'ı (KV-21 PR-2, #23) ────────────────────────────────────────
+
+// Değerler worker dağıtıcısının teslim durumlarıdır (apps/worker/src/jobs/events/dispatch.ts).
+enum EventDeliveryStatus {
+  PENDING
+  DONE
+  DEAD
+
+  @@map("event_delivery_status")
+}
+
+// Domain olayı (KV-04 zarfı). Satırı producer, mutation ile aynı transaction'da yazar (API writeEvent); zarf yazıldıktan
+// sonra değişmez (trigger domain_events_immutable). FK yok: olay bir mesajdır, ilişki değil; actor FK'si users satırında
+// FOR KEY SHARE alırdı ve 30 gün saklamayla çelişir. Dağıtım yalnız dispatched_at / dispatch_error'u doldurur.
+// Saklama: bütün teslimleri DONE olan olay son DONE'dan 30 gün sonra silinir; diğerleri asla (docs/DATA_MODEL.md §9.4).
+model DomainEvent {
+  // = event.id: UUIDv7, producer üretir (contracts newEventId), retry boyunca değişmez.
+  id            String    @id @db.Uuid
+  type          String    @db.VarChar(64)
+  version       Int       @db.SmallInt
+  occurredAt    DateTime  @map("occurred_at") @db.Timestamptz(3)
+  // NULL = sistem olayı (contracts eventCatalog actor kuralı).
+  actorId       String?   @map("actor_id") @db.Uuid
+  subjectType   String    @map("subject_type") @db.VarChar(20)
+  // SETTING konusunda ayar anahtarıdır, diğerlerinde UUID.
+  subjectId     String    @map("subject_id") @db.VarChar(100)
+  payload       Json
+  // contracts naturalKey(event); tanımsızsa NULL (NULL'lar çakışmaz). Aynı iş olgusu ikinci kez yazılmaz.
+  naturalKey    String?   @unique @map("natural_key") @db.VarChar(250)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  dispatchedAt  DateTime? @map("dispatched_at") @db.Timestamptz(3)
+  // Satır olaya ayrıştırılamadı (parseEvent): teslim açılmaz, satır saklamada silinmez.
+  dispatchError String?   @map("dispatch_error") @db.VarChar(1000)
+
+  deliveries EventDelivery[]
+
+  @@map("domain_events")
+}
+
+// Tüketici başına teslim. PK (event_id, consumer) contracts dedupeKey(event, consumer) kapsamıdır: aynı olay aynı
+// tüketiciye bir kez açılır. next_attempt_at hem vade hem kiradır (kiralama denemeyi sayar ve vadeyi ileri atar).
+model EventDelivery {
+  eventId       String              @map("event_id") @db.Uuid
+  consumer      String              @db.VarChar(64)
+  status        EventDeliveryStatus @default(PENDING)
+  attempts      Int                 @default(0)
+  nextAttemptAt DateTime            @map("next_attempt_at") @db.Timestamptz(3)
+  lastError     String?             @map("last_error") @db.VarChar(1000)
+  processedAt   DateTime?           @map("processed_at") @db.Timestamptz(3)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  event DomainEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, consumer])
+  @@map("domain_event_deliveries")
+}
+
+// ─── Öne çıkarma ve zamanlanmış duyurular (KV-42, #44) ──────────────────────
+
+enum FeaturedSurface {
+  HOME_SPOTLIGHT
+  FEED_TOP
+  DAILY_PICK
+  CATEGORY
+  COMMUNITY
+  EDITORS_CHOICE
+
+  @@map("featured_surface")
+}
+
+enum AnnouncementLevel {
+  INFO
+  WARNING
+
+  @@map("announcement_level")
+}
+
+enum AnnouncementAudience {
+  ALL
+  AUTHENTICATED
+
+  @@map("announcement_audience")
+}
+
+model FeaturedPlacement {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  pollId      String          @map("poll_id") @db.Uuid
+  surface     FeaturedSurface
+  scopeId     String?         @map("scope_id") @db.Uuid
+  priority    Int             @default(0)
+  badge       String?         @db.VarChar(30)
+  startsAt    DateTime        @map("starts_at") @db.Timestamptz(3)
+  endsAt      DateTime        @map("ends_at") @db.Timestamptz(3)
+  activatedAt DateTime?       @map("activated_at") @db.Timestamptz(3)
+  createdBy   String          @map("created_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([surface, scopeId, startsAt, endsAt, priority], map: "featured_placements_surface_scope_time_priority_idx")
+  @@index([pollId], map: "featured_placements_poll_id_idx")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "featured_placements_created_at_id_idx")
+  @@map("featured_placements")
+}
+
+model Announcement {
+  id          String               @id @default(uuid(7)) @db.Uuid
+  title       String               @db.VarChar(120)
+  body        String               @db.VarChar(2000)
+  level       AnnouncementLevel    @default(INFO)
+  audience    AnnouncementAudience @default(ALL)
+  startsAt    DateTime             @map("starts_at") @db.Timestamptz(3)
+  endsAt      DateTime?            @map("ends_at") @db.Timestamptz(3)
+  activatedAt DateTime?            @map("activated_at") @db.Timestamptz(3)
+  createdBy   String               @map("created_by") @db.Uuid
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([startsAt, endsAt], map: "announcements_starts_at_ends_at_idx")
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "announcements_created_at_id_idx")
+  @@map("announcements")
+}
+
+// KV-40 (#42): sistem ayarları. Yalnız değiştirilmiş (veya ilk kez dokunulmuş) ayarlar satır olur; satırı olmayan ayar
+// contracts settings.ts varsayılanıyla (sürüm 1) çalışır. Anahtar, tip ve aralık uygulamada contracts kayıt defteriyle
+// doğrulanır (key CHECK'i yalnız biçimi korur). Her değişiklik sürümü artırır (iyimser kilit) ve audit'e yazılır.
+model SystemSetting {
+  key         String   @id @db.VarChar(80)
+  value       Json
+  version     Int      @default(1)
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  updatedBy User? @relation("SystemSettingEditor", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@map("system_settings")
+}
