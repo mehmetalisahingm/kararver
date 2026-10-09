@@ -1,7 +1,23 @@
 import type { NextConfig } from "next";
 
+/**
+ * KV-49 (#51) güvenlik başlıkları. Hiçbir kaynağı kısıtlamayan, kırılma riski olmayan set: çerçeveleme yasağı
+ * (clickjacking), MIME tahmini kapalı, base/form/object sınırı, referrer ve tarayıcı izinleri. Script/görsel kısıtlayan
+ * sıkı CSP (nonce veya SRI) ayrı iş: görseller API alan adından gelir ve canlıda denenmeden açılmamalı.
+ */
+const SECURITY_HEADERS = [
+  { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+];
+
 const config: NextConfig = {
   poweredByHeader: false,
+  async headers() {
+    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+  },
   devIndicators: false,
   // Browser uses NEXT_PUBLIC_API_URL=/api; this rewrite keeps session requests same-origin.
   async rewrites() {
