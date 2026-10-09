@@ -26,6 +26,7 @@ import { createS3WorkerStorage } from "./jobs/media/storage.ts";
 import { createPrismaMediaJobStore } from "./jobs/media/store.ts";
 import { activateScheduled, FEATURED_ACTIVATE_CRON, FEATURED_ACTIVATE_QUEUE } from "./jobs/featured/activate.ts";
 import { expirePolls, POLLS_EXPIRE_CRON, POLLS_EXPIRE_QUEUE } from "./jobs/polls/expire.ts";
+import { expireCommunityRequests, COMMUNITY_REQUESTS_EXPIRE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_CRON } from "./jobs/communities/expire-requests.ts";
 import { expireSanctions, SANCTIONS_EXPIRE_CRON, SANCTIONS_EXPIRE_QUEUE } from "./jobs/sanctions/job.ts";
 import { runDailySnapshots, SNAPSHOT_TIME_ZONE, SNAPSHOTS_CRON, SNAPSHOTS_QUEUE } from "./jobs/snapshots/job.ts";
 import { TRENDS_CRON, TRENDS_QUEUE } from "./jobs/trends/config.ts";
@@ -133,6 +134,13 @@ await boss.work(POLLS_EXPIRE_QUEUE, { batchSize: 1 }, async () => {
   const result = await expirePolls({ prisma, now: () => new Date(), log });
   if (result.candidates > 0) log("info", "polls.expire bitti", result);
 });
+// community requests: daily UTC deadline enforcement (independent of user's local timezone).
+await boss.createQueue(COMMUNITY_REQUESTS_EXPIRE_QUEUE, { policy: "singleton", retryLimit: 0 });
+await boss.schedule(COMMUNITY_REQUESTS_EXPIRE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_CRON, null, { tz: "UTC" });
+await boss.work(COMMUNITY_REQUESTS_EXPIRE_QUEUE, { batchSize: 1 }, async () => {
+  const result = await expireCommunityRequests({ prisma, now: () => new Date(), log });
+  if (result.closed || result.failed) log(result.failed ? "warn" : "info", "community.requests.expire", result);
+});
 // featured.activate: scheduled placements and announcements at their start time.
 // One-time activated_at claim and outbox are written atomically.
 await boss.createQueue(FEATURED_ACTIVATE_QUEUE, { policy: "singleton", retryLimit: 0 });
@@ -149,7 +157,7 @@ await boss.work(NOTIFICATIONS_CLEANUP_QUEUE, { batchSize: 1 }, async () => {
   await cleanupNotifications({ prisma, now: () => new Date(), log });
 });
 log("info", "worker hazır", {
-  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE],
+  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_QUEUE],
   concurrency: config.mediaConcurrency,
 });
 const heartbeatPath = process.env.WORKER_HEARTBEAT_PATH ?? "/tmp/kararver-worker-heartbeat.json";
