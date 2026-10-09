@@ -1,6 +1,7 @@
 // CommunityStore'un PostgreSQL uygulaması — communities, community_memberships (DATA_MODEL.md §9).
 import type { Prisma, PrismaClient } from "@kararver/db";
 import { runIdempotent } from "../../http/idempotency.ts";
+import { ApiError } from "../../http/errors.ts";
 import { writeAudit } from "../audit/write.ts";
 import type { CommunityRecord, CommunityRejection, CommunityRole, CommunityStore, MemberRecord } from "./store.ts";
 
@@ -101,6 +102,10 @@ export function createPrismaCommunityStore(prisma: PrismaClient): CommunityStore
     // sayaç sadece gerçekten eklenen satır için artar (DATA_MODEL §2.5).
     async join(communityId, userId, now) {
       return prisma.$transaction(async (tx): Promise<CommunityRole> => {
+        // Closing job locks the same community row; joining after expiry must fail.
+        const [community] = await tx.$queryRaw<{ status: string }[]>`
+          SELECT status::text AS status FROM communities WHERE id = ${communityId}::uuid FOR UPDATE`;
+        if (!community || community.status !== "ACTIVE") throw new ApiError("NOT_FOUND", "Topluluk kapalı veya bulunamadı.");
         const inserted = await tx.$executeRaw`
           INSERT INTO community_memberships (community_id, user_id, role, created_at, updated_at)
           VALUES (${communityId}::uuid, ${userId}::uuid, 'MEMBER', ${now}, ${now})

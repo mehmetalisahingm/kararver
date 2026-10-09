@@ -12,6 +12,7 @@ import type {
   Category as PublicCategory,
   CommunityCard,
   CommunityDetail,
+  CommunityRequestView,
   ContentHistoryItem,
   MediaView,
   ReportView,
@@ -23,6 +24,7 @@ export type Report = ReturnType<typeof ReportView.parse>;
 export type AdminMedia = ReturnType<typeof MediaView.parse>;
 export type BannedMedia = ReturnType<typeof BannedMediaView.parse>;
 export type Community = ReturnType<typeof CommunityCard.parse>;
+export type CommunityRequestRecord = ReturnType<typeof CommunityRequestView.parse>;
 export type CommunityDetailView = ReturnType<typeof CommunityDetail.parse>;
 export type Category = ReturnType<typeof AdminCategory.parse>;
 export type PollCategory = ReturnType<typeof PublicCategory.parse>;
@@ -170,6 +172,12 @@ export class AdminClient {
   }
 
   // ── Topluluk yönetimi (KV-32) ──
+  async communityRequests(status: "PENDING" | "APPROVED" | "REJECTED" | "CLOSED" = "PENDING") {
+    return data<CommunityRequestRecord[]>(await this.http.request("admin.communities.requests.list", { query: { status } }));
+  }
+  async decideCommunityRequest(id: string, decision: "APPROVE" | "REJECT", reason: string) {
+    return data<CommunityRequestRecord>(await this.http.request("admin.communities.requests.decide", { params: { id }, body: { decision, reason } }));
+  }
   async communities(cursor?: string, signal?: AbortSignal) {
     return page<Community>(await this.http.request("communities.list", { query: { cursor, limit: "20" }, signal }));
   }

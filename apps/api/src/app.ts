@@ -18,6 +18,7 @@ import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerCommunityAdminRoutes } from "./modules/communities/admin-routes.ts";
 import { registerCommunityRoutes } from "./modules/communities/routes.ts";
 import type { CommunityStore } from "./modules/communities/store.ts";
+import { registerCommunityRequestRoutes, type CommunityRequestStore } from "./modules/communities/request-routes.ts";
 import type { MediaQueue } from "./modules/media/queue.ts";
 import { registerMediaAdminRoutes } from "./modules/media/admin-routes.ts";
 import { registerMediaRoutes } from "./modules/media/routes.ts";
@@ -116,6 +117,7 @@ export type AppDeps = {
   voteStore?: VoteStore;
   /** Verilmezse topluluk route'ları kaydedilmez. */
   communityStore?: CommunityStore;
+  communityRequestStore?: CommunityRequestStore;
   /** Verilmezse onboarding/ilgi route'ları kaydedilmez. */
   onboardingStore?: OnboardingStore;
   /** Verilmezse rapor route'u kaydedilmez. */
@@ -300,6 +302,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
     registerCommunityAdminRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
+  if (deps.communityRequestStore) registerCommunityRequestRoutes(route, deps.communityRequestStore, now);
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
   if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
