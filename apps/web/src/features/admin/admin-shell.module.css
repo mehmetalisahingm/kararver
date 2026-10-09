@@ -11,4 +11,8 @@
 .toolbar .check{display:flex;flex-direction:row;align-items:center;gap:8px;min-height:40px}
 .timeline{list-style:none;padding:0;margin:12px 0;display:grid;gap:10px}.timeline li{padding:10px 12px;border:1px solid var(--kv-border);border-radius:12px}.timeline time{font-size:.8rem;opacity:.7}.timeline p{margin:4px 0 0}
 
+/* WebKit may retain the dark inherited label foreground immediately after a theme switch.
+   Give the light admin filter labels a deterministic accessible color. */
+:global(.product[data-theme="light"]) .toolbar > label { color: #181b25; }
+
 .table th.settingsHeader{opacity:1}
