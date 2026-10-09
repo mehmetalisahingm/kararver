@@ -1,18 +1,24 @@
 import { spawn } from "node:child_process";
 
-const processes = [
-  ["api", ["--filter", "@kararver/api", "start"]],
-  ["worker", ["--filter", "@kararver/worker", "start"]],
-];
+const children = new Set();
+let apiExited = false;
+let stopping = false;
 
-const children = processes.map(([name, args]) => {
+function start(name, args) {
   const child = spawn("pnpm", args, { stdio: "inherit", env: process.env, shell: process.platform === "win32" });
-  child.on("exit", (code, signal) => {
-    if (code && code !== 0) console.error(`[${name}] exited with code ${code}`);
-    if (signal) console.error(`[${name}] exited with signal ${signal}`);
+  children.add(child);
+  child.once("exit", (code, signal) => {
+    children.delete(child);
+    console.error(`[${name}] exited`, { code, signal });
+    if (name === "api") {
+      apiExited = true;
+      stop("SIGTERM");
+      return;
+    }
+    if (!stopping) setTimeout(() => start(name, args), 2_000).unref();
   });
   return child;
-});
+}
 
 let stopping = false;
 const stop = (signal) => {
@@ -23,6 +29,8 @@ const stop = (signal) => {
 process.once("SIGINT", () => stop("SIGINT"));
 process.once("SIGTERM", () => stop("SIGTERM"));
 
-await Promise.race(children.map((child) => new Promise((resolve) => child.once("exit", resolve))));
-stop("SIGTERM");
-process.exitCode = 1;
+start("api", ["--filter", "@kararver/api", "start"]);
+start("worker", ["--filter", "@kararver/worker", "start"]);
+
+while (!apiExited && !stopping) await new Promise((resolve) => setTimeout(resolve, 1_000));
+process.exitCode = apiExited ? 1 : 0;
