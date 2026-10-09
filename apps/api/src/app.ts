@@ -189,7 +189,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerErrorHandling(app);
   registerSecurity(app, config.allowedOrigins, { hsts: config.session.secure });
 
-  const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper };
+  const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper, emailVerificationRequired: config.emailVerificationRequired };
   // Ayar kancaları: açık kanca > ayar servisi > güvenli varsayılan.
   const settings = deps.settingsService;
   const pollSettings = deps.pollSettings ?? (settings ? () => settings.pollSettings() : async () => DEFAULT_POLL_SETTINGS);
@@ -236,6 +236,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     initialGrant: settings ? async () => (await settings.pointSettings()).initialGrant : undefined,
   });
   registerUserRoutes(route, {
+    emailVerificationRequired: config.emailVerificationRequired,
     store: deps.authStore,
     mediaPublicBaseUrl: config.mediaPublicBaseUrl,
     rolesOf,

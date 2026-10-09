@@ -142,7 +142,7 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
     );
     cookies.set(reply, raw);
     // İlk giriş puanı (#67, 20 puan) puan defteriyle birlikte gelecek; tablo henüz yok.
-    return { status: 200, body: { data: toMe(user, deps.mediaPublicBaseUrl, await rolesOf(user.id)) } };
+    return { status: 200, body: { data: toMe(user, deps.mediaPublicBaseUrl, await rolesOf(user.id), session.emailVerificationRequired) } };
   });
 
   route("auth.logout", async ({ viewer, reply }) => {

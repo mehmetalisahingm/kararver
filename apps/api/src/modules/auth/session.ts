@@ -7,7 +7,7 @@ import type { AuthStore, UserRecord, UserStatus } from "./store.ts";
 
 export type SessionUser = { id: string; sessionId: string; status: UserStatus; emailVerified: boolean; user: UserRecord };
 
-export type SessionSettings = { cookieName: string; cookieDomain: string | null; secure: boolean; ttlMs: number; pepper: string };
+export type SessionSettings = { cookieName: string; cookieDomain: string | null; secure: boolean; ttlMs: number; pepper: string; emailVerificationRequired?: boolean };
 
 /** lastSeenAt her istekte değil, en fazla bu aralıkla güncellenir. */
 const TOUCH_INTERVAL_MS = 60 * 60 * 1000;
@@ -44,7 +44,7 @@ export function createAuthenticator(store: AuthStore, settings: SessionSettings,
       if (!session.lastSeenAt || at.getTime() - session.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) {
         await store.touchSession(session.id, at);
       }
-      return { id: user.id, sessionId: session.id, status: user.status, emailVerified: user.emailVerifiedAt !== null, user };
+      return { id: user.id, sessionId: session.id, status: user.status, emailVerified: settings.emailVerificationRequired === false || user.emailVerifiedAt !== null, user };
     },
   };
 }

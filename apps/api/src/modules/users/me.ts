@@ -8,13 +8,13 @@ type Role = ActorGrants["roles"][number];
 /** Hesabın rolleri `user_roles`'tan (RBAC, KV-12) okunur; rol satırı yoksa USER. */
 export type RolesOf = (userId: string) => Promise<Role[]>;
 
-export function toMe(user: UserRecord, mediaPublicBaseUrl: string, roles: readonly Role[]) {
+export function toMe(user: UserRecord, mediaPublicBaseUrl: string, roles: readonly Role[], emailVerificationRequired = true) {
   return {
     id: user.id,
     username: user.username,
     displayName: user.displayName,
     email: user.email,
-    emailVerified: user.emailVerifiedAt !== null,
+    emailVerified: !emailVerificationRequired || user.emailVerifiedAt !== null,
     avatarUrl: user.avatarPublicKey ? `${mediaPublicBaseUrl}/${user.avatarPublicKey}` : null,
     bio: user.bio,
     status: user.status,
