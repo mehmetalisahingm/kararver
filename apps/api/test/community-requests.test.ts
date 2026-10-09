@@ -43,7 +43,7 @@ describe("community requests #172", { skip: backend ? false : "TEST_DATABASE_URL
     h = await createHarness(backend!);
     admin = await signUp();
     member = await signUp();
-    await h.prisma!.userRole.create({ data: { userId: admin.id, role: "ADMIN" } });
+    await h.prisma!.userRole.create({ data: { userId: admin.id, role: "SUPER_ADMIN" } });
   });
   after(async () => { await h?.close(); });
 
