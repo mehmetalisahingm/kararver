@@ -153,7 +153,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
             // KV-49 (#51): istek logu IP, port ve başlık içermez (IP kişisel veridir). İstek kimliği, yöntem, yol ve
             // süre yeterli; kötüye kullanım izi hız sınırı logundaki anahtar özetindedir (KV-19).
             serializers: {
-              req: (req: { id: string; method: string; url: string }) => ({ id: req.id, method: req.method, url: req.url }),
+              req: (req: { id: string; method: string; url: string }) => ({
+                id: req.id,
+                method: req.method,
+                // Raw req.url includes query strings (e.g. ?token=...); never log them.
+                url: req.url.split(/[?#]/, 1)[0] || "/",
+              }),
             },
           },
     bodyLimit: 64 * 1024,
