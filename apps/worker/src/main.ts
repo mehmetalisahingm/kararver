@@ -2,6 +2,7 @@
 // media.process (Mert, KV-16), trends.refresh (Faruk, KV-28), snapshots.daily (Faruk, KV-29), sanctions.expire (Utku, KV-33)
 // ve olay outbox'ı events.dispatch / events.cleanup, bildirim saklaması notifications.cleanup ve anket süre dolumu olayı polls.expire (Utku, KV-21). Diğer job'lar kendi klasörlerinde eklenir ve burada kaydedilir.
 import path from "node:path";
+import fs from "node:fs";
 import { createPrismaClient } from "@kararver/db";
 import { PgBoss } from "pg-boss";
 import { loadWorkerConfig } from "./config.ts";
@@ -151,6 +152,12 @@ log("info", "worker hazır", {
   queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE],
   concurrency: config.mediaConcurrency,
 });
+const heartbeatPath = process.env.WORKER_HEARTBEAT_PATH ?? "/tmp/kararver-worker-heartbeat.json";
+const writeHeartbeat = () => {
+  try { fs.writeFileSync(heartbeatPath, JSON.stringify({ status: "ready", at: new Date().toISOString(), pid: process.pid })); } catch (error) { log("warn", "worker heartbeat yazılamadı", { error: String(error) }); }
+};
+writeHeartbeat();
+const heartbeatTimer = setInterval(writeHeartbeat, 10_000);
 
 async function shutdown(signal: string): Promise<void> {
   log("info", "kapanıyor", { signal });
@@ -158,6 +165,7 @@ async function shutdown(signal: string): Promise<void> {
   await boss.stop({ graceful: true });
   await moderator.close();
   await prisma.$disconnect();
+  clearInterval(heartbeatTimer);
   process.exit(0);
 }
 process.once("SIGINT", () => void shutdown("SIGINT"));

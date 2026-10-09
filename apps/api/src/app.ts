@@ -3,6 +3,7 @@ import type { DecisionStore } from "./modules/decisions/store.ts";
 // Fastify uygulaması. Bağımlılıklar dışarıdan verilir; server.ts gerçeklerini, testler kendi
 // store/mailer/saatini bağlar. Yeni modül: src/modules/<modül>/routes.ts + aşağıya bir satır.
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import { headers } from "@kararver/contracts";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Config } from "./config.ts";
@@ -332,6 +333,14 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   if (settings) registerSettingsRoutes(route, { service: settings, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
 
-  app.get("/health", async (_request, reply) => reply.header("Cache-Control", "no-store").send({ status: "ok" }));
+  app.get("/health", async (_request, reply) => {
+    let worker: { status: string; at: string; ageMs: number } | { status: "unknown" } = { status: "unknown" };
+    try {
+      const file = process.env.WORKER_HEARTBEAT_PATH ?? "/tmp/kararver-worker-heartbeat.json";
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { status: string; at: string };
+      worker = { status: parsed.status, at: parsed.at, ageMs: Date.now() - Date.parse(parsed.at) };
+    } catch { /* worker may be disabled or separate */ }
+    return reply.header("Cache-Control", "no-store").send({ status: "ok", worker });
+  });
   return app;
 }
