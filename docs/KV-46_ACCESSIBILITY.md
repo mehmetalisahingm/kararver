@@ -4,6 +4,22 @@
 #20 medya/sosyal teslimi #124 ile main'e alındı ve #20 kapandı. #47 beta bağımlılığı,
 fiziksel cihaz, ekran okuyucu ve staging kabulü hâlâ final kapanış için beklenir.
 
+## 9 Ekim — Oturum kaybı ve güncel ekranlar
+
+Güncel main (`b1c0c07`) #168 onboarding kabulünü ve #170 açık tema admin
+filtre kontrast düzeltmesini içerir. Hesap ekranındaki yeni regresyon, profil
+kaydı sırasında API 401 döndürdüğünde özel form ve kaydedilenlerin kaldırılmasını,
+sayfa yenilendiğinde misafir ekranının korunmasını ve tekrar girişten sonra
+`returnTo=/hesap` hedefine dönülmesini doğrular. Bu test HTTP fixture kullanır;
+gerçek cookie TTL veya staging veritabanı kabulü olarak değerlendirilmez.
+
+Gerçek kısa TTL staging senaryosu için `docs/KV-48_STAGING_EXPIRY.md` ve
+#143 ile eklenen operator CLI kullanılmalıdır. Yalnız ayrı test oturumu oluşturur;
+ortak oturum süresi değiştirilmez. Kabul kaydında süre dolmadan 200, aynı cookie
+ile süre dolduktan sonra 401 ve DB expired durumu yer almalıdır. Cookie/token
+değerleri rapora yazılmaz. Bu çalıştırma ve kontrollü gerçek staging 500/recovery
+kanıtı hâlâ beklenmektedir.
+
 ## 4 Ekim — Güncel main ve medya matrisi
 
 #111 main'e alındı; bu devam teslimi #124 ve #111'i içeren main üzerine kuruludur.
@@ -56,7 +72,7 @@ Firefox viewport + touch kullanır (Firefox isMobile desteklemez).
 | Edge (yerel) | 1440px | 360px | Aynı matris, KV_BROWSER_PATH ile |
 
 Her motor: 28 rota × açık/koyu tema × 2 viewport = 112 rota denetimi;
-üç motor toplam 336 rota denetimi. Bunlar 60 Playwright state senaryosu içinde
+üç motor toplam 336 rota denetimi. Güncel paket her motor için 54 Playwright testi içinde
 çalışır. Her denetim taşma, yükleme bitişi, başlık/landmark ve axe WCAG 2 A/AA,
 2.1 AA kontrolünü içerir. HTML raporu motor sürümünü, proje/viewport bilgisini
 ve emülasyon olduğunu kaydeder. Temsili ekranlar ve her senaryonun son durumu
@@ -76,18 +92,20 @@ Escape/odak dönüşü, azaltılmış hareket ve grafik/tablo kontrolleri bu pak
 | Anket / oluşturma | gizli/açık/kapalı/kilitli, seçenek/form hatası, giriş modalı, yayın/oy hatası ve retry | browser/flows, browser/social |
 | Sosyal / galeri | loading/empty/error, iyimser geri alma, taslak koruma, fotoğraf hatası/retry, modal/klavye | browser/social |
 | Profil | loading, 404, 500/offline/retry, boş/dolu gönderi/yorum, iki pagination hata/retry akışı | states/matrix |
-| Hesap / kaydedilenler | misafir, loading, boş/dolu, ilk yükleme hatası/retry, başarısız profil kaydı ve silme | states/matrix |
+| Hesap / kaydedilenler | misafir, loading, boş/dolu, ilk yükleme hatası/retry, başarısız profil kaydı ve silme, 401 sonrası özel içerik kaldırma ve yeniden giriş | states/matrix |
 | İlgi alanları | misafir, loading, boş/dolu kategori/topluluk, yükleme retry, kayıtta seçim koruma | states/matrix |
 | Ortak admin (11 rota) | yetki loading/error/retry/denied, tüm kabuklar, tema/taşma, modal adı/Escape/focus | states/matrix, browser/admin |
-| 404 / bildirim placeholder | 404 dönüş/skip/focus, placeholder erişilebilirliği | browser/states, states/matrix |
+| Bildirim merkezi | loading, boş/dolu, retry, sayfalama, okundu işlemi hatası ve toparlanma | states/notifications |
+| İlk açılış onboarding | demo sonucu, kayıt/giriş yönlendirmesi, ilgi alanı kaydı retry/401, mobil/klavye/reduced-motion | states/onboarding, browser/onboarding-acceptance |
+| 404 | dönüş/skip/focus ve erişilebilirlik | browser/states, states/matrix |
 | Route / root 500 sınırı | retry çağrısı, gizli hata bilgisi, bağımsız HTML belge | error-boundaries.test.mjs |
 
 API-mode state testleri gerçek UI/HTTP adapter'ını sözleşme fixture'larıyla sürer;
 500/offline ve gecikme tarayıcı request interception ile üretilir. Bunlar backend
 veya staging testi değildir. Gerçek PostgreSQL testleri database CI işinde,
-gerçek auth HTTP testi integration işinde ayrıca çalışır. Admin alt modülleri ve
-bildirim merkezi henüz placeholder olan yerde, olmayan backend işlevi tamamlandı
-sayılmaz; yalnız ortak arayüz erişilebilirliği kapsanır.
+gerçek auth HTTP testi integration işinde ayrıca çalışır. Bir ekranın fixture
+üzerinde erişilebilir olması, ilgili backend işlevinin staging kabulünün
+tamamlandığı anlamına gelmez.
 
 ## Çalıştırma ve kalan dış kabul
 

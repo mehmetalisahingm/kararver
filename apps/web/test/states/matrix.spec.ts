@@ -146,3 +146,27 @@ test("session outage retry and anonymous permission states",async({page})=>{
   await page.getByRole("button",{name:"Tekrar dene",exact:true}).click();await expect(page.getByRole("heading",{name:"Hesabınla katıl."})).toBeVisible();
   await page.goto("/ilgi-alanlari");await expect(page.getByRole("heading",{name:"Akışını kişiselleştirmek için giriş yap."})).toBeVisible();
 });
+
+test("expired account session removes private content and login restores the requested page",async({page})=>{
+  const mock=await api(page);
+  await page.goto("/hesap");
+  await expect(page.getByLabel("Biyografi")).toBeVisible();
+  mock.handlers.set("me.update",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
+  await page.getByLabel("Biyografi").fill("Expired session must not save this change");
+  await page.getByRole("button",{name:"Profili kaydet"}).click();
+  await expect(page.getByRole("heading",{name:"Hesabınla katıl."})).toBeVisible();
+  await expect(page.getByLabel("Biyografi")).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"Kaydı kaldır"})).toHaveCount(0);
+  const login=page.locator("main").getByRole("link",{name:"Giriş yap",exact:true});
+  await expect(login).toHaveAttribute("href","/giris?returnTo=%2Fhesap");
+  mock.handlers.set("me.get",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
+  await page.reload();
+  await expect(page.getByRole("heading",{name:"Hesabınla katıl."})).toBeVisible();
+  await login.click();
+  await page.getByLabel("E-posta",{exact:true}).fill("session-recovery@example.test");
+  await page.getByLabel("Şifre",{exact:true}).fill("test-password");
+  await page.getByRole("button",{name:"Giriş yap",exact:true}).click();
+  await expect(page).toHaveURL(/\/hesap$/);
+  await expect(page.getByLabel("Biyografi")).toBeVisible();
+  expect(mock.unexpected).toEqual([]);
+});
