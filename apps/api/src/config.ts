@@ -15,10 +15,13 @@ const Env = z.object({
   SESSION_COOKIE_SECURE: bool.default(true),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   AUTH_TOKEN_PEPPER: z.string().min(32, "en az 32 karakter olmalı"),
-  MAIL_TRANSPORT: z.enum(["console", "smtp"]).default("console"),
+  MAIL_TRANSPORT: z.enum(["console", "smtp", "mailpit_api"]).default("console"),
   MAIL_FROM: z.string().min(3),
   // MAIL_TRANSPORT=smtp iken zorunlu: smtp://kullanici:parola@host:587 (STARTTLS) veya smtps://...:465 (TLS).
   SMTP_URL: z.string().default(""),
+  // Staging-only Mailpit HTTPS inbox (does not send to real mailboxes).
+  MAILPIT_SEND_URL: z.string().default(""),
+  MAILPIT_SEND_AUTH: z.string().default(""),
   MEDIA_PUBLIC_BASE_URL: z.url(),
   // KV-19 (#21): yalnız local/test'te kapatılabilir (ör. KV-47 yük testi); staging/production'da her zaman açık.
   RATE_LIMIT_ENABLED: bool.default(true),
@@ -46,7 +49,8 @@ export type StorageConfig = {
 export type MailConfig =
   | { transport: "console"; from: string }
   /** requireTls: staging/production'da smtp:// bağlantısı STARTTLS'siz gönderim yapmaz (parola ve token açıkta gitmez). */
-  | { transport: "smtp"; from: string; smtpUrl: string; requireTls: boolean };
+  | { transport: "smtp"; from: string; smtpUrl: string; requireTls: boolean }
+  | { transport: "mailpit_api"; from: string; sendUrl: string; sendAuth: string };
 
 export type Config = {
   appEnv: "local" | "test" | "staging" | "production";
@@ -101,6 +105,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       throw new Error(`API yapılandırması geçersiz → SMTP_URL: staging/production'da ${TLS_OVERRIDES.join(", ")} parametreleri kullanılamaz`);
     }
   }
+  if (e.MAIL_TRANSPORT === "mailpit_api") {
+    if (e.APP_ENV !== "staging") {
+      throw new Error("API yapılandırması geçersiz → MAIL_TRANSPORT=mailpit_api yalnız staging ortamında kullanılabilir");
+    }
+    let url: URL | null = null;
+    try { url = new URL(e.MAILPIT_SEND_URL); } catch {}
+    if (!url || url.protocol !== "https:" || url.username || url.password || url.search || url.hash || !url.hostname.endsWith(".up.railway.app")) {
+      throw new Error("API yapılandırması geçersiz → MAILPIT_SEND_URL: Railway HTTPS adresi gerekli");
+    }
+    if (!/^[^:\\s]+:[^\\s]+$/.test(e.MAILPIT_SEND_AUTH)) {
+      throw new Error("API yapılandırması geçersiz → MAILPIT_SEND_AUTH: kimlik bilgisi gerekli");
+    }
+  }
   const missingStorage = STORAGE_KEYS.filter((k) => !e[k]);
   if (missingStorage.length > 0 && (deployed || missingStorage.length < STORAGE_KEYS.length)) {
     // Yarım S3 ayarı her ortamda hatadır; staging/production'da hiç olmaması da hatadır.
@@ -122,7 +139,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mail:
       e.MAIL_TRANSPORT === "smtp"
         ? { transport: "smtp", from: e.MAIL_FROM, smtpUrl: e.SMTP_URL, requireTls: deployed }
-        : { transport: "console", from: e.MAIL_FROM },
+        : e.MAIL_TRANSPORT === "mailpit_api"
+          ? { transport: "mailpit_api", from: e.MAIL_FROM, sendUrl: e.MAILPIT_SEND_URL, sendAuth: e.MAILPIT_SEND_AUTH }
+          : { transport: "console", from: e.MAIL_FROM },
     mediaPublicBaseUrl: e.MEDIA_PUBLIC_BASE_URL.replace(/\/$/, ""),
     rateLimitEnabled: e.RATE_LIMIT_ENABLED,
     storage:
