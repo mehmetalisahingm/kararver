@@ -160,7 +160,6 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `PATCH /admin/communities/:id`<br>Topluluğu düzenle / kapat · `admin.communities.update` | A | 200 | doğal | Mert `communities` | Mert (admin UI, KV-32) | #34 | hazır |
 | `PUT /admin/communities/:id/moderators/:userId`<br>Topluluk moderatörü ata · `admin.communities.moderators.put` | A | 200 | doğal | Mert `communities` | Mert (admin UI, KV-32) | #34 | hazır |
 | `DELETE /admin/communities/:id/moderators/:userId`<br>Topluluk moderatörlüğünü kaldır · `admin.communities.moderators.delete` | A | 204 | doğal | Mert `communities` | Mert (admin UI, KV-32) | #34 | hazır |
-
 | `POST /communities/requests`<br>Topluluk oluşturma başvurusu · `communities.requests.create` | U | 200/201 | doğal | Mehmet `community-requests` | KararVer web | #172 | hazır |
 | `GET /communities/requests/mine`<br>Kendi topluluk başvurularım · `communities.requests.mine` | U | 200 | — | Mehmet `community-requests` | KararVer web | #172 | hazır |
 | `GET /admin/communities/requests`<br>Topluluk başvuru kuyruğu · `admin.communities.requests.list` | A | 200 | — | Mehmet `community-requests` | KararVer admin | #172 | hazır |
