@@ -49,8 +49,8 @@ export function Welcome({
 
   return <main className={styles.welcome} id="main">
     <header className={styles.header}>
-      <Link href="/basla" className={styles.logo}>↗ KARARVER</Link>
-      <Link href="/giris?onboarding=1" onClick={(event) => { event.preventDefault(); onSkip(); }}>
+      <Link href="/basla" tabIndex={0} className={styles.logo}>↗ KARARVER</Link>
+      <Link href="/giris?onboarding=1" tabIndex={0} onClick={(event) => { event.preventDefault(); onSkip(); }}>
         Zaten üye misin? Giriş yap ↗
       </Link>
     </header>
@@ -114,6 +114,7 @@ export function Welcome({
         <p className={styles.note}>Seçimler gerçek kategori kimlikleriyle girişten sonra hesabına bağlanır. Demo seçimin gerçek oy değildir.</p>
         <Link
           className={styles.primary}
+          tabIndex={0}
           href="/giris?onboarding=1&returnTo=%2F"
           onClick={(event) => { event.preventDefault(); onComplete(payload()); }}
         >
@@ -121,6 +122,7 @@ export function Welcome({
         </Link>
         <Link
           className={styles.secondary}
+          tabIndex={0}
           href="/kayit?onboarding=1&returnTo=%2F"
           onClick={(event) => {
             if (!onRegister) return;

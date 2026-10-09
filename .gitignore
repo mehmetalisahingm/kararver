@@ -28,3 +28,7 @@ Thumbs.db
 
 # KV-48 staging tatbikatı raporları ve yedekleri
 drill/
+
+# Browser visual acceptance recordings
+acceptance-results/
+onboarding-results/

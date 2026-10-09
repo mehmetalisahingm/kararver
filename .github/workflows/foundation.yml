@@ -104,6 +104,14 @@ jobs:
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @kararver/web exec playwright install --with-deps ${{ matrix.browser }}
+      - name: Premium onboarding visual and keyboard acceptance
+        run: pnpm --filter @kararver/web exec playwright test test/browser/onboarding-acceptance.spec.ts --output onboarding-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: onboarding-${{ matrix.browser }}
+          path: apps/web/onboarding-results
+          if-no-files-found: error
       - name: API screen states, desktop/mobile and both themes
         run: pnpm --filter @kararver/web exec playwright test -c playwright.states.config.ts
       - uses: actions/upload-artifact@v4
