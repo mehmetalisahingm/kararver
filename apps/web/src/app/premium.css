@@ -14,7 +14,7 @@
   --kv-primary-hover: #caa666;
   --kv-primary-light: #e5cb97;
   --kv-accent: #815b21;
-  --kv-focus: #d9ba7f;
+  --kv-focus: #815b21;
   --kv-soft: #f6ecd9;
   --kv-success: #147c5d;
   --kv-danger: #b02546;
@@ -289,3 +289,8 @@
 @media (prefers-reduced-motion: reduce) {
   .product .kv-button, .product .vote-option { transform: none !important; }
 }
+
+/* Prevent dark flash before hydration and maintain a light native-form default. */
+html { color-scheme: light; }
+body { background: #faf8f2; color: #292826; }
+.product[data-theme="dark"] { color-scheme: dark; }

@@ -262,10 +262,9 @@ test("gallery keyboard controls, load retry, locked and closed states, mobile/li
       })
       .click();
     for (const theme of ["dark", "light"]) {
-      if (theme === "light")
-        await page
-          .getByRole("button", { name: "Açık temaya geç", exact: true })
-          .click();
+      // Premium light is now the default; verify both modes independent of storage.
+      if (await page.locator(".product").getAttribute("data-theme") !== theme)
+        await page.getByRole("button", { name: /temaya geç/ }).click();
       await expect(page.locator(".product")).toHaveAttribute(
         "data-theme",
         theme,
