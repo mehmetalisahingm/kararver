@@ -32,3 +32,7 @@ drill/
 # Browser visual acceptance recordings
 acceptance-results/
 onboarding-results/
+
+# KV-45: private beta measurements and derived reports (never commit participant records)
+beta-private/
+beta-reports/
