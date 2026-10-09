@@ -39,11 +39,19 @@ jobs:
           else
             status=$(printf '%s' "$json" | jq -r '.status // "?"')
             worker=$(printf '%s' "$json" | jq -r '.worker.status // "?"')
-            age=$(printf '%s' "$json" | jq -r '.worker.ageMs // -1')
-            sha=$(printf '%s' "$json" | jq -r '.release.sha // "bilinmiyor"')
-            [ "$status" = "ok" ] || problems+=("API durumu: $status")
-            [ "$worker" = "ready" ] || problems+=("worker durumu: $worker")
-            if [ "$age" -lt 0 ] || [ "$age" -gt "$MAX_WORKER_AGE_MS" ]; then problems+=("worker heartbeat eski: ${age} ms"); fi
+            age=$(printf '%s' "$json" | jq -er '.worker.ageMs | numbers' 2>/dev/null || echo "-1")
+            sha=$(printf '%s' "$json" | jq -er '.release.sha | strings' 2>/dev/null || echo "bilinmiyor")
+            [ "$status" = "ok" ] || problems+=("API durumu beklenenden farklı")
+            [ "$worker" = "ready" ] || problems+=("worker hazır değil")
+            if ! [[ "$age" =~ ^[0-9]{1,10}$ ]] || [ "$age" -gt "$MAX_WORKER_AGE_MS" ]; then
+              problems+=("worker heartbeat geçersiz veya eski")
+            fi
+            # A missing SHA must not make a stale/unidentifiable deployment look healthy.
+            # Validate before writing any untrusted health value to GITHUB_OUTPUT.
+            if ! [[ "$sha" =~ ^[0-9a-f]{12}$ ]]; then
+              sha="bilinmiyor"
+              problems+=("deploy SHA eksik veya geçersiz")
+            fi
             echo "sha=$sha" >> "$GITHUB_OUTPUT"
           fi
           {
