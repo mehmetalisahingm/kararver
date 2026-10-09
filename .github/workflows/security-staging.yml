@@ -1,0 +1,32 @@
+name: Staging security read-only gate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: staging-security-readonly
+  cancel-in-progress: true
+jobs:
+  read-only-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Local gate regression (no HTTP writes)
+        run: node --test scripts/security-acceptance.test.mjs
+      - name: Live staging guest/CORS/HSTS/config controls (NO beta GO)
+        run: |
+          node scripts/security-acceptance.mjs \
+            --api https://api-staging-45cb.up.railway.app --json \
+            > security-staging-results.json
+          node -e 'const r=require("./security-staging-results.json"); console.log("PASS",r.totals.pass,"FAIL",r.totals.fail,"beta",r.betaGate)'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kv46-read-only-security
+          path: security-staging-results.json
+          if-no-files-found: warn
+          retention-days: 14

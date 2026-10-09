@@ -1,0 +1,85 @@
+# KV-49 (#51) staging izleme ve alarm. 30 dakikada bir (ve elle): API sağlığı, worker heartbeat'i, çalışan sürüm.
+# Sorun varsa "staging-alarm" etiketli tek bir açık issue açılır/güncellenir; düzelince kapatılır. Secret gerekmez
+# (yalnız public /health okunur). Ayrıntı: docs/KV-49_OPERATIONS.md "İzleme ve alarm".
+name: staging-monitor
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: staging-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      API_URL: ${{ vars.STAGING_API_URL || 'https://api-staging-45cb.up.railway.app' }}
+      # Worker heartbeat'i 10 sn'de bir yazılır; 2 dakikadan eskiyse worker durmuş sayılır.
+      MAX_WORKER_AGE_MS: "120000"
+    steps:
+      - name: Sağlık kontrolü
+        id: health
+        shell: bash
+        run: |
+          set -u
+          problems=()
+          body=$(curl -sS --max-time 20 -w '\n%{http_code}' "$API_URL/health" || true)
+          code=$(printf '%s' "$body" | tail -n1)
+          json=$(printf '%s' "$body" | sed '$d')
+          if [ "$code" != "200" ]; then
+            problems+=("API /health HTTP $code")
+          else
+            status=$(printf '%s' "$json" | jq -r '.status // "?"')
+            worker=$(printf '%s' "$json" | jq -r '.worker.status // "?"')
+            age=$(printf '%s' "$json" | jq -er '.worker.ageMs | numbers' 2>/dev/null || echo "-1")
+            sha=$(printf '%s' "$json" | jq -er '.release.sha | strings' 2>/dev/null || echo "bilinmiyor")
+            [ "$status" = "ok" ] || problems+=("API durumu beklenenden farklı")
+            [ "$worker" = "ready" ] || problems+=("worker hazır değil")
+            if ! [[ "$age" =~ ^[0-9]{1,10}$ ]] || [ "$age" -gt "$MAX_WORKER_AGE_MS" ]; then
+              problems+=("worker heartbeat geçersiz veya eski")
+            fi
+            # A missing SHA must not make a stale/unidentifiable deployment look healthy.
+            # Validate before writing any untrusted health value to GITHUB_OUTPUT.
+            if ! [[ "$sha" =~ ^[0-9a-f]{12}$ ]]; then
+              sha="bilinmiyor"
+              problems+=("deploy SHA eksik veya geçersiz")
+            fi
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          fi
+          {
+            echo "## Staging sağlığı"
+            echo "- API: \`$API_URL\` → HTTP $code"
+            echo "- Çalışan sürüm: \`${sha:-?}\`"
+            if [ ${#problems[@]} -eq 0 ]; then echo "- Sonuç: ✅ sorun yok"; else printf -- '- ✖ %s\n' "${problems[@]}"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "${problems[@]}" > problems.txt
+          [ ${#problems[@]} -eq 0 ] && echo "ok=true" >> "$GITHUB_OUTPUT" || echo "ok=false" >> "$GITHUB_OUTPUT"
+
+      - name: Alarm issue'sunu aç / güncelle / kapat
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OK: ${{ steps.health.outputs.ok }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          gh label create staging-alarm --color B60205 --description "KV-49 staging izleme alarmı" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label staging-alarm --state open --json number --jq '.[0].number // empty')
+          if [ "$OK" = "true" ]; then
+            if [ -n "$open" ]; then gh issue close "$open" -R "$GITHUB_REPOSITORY" --comment "✅ Staging yeniden sağlıklı ($RUN_URL)."; fi
+            exit 0
+          fi
+          msg=$(printf '**Staging sağlık kontrolü başarısız** (%s)\n\n%s\n\nRunbook: docs/KV-49_OPERATIONS.md "Olay müdahalesi". Sorumlu: @farukkemree' "$RUN_URL" "$(sed 's/^/- /' problems.txt)")
+          if [ -n "$open" ]; then
+            gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$msg"
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --label staging-alarm --title "Staging alarmı: sağlık kontrolü başarısız" --body "$msg"
+          fi
+          exit 1

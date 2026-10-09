@@ -18,6 +18,7 @@ import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerCommunityAdminRoutes } from "./modules/communities/admin-routes.ts";
 import { registerCommunityRoutes } from "./modules/communities/routes.ts";
 import type { CommunityStore } from "./modules/communities/store.ts";
+import { registerCommunityRequestRoutes, type CommunityRequestStore } from "./modules/communities/request-routes.ts";
 import type { MediaQueue } from "./modules/media/queue.ts";
 import { registerMediaAdminRoutes } from "./modules/media/admin-routes.ts";
 import { registerMediaRoutes } from "./modules/media/routes.ts";
@@ -116,6 +117,7 @@ export type AppDeps = {
   voteStore?: VoteStore;
   /** Verilmezse topluluk route'ları kaydedilmez. */
   communityStore?: CommunityStore;
+  communityRequestStore?: CommunityRequestStore;
   /** Verilmezse onboarding/ilgi route'ları kaydedilmez. */
   onboardingStore?: OnboardingStore;
   /** Verilmezse rapor route'u kaydedilmez. */
@@ -150,6 +152,16 @@ export function buildApp(deps: AppDeps): FastifyInstance {
             level: deps.logger?.level ?? config.logLevel,
             ...(deps.logger?.stream ? { stream: deps.logger.stream } : {}),
             redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]', "*.password", "*.token"],
+            // KV-49 (#51): istek logu IP, port ve başlık içermez (IP kişisel veridir). İstek kimliği, yöntem, yol ve
+            // süre yeterli; kötüye kullanım izi hız sınırı logundaki anahtar özetindedir (KV-19).
+            serializers: {
+              req: (req: { id: string; method: string; url: string }) => ({
+                id: req.id,
+                method: req.method,
+                // Raw req.url includes query strings (e.g. ?token=...); never log them.
+                url: req.url.split(/[?#]/, 1)[0] || "/",
+              }),
+            },
           },
     bodyLimit: 64 * 1024,
     trustProxy: config.appEnv === "staging" || config.appEnv === "production",
@@ -300,6 +312,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
     registerCommunityAdminRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
+  if (deps.communityRequestStore) registerCommunityRequestRoutes(route, deps.communityRequestStore, now);
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
   if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
@@ -340,7 +353,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { status: string; at: string };
       worker = { status: parsed.status, at: parsed.at, ageMs: Date.now() - Date.parse(parsed.at) };
     } catch { /* worker may be disabled or separate */ }
-    return reply.header("Cache-Control", "no-store").send({ status: "ok", worker });
+    // KV-49 (#51): hangi sürümün çalıştığı (deploy SHA). Railway GitHub entegrasyonu RAILWAY_GIT_COMMIT_SHA verir.
+    const sha = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null;
+    return reply.header("Cache-Control", "no-store").send({ status: "ok", worker, release: { sha: sha ? sha.slice(0, 12) : null, env: config.appEnv } });
   });
   return app;
 }
