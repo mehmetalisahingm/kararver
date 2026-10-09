@@ -178,3 +178,33 @@ test("401 during post-login interest save returns to login and keeps draft for a
   expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).toBeNull();
   expect(mock.unexpected).toEqual([]);
 });
+
+
+test("registration confirms login and retains post-signup interests retry after session changes", async ({page}) => {
+  const mock = await api(page);
+  const categoryId = sample("categories.list").data[0].id as string;
+  let writes = 0; let logins = 0; let registrations = 0;
+  mock.handlers.set("me.get", r => r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
+  mock.handlers.set("auth.register", r => { registrations++; return r.fulfill({status:202,json:sample("auth.register")}); });
+  mock.handlers.set("auth.login", r => { logins++; return r.fulfill({json:sample("auth.login")}); });
+  mock.handlers.set("interests.get", r => r.fulfill({json:{data:{categoryIds:[]}}}));
+  mock.handlers.set("interests.put", r => {
+    writes++;
+    return writes === 1 ? r.fulfill({status:503,json:failure()}) : r.fulfill({json:{data:{categoryIds:[categoryId]}}});
+  });
+  await page.addInitScript(({categoryId}) => {
+    localStorage.setItem("kv-welcome-v1","1");
+    localStorage.setItem("kv-welcome-draft-v1",JSON.stringify({version:1,categoryIds:[categoryId],demoChoice:"wait",returnTo:"/"}));
+  },{categoryId});
+  await page.goto("/kayit?onboarding=1&returnTo=%2F");
+  await page.getByLabel("Görünen ad",{exact:true}).fill("Signup retry");
+  await page.getByLabel("Kullanıcı adı",{exact:true}).fill("signup_retry");
+  await page.getByLabel("E-posta",{exact:true}).fill("signup_retry@example.test");
+  await page.getByLabel("Şifre",{exact:true}).fill("Signup-password-123");
+  await page.getByRole("button",{name:"Hesap oluştur",exact:true}).click();
+  await expect(page.getByRole("button",{name:"İlgi alanlarını yeniden kaydet"})).toBeVisible();
+  await page.getByRole("button",{name:"İlgi alanlarını yeniden kaydet"}).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(registrations).toBe(1); expect(logins).toBe(1); expect(writes).toBe(2);
+  expect(await page.evaluate(()=>localStorage.getItem("kv-welcome-draft-v1"))).toBeNull();
+});
