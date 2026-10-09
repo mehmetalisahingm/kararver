@@ -33,9 +33,9 @@ const summary = (r: {
   slug: string; description: string | null; categoryId: string | null;
   status: CommunityRequestRecord["status"]; rejectionReason: string | null;
   approvedAt: Date | null; approvalDeadline: Date | null; closedAt: Date | null;
-  createdAt: Date; community: { memberCount: number } | null;
+  createdAt: Date; updatedAt: Date; community: { memberCount: number } | null;
 }): CommunityRequestRecord => {
-  const { community, ...fields } = r;
+  const { community, updatedAt: _unused, ...fields } = r;
   return { ...fields, memberCount: community?.memberCount ?? 0 };
 };
 const detailInclude = { community: { select: { memberCount: true } } } as const;
