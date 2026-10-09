@@ -28,6 +28,7 @@ export class CommunityClient {
     this.mapPoll = mapPoll;
   }
 
+  async categories() { return (await this.http.request("categories.list") as { data: { id: string; name: string }[] }).data; }
   async createRequest(body: CommunityRequestPayload) {
     return (await this.http.request("communities.requests.create", { body }) as { data: CommunityRequestItem }).data;
   }
