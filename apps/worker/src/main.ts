@@ -31,6 +31,7 @@ import { expireSanctions, SANCTIONS_EXPIRE_CRON, SANCTIONS_EXPIRE_QUEUE } from "
 import { runDailySnapshots, SNAPSHOT_TIME_ZONE, SNAPSHOTS_CRON, SNAPSHOTS_QUEUE } from "./jobs/snapshots/job.ts";
 import { TRENDS_CRON, TRENDS_QUEUE } from "./jobs/trends/config.ts";
 import { refreshTrends } from "./jobs/trends/job.ts";
+import { loadTrendSettings } from "./jobs/trends/settings.ts";
 
 if (!process.env.APP_ENV) {
   try {
@@ -90,10 +91,7 @@ await boss.work(TRENDS_QUEUE, { batchSize: 1 }, async () => {
     prisma,
     now: () => new Date(),
     log,
-    moversThresholds: async () => ({
-      minVotes: await settings.get<number>("trends.moversMinVotes"),
-      minActiveAccounts: await settings.get<number>("trends.moversMinActiveAccounts"),
-    }),
+    scoringSettings: () => loadTrendSettings(settings),
   });
   log("info", "trends.refresh bitti", { ms: Date.now() - started });
 });

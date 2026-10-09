@@ -11,6 +11,7 @@
 // - Eşitlikte yeni anket önce, sonra id (deterministik).
 import { Prisma } from "@kararver/db";
 import { TREND_CONFIG, type ComputedFormat } from "./config.ts";
+import type { TrendScoringSettings } from "./settings.ts";
 
 export type ScoreRow = { poll_id: string; rank: number; score: number; components: Record<string, number | string> };
 
@@ -24,7 +25,8 @@ export function windowStart(format: ComputedFormat, windowEnd: Date): Date {
 }
 
 /** Formatın sıralama sorgusu: ilk topN satır, rank 1'den. */
-export function scoreQuery(format: ComputedFormat, windowEnd: Date, movers: MoversThresholds = C.movers): Prisma.Sql {
+export function scoreQuery(format: ComputedFormat, windowEnd: Date, movers: MoversThresholds = C.movers, config: TrendScoringSettings = TREND_CONFIG): Prisma.Sql {
+  const C = config;
   if (format === "WEEKLY_MOVERS") return moversQuery(windowEnd, movers);
   // Zaman ISO-8601 metni olarak gider ve açıkça timestamptz'ye çevrilir (DATA_MODEL §2.2).
   const end = Prisma.sql`${windowEnd.toISOString()}::timestamptz`;
@@ -143,6 +145,7 @@ function moversQuery(windowEnd: Date, m: MoversThresholds): Prisma.Sql {
       JOIN poll_daily_snapshots s2 ON s2.poll_id = e.id
       JOIN poll_daily_snapshots s1 ON s1.poll_id = e.id AND s1.poll_day = s2.poll_day - 7
       WHERE s2.poll_day >= 13 AND (s2.poll_day + 1) % 7 = 0
+        AND s1.total_valid_votes > 0 AND s2.total_valid_votes > 0
         AND s2.cutoff_at > ${start} AND s2.cutoff_at <= ${end}
         AND s1.total_valid_votes >= ${m.minVotes} AND s2.total_valid_votes >= ${m.minVotes}
     ),

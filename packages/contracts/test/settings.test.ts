@@ -137,8 +137,17 @@ describe("anahtar ve kaynak kuralları", () => {
     }
   });
 
-  test("trend katsayısı kayıtta yok; feed.* (KV-27) kayıtta ama resmî değeri yok (açık konu 9)", () => {
-    assert.deepEqual(settingKeys.filter((k) => /coefficient|weight/i.test(k)), []);
+  test("trend katsayıları KV-28 varsayılanlarıyla kayıtlı; feed.* önerileri ayrı tutulur", () => {
+    const trends = settingKeys.filter((k) => k.startsWith("trends."));
+    assert.equal(trends.length, 13);
+    for (const key of trends) {
+      assert.ok(def(key).default, key);
+      assert.equal(def(key).publicPath, null, key);
+      assert.ok(parseSettingValue(key, def(key).default!.value).ok, key);
+    }
+    assert.equal(parseSettingValue("trends.dailyGravityPercent", 0).ok, false);
+    assert.equal(parseSettingValue("trends.dailyGravityPercent", 501).ok, false);
+    assert.equal(parseSettingValue("trends.weeklySmoothing", 0).ok, false);
     const feed = settingKeys.filter((k) => k.startsWith("feed."));
     assert.deepEqual(feed, ["feed.explorationPercent", "feed.maxSameAuthorPerWindow", "feed.maxSameCategoryPerWindow"]);
     for (const k of feed) {

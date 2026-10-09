@@ -218,6 +218,18 @@ export const settingsRegistry = Object.freeze({
   "features.comments": flag("Yorumlar açık", ["features", "comments"], NO_SWITCH_DEFAULT),
   "features.uploads": flag("Görsel yükleme açık", ["features", "uploads"], NO_SWITCH_DEFAULT),
   "maintenance.enabled": flag("Bakım modu", ["maintenance"], NO_SWITCH_DEFAULT),
+  // Mevcut KV-28 formülleri korunur; yüzde değerleri worker'da 100'e bölünür.
+  "trends.commentCapPerUser": int("Trend: hesap başına sayılan yorum sınırı", 1, 100, 3, "docs/KV-28_TRENDS.md", null),
+  "trends.dailyCommentWeightPercent": int("Günün Yükselenleri: yorum ağırlığı (%; 50 = 0,5)", 0, 1000, 50, "docs/KV-28_TRENDS.md", null),
+  "trends.dailyCommenterWeightPercent": int("Günün Yükselenleri: yorumcu ağırlığı (%; 100 = 1)", 0, 1000, 100, "docs/KV-28_TRENDS.md", null),
+  "trends.dailyAgeOffsetHours": int("Günün Yükselenleri: yaşa eklenen saat", 1, 168, 2, "docs/KV-28_TRENDS.md", null),
+  "trends.dailyGravityPercent": int("Günün Yükselenleri: yaş üssü (%; 120 = 1,2)", 1, 500, 120, "docs/KV-28_TRENDS.md", null),
+  "trends.dailyMinParticipants": int("Günün Yükselenleri: en az katılımcı", 1, 100000, 5, "docs/KV-28_TRENDS.md", null),
+  "trends.weeklySmoothing": int("Haftanın Yükselenleri: dengeleme sabiti", 1, 100000, 10, "docs/KV-28_TRENDS.md", null),
+  "trends.weeklyMinNewVoters": int("Haftanın Yükselenleri: en az yeni oy veren", 1, 100000, 10, "docs/KV-28_TRENDS.md", null),
+  "trends.mostVotedMinVoters": int("En Çok Oy Verilenler: en az oy veren", 1, 100000, 1, "docs/KV-28_TRENDS.md", null),
+  "trends.discussedCommenterWeightPercent": int("En Çok Konuşulanlar: yorumcu ağırlığı (%; 200 = 2)", 0, 1000, 200, "docs/KV-28_TRENDS.md", null),
+  "trends.discussedMinCommenters": int("En Çok Konuşulanlar: en az yorumcu", 1, 100000, 1, "docs/KV-28_TRENDS.md", null),
   "trends.moversMinVotes": int(
     "Haftanın Değişkenleri: her iki pencere sonunda en az geçerli oy",
     0,

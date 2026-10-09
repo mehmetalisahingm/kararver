@@ -194,7 +194,7 @@ Payload şemaları `events.ts` içindedir (strict zod). Kabul koşulundaki alanl
 | `limits.writesPerMinute` | integer | 1 – 10000 | 60 | hayır | Diğer yazma işlemleri: normal hesap dakikada en fazla. KV-19 (#21); Mehmet onayı (2026-10-08, PR #152 tablosu) |
 | `limits.newAccountWritesPerMinute` | integer | 1 – 10000 | 30 | hayır | Diğer yazma işlemleri: yeni hesap dakikada en fazla. KV-19 (#21); Mehmet onayı (2026-10-08, PR #152 tablosu) |
 
-Kaynaklardaki dosyalar `packages/contracts/src/domains/` altındadır. Kayıtta **olmayanlar**: trend katsayıları ve feed sıralama ağırlıkları (§5). Cooldown ve günlük anket limiti KV-20 (#22), `feed.*` keşif payı ve tekrar sınırları KV-27 (#29) ile eklendi.
+Kaynaklardaki dosyalar `packages/contracts/src/domains/` altındadır. Kayıtta **olmayanlar**: feed sıralama ağırlıkları (§5). Cooldown ve günlük anket limiti KV-20 (#22), `feed.*` keşif payı ve tekrar sınırları KV-27 (#29), 13 trend katsayı/örneklem ayarı KV-40 (#42) ile eklendi; trend varsayılanları mevcut KV-28 davranışını korur.
 
 ---
 
@@ -239,5 +239,5 @@ Issue numaraları mevcut eşlemeye göredir (KV-N → #N+2).
 | 6 | **`media.maxPerPoll` ürün varsayılanı**: varsayılan şu an tavana eşit (10); ürün varsayılanı Mehmet'e sorulacak. Tavan `polls.ts` mediaIds şemasıyla sabit; config ile API çelişmesin diye kayıtta `max = 10`. | Mehmet | KV-40 (#42) |
 | 7 | **Puan tavanı**: `points.initialGrant` ve `points.publishCost` için üst sınır kaynakta yok (kayıtta sınırsız). | Mehmet | #67 |
 | 8 | **Eksik 9 varsayılan**: `polls.voteChangeAllowed`, `features.registration`, `features.pollCreation`, `features.comments`, `features.uploads`, `maintenance.enabled`; KV-27 ile `feed.explorationPercent`, `feed.maxSameAuthorPerWindow`, `feed.maxSameCategoryPerWindow` (öneri 20 / 2 / 4, API geçici olarak bunları kullanır; Mehmet teyidi). Değer belgeye yazılınca `settings.test.ts`'teki `todo` kaldırılır. **PR bu yüzden taslaktır.** | Utku (kayıt), Mehmet (ürün), Faruk (`voteChangeAllowed`, KV-11 #13; `feed.*`, KV-27 #29) | KV-40 (#42) |
-| 9 | **Kayıtta olmayan ayarlar**: ~~anket cooldown ve günlük anket limiti~~ (KV-20 ile eklendi: `polls.newAccount*`, `polls.dailyLimit`, `polls.cooldownMinutes`), trend katsayıları, feed sıralama ağırlıkları (~~`feed.*`~~ keşif payı/tekrar sınırı KV-27 ile eklendi, değerleri açık konu 8). Değerleri belirlenince kaynağıyla kayda eklenir (minor). | Faruk (polls, trends, feed), Utku (rate-limit) | KV-10 (#12), KV-28 (#30), #22 |
+| 9 | **Kayıtta olmayan ayarlar**: ~~anket cooldown ve günlük anket limiti~~ (KV-20), ~~trend katsayıları~~ (KV-40, mevcut KV-28 varsayılanları), feed sıralama ağırlıkları (~~`feed.*`~~ keşif payı/tekrar sınırı KV-27 ile eklendi, değerleri açık konu 8). Kalan ağırlıklar tanımlanınca kaynağıyla kayda eklenir (minor). | Faruk (polls, trends, feed), Utku (rate-limit) | KV-10 (#12), KV-28 (#30), #22, #42 |
 | 10 | ~~**Hız sınırı değerleri (KV-19)**~~ **Kapandı:** Mehmet önerilen değerleri onayladı (#21, 2026-10-08; PR #152 tablosu referans). Değerler `settings.ts`'te kaynağıyla. | — | KV-19 (#21) |
