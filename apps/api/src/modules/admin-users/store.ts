@@ -98,6 +98,8 @@ export type RoleResult =
   | { kind: "rejected"; reason: RoleRejection };
 
 export interface AdminUserStore {
+  listSessions(userId: string, afterId: string | null, limit: number, now: Date): Promise<Array<{ id: string; createdAt: Date; expiresAt: Date; lastSeenAt: Date | null; ipAddress: string | null; userAgent: string | null }>>;
+  revokeSessions(input: Mutation & { userId: string; sessionId?: string; reason: string }): Promise<number | null>;
   list(filter: UserListFilter, limit: number): Promise<AdminUserRow[]>;
   get(id: string, now: Date): Promise<AdminUserDetailRow | null>;
   target(id: string): Promise<TargetInfo | null>;

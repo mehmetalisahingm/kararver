@@ -244,6 +244,8 @@ const pollParams = { id: POLL };
 const reason = "Topluluk kurallarına aykırı";
 
 export const examples: Example[] = [
+  { endpoint: "admin.users.sessions.list", name: "ok", request: { params: { id: U1 } }, status: 200, body: { data: [], page: { nextCursor: null, hasMore: false } } },
+  { endpoint: "admin.users.sessions.revoke", name: "ok", request: { params: { id: U1 }, body: { reason: "Şüpheli giriş nedeniyle oturumlar kapatıldı" } }, status: 200, body: { data: { revokedCount: 2 } } },
   // ── auth ──
   { endpoint: "auth.register", name: "ok", request: { body: { email: "yeni@example.test", username: "yeni_kullanici", displayName: "Yeni", password: "cok-guclu-sifre" } }, status: 202, body: data({ status: "VERIFICATION_SENT" }) },
   { endpoint: "auth.register", name: "username-taken", request: { body: { email: "a@example.test", username: "deniz", displayName: "D", password: "cok-guclu-sifre" } }, status: 409, body: error("USERNAME_TAKEN", "Bu kullanıcı adı alınmış.", [{ field: "username", code: "taken" }]) },
