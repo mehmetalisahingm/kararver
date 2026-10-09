@@ -22,8 +22,3 @@ CREATE TABLE "community_requests" (
 );
 CREATE INDEX "community_requests_requester_id_status_created_at_idx" ON "community_requests"("requester_id", "status", "created_at" DESC);
 CREATE INDEX "community_requests_status_approval_deadline_idx" ON "community_requests"("status", "approval_deadline");
-
--- Prevent two live pending proposals for the same slug. Archived/decided requests remain history.
-CREATE UNIQUE INDEX "community_requests_pending_slug_key" ON "community_requests" ("slug") WHERE status = 'PENDING';
-ALTER TABLE "community_requests" ADD CONSTRAINT "community_requests_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-CREATE INDEX "community_requests_community_id_idx" ON "community_requests" ("community_id");
