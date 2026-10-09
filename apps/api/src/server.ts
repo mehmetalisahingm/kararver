@@ -9,6 +9,7 @@ import { createPrismaAdminUserStore } from "./modules/admin-users/prisma-store.t
 import { createArgon2Hasher } from "./modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "./modules/auth/prisma-store.ts";
 import { createPrismaCommunityStore } from "./modules/communities/prisma-store.ts";
+import { createPrismaCommunityRequestStore } from "./modules/communities/request-routes.ts";
 import { createPrismaMediaStore } from "./modules/media/prisma-store.ts";
 import { startPgBossMediaQueue } from "./modules/media/queue.ts";
 import { createS3MediaStorage } from "./modules/media/storage.ts";
@@ -72,6 +73,7 @@ const app = buildApp({
   auditStore: createPrismaAuditStore(prisma),
   rateLimitStore: config.rateLimitEnabled ? createPrismaRateLimitStore(prisma) : undefined,
   communityStore: createPrismaCommunityStore(prisma),
+  communityRequestStore: createPrismaCommunityRequestStore(prisma),
   onboardingStore: createPrismaOnboardingStore(prisma),
   reportStore: createPrismaReportStore(prisma),
   moderationStore: createPrismaModerationStore(prisma),
