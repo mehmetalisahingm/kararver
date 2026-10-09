@@ -24,6 +24,15 @@ enum CommunityMembersVisibility {
   @@map("community_members_visibility")
 }
 
+enum CommunityRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CLOSED
+
+  @@map("community_request_status")
+}
+
 model Community {
   id                String                     @id @default(uuid(7)) @db.Uuid
   slug              String                     @unique @db.VarChar(60)
@@ -41,12 +50,37 @@ model Community {
   imageMedia  MediaAsset?           @relation(fields: [imageMediaId], references: [id], onDelete: Restrict)
   createdBy   User                  @relation("CommunityCreator", fields: [createdById], references: [id], onDelete: Restrict)
   memberships CommunityMembership[]
+  requests    CommunityRequest[]
 
   // ── Core ilişkileri (Faruk) — kaldırmayın ──
   polls Poll[]
 
   @@index([status, memberCount(sort: Desc)])
   @@map("communities")
+}
+
+model CommunityRequest {
+  id               String                 @id @default(uuid(7)) @db.Uuid
+  requesterId      String                 @map("requester_id") @db.Uuid
+  communityId      String?                @unique @map("community_id") @db.Uuid
+  name             String                 @db.VarChar(80)
+  slug             String                 @db.VarChar(60)
+  description      String?                @db.VarChar(1000)
+  categoryId       String?                @map("category_id") @db.Uuid
+  status           CommunityRequestStatus @default(PENDING)
+  rejectionReason  String?                @map("rejection_reason") @db.VarChar(500)
+  approvedAt       DateTime?              @map("approved_at") @db.Timestamptz(3)
+  approvalDeadline DateTime?              @map("approval_deadline") @db.Timestamptz(3)
+  closedAt         DateTime?              @map("closed_at") @db.Timestamptz(3)
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  requester User       @relation(fields: [requesterId], references: [id], onDelete: Restrict)
+  community Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+
+  @@index([requesterId, status, createdAt(sort: Desc)])
+  @@index([status, approvalDeadline])
+  @@map("community_requests")
 }
 
 // Katıl = satır ekle, ayrıl = satırı sil (join tablosu, DATA_MODEL §2.4).

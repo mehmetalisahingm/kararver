@@ -103,31 +103,32 @@ model User {
   commentRevisions CommentRevision[]
 
   // Mert — media.prisma (KV-16)
-  uploadedMedia            MediaAsset[]          @relation("MediaUploader")
-  reviewedMedia            MediaAsset[]          @relation("MediaReviewer")
-  bannedMediaHashes        BannedMediaHash[]     @relation("BannedHashCreator")
+  uploadedMedia            MediaAsset[]             @relation("MediaUploader")
+  reviewedMedia            MediaAsset[]             @relation("MediaReviewer")
+  bannedMediaHashes        BannedMediaHash[]        @relation("BannedHashCreator")
   // Mert — moderation.prisma (KV-24)
-  reportsFiled             Report[]              @relation("ReportReporter")
-  reportsAgainst           Report[]              @relation("ReportTargetUser")
-  reportsResolved          Report[]              @relation("ReportResolver")
-  moderationActionsTaken   ModerationAction[]    @relation("ModerationActor")
-  moderationActionsAgainst ModerationAction[]    @relation("ModerationTargetUser")
+  reportsFiled             Report[]                 @relation("ReportReporter")
+  reportsAgainst           Report[]                 @relation("ReportTargetUser")
+  reportsResolved          Report[]                 @relation("ReportResolver")
+  moderationActionsTaken   ModerationAction[]       @relation("ModerationActor")
+  moderationActionsAgainst ModerationAction[]       @relation("ModerationTargetUser")
   // Mert — community.prisma (KV-31)
-  createdCommunities       Community[]           @relation("CommunityCreator")
+  createdCommunities       Community[]              @relation("CommunityCreator")
+  communityRequests        CommunityRequest[]
   communityMemberships     CommunityMembership[]
   // Utku — admin.prisma (KV-12)
-  role                     UserRole?             @relation("UserRoleHolder")
-  rolesGranted             UserRole[]            @relation("UserRoleGranter")
-  sanctions                Sanction[]            @relation("SanctionTarget")
-  sanctionsIssued          Sanction[]            @relation("SanctionIssuer")
-  sanctionsLifted          Sanction[]            @relation("SanctionLifter")
+  role                     UserRole?                @relation("UserRoleHolder")
+  rolesGranted             UserRole[]               @relation("UserRoleGranter")
+  sanctions                Sanction[]               @relation("SanctionTarget")
+  sanctionsIssued          Sanction[]               @relation("SanctionIssuer")
+  sanctionsLifted          Sanction[]               @relation("SanctionLifter")
   // Utku — admin.prisma (KV-39)
-  auditLogs                AuditLog[]            @relation("AuditActor")
+  auditLogs                AuditLog[]               @relation("AuditActor")
   // Utku — admin.prisma (KV-40)
-  settingsEdited           SystemSetting[]       @relation("SystemSettingEditor")
+  settingsEdited           SystemSetting[]          @relation("SystemSettingEditor")
   // Utku — admin.prisma (KV-21)
-  notifications            Notification[]        @relation("NotificationRecipient")
-  notificationsCaused      Notification[]        @relation("NotificationActor")
+  notifications            Notification[]           @relation("NotificationRecipient")
+  notificationsCaused      Notification[]           @relation("NotificationActor")
   // Faruk — admin.prisma (KV-34, Utku'dan geçici devir)
   notificationOptOuts      NotificationTypeOptOut[]
   notificationPollMutes    NotificationPollMute[]
@@ -136,7 +137,7 @@ model User {
   pointAccount             PointAccount?
   pointLedgerEntries       PointLedgerEntry[]
   // Mehmet — growth.prisma (KV-23)
-  pollFollows              PollFollow[]          @relation("PollFollowUser")
+  pollFollows              PollFollow[]             @relation("PollFollowUser")
 
   @@index([status])
   @@map("users")
@@ -149,7 +150,7 @@ model Session {
   tokenHash  String    @unique @map("token_hash") @db.Char(64)
   expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
   lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(3)
-  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
   ipAddress  String?   @map("ip_address") @db.VarChar(45)
   userAgent  String?   @map("user_agent") @db.VarChar(512)
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -163,7 +164,7 @@ model Session {
 
 model AuthToken {
   id        String           @id @default(uuid(7)) @db.Uuid
-  userId     String           @map("user_id") @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
   purpose   AuthTokenPurpose
   tokenHash String           @unique @map("token_hash") @db.Char(64)
   expiresAt DateTime         @map("expires_at") @db.Timestamptz(3)
@@ -223,54 +224,54 @@ model PollTag {
 // ─── Anket ────────────────────────────────────────────────────
 
 model Poll {
-  id                String             @id @default(uuid(7)) @db.Uuid
+  id                  String             @id @default(uuid(7)) @db.Uuid
   // URL: /karar/<slug>-<publicId>
-  publicId          String             @unique @map("public_id") @db.VarChar(12)
-  slug              String             @db.VarChar(120)
-  authorId          String             @map("author_id") @db.Uuid
-  categoryId        String             @map("category_id") @db.Uuid
-  communityId       String?            @map("community_id") @db.Uuid
-  kind              PollKind           @default(POLL)
-  title             String             @db.VarChar(200)
-  description       String?
-  priceAmount       Decimal?           @map("price_amount") @db.Decimal(14, 2)
-  priceCurrency     String?            @map("price_currency") @db.Char(3)
-  extraInfo         String?            @map("extra_info")
-  status            ContentStatus      @default(ACTIVE)
+  publicId            String             @unique @map("public_id") @db.VarChar(12)
+  slug                String             @db.VarChar(120)
+  authorId            String             @map("author_id") @db.Uuid
+  categoryId          String             @map("category_id") @db.Uuid
+  communityId         String?            @map("community_id") @db.Uuid
+  kind                PollKind           @default(POLL)
+  title               String             @db.VarChar(200)
+  description         String?
+  priceAmount         Decimal?           @map("price_amount") @db.Decimal(14, 2)
+  priceCurrency       String?            @map("price_currency") @db.Char(3)
+  extraInfo           String?            @map("extra_info")
+  status              ContentStatus      @default(ACTIVE)
   // DISCUSSION'da NULL (CHECK polls_kind_shape_check).
-  resultsVisibility ResultsVisibility? @default(ALWAYS) @map("results_visibility")
-  allowComments     Boolean            @default(true) @map("allow_comments")
+  resultsVisibility   ResultsVisibility? @default(ALWAYS) @map("results_visibility")
+  allowComments       Boolean            @default(true) @map("allow_comments")
   // Oylamanın başladığı an. Snapshot pencereleri buradan sayılır.
-  opensAt           DateTime           @default(now()) @map("opens_at") @db.Timestamptz(3)
+  opensAt             DateTime           @default(now()) @map("opens_at") @db.Timestamptz(3)
   // DISCUSSION'da NULL: tartışma süresizdir, kapanmaz (CHECK polls_kind_shape_check).
-  closesAt          DateTime?          @map("closes_at") @db.Timestamptz(3)
+  closesAt            DateTime?          @map("closes_at") @db.Timestamptz(3)
   // Sahip/admin erken kapatırsa dolar. Etkin kapanış = LEAST(closes_at, closed_at).
-  closedAt          DateTime?          @map("closed_at") @db.Timestamptz(3)
+  closedAt            DateTime?          @map("closed_at") @db.Timestamptz(3)
   // İlk geçerli oyda trigger doldurur; dolduktan sonra başlık, açıklama, seçenekler
   // ve sonuç görünürlüğü değiştirilemez (ek bilgi: PollAddendum) ve bu alan geri alınamaz.
-  firstValidVoteAt  DateTime?          @map("first_valid_vote_at") @db.Timestamptz(3)
+  firstValidVoteAt    DateTime?          @map("first_valid_vote_at") @db.Timestamptz(3)
   // Doluysa anket algoritmik trend listelerine girmez (EXCLUDE_FROM_TRENDS moderasyon işlemi, KV-37 Mert yazar).
   // Görünürlüğü etkilemez; editör seçimi/öne çıkarma ayrı yüzeydir (KV-28, docs/KV-28_TRENDS.md).
-  trendExcludedAt   DateTime?          @map("trend_excluded_at") @db.Timestamptz(3)
+  trendExcludedAt     DateTime?          @map("trend_excluded_at") @db.Timestamptz(3)
   // Moderasyon yorumları kapattı (CLOSE_COMMENTS, KV-37): oy açık kalır, yeni yorum/cevap COMMENTS_DISABLED olur.
   // Sahibin allow_comments ayarından bağımsızdır; sahip geri açamaz, yalnız OPEN_COMMENTS açar.
-  commentsClosedAt  DateTime?          @map("comments_closed_at") @db.Timestamptz(3)
+  commentsClosedAt    DateTime?          @map("comments_closed_at") @db.Timestamptz(3)
   // Oy geçersiz sayıldı/geri alındı (KV-43): bu andan sonraki günlük snapshot'lar yeniden üretilecek. Worker
   // (trends.refresh, snapshots.daily) yeniden üretip temizler. NULL: snapshot'lar güncel.
-  snapshotsStaleSince DateTime?        @map("snapshots_stale_since") @db.Timestamptz(3)
-  voteCount         Int                @default(0) @map("vote_count")
-  commentCount      Int                @default(0) @map("comment_count")
-  saveCount         Int                @default(0) @map("save_count")
+  snapshotsStaleSince DateTime?          @map("snapshots_stale_since") @db.Timestamptz(3)
+  voteCount           Int                @default(0) @map("vote_count")
+  commentCount        Int                @default(0) @map("comment_count")
+  saveCount           Int                @default(0) @map("save_count")
   // Gönderi tepkileri (#66); poll_reactions ile aynı transaction'da güncellenir.
-  likeCount         Int                @default(0) @map("like_count")
-  dislikeCount      Int                @default(0) @map("dislike_count")
-  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz(3)
+  likeCount           Int                @default(0) @map("like_count")
+  dislikeCount        Int                @default(0) @map("dislike_count")
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt           DateTime?          @map("deleted_at") @db.Timestamptz(3)
 
-  author            User                @relation(fields: [authorId], references: [id], onDelete: Restrict)
-  category          Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  community         Community?          @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  author            User                   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  category          Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  community         Community?             @relation(fields: [communityId], references: [id], onDelete: Restrict)
   options           PollOption[]
   reactions         PollReaction[]
   revisions         PollRevision[]
@@ -279,8 +280,8 @@ model Poll {
   addenda           PollAddendum[]
   votes             Vote[]
   // KV-23 (Mehmet): growth.prisma
-  follows           PollFollow[]   @relation("PollFollowPoll")
-  decision          PollDecision?  @relation("PollDecisionPoll")
+  follows           PollFollow[]           @relation("PollFollowPoll")
+  decision          PollDecision?          @relation("PollDecisionPoll")
   voteEvents        VoteEvent[]
   comments          Comment[]
   dailySnapshots    PollDailySnapshot[]
