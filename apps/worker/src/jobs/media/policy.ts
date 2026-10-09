@@ -5,8 +5,14 @@ export type Detection = { class: string; score: number };
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
 export type RiskThresholds = { high: number; medium: number };
 
-/** Admin ayarı gelene kadar (KV-40, "moderasyon risk eşikleri") MEDIA_MODERATION §6.1 varsayılanları. */
+/** MEDIA_MODERATION §6.1 varsayılanları; ayar (media.risk*Percent, KV-38/KV-40) yoksa veya okunamazsa bunlar kullanılır. */
 export const DEFAULT_THRESHOLDS: RiskThresholds = { high: 0.65, medium: 0.35 };
+
+/** Ayar (yüzde, tamsayı) → eşik (0–1). Orta eşik yüksek eşiği aşamaz; aşıyorsa yüksek eşiğe indirilir (fail-closed). */
+export function thresholdsFromPercent(mediumPercent: number, highPercent: number): RiskThresholds {
+  const high = highPercent / 100;
+  return { high, medium: Math.min(mediumPercent / 100, high) };
+}
 
 const HIGH_CLASSES = new Set([
   "FEMALE_GENITALIA_EXPOSED",
