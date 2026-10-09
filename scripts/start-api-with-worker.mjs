@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 
 const children = new Set();
-let apiExited = false;`r`n
+let apiExited = false;
+
 function start(name, args) {
   const child = spawn("pnpm", args, { stdio: "inherit", env: process.env, shell: process.platform === "win32" });
   children.add(child);
