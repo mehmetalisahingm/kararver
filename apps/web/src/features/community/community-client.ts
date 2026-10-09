@@ -1,10 +1,12 @@
 // Kullanıcı tarafı topluluk istemcisi (KV-31) ve rapor gönderme (KV-24). Her çağrı sözleşme şemasıyla doğrulanır
 // (HttpClient). Üye listesi görünürlüğü ve topluluk kapsamı sunucudadır; yetkisiz izleyici 404 alır ve ekran
 // "bu liste sana açık değil" durumuna düşer.
-import type { CommunityCard, CommunityDetail, CommunityMember, ReportReason } from "@kararver/contracts";
+import type { CommunityCard, CommunityDetail, CommunityMember, CommunityRequestView, ReportReason } from "@kararver/contracts";
 import type { HttpClient } from "../../lib/http-client.ts";
 import type { Poll } from "../../lib/model.ts";
 
+export type CommunityRequestItem = ReturnType<typeof CommunityRequestView.parse>;
+export type CommunityRequestPayload = { name: string; slug: string; description?: string; categoryId?: string };
 export type CommunitySummary = ReturnType<typeof CommunityCard.parse>;
 export type CommunityPage = ReturnType<typeof CommunityDetail.parse>;
 export type Member = ReturnType<typeof CommunityMember.parse>;
@@ -26,6 +28,12 @@ export class CommunityClient {
     this.mapPoll = mapPoll;
   }
 
+  async createRequest(body: CommunityRequestPayload) {
+    return (await this.http.request("communities.requests.create", { body }) as { data: CommunityRequestItem }).data;
+  }
+  async myRequests() {
+    return (await this.http.request("communities.requests.mine") as { data: CommunityRequestItem[] }).data;
+  }
   async list(cursor?: string, signal?: AbortSignal) {
     return paged<CommunitySummary>(await this.http.request("communities.list", { query: { cursor, limit: "20" }, signal }));
   }
