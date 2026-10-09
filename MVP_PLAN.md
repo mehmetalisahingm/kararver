@@ -5,6 +5,8 @@
 
 > Bu doküman klasik “en az özellikli MVP” değildir. Hedef; ilk günden gerçek kullanıcıya açılabilecek, güven veren, moderasyonu olan, büyümeye hazır ve veri toplayabileceğimiz güçlü bir V1 çıkarmaktır.
 
+**Güncel plan:** [#2 ekip/bağımlılık haritası](https://github.com/mehmetalisahingm/kararver/issues/2), [V1 ürün/ekip planı](docs/PRODUCT_TEAM_PLAN.md) ve [büyüme/ölçüm hipotezleri](docs/PRODUCT_GROWTH_PLAYBOOK.md) birlikte okunmalıdır. V1 kabulü ve güncel teknik işlerin durumu, eski beş haftalık şablona göre değil ilgili GitHub issue'lardaki kanıta göre kararlaştırılır.
+
 ## 1. Ürün fikri
 
 KararVer; kullanıcıların bir konuda kısa sürede topluluğun fikrini alabildiği, anket/karar gönderileri oluşturabildiği ve gündemde yükselen konuları keşfedebildiği Türkiye odaklı sosyal karar platformudur.

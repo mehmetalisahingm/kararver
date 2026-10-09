@@ -11,6 +11,8 @@
 
 ---
 
+> **Ekip/sahiplik için güncel tek kaynak:** [#2 KararVer görev haritası](https://github.com/mehmetalisahingm/kararver/issues/2). Bu belgedeki geçmiş kişi ve sprint dağılımları referans niteliğindedir. Kullanıcı kazanımı ve ölçüm hipotezleri: [Büyüme planı](PRODUCT_GROWTH_PLAYBOOK.md).
+
 # 1. Ürün vizyonu
 
 KararVer; insanların karar veremedikleri konuları topluluğa sorabildiği, fotoğraf ve açıklama ile gönderi oluşturabildiği, oy ve yorum alabildiği, alternatif önerileri görebildiği, gündemde yükselen kararları keşfedebildiği Türkiye odaklı sosyal karar platformudur.

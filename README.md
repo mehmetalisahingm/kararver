@@ -9,6 +9,8 @@ Türkiye odaklı sosyal karar ve anket platformu.
 
 Detaylı V1 MVP kapsamı için [`MVP_PLAN.md`](./MVP_PLAN.md) dosyasına bakın.
 
+Güncel iş sahipliği: [#2 görev haritası](https://github.com/mehmetalisahingm/kararver/issues/2); ürün, ekip ve yayın kararları: [Ürün ve ekip planı](docs/PRODUCT_TEAM_PLAN.md); kullanıcı kazanımı hipotezleri: [Büyüme planı](docs/PRODUCT_GROWTH_PLAYBOOK.md).
+
 Ana ürün döngüsü:
 
 **Sor → Oy Al → Sonucu Gör → Tartış → Yükseleni Keşfet → Tekrar Katıl**
