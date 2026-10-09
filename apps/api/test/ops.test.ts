@@ -28,10 +28,13 @@ describe("operasyon: sağlık ve log", () => {
   test("istek logu IP, port ve başlık içermez; istek kimliği, yöntem ve yol vardır", async () => {
     const ip = "203.0.113.77";
     const before = h.logs.length;
-    const res = await h.app.inject({ method: "GET", url: "/v1/categories", remoteAddress: ip, headers: { "user-agent": "izleme-testi/1.0" } });
+    // Sensitive query values can appear on any route (including invalid requests).
+    const token = "test-token-query-secret-123";
+    const email = "private.beta@example.test";
+    const res = await h.app.inject({ method: "GET", url: `/v1/categories?token=${token}&email=${encodeURIComponent(email)}`, remoteAddress: ip, headers: { "user-agent": "izleme-testi/1.0" } });
     const lines = h.logs.slice(before).join("\n");
     assert.ok(lines.includes(`"method":"GET"`) && lines.includes(`"url":"/v1/categories"`), lines.slice(0, 300));
     assert.ok(lines.includes(String(res.headers["x-request-id"])), "istek kimliği logda");
-    for (const secret of [ip, "remoteAddress", "remotePort", "izleme-testi", "user-agent"]) assert.ok(!lines.includes(secret), `logda ${secret}`);
+    for (const secret of [ip, "remoteAddress", "remotePort", "izleme-testi", "user-agent", token, "token=", "email=", encodeURIComponent(email), email]) assert.ok(!lines.includes(secret), `logda ${secret}`);
   });
 });
