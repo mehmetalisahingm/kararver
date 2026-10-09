@@ -51,7 +51,7 @@ export function createSmtpMailer(options: { smtpUrl: string; from: string; requi
  */
 export function createMailpitApiMailer(options: { sendUrl: string; sendAuth: string; from: string }): Mailer {
   const endpoint = new URL("/api/v1/send", options.sendUrl).toString();
-  const displayFrom = options.from.match(/^(.+?)\\s*<([^<>]+)>$/);
+  const displayFrom = options.from.match(/^(.+?)\s*<([^<>]+)>$/);
   const from = displayFrom
     ? { Email: displayFrom[2]!, Name: displayFrom[1]!.trim().replace(/^["']|["']$/g, "") }
     : { Email: options.from };
