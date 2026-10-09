@@ -5,7 +5,7 @@ import { writeFile } from "node:fs/promises";
 // Keep successful recordings too: these are the #144 visual acceptance artifacts.
 test.use({ video: "on", trace: "on" });
 
-async function tabTo(page: Page, target: Locator) {
+async function tabTo(page: Page, target: Locator, direction: "forward" | "backward" = "forward") {
   for (let count = 0; count < 30; count++) {
     if (await target.evaluate(element => element === document.activeElement)) {
       await expect(target).toBeFocused();
@@ -13,7 +13,7 @@ async function tabTo(page: Page, target: Locator) {
       expect(outline).not.toBe("none");
       return;
     }
-    await page.keyboard.press("Tab");
+    await page.keyboard.press(direction === "backward" ? "Shift+Tab" : "Tab");
   }
   throw new Error("Onboarding control was not reachable within 30 Tab presses");
 }
@@ -96,7 +96,10 @@ for (const width of [1440, 360]) {
 test("skip and signup are keyboard reachable; back preserves interest selection", async ({ page }) => {
   await page.goto("/basla");
   await expect(page.getByRole("button", { name: "Bir karar verelim" })).toBeEnabled();
-  await tabTo(page, page.getByRole("link", { name: /Zaten üye misin/ }));
+  // The intro focuses its heading. The header link precedes that heading:
+  // traverse backwards rather than depending on browser-chrome focus wrapping.
+  await expect(page.getByRole("heading", { name: "İnsanlar gerçekten ne düşünüyor?" })).toBeFocused();
+  await tabTo(page, page.getByRole("link", { name: /Zaten üye misin/ }), "backward");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/giris\?onboarding=1/);
   await page.goto("/basla");
