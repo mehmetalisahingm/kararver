@@ -5,6 +5,7 @@
 // listeleyen admin endpoint'i yok: kapatılmış topluluk "Kimlikle işlem" ile yeniden açılır.
 import { useCallback, useRef, useState } from "react";
 import { AdminClient } from "./admin-client.ts";
+import { CommunityRequestQueue } from "./community-request-queue.tsx";
 import type { Community, CommunityInput } from "./admin-client.ts";
 import { ActionDialog, ListState, isAdminRole, shortId, useAdminRoles, useNotice, useRemoteList } from "./admin-ui";
 import styles from "./admin-shell.module.css";
@@ -66,6 +67,7 @@ export function CommunitiesPanel({ admin }: { admin: AdminClient }) {
         )}
       </div>
       {element}
+      {canManage ? <CommunityRequestQueue admin={admin} /> : null}
       {remote.items.length > 0 ? (
         <div className={styles.tableWrap}>
           <table className={styles.table}>
