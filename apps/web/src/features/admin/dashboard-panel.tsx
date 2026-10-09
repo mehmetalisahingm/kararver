@@ -8,8 +8,8 @@ import styles from "./admin-shell.module.css";
 type Range = "7d" | "30d";
 const number = new Intl.NumberFormat("tr-TR");
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return <article className={styles.metric}><span className="kv-muted">{label}</span><strong>{number.format(value)}</strong></article>;
+function Stat({ label, value }: { label: string; value: number | undefined }) {
+  return <article className={styles.metric}><span className="kv-muted">{label}</span><strong>{value === undefined ? "—" : number.format(value)}</strong></article>;
 }
 
 export function DashboardPanel({ admin }: { admin: AdminClient }) {
@@ -56,6 +56,11 @@ export function DashboardPanel({ admin }: { admin: AdminClient }) {
           <Stat label="Toplam oy" value={current.totals.votes} />
           <Stat label="Yorum (silinmemiş)" value={current.totals.comments} />
           <Stat label="Açık rapor" value={current.totals.openReports} />
+          <Stat label="Aktif kullanıcı / son 24 saat" value={current.totals.activeUsers24h} />
+          <Stat label="Yeni kayıt / son 24 saat" value={current.totals.registrations24h} />
+          <Stat label="Aktif topluluk" value={current.totals.activeCommunities} />
+          <Stat label="Kaldırılan anket" value={current.totals.removedPolls} />
+          <Stat label="Kaldırılan yorum" value={current.totals.removedComments} />
         </div>
         <div className={styles.tableWrap}>
           <table className={styles.table}>
@@ -86,7 +91,7 @@ export function DashboardPanel({ admin }: { admin: AdminClient }) {
         </div>
         <p className="kv-muted">
           Son güncelleme: <time dateTime={current.generatedAt}>{new Date(current.generatedAt).toLocaleString("tr-TR")}</time>.
-          Günlük kullanıcı metriği, oturum oluşturma olaylarından türetilir; toplam kayıtlı kullanıcı sayısı veya gerçek zamanlı çevrimiçi kullanıcı sayısı değildir.
+          Günlük tablo kullanıcı metriği oturum açma olaylarından, son 24 saat aktif kullanıcı metriği ise geçerli oturumların son kullanımından hesaplanır; ikisi de gerçek zamanlı çevrimiçi kullanıcı sayısı değildir.
           Servis hata oranı ve worker durumu henüz bu API'den gelmiyor; değer uydurulmaz.
         </p>
       </> : null}
