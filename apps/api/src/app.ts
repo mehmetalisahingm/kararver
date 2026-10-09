@@ -70,6 +70,8 @@ import { registerUserRoutes } from "./modules/users/routes.ts";
 import { registerVoteAdminRoutes } from "./modules/votes/admin-routes.ts";
 import { registerVoteRoutes } from "./modules/votes/routes.ts";
 import type { VoteStore } from "./modules/votes/store.ts";
+import { registerMetricsRoutes } from "./modules/metrics/routes.ts";
+import type { MetricsStore } from "./modules/metrics/store.ts";
 
 export type AppDeps = {
  decisionStore?: DecisionStore;
@@ -124,6 +126,7 @@ export type AppDeps = {
   reportStore?: ReportStore;
   /** Verilmezse admin kullanıcı, yaptırım ve rol route'ları (admin.users.*, admin.sanctions.*, admin.roles.put; KV-33) kaydedilmez. */
   adminUserStore?: AdminUserStore;
+  metricsStore?: MetricsStore;
   /** Verilmezse admin içerik moderasyonu (anket/yorum) route'ları kaydedilmez. */
   moderationStore?: ModerationStore;
   /** Verilmezse bildirim okuma route'ları (notifications.*; KV-21) kaydedilmez. */
@@ -324,6 +327,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerAdminUserRoutes(route, { store: deps.adminUserStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
     registerRoleRoutes(route, { store: deps.adminUserStore, now });
   }
+  if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
   if (deps.commentStore) {
     registerCommentRoutes(route, {
       store: deps.commentStore,

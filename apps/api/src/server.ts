@@ -34,6 +34,7 @@ import { createPrismaRevisionStore } from "./modules/revisions/prisma-store.ts";
 import { createPrismaVoteStore } from "./modules/votes/prisma-store.ts";
 import { createPrismaAuditStore } from "./modules/audit/prisma-store.ts";
 import { createPrismaRateLimitStore } from "./modules/rate-limit/prisma-store.ts";
+import { createPrismaMetricsStore } from "./modules/metrics/store.ts";
 
 // Local'de repo kökündeki .env okunur; staging/production'da değerler ortamdan gelir.
 if (!process.env.APP_ENV) {
@@ -79,6 +80,7 @@ const app = buildApp({
   moderationStore: createPrismaModerationStore(prisma),
   notificationStore: createPrismaNotificationStore(prisma),
   adminUserStore: createPrismaAdminUserStore(prisma),
+  metricsStore: createPrismaMetricsStore(prisma),
   commentStore: createPrismaCommentStore(prisma),
   hasher: createArgon2Hasher(),
   mailer: createMailer(config.mail),
