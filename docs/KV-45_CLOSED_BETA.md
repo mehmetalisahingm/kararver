@@ -130,3 +130,11 @@ Gerçek davet, güvenlik kapısı ve iletişim/kişisel veri çerçevesi kesinle
 5. **Faruk (#51/#42):** worker, görsel public bucket, log ve ortam ayarlarını kapanış kanıtlarıyla kontrol et.
 
 **İlgili işler:** [#47](https://github.com/mehmetalisahingm/kararver/issues/47) · [#46](https://github.com/mehmetalisahingm/kararver/issues/46) · [#48](https://github.com/mehmetalisahingm/kararver/issues/48) · [#53](https://github.com/mehmetalisahingm/kararver/issues/53) · [#54](https://github.com/mehmetalisahingm/kararver/issues/54).
+
+## 9. Operasyonel ölçüm ve 20 içerik taslağı (9 Ekim 2026)
+
+Hazırlık paketinin uygulanabilir sürümü: **[docs/beta/OPERATIONS.md](beta/OPERATIONS.md)**. 12 anket + 8 fotoğrafsız tartışmadan oluşan **henüz yayınlanmamış** içerik bankası: **[docs/beta/seed-content.example.json](beta/seed-content.example.json)**.
+
+Yerel katılımcı ölçüm aracı `scripts/beta-report.mjs`; Node testleri `scripts/beta-report.test.mjs`; komutlar `pnpm beta:test`, `pnpm beta:report --participants beta-private/participants.json --tasks beta-private/tasks.json --bugs beta-private/bugs.json --as-of <UTC timestamp>`. Ham dosyalar yalnız gitignore'lu özel klasörde tutulur. D1 ve D7 sadece olgun kohorttan hesaplanır. Davet/senaryo/hata kayıtları için kişisel bilgi alanları kabul edilmez.
+
+**Gerçek beta kabulü değişmedi:** #46 ve #51 ile yazılı GO olmadan davet veya gerçek içerik yayını yok; #47 açık kalır. Bu değişiklik yalnız G0 hazırlığıdır, gerçek davet/katılım/e-posta doğrulama/CI staging kabulü değildir.

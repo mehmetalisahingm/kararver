@@ -23,6 +23,8 @@
     "db:test": "pnpm --filter @kararver/db run test:db",
     "mock:dev": "pnpm --filter @kararver/mock-api run serve",
     "mock:test": "pnpm --filter @kararver/mock-api run test",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "beta:test": "node --test scripts/beta-report.test.mjs",
+    "beta:report": "node scripts/beta-report.mjs"
   }
 }
