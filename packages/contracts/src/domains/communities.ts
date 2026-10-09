@@ -26,6 +26,7 @@ export const CommunityDetail = z.strictObject({
 export const CommunityMember = z.strictObject({ user: PublicUser, role: CommunityRole, joinedAt: Timestamp });
 
 const communities = { owner: "Mert", module: "communities" } as const;
+const requestsProvider = { owner: "Mehmet", module: "community-requests" } as const;
 const web = ["Ümit (web)", "Mert (topluluk UI, KV-31)"];
 const SlugParams = z.strictObject({ slug: z.string().regex(/^[a-z0-9-]{2,60}$/) });
 
@@ -35,6 +36,30 @@ const CommunityBody = z.strictObject({
   description: z.string().trim().max(1000).optional(),
   imageMediaId: Id.optional(),
   membersVisibility: MembersVisibility.default("MEMBERS"),
+});
+
+export const CommunityRequestView = z.strictObject({
+  id: Id,
+  requesterId: Id,
+  communityId: Id.nullable(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.string().nullable(),
+  categoryId: Id.nullable(),
+  status: z.enum(["PENDING", "APPROVED", "REJECTED", "CLOSED"]),
+  rejectionReason: z.string().nullable(),
+  approvedAt: Timestamp.nullable(),
+  approvalDeadline: Timestamp.nullable(),
+  closedAt: Timestamp.nullable(),
+  memberCount: Count,
+  createdAt: Timestamp,
+});
+
+const CommunityRequestBody = z.strictObject({
+  name: z.string().trim().min(2).max(80),
+  slug: z.string().regex(/^[a-z0-9-]{2,60}$/),
+  description: z.string().trim().max(1000).optional(),
+  categoryId: Id.optional(),
 });
 
 export const communityEndpoints = [
@@ -203,5 +228,45 @@ export const communityEndpoints = [
     errors: [],
     idempotency: "natural",
     cache: "private",
+  }),
+
+  // KV-172: kullanıcı başvurusu ve yönetici karar kuyruğu.
+  defineEndpoint({
+    id: "communities.requests.create", domain: "communities", method: "POST",
+    path: "/communities/requests", summary: "Topluluk oluşturma başvurusu",
+    auth: "user", provider: requestsProvider, consumers: ["KararVer web"],
+    unblocks: ["#172"], availability: { status: "ready" },
+    request: { body: CommunityRequestBody },
+    responses: { 201: dataOf(CommunityRequestView), 200: dataOf(CommunityRequestView) },
+    errors: ["CONFLICT"], idempotency: "natural", cache: "private",
+  }),
+  defineEndpoint({
+    id: "communities.requests.mine", domain: "communities", method: "GET",
+    path: "/communities/requests/mine", summary: "Kendi topluluk başvurularım",
+    auth: "user", provider: requestsProvider, consumers: ["KararVer web"],
+    unblocks: ["#172"], availability: { status: "ready" },
+    request: {}, responses: { 200: dataOf(z.array(CommunityRequestView)) },
+    errors: [], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
+    id: "admin.communities.requests.list", domain: "communities", method: "GET",
+    path: "/admin/communities/requests", summary: "Topluluk başvuru kuyruğu",
+    auth: "admin", provider: requestsProvider, consumers: ["KararVer admin"],
+    unblocks: ["#172"], availability: { status: "ready" },
+    request: { query: z.strictObject({ status: z.enum(["PENDING","APPROVED","REJECTED","CLOSED"]).optional() }) },
+    responses: { 200: dataOf(z.array(CommunityRequestView)) },
+    errors: [], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
+    id: "admin.communities.requests.decide", domain: "communities", method: "PATCH",
+    path: "/admin/communities/requests/:id", summary: "Topluluk başvurusu onay / red",
+    auth: "admin", provider: requestsProvider, consumers: ["KararVer admin"],
+    unblocks: ["#172"], availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({
+      decision: z.enum(["APPROVE", "REJECT"]),
+      reason: z.string().trim().min(3).max(500),
+    }) },
+    responses: { 200: dataOf(CommunityRequestView) },
+    errors: ["CONFLICT"], idempotency: "natural", cache: "private",
   }),
 ];
