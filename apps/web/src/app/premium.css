@@ -294,3 +294,15 @@
 html { color-scheme: light; }
 body { background: #faf8f2; color: #292826; }
 .product[data-theme="dark"] { color-scheme: dark; }
+
+/* Selected routes need opaque, high-contrast pairing even while editing in a dialog. */
+.product .app-sidebar nav a[aria-current="page"],
+.product .app-mobile a[aria-current="page"] {
+  background: #e4c48f;
+  color: #252525;
+}
+.product .app-sidebar nav a[aria-current="page"] {
+  border-left: 3px solid #92703b;
+}
+.product .app-mobile a[aria-current="page"] svg { color: #252525; }
+.product .app-mobile a[href="/olustur"][aria-current="page"] span { color: #252525; }
