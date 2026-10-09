@@ -257,7 +257,7 @@ export function ProductProvider({
             <div className="announcement" role="status">
               {message}
             </div>
-            {sessionReady ? <Fragment key={pathname === "/giris" ? "login-session" : (user?.id ?? "guest")}>{children}</Fragment> : <div className="kv-card kv-state">
+            {sessionReady ? <Fragment key={(pathname === "/giris" || pathname === "/kayit") ? "auth-session" : (user?.id ?? "guest")}>{children}</Fragment> : <div className="kv-card kv-state">
               <h1>{sessionError ? "Bağlantı kurulamadı." : "Oturum kontrol ediliyor…"}</h1>
               {sessionError && <><p role="alert">{sessionError}</p><button className="kv-button" onClick={() => retrySession(n => n + 1)}>Tekrar dene</button></>}
             </div>}

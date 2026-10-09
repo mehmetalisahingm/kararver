@@ -44,8 +44,42 @@ export function createSmtpMailer(options: { smtpUrl: string; from: string; requi
   };
 }
 
+/**
+ * Staging-only: Mailpit's HTTPS send API captures verification messages in its
+ * protected test inbox. SMTP strict-STARTTLS remains enforced in production.
+ * This deliberately does NOT deliver email to the recipient's real mailbox.
+ */
+export function createMailpitApiMailer(options: { sendUrl: string; sendAuth: string; from: string }): Mailer {
+  const endpoint = new URL("/api/v1/send", options.sendUrl).toString();
+  const displayFrom = options.from.match(/^(.+?)\s*<([^<>]+)>$/);
+  const from = displayFrom
+    ? { Email: displayFrom[2]!, Name: displayFrom[1]!.trim().replace(/^["']|["']$/g, "") }
+    : { Email: options.from };
+  return {
+    async send(mail) {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Basic ${Buffer.from(options.sendAuth, "utf8").toString("base64")}`,
+        },
+        body: JSON.stringify({
+          From: from,
+          To: [{ Email: mail.to }],
+          Subject: mail.subject,
+          Text: mail.text,
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      // Never log the response body: an untrusted relay may echo message content.
+      if (!response.ok) throw new Error(`Mailpit test inbox rejected mail (HTTP ${response.status})`);
+    },
+  };
+}
+
 export function createMailer(config: MailConfig): Mailer {
   if (config.transport === "console") return createConsoleMailer(config.from);
+  if (config.transport === "mailpit_api") return createMailpitApiMailer(config);
   return createSmtpMailer(config);
 }
 

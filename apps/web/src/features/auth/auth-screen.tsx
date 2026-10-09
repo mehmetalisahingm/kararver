@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Field } from "../../components/fields";
 import { ApiClient } from "../../lib/api-client";
-import { safeReturnTo } from "../../lib/model";
+import { UiError, safeReturnTo } from "../../lib/model";
 import { clearWelcomeDraft, readWelcomeDraft } from "../../lib/welcome-draft";
 import { WelcomeAuthContext } from "../onboarding/welcome";
 export type AuthMode = "login" | "register" | "verify" | "forgot" | "reset";
@@ -109,6 +109,21 @@ export function AuthScreen({
       setBusy(false);
     }
   }
+  async function finishSignIn() {
+    const hasWelcomeDraft = Boolean(readWelcomeDraft());
+    syncUser();
+    setPassword("");
+    if (onboarding || hasWelcomeDraft) {
+      try {
+        await applyWelcomeSelection();
+      } catch (reason) {
+        onWelcomeSaveFailure(reason);
+        return;
+      }
+    }
+    notify(onboarding || hasWelcomeDraft ? "Giriş yaptın. KararVer akışın hazır." : "Giriş yaptın. Seçimin korunuyor; işlemi tamamlamak için yeniden onayla.");
+    router.push(destination);
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -116,23 +131,27 @@ export function AuthScreen({
     setError("");
     try {
       if (mode === "login") {
-        const hasWelcomeDraft = Boolean(readWelcomeDraft());
         await client.login(email, password);
-        syncUser();
-        if (onboarding || hasWelcomeDraft) {
-          try {
-            await applyWelcomeSelection();
-          } catch (reason) {
-            onWelcomeSaveFailure(reason);
-            return;
-          }
-        }
-        notify(onboarding || hasWelcomeDraft ? "Giriş yaptın. KararVer akışın hazır." : "Giriş yaptın. Seçimin korunuyor; işlemi tamamlamak için yeniden onayla.");
-        router.push(destination);
+        await finishSignIn();
       }
       if (mode === "register") {
         await client.register(name, email, password, username);
-        if (demo) router.push(`/dogrula${emailSuffix}`); else setDone(true);
+        if (demo) {
+          router.push(`/dogrula${emailSuffix}`);
+        } else {
+          // A 202 is deliberately identical for a new and an existing email.
+          // Only a successful login proves these credentials actually work.
+          try {
+            await client.login(email, password);
+          } catch (reason) {
+            setPassword("");
+            if (reason instanceof UiError && reason.code === "INVALID_CREDENTIALS") {
+              throw new UiError("REGISTRATION_SIGNIN_FAILED", "Kayıt isteğin alındı, ancak bu bilgilerle giriş tamamlanamadı. Daha önce kayıt olduysan mevcut şifrenle giriş yap veya şifreni sıfırla. Yeniden kayıt mevcut şifreni değiştirmez.");
+            }
+            throw reason;
+          }
+          await finishSignIn();
+        }
       }
       if (mode === "verify") {
         await client.verify(email, code);
@@ -297,6 +316,10 @@ export function AuthScreen({
         try { await client.resendVerification(); notify("Doğrulama bağlantısı gönderildi."); } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
       }}>Doğrulama bağlantısını yeniden gönder</button>}
       <div className="auth-links">
+        {mode === "register" && !demo && <>
+          <Link href={`/giris${emailSuffix}`}>Mevcut hesabımla giriş yap</Link>
+          <Link href={`/sifremi-unuttum${emailSuffix}`}>Şifremi unuttum</Link>
+        </>}
         {mode === "login" && (
           <>
             <Link href={`/kayit${suffix}`}>Yeni hesap oluştur</Link>

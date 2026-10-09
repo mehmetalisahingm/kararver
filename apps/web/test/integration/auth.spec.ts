@@ -10,7 +10,8 @@ test("real auth HTTP: registration, fragment verification, cookie reload, reset 
   await page.getByLabel("E-posta",{exact:true}).fill("umit.browser@example.test");
   await page.getByLabel("Şifre",{exact:true}).fill("Browser-password-123");
   await page.getByRole("button",{name:"Hesap oluştur",exact:true}).click();
-  await expect(page.getByRole("status").filter({hasText:"E-postanı kontrol et"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Çıkış",exact:true})).toBeVisible();
+  await expect(page.locator(".balance")).toContainText("20");
   const mail=await (await request.get("http://127.0.0.1:4011/__test__/mail")).json();
   const token=mail.text.match(/#token=([A-Za-z0-9_-]+)/)[1];
   await page.goto(`/dogrula#token=${token}`);
@@ -49,4 +50,35 @@ test("real auth HTTP: registration, fragment verification, cookie reload, reset 
   await page.getByRole("button",{name:"Çıkış",exact:true}).click();
   await page.goto("/hesap");await expect(page.getByRole("heading",{name:"Hesabınla katıl."})).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("duplicate registration cannot claim success or replace the existing password", async ({page}) => {
+  const id = `dup_${Date.now().toString(36)}`;
+  const email = `${id}@example.test`;
+  const original = "Original-browser-password-123";
+  await page.goto("/kayit");
+  await page.getByLabel("Görünen ad",{exact:true}).fill("Duplicate Test");
+  await page.getByLabel("Kullanıcı adı",{exact:true}).fill(id);
+  await page.getByLabel("E-posta",{exact:true}).fill(email);
+  await page.getByLabel("Şifre",{exact:true}).fill(original);
+  await page.getByRole("button",{name:"Hesap oluştur",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Çıkış",exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Çıkış",exact:true}).click();
+  await page.goto("/kayit");
+  await page.getByLabel("Görünen ad",{exact:true}).fill("Duplicate Test");
+  await page.getByLabel("Kullanıcı adı",{exact:true}).fill(`${id}_new`);
+  await page.getByLabel("E-posta",{exact:true}).fill(email);
+  await page.getByLabel("Şifre",{exact:true}).fill("Replacement-browser-password-123");
+  await page.getByRole("button",{name:"Hesap oluştur",exact:true}).click();
+  await expect(page.locator("main").getByRole("alert").filter({hasText:"Yeniden kayıt mevcut şifreni değiştirmez"})).toBeVisible();
+  await expect(page.getByLabel("Şifre",{exact:true})).toHaveValue("");
+  await expect(page.getByRole("button",{name:"Çıkış",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("link",{name:"Şifremi unuttum",exact:true})).toHaveAttribute("href",new RegExp(encodeURIComponent(email)));
+  await page.getByRole("link",{name:"Mevcut hesabımla giriş yap",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"Tekrar hoş geldin.",exact:true})).toBeVisible();
+  await expect(page.getByLabel("E-posta",{exact:true})).toHaveValue(email);
+  await page.getByLabel("Şifre",{exact:true}).fill(original);
+  await page.getByRole("button",{name:"Giriş yap",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Çıkış",exact:true})).toBeVisible();
+  await expect(page.locator(".balance")).toContainText("20");
 });
