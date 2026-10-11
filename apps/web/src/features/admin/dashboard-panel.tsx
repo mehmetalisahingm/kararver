@@ -31,6 +31,7 @@ export function DashboardPanel({ admin }: { admin: AdminClient }) {
   }, [admin, range, attempt]);
 
   const current = metrics?.range === range ? metrics : null;
+  const maxVotes = Math.max(1, ...(current?.series.map(day => day.votes) ?? []));
 
   return (
     <section className="kv-stack" aria-label="Canlı yönetim metrikleri">
@@ -62,12 +63,12 @@ export function DashboardPanel({ admin }: { admin: AdminClient }) {
           <Stat label="Kaldırılan anket" value={current.totals.removedPolls} />
           <Stat label="Kaldırılan yorum" value={current.totals.removedComments} />
         </div>
-        <div className={styles.tableWrap}>
+        <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Günlük hareket grafiği ve veri tablosu">
           <h2>Günlük oy hareketi</h2>
           <div style={{ display: "flex", alignItems: "end", gap: 12, minHeight: 160 }}>
             {current.series.map(day => <div key={day.localDate} style={{ flex: "1 0 40px", textAlign: "center" }}>
               <span>{number.format(day.votes)}</span>
-              <div aria-hidden="true" style={{ height: Math.max(3, day.votes / Math.max(1, ...current.series.map(d => d.votes)) * 100), background: "var(--kv-accent)", borderRadius: "8px 8px 0 0", margin: "8px 0" }} />
+              <div aria-hidden="true" style={{ height: Math.max(3, day.votes / maxVotes * 100), background: "var(--kv-accent)", borderRadius: "8px 8px 0 0", margin: "8px 0" }} />
               <small>{day.localDate.slice(5)}</small>
             </div>)}
           </div>

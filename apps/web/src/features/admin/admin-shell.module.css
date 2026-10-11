@@ -16,6 +16,7 @@
 :global(.product[data-theme="light"]) .toolbar > label { color: #181b25; }
 
 .table th.settingsHeader{opacity:1}
+.tableWrap:focus-visible{outline:2px solid var(--kv-focus,var(--kv-accent));outline-offset:3px}
 
 /* WebKit may retain the previous dark text color after switching to light theme. */
 .communityRequestQueue label { color: var(--kv-text); }
