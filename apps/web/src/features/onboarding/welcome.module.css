@@ -268,7 +268,8 @@
 }
 .authContext h2 { margin: 10px 0; font-size: clamp(24px,3vw,32px); line-height: 1.2; letter-spacing: -.04em; }
 .authContext p { line-height: 1.6; }
-@keyframes enter { from { transform: translateY(15px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Readable text keeps its full contrast throughout the entrance motion. */
+@keyframes enter { from { transform: translateY(15px); } to { transform: none; } }
 @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @media (max-width: 800px) {
   .orbit { display: none; }

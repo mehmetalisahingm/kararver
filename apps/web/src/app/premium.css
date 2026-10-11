@@ -133,7 +133,8 @@
   font-size: 14px;
   color: var(--kv-muted);
   font-weight: 600;
-  transition: background-color 150ms ease, color 150ms ease;
+  /* Theme foreground/background must switch together to preserve contrast. */
+  transition: box-shadow 150ms ease;
 }
 .app-sidebar nav a:hover { background: var(--kv-surface-2); color: var(--kv-text); }
 .app-sidebar nav a[aria-current="page"] { background: var(--kv-soft); color: var(--kv-accent); font-weight: 800; }
@@ -165,7 +166,7 @@
 .vote-option {
   border-radius: 15px; border-color: var(--kv-border);
   background: var(--kv-surface);
-  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 .vote-option:hover:not(:has(input:disabled)) { border-color: var(--kv-primary); background: var(--kv-surface-2); }
 .vote-option:has(input:checked) { outline: 2px solid var(--kv-primary); background: var(--kv-soft); }
@@ -210,7 +211,7 @@
   .brand { font-size: 21px; }
   .brand span { width: 33px; height: 33px; font-size: 18px; border-radius: 11px; }
   .header-caption { display: none; }
-  .app-header .kv-button { min-height: 38px; padding: 8px 11px; font-size: 12px; }
+  .app-header .kv-button { min-height: 44px; padding: 8px 11px; font-size: 12px; }
   .app-header .balance { padding: 5px 8px; font-size: 11px; }
   .app-layout { display: block; padding: 22px 14px calc(112px + env(safe-area-inset-bottom)); }
   .app-sidebar { display: none; }
