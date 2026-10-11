@@ -350,6 +350,21 @@ export const adminEndpoints = [
     availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ sessionId: Id.optional(), reason: Reason }) },
     responses: { 200: dataOf(z.strictObject({ revokedCount: Count })) }, errors: [], idempotency: "natural", cache: "private",
   }),
+  defineEndpoint({
+    id: "admin.users.passwordReset.send", domain: "admin", method: "POST", path: "/admin/users/:id/password-reset",
+    summary: "Kullanıcıya şifre sıfırlama bağlantısı e-postası gönder", auth: "admin", provider: adminUsers, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 202: dataOf(z.strictObject({ sent: z.boolean(), expiresAt: Timestamp })) }, errors: ["CONFLICT"],
+    idempotency: "none", cache: "private",
+    notes: [
+      "Bağlantı yalnız kullanıcının kayıtlı e-postasına gider; yanıtta ve audit'te ham token/bağlantı yoktur, admin parolayı veya token'ı hiçbir yerde görmez.",
+      "Aynı hesap için ardışık istekler arasında 60 sn bekleme, saatte en çok 5 istek vardır; aşılırsa 429 RATE_LIMITED (çift tıklama yeni token üretmez). Yeni token önceki kullanılmamış sıfırlama token'larını geçersiz kılar.",
+      "Admin hedef SUPER_ADMIN gerektirir ve kimse kendi hesabı için kullanamaz (user.sanction ile aynı sanctionTarget kuralı, KV-04); kendi şifresi için normal 'şifremi unuttum' akışı vardır.",
+      "409 CONFLICT details[0].code: user_deleted, user_banned (yasaklı hesaba bağlantı gönderilmez; normal 'şifremi unuttum' akışıyla aynı).",
+      "sent=false: e-posta servisi cevap vermedi; token oluşmuştur ve audit yazılmıştır, bekleme süresi sonrası tekrar denenir.",
+      "Bağlantı 1 saat geçerli ve tek kullanımlıktır; kullanıldığında kullanıcının bütün oturumları kapanır (auth.password.reset).",
+    ],
+  }),
   ...(["sanctions", "reports", "activity"] as const).map((sub) =>
     defineEndpoint({
       id: `admin.users.${sub}`,

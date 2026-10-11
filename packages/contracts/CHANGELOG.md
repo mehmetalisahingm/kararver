@@ -9,6 +9,12 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.22.0 — 2026-10-11 (Mert, #181 hesap yönetimi: şifre sıfırlama)
+
+Kırıcı değişiklik yok: yeni endpoint ve yetki.
+
+- **Eklendi:** `admin.users.passwordReset.send` (`POST /admin/users/:id/password-reset`, ADMIN+, `user.password.reset`, kural `sanctionTarget`): kullanıcıya tek kullanımlık, 1 saat geçerli sıfırlama bağlantısını e-postayla gönderir. Gerekçe zorunlu, audit `user.password.reset`/`send`; yanıt ve audit ham token/bağlantı içermez. Aynı hesap için 60 sn bekleme ve saatte 5 sınırı (429 `RATE_LIMITED`); yasaklı/silinmiş hesap 409.
+
 ## 1.21.0 — 2026-10-09 (Mert, KV-38 görsel risk eşikleri, #40)
 
 Kırıcı değişiklik yok: kayıt defterine iki yeni ayar (yeni anahtar minör); endpoint ve şema değişmedi.

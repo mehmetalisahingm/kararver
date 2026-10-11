@@ -97,6 +97,22 @@ export type RoleResult =
   | { kind: "changed" | "unchanged"; role: Role }
   | { kind: "rejected"; reason: RoleRejection };
 
+/** Yönetici başlatmalı şifre sıfırlama (#181). Token yalnız özetiyle gelir; ham değer store'a girmez. */
+export type PasswordResetInput = Mutation & {
+  userId: string;
+  reason: string;
+  tokenHash: string;
+  expiresAt: Date;
+  /** Aynı hesap için ardışık istekler arası en kısa süre ve pencere (1 saat) içindeki en çok istek. */
+  cooldownMs: number;
+  hourlyLimit: number;
+};
+export type PasswordResetRejection = "not_found" | "forbidden" | "user_deleted" | "user_banned";
+export type PasswordResetResult =
+  | { kind: "issued"; email: string }
+  | { kind: "rejected"; reason: PasswordResetRejection }
+  | { kind: "limited"; retryAfterMs: number };
+
 export interface AdminUserStore {
   listSessions(userId: string, afterId: string | null, limit: number, now: Date): Promise<Array<{ id: string; createdAt: Date; expiresAt: Date; lastSeenAt: Date | null; ipAddress: string | null; userAgent: string | null }>>;
   revokeSessions(input: Mutation & { userId: string; sessionId?: string; reason: string }): Promise<number | null>;
@@ -114,4 +130,9 @@ export interface AdminUserStore {
   applySanction(scope: IdempotencyScope | null, input: ApplyInput): Promise<IdempotentResult | { kind: "rejected"; reason: ApplyRejection }>;
   liftSanction(input: LiftInput): Promise<{ kind: "lifted" } | { kind: "rejected"; reason: LiftRejection }>;
   setRole(input: RoleInput): Promise<RoleResult>;
+  /**
+   * Hedef kilitlenir, yetki taze veriyle yeniden verilir, sıklık sınırı audit kayıtlarından hesaplanır; token (önceki
+   * kullanılmamış sıfırlama token'larını geçersiz kılarak) ve audit aynı transaction'da yazılır. E-postayı çağıran gönderir.
+   */
+  issuePasswordReset(input: PasswordResetInput): Promise<PasswordResetResult>;
 }

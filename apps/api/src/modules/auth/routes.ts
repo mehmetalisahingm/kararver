@@ -5,6 +5,7 @@ import { sendSafely, type Mailer } from "../../mail/mailer.ts";
 import type { LoginGuard } from "../rate-limit/limiter.ts";
 import { toMe, type RolesOf } from "../users/me.ts";
 import { hashToken, newToken, type PasswordHasher } from "./crypto.ts";
+import { passwordResetMail, PASSWORD_RESET_TTL_MS } from "./reset-mail.ts";
 import { createSessionCookies, type SessionSettings } from "./session.ts";
 import type { AuthStore, NewToken, TokenPurpose } from "./store.ts";
 
@@ -28,7 +29,7 @@ export type AuthDeps = {
 
 const TOKEN_TTL_MS: Record<TokenPurpose, number> = {
   EMAIL_VERIFICATION: 24 * 60 * 60 * 1000,
-  PASSWORD_RESET: 60 * 60 * 1000,
+  PASSWORD_RESET: PASSWORD_RESET_TTL_MS,
 };
 
 const RESTRICTED = new Set(["BANNED", "SUSPENDED"]);
@@ -55,7 +56,6 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
 
   // Token URL fragment'ında taşınır: sunucu loglarına ve Referer başlığına düşmez.
   const verifyLink = (raw: string) => `${deps.webUrl}/dogrula#token=${raw}`;
-  const resetLink = (raw: string) => `${deps.webUrl}/sifre-yenile#token=${raw}`;
 
   function verificationMail(to: string, raw: string) {
     return {
@@ -173,15 +173,7 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
     if (user && !user.deletedAt && user.status !== "BANNED") {
       const reset = token("PASSWORD_RESET");
       await store.issueToken(user.id, reset.record, now());
-      await sendSafely(
-        mailer,
-        {
-          to: user.email,
-          subject: "KararVer — şifre sıfırlama",
-          text: `Merhaba,\n\nŞifreni sıfırlamak için bağlantıyı aç (1 saat geçerli):\n${resetLink(reset.raw)}\n\nŞifre değişince bütün cihazlardaki oturumların kapanır.\nBu isteği sen yapmadıysan bu e-postayı yok sayabilirsin; şifren değişmez.`,
-        },
-        request.log,
-      );
+      await sendSafely(mailer, passwordResetMail(deps.webUrl, user.email, reset.raw, "self"), request.log);
     }
     return { status: 202, body: null };
   });

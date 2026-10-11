@@ -161,6 +161,10 @@ export const actions = Object.freeze({
     guard: "sanctionTarget",
     requires: ["targetUserId", "targetRoles"],
   }),
+  "user.password.reset": rule("admin", "Kullanıcıya şifre sıfırlama e-postası gönderme; admin hedef SUPER_ADMIN ister", {
+    guard: "sanctionTarget",
+    requires: ["targetUserId", "targetRoles"],
+  }),
   "settings.read": rule("admin", "Sistem ayarlarını okuma"),
   "audit.read": rule("admin", "Audit okuma (yazma/silme işlemi yoktur)"),
   "points.adjust": rule("admin", "Puan düzeltmesi"),
@@ -292,6 +296,7 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.sanctions.create": "user.sanction",
   "admin.sanctions.lift": "user.sanction.lift",
   "admin.roles.put": "user.role.assign",
+  "admin.users.passwordReset.send": "user.password.reset",
   "admin.users.sessions.list": "user.sessions.manage",
   "admin.users.sessions.revoke": "user.sessions.manage",
   "admin.settings.list": "settings.read",

@@ -244,6 +244,8 @@ const pollParams = { id: POLL };
 const reason = "Topluluk kurallarına aykırı";
 
 export const examples: Example[] = [
+  { endpoint: "admin.users.passwordReset.send", name: "ok", request: { params: { id: U1 }, body: { reason: "Kullanıcı erişimini kaybetti, kimlik doğrulandı" } }, status: 202, body: { data: { sent: true, expiresAt: "2026-09-27T13:00:00.000Z" } } },
+  { endpoint: "admin.users.passwordReset.send", name: "banned", request: { params: { id: U1 }, body: { reason: "Kullanıcı erişimini kaybetti, kimlik doğrulandı" } }, status: 409, body: error("CONFLICT", "Yasaklı hesaba şifre sıfırlama bağlantısı gönderilemez.", [{ code: "user_banned" }]) },
   { endpoint: "admin.users.sessions.list", name: "ok", request: { params: { id: U1 } }, status: 200, body: { data: [], page: { nextCursor: null, hasMore: false } } },
   { endpoint: "admin.users.sessions.revoke", name: "ok", request: { params: { id: U1 }, body: { reason: "Şüpheli giriş nedeniyle oturumlar kapatıldı" } }, status: 200, body: { data: { revokedCount: 2 } } },
   // ── auth ──
