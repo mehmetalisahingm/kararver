@@ -6,6 +6,8 @@ export type FakeStorage = MediaStorage & {
   /** İstemcinin presigned URL'e yaptığı PUT'u taklit eder. */
   put(key: string, sizeBytes: number, contentType: string): void;
   objects: Map<string, { sizeBytes: number; contentType: string }>;
+  /** İçerikli nesneler (KVKK veri paketi: worker yazar, API okur). */
+  blobs: Map<string, Buffer>;
   /** Public bucket'taki anahtarlar (moderatör onayıyla kopyalananlar). */
   publicKeys: Set<string>;
   /** Test: storage çağrısı hata versin. */
@@ -14,10 +16,12 @@ export type FakeStorage = MediaStorage & {
 
 export function createFakeStorage(): FakeStorage {
   const objects = new Map<string, { sizeBytes: number; contentType: string }>();
+  const blobs = new Map<string, Buffer>();
   const publicKeys = new Set<string>();
   const failNext = { publish: false, delete: false };
   return {
     objects,
+    blobs,
     publicKeys,
     failNext,
     put(key, sizeBytes, contentType) {
@@ -29,6 +33,9 @@ export function createFakeStorage(): FakeStorage {
         headers: { "Content-Type": file.contentType },
         expiresAt: new Date(now.getTime() + UPLOAD_URL_TTL_SECONDS * 1000),
       };
+    },
+    async readPrivate(key) {
+      return blobs.get(key) ?? null;
     },
     async headPrivate(key) {
       return objects.get(key) ?? null;

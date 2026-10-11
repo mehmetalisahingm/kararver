@@ -161,6 +161,7 @@ export const actions = Object.freeze({
     guard: "sanctionTarget",
     requires: ["targetUserId", "targetRoles"],
   }),
+  "privacy.export.download": rule("user", "Kendi KVKK veri paketini indirme (#181)"),
   "user.password.reset": rule("admin", "Kullanıcıya şifre sıfırlama e-postası gönderme; admin hedef SUPER_ADMIN ister", {
     guard: "sanctionTarget",
     requires: ["targetUserId", "targetRoles"],
@@ -179,6 +180,7 @@ export const actions = Object.freeze({
     requires: ["targetUserId", "targetRoles", "newRole", "activeSuperAdminCount"],
   }),
   "settings.update": rule("super_admin", "Sistem ayarı değiştirme"),
+  "privacy.export.manage": rule("super_admin", "KVKK veri dışa aktarma talebi ve teslimi (#181)"),
   "user.sessions.manage": rule("super_admin", "Kullanıcı oturumlarını yönetme"),
   "emergency.update": rule("super_admin", "Acil durum anahtarları"),
 } satisfies Record<string, ActionRule>);
@@ -297,6 +299,10 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.sanctions.lift": "user.sanction.lift",
   "admin.roles.put": "user.role.assign",
   "admin.users.passwordReset.send": "user.password.reset",
+  "admin.users.dataExports.create": "privacy.export.manage",
+  "admin.users.dataExports.list": "privacy.export.manage",
+  "admin.users.dataExports.deliver": "privacy.export.manage",
+  "dataExports.download": "privacy.export.download",
   "admin.users.sessions.list": "user.sessions.manage",
   "admin.users.sessions.revoke": "user.sessions.manage",
   "admin.settings.list": "settings.read",

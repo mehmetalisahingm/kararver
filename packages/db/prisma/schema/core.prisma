@@ -90,6 +90,9 @@ model User {
   avatarMedia      MediaAsset?       @relation("UserAvatar", fields: [avatarMediaId], references: [id], onDelete: SetNull)
   sessions         Session[]
   authTokens       AuthToken[]
+  // #181 KVKK veri dışa aktarma (admin.prisma)
+  dataExports          DataExport[] @relation("DataExportSubject")
+  dataExportsRequested DataExport[] @relation("DataExportRequester")
   idempotencyKeys  IdempotencyKey[]
   polls            Poll[]
   votes            Vote[]

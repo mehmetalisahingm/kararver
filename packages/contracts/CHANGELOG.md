@@ -9,6 +9,13 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.23.0 — 2026-10-11 (Mert, #181 KVKK veri dışa aktarma)
+
+Kırıcı değişiklik yok: yeni endpoint ve yetkiler.
+
+- **Eklendi:** `admin.users.dataExports.create` / `.list` / `.deliver` (SUPER_ADMIN, `privacy.export.manage`, gerekçeli, audit `request`/`deliver`) ve kullanıcının kendi paketini indirdiği `dataExports.download` (`POST /me/data-export/download`, `privacy.export.download`, audit `download`). Paket asenkron hazırlanır, AES-256-GCM ile şifreli saklanır, 7 gün sonra silinir; indirme bağlantısı yalnız kullanıcının kayıtlı e-postasına gider ve oturum + token gerektirir. Yönetici paket içeriğini hiçbir yanıtta görmez.
+- Şemalar: `DataExport`, `DataExportStatus`, `DataExportPackage`.
+
 ## 1.22.0 — 2026-10-11 (Mert, #181 hesap yönetimi: şifre sıfırlama)
 
 Kırıcı değişiklik yok: yeni endpoint ve yetki.

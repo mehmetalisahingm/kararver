@@ -348,3 +348,45 @@ model SystemSetting {
 
   @@map("system_settings")
 }
+
+// #181: KVKK veri dışa aktarma talebi. Yaşam döngüsü: PENDING → PROCESSING → READY → EXPIRED (veya FAILED). Paket private
+// bucket'ta AES-256-GCM ile şifreli durur; enc_key yalnız bu satırdadır ve süre dolunca/başarısızlıkta silinir. Hesap başına
+// en çok bir açık talep migration'daki kısmi unique index'le sağlanır (data_exports_one_open_per_user_key).
+enum DataExportStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+  EXPIRED
+
+  @@map("data_export_status")
+}
+
+model DataExport {
+  id               String           @id @default(uuid(7)) @db.Uuid
+  userId           String           @map("user_id") @db.Uuid
+  requestedById    String           @map("requested_by_id") @db.Uuid
+  status           DataExportStatus @default(PENDING)
+  objectKey        String?          @map("object_key") @db.VarChar(512)
+  sizeBytes        Int?             @map("size_bytes")
+  encKey           Bytes?           @map("enc_key")
+  claimedAt        DateTime?        @map("claimed_at") @db.Timestamptz(3)
+  readyAt          DateTime?        @map("ready_at") @db.Timestamptz(3)
+  expiresAt        DateTime?        @map("expires_at") @db.Timestamptz(3)
+  failure          String?          @db.VarChar(60)
+  // sha256(token + AUTH_TOKEN_PEPPER); ham token yalnız e-postada
+  tokenHash        String?          @unique @map("token_hash") @db.Char(64)
+  tokenExpiresAt   DateTime?        @map("token_expires_at") @db.Timestamptz(3)
+  deliveredAt      DateTime?        @map("delivered_at") @db.Timestamptz(3)
+  downloadCount    Int              @default(0) @map("download_count") @db.SmallInt
+  lastDownloadedAt DateTime?        @map("last_downloaded_at") @db.Timestamptz(3)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user        User @relation("DataExportSubject", fields: [userId], references: [id], onDelete: Restrict)
+  requestedBy User @relation("DataExportRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@map("data_exports")
+}

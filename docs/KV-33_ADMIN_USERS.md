@@ -18,6 +18,8 @@ KV-33 üç PR'dır: **PR-A** `audit_logs` ve `writeAudit` (KV-39), **PR-B** bu b
 | `admin.sanctions.create` | `POST /admin/users/:id/sanctions` | `user.sanction` (`sanctionTarget`) | zorunlu | `user.sanction` / `apply` |
 | `admin.sanctions.lift` | `POST /admin/users/:id/sanctions/:sanctionId/lift` | `user.sanction.lift` (`sanctionTarget`) | zorunlu | `user.sanction.lift` / `lift` |
 | `admin.users.passwordReset.send` | `POST /admin/users/:id/password-reset` | `user.password.reset` (ADMIN+, `sanctionTarget`) | zorunlu | `user.password.reset` / `send` |
+| `admin.users.dataExports.create` / `.list` / `.deliver` | `POST`/`GET /admin/users/:id/data-exports`, `POST …/:exportId/deliver` | `privacy.export.manage` (SUPER_ADMIN) | zorunlu (create, deliver) | `privacy.export.manage` / `request` \| `deliver` |
+| `dataExports.download` | `POST /me/data-export/download` | `privacy.export.download` (kullanıcı, kendi paketi) | yok | `privacy.export.download` / `download` |
 | `admin.roles.put` | `PUT /admin/users/:id/role` | `user.role.assign` (SUPER_ADMIN, `roleAssignment`) | zorunlu | `user.role.assign` / `grant` \| `revoke` \| `change` |
 
 - **Arama (`q`):** en az 3 karakter (daha kısa 400). Kullanıcı adı ve görünen adda içerir araması (`kv_normalize … LIKE '%q%'`, KV-26 trigram GIN index'leri). `q` `@` içeriyorsa yalnız e-postada tam eşleşme (`email_normalized` unique index); e-postada içerir araması yoktur (PII taraması olmasın). Sayfalama `id DESC` (UUIDv7 ≈ kayıt zamanı). Silinmiş hesaplar durumlarıyla listelenir. Migration gerekmedi.
@@ -106,3 +108,43 @@ Yönetici, kullanıcının kayıtlı e-postasına tek kullanımlık sıfırlama 
 | Audit | `user.password.reset` / `send`, gerekçe zorunlu, aktör, hedef, `requestId`. |
 
 Test: `apps/api/test/admin-password-reset.test.ts` (yetki matrisi, gerekçe, bağlantının çalışması ve oturumların kapanması, audit'te sır olmaması, ban/silinmiş, çift tıklama, saatlik sınır, eşzamanlı yarış, e-posta hatası). Kapsam dışı (#181'in sonraki dilimleri): e-posta adresi değişimi, hesap dondurma/geri alma akışı, kullanıcı içeriğinin toplu gizlenmesi, KVKK dışa aktarma ve anonimleştirme; kritik işlemlerde ikinci onay/MFA #182 ile gelir.
+
+## 8. KVKK veri dışa aktarma (#181)
+
+Kullanıcının kendi kişisel verisinin paketini hazırlar ve **yalnız kullanıcıya** teslim eder. Yönetici talebi açar ve teslimi onaylar; paket içeriğini, indirme token'ını veya bağlantıyı hiçbir yanıtta, audit kaydında ya da loglarda görmez.
+
+**Akış**
+
+1. `admin.users.dataExports.create` (SUPER_ADMIN, gerekçeli): `data_exports` satırı `PENDING`. Hesap başına en çok bir açık talep (PENDING/PROCESSING/READY) vardır; tekrar çağrı aynı talebi döner ve yeni audit yazmaz. Kısmi unique index (`data_exports_one_open_per_user_key`) ve hedef kullanıcı satırı kilidi yarışta da tek satırı garanti eder.
+2. Worker `data-exports.build` (dakikada bir): `FOR UPDATE SKIP LOCKED` ile sahiplenir, paketi toplar (JSON → gzip → **AES-256-GCM**, rastgele anahtar, AAD = talep id'si), private bucket'a `exports/<id>-<rastgele>.bin` olarak yazar, satırı `READY` yapar (anahtar yalnız bu satırda). Takılan `PROCESSING` talep 10 dk sonra yeniden alınır; talebi kaybeden deneme kendi nesnesini siler. Hata → `FAILED` + kısa kod (`build_failed`, `too_large`; 25 MB JSON ve koleksiyon başına 50 bin satır sınırı); ham hata metni DB'ye yazılmaz. FAILED talep açık sayılmaz, yeni talep açılabilir.
+3. `admin.users.dataExports.deliver` (SUPER_ADMIN, gerekçeli): talep `READY` iken yönetici kimlik doğrulamasını (destek kanalı vb.) yaptığını gerekçeyle beyan eder. Yeni bir indirme token'ı üretilir (yalnız SHA-256 özeti saklanır, önceki bağlantıyı geçersiz kılar) ve bağlantı (`/veri-indir#token=…`) **yalnız hesabın kayıtlı e-postasına** gider. Bağlantı 24 saat (ve paket süresi) geçerlidir. Hesap başına 60 sn bekleme ve saatte 3 gönderim (429).
+4. `dataExports.download` (kullanıcı): **hem** token **hem** paketin sahibi olan oturum gerekir; başkasının oturumu ya da yanlış token aynı `TOKEN_INVALID_OR_EXPIRED` yanıtını alır (hesap/paket varlığı sızmaz). Paket sunucuda çözülür (GCM etiketi doğrulanmazsa veri dönmez) ve JSON olarak döner. Teslim başına en çok 3 indirme; sayaç paket çözüldükten sonra, koşullu `UPDATE` ile düşer (eşzamanlı indirmeler hakkı aşamaz). Her indirme audit'e yazılır.
+5. Paket 7 gün sonra silinir: worker nesneyi, anahtarı ve token'ı siler, talep `EXPIRED` olur (anahtar silindiğinden nesne artık hiç okunamaz). Nesne silinemezse satır `READY` kalır ve sonraki tur dener.
+
+**Audit** (hepsi `target = USER`, token/bağlantı/e-posta/içerik yok): `privacy.export.manage` `request` (`after: { exportId }`), `deliver` (`after: { exportId, linkExpiresAt }`); `privacy.export.download` `download` (aktör kullanıcının kendisi, `after: { exportId, downloadNumber }`).
+
+**Pakette olanlar** (`apps/worker/src/jobs/data-exports/collect.ts`; her koleksiyon açık `select` ile okunur, şemaya eklenen sütun bilinçli eklenmedikçe pakete girmez): profil (e-posta, kullanıcı adı, görünen ad, biyografi, durum, tarihler, rol, puan bakiyesi), anketler (seçenekler ve ek açıklamalarla, kaldırılmış/silinmiş dahil), yorumlar, oylar (kullanıcının kendi oyu, anket başlığı ve seçenek etiketiyle) ve oy olayları, anket/yorum tepkileri, kayıtlılar, takipler, ilgi alanları, puan defteri, bildirimler ve bildirim tercihleri/susturmaları, yaptığı raporlar, aldığı yaptırımlar, içeriğine/hesabına uygulanan moderasyon işlemleri, topluluk üyelikleri ve başvuruları, görsel yükleme kayıtları (meta veri), oturumlar (zaman, IP, cihaz).
+
+**Bilerek pakette olmayanlar ve nedenleri**
+
+| Veri | Neden |
+|---|---|
+| Parola özeti, oturum/token özetleri | Kimlik sırrı; kullanıcıya da verilmez |
+| Kullanıcı **hakkındaki** raporlar ve raporlayan kimliği | Raporlayanın güvenliği (kuyruk da raporlayanı göstermez, KV-33 §4). Hakkındaki rapor sonuçları yaptırım/moderasyon işlemi olarak zaten görünür |
+| Yaptırımı uygulayan/kaldıran yönetici, moderasyon işlemini yapan yönetici, bildirimi tetikleyen kullanıcı | Üçüncü kişinin kimliği |
+| Görsel risk skorları ve etiketleri, hash'ler | Kötüye kullanım tespitinin iç sinyali |
+| Yüklenen görsellerin dosyaları | V1 kapsamı meta veri; dosya paketi sonraki iş |
+| Başkalarının yorumları/oyları (kullanıcının anketindeki) | Başka kullanıcının verisi; yalnız toplam sayılar anket satırında |
+| Audit kayıtları (yöneticinin kullanıcı üzerindeki işlemleri) | Güvenlik ve yasal saklama; açık karar (aşağıda) |
+
+**Test:** `apps/api/test/data-exports.test.ts` (yetki matrisi, gerekçe, kısıtlı/silinmiş hesap, idempotency ve eşzamanlı talep, şifreli saklama, worker tekrar/takılma/yarış/hata, teslim ve sıklık sınırı, token + oturum kimlik doğrulaması, indirme hakkı ve eşzamanlı indirme, bağlantı ve paket süre dolumu, bozuk nesne, şifreleme biçimi, paket içeriği ve sızıntı kontrolü).
+
+**Açık kararlar (Mehmet / ürün ve hukuk)**
+
+1. **Kısıtlı hesap:** BANNED/SUSPENDED hesap giriş yapamadığı için indirme oturumu açamaz; talep bu yüzden 409 `account_restricted` ile reddedilir. KVKK erişim hakkı kısıtlı hesaplar için de geçerliyse ayrı bir kanal (ör. tek seferlik, oturumsuz ama e-posta + kimlik kanıtı) gerekir.
+2. **Yetki:** talep ve teslim şimdilik SUPER_ADMIN'e özeldir (kişisel verinin toplu çıkışı). ADMIN'e açılacaksa `privacy.export.manage` kuralı tek satırla değişir.
+3. **Audit kayıtlarının pakette yer alması** ve saklama süresi (KV-39 §47: V1'de süresiz, karar Mehmet).
+4. **Silinmiş/anonimleştirilmiş hesap:** paket üretilmez (409 `user_deleted`). Anonimleştirme kapsamı DATA_MODEL §11/3'te açık (Faruk + Utku).
+5. **Görsel dosyaları** pakete eklensin mi (boyut ve sızıntı yüzeyi büyür).
+
+**Kapsam dışı (sonraki dilimler):** anonimleştirme/silme (geri alınamaz onay, saklama/yasal tutma ayrımı), e-posta değişimi, toplu içerik gizleme; kritik işlemlerde ikinci onay/MFA #182.

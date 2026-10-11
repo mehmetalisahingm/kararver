@@ -107,7 +107,7 @@ const reportsAgainst = (userIds: Prisma.Sql) => Prisma.sql`
 
 type LockedTarget = { id: string; status: UserStatus; deleted: boolean };
 
-async function lockTarget(tx: Tx, userId: string): Promise<LockedTarget | null> {
+export async function lockTarget(tx: Tx, userId: string): Promise<LockedTarget | null> {
   const [row] = await tx.$queryRaw<LockedTarget[]>`
     SELECT id::text AS id, status::text AS status, deleted_at IS NOT NULL AS deleted
     FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
@@ -148,7 +148,7 @@ async function actorIn(tx: Tx, actorId: string): Promise<TrustedActor | null> {
   };
 }
 
-async function decide(tx: Tx, actorId: string, action: ActionId, resource: ResourceContext, now: Date) {
+export async function decide(tx: Tx, actorId: string, action: ActionId, resource: ResourceContext, now: Date) {
   return authorize(await actorIn(tx, actorId), action, resource, now);
 }
 

@@ -187,6 +187,32 @@ export const AdminSession = z.strictObject({
   ipAddress: z.string().nullable(), userAgent: z.string().nullable(),
 });
 
+/** KVKK veri dışa aktarma talebi (#181). Paketin kendisi hiçbir admin yanıtında yoktur. */
+export const DataExportStatus = z.enum(["PENDING", "PROCESSING", "READY", "FAILED", "EXPIRED"]);
+export const DataExport = z.strictObject({
+  id: Id,
+  status: DataExportStatus,
+  requestedAt: Timestamp,
+  readyAt: Timestamp.nullable(),
+  /** Paketin silineceği an (READY iken); sonrasında EXPIRED. */
+  expiresAt: Timestamp.nullable(),
+  sizeBytes: Count.nullable(),
+  /** FAILED iken kısa hata kodu (ör. too_large); ham hata metni yok. */
+  failure: z.string().nullable(),
+  /** Son bağlantı gönderimi; bağlantı token'ı hiçbir yanıtta yoktur. */
+  deliveredAt: Timestamp.nullable(),
+  downloadCount: Count,
+});
+const ExportParams = z.strictObject({ id: Id, exportId: Id });
+
+/** Kullanıcının indirdiği paket: sürümlü, koleksiyonlar serbest biçimli satırlar (sözleşme alan alan sabitlenmez). */
+export const DataExportPackage = z.strictObject({
+  schemaVersion: z.literal(1),
+  generatedAt: Timestamp,
+  profile: z.record(z.string(), z.unknown()),
+  collections: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
+});
+
 const settings = { owner: "Utku", module: "settings" } as const;
 const adminUsers = { owner: "Utku", module: "admin-users" } as const;
 const mehmet = (module: string) => ({ owner: "Mehmet", module }) as const;
@@ -276,6 +302,16 @@ const crud = (
 
 export const adminEndpoints = [
   defineEndpoint({
+    id: "dataExports.download", domain: "admin", method: "POST", path: "/me/data-export/download",
+    summary: "Kendi veri paketini indir (e-postadaki bağlantı token'ı + oturum)", auth: "user", provider: { owner: "Mert", module: "data-exports" }, consumers: ["web"], unblocks: ["#181"],
+    availability: { status: "ready" }, request: { body: z.strictObject({ token: z.string().min(20).max(200) }) },
+    responses: { 200: dataOf(DataExportPackage) }, errors: ["TOKEN_INVALID_OR_EXPIRED"], idempotency: "none", cache: "private",
+    notes: [
+      "Hem geçerli bağlantı token'ı hem paketin sahibi olan oturum gerekir; başkasının oturumuyla token geçersiz sayılır (TOKEN_INVALID_OR_EXPIRED, hesap varlığı sızmaz).",
+      "Paket sunucuda çözülüp JSON olarak döner; her teslimde en çok 3 indirme (sonra bağlantı geçersiz). Her indirme audit'e (privacy.export.download) yazılır.",
+    ],
+  }),
+  defineEndpoint({
     id: "config.get",
     domain: "admin",
     method: "GET",
@@ -363,6 +399,36 @@ export const adminEndpoints = [
       "409 CONFLICT details[0].code: user_deleted, user_banned (yasaklı hesaba bağlantı gönderilmez; normal 'şifremi unuttum' akışıyla aynı).",
       "sent=false: e-posta servisi cevap vermedi; token oluşmuştur ve audit yazılmıştır, bekleme süresi sonrası tekrar denenir.",
       "Bağlantı 1 saat geçerli ve tek kullanımlıktır; kullanıldığında kullanıcının bütün oturumları kapanır (auth.password.reset).",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.dataExports.create", domain: "admin", method: "POST", path: "/admin/users/:id/data-exports",
+    summary: "KVKK veri dışa aktarma talebi başlat", auth: "super_admin", provider: { owner: "Mert", module: "data-exports" }, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 202: dataOf(DataExport) }, errors: ["CONFLICT"], idempotency: "natural", cache: "private",
+    notes: [
+      "Paket asenkron hazırlanır (worker, en geç ~1-2 dk): PENDING → PROCESSING → READY | FAILED. Yönetici veriyi hiçbir aşamada görmez; yanıtlar yalnız durum ve boyut taşır.",
+      "Idempotent: hesabın PENDING/PROCESSING/READY (süresi dolmamış) bir talebi varsa yenisi açılmaz, mevcut talep döner (DB'de kısmi unique index); audit yalnız yeni talepte yazılır.",
+      "Kapsam ve dışarıda bırakılanlar: docs/KV-33_ADMIN_USERS.md §8. Paket AES-256-GCM ile şifreli saklanır, 7 gün sonra silinir (EXPIRED).",
+      "409 CONFLICT details[0].code: user_deleted (hesap anonimleştirilmiş), account_restricted (BANNED/SUSPENDED hesap indirme için giriş yapamaz; açık karar, PR notu).",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.dataExports.list", domain: "admin", method: "GET", path: "/admin/users/:id/data-exports",
+    summary: "Hesabın veri dışa aktarma talepleri (son 20)", auth: "super_admin", provider: { owner: "Mert", module: "data-exports" }, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(z.array(DataExport)) }, errors: [], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
+    id: "admin.users.dataExports.deliver", domain: "admin", method: "POST", path: "/admin/users/:id/data-exports/:exportId/deliver",
+    summary: "Hazır paketin indirme bağlantısını kullanıcının e-postasına gönder", auth: "super_admin", provider: { owner: "Mert", module: "data-exports" }, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: ExportParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 202: dataOf(z.strictObject({ sent: z.boolean(), linkExpiresAt: Timestamp })) }, errors: ["CONFLICT", "NOT_FOUND"], idempotency: "none", cache: "private",
+    notes: [
+      "Ayrı onay adımı: talep READY olduktan sonra, yönetici kimlik doğrulamasını (destek kanalı vb.) yaptığını gerekçeyle beyan ederek gönderir. Bağlantı yalnız hesabın kayıtlı e-postasına gider; yanıtta ve audit'te token/bağlantı yoktur.",
+      "Bağlantı 24 saat (ve paket süresi) geçerli; yeni gönderim önceki bağlantıyı geçersiz kılar. Hesap başına 60 sn bekleme ve saatte 3 gönderim (429 RATE_LIMITED).",
+      "409 CONFLICT details[0].code: not_ready (PENDING/PROCESSING/FAILED), expired (paket silinmiş). Talep başka hesaba aitse 404.",
+      "sent=false: e-posta servisi cevap vermedi; token oluşmuştur, bekleme süresi sonrası tekrar denenir.",
     ],
   }),
   ...(["sanctions", "reports", "activity"] as const).map((sub) =>
