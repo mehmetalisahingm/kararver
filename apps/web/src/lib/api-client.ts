@@ -1,4 +1,4 @@
-import { DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
+import { DataExportPackage, DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
 import { AdminClient } from "../features/admin/admin-client.ts";
 import { CommunityClient, ReportClient } from "../features/community/community-client.ts";
@@ -66,6 +66,10 @@ export class ApiClient implements ProductClient {
   addComment(id: string, draft: CommentDraft, key: string) { return this.social.addComment(id,draft,key); }
   editComment(id: string, commentId: string, text: string) { return this.social.editComment(id,commentId,text); }
   deleteComment(id: string, commentId: string) { return this.social.deleteComment(id,commentId); }
+  /** #181 KVKK: kendi veri paketini indirir (e-postadaki bağlantı token'ı + oturum). Paket sunucuda çözülüp JSON döner. */
+  async downloadDataExport(token: string) {
+    return dataOf(DataExportPackage).parse(await this.http.request("dataExports.download", { body: { token } })).data;
+  }
   async getDecision(id: string, signal?: AbortSignal) {
     return dataOf(DecisionState).parse(await this.http.request("decisions.get", { params: { id }, signal })).data;
   }
