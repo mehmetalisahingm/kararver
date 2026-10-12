@@ -11,6 +11,10 @@ import type { PrismaClient } from "@kararver/db";
 import { createSettingsService, DEFAULT_UPDATED_AT, effectiveDefaults, SAFE_DEFAULTS } from "../src/modules/settings/service.ts";
 import type { SettingsStore, StoredSetting } from "../src/modules/settings/store.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
+import { createWorkerSettings } from "../../worker/src/settings.ts";
+import { loadTrendSettings } from "../../worker/src/jobs/trends/settings.ts";
+import { refreshFormat } from "../../worker/src/jobs/trends/job.ts";
+import { fixtures } from "../../worker/test/support/db.ts";
 
 const backend = prismaBackend();
 
@@ -217,6 +221,42 @@ describe("sistem ayarları ve acil durum (postgres)", { skip: backend ? false : 
   });
 
   // ─── Değiştirme ─────────────────────────────────────────────
+
+  test("admin ayarı gerçek trend hesabını deploy olmadan değiştirir; aynı dilimde yeni sürüm ve audit", async () => {
+    const end = new Date("2099-10-09T12:00:00Z");
+    const fixture = fixtures(db);
+    const poll = await fixture.poll({ categoryId, opensAt: new Date(end.getTime() - 3600_000) });
+    await fixture.votes(poll, 3, () => new Date(end.getTime() - 60_000));
+    const worker = createWorkerSettings(db, { now: () => h.clock.now });
+    const deps = { prisma: db, now: () => end, log: () => {}, scoringSettings: () => loadTrendSettings(worker) };
+    const key = "trends.mostVotedMinVoters";
+    const baseAudit = await auditCount(key, "settings.update");
+    const score = async (runId: string) => db.trendScore.findFirst({ where: { runId, pollId: poll.id } });
+    const first = await refreshFormat(deps, "WEEKLY_MOST_VOTED", end);
+    assert.equal(first.status, "SUCCEEDED");
+    if (first.status !== "SUCCEEDED") return;
+    assert.ok(await score(first.runId));
+    assertError(await update(admin.cookie, key, 4, 1), 403, "FORBIDDEN");
+    assertError(await update(superAdmin.cookie, "trends.weeklySmoothing", 0, 1), 400, "VALIDATION_ERROR");
+    assert.equal((await update(superAdmin.cookie, key, 4, 1)).statusCode, 200);
+    assert.equal((await refreshFormat(deps, "WEEKLY_MOST_VOTED", end)).status, "SKIPPED", "önbellek süresi henüz dolmadı");
+    h.clock.advance(5001);
+    const second = await refreshFormat(deps, "WEEKLY_MOST_VOTED", end);
+    assert.equal(second.status, "SUCCEEDED");
+    if (second.status !== "SUCCEEDED") return;
+    assert.equal(await score(second.runId), null, "yeni örneklem eşiği uygulanır");
+    const runs = await db.trendRun.findMany({ where: { id: { in: [first.runId, second.runId] } }, orderBy: { calculationVersion: "asc" } });
+    assert.ok(runs[1]!.calculationVersion > runs[0]!.calculationVersion);
+    assert.equal((await update(superAdmin.cookie, key, 1, 2)).statusCode, 200);
+    h.clock.advance(5001);
+    const restored = await refreshFormat(deps, "WEEKLY_MOST_VOTED", end);
+    assert.equal(restored.status, "SUCCEEDED");
+    if (restored.status !== "SUCCEEDED") return;
+    assert.ok(await score(restored.runId), "eski değere dönüş yeni hesap sürümüdür");
+    assert.equal(await auditCount(key, "settings.update"), baseAudit + 2);
+    // Yeniden çalıştırılan test için bu pencereyi serbest bırak.
+    await db.trendRun.deleteMany({ where: { id: { in: [first.runId, second.runId, restored.runId] } } });
+  });
 
   test("güncelleme: sürüm artar, audit önce/sonra + gerekçe + güncelleyen; listeye ve config'e yansır", async () => {
     const base = await auditCount("polls.dailyLimit", "settings.update");

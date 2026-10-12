@@ -1,6 +1,7 @@
 import { test,expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { api, sample, empty, failure } from "./api";
+import { defaultSettings } from "@kararver/contracts";
 
 test.beforeEach(async ({browser},info)=>{
   info.annotations.push({type:"browser-version",description:browser.version()});
@@ -8,6 +9,36 @@ test.beforeEach(async ({browser},info)=>{
 });
 test.afterEach(async ({page},info)=>{
   if(info.status==="passed") await page.screenshot({path:info.outputPath("verified-state.png"),fullPage:true});
+});
+
+test("settings: trend coefficients render, validate and save with reason and version", async ({page}) => {
+  const {handlers, unexpected} = await api(page);
+  const key = "trends.dailyGravityPercent";
+  let setting = {key, value: defaultSettings().values[key], version: 1, updatedAt: "1970-01-01T00:00:00.000Z", updatedBy: null};
+  let submitted: unknown;
+  handlers.set("admin.settings.list", route => route.fulfill({json: {data: [setting]}}));
+  handlers.set("admin.settings.update", async route => {
+    submitted = route.request().postDataJSON();
+    setting = {...setting, value: 150, version: 2};
+    await route.fulfill({json: {data: setting}});
+  });
+  await page.goto("/admin/settings");
+  const row = page.getByRole("row").filter({hasText: key});
+  await expect(row).toContainText("120");
+  await row.getByRole("button", {name: /değiştir/i}).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel(/^Değer/).fill("0");
+  await dialog.getByLabel(/Gerekçe/).fill("Günlük trend ağırlığı düzenlendi");
+  await dialog.getByRole("button", {name: "Kaydet", exact:true}).click();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  expect(submitted).toBeUndefined();
+  await dialog.getByLabel(/^Değer/).fill("150");
+  await dialog.getByRole("button", {name: "Kaydet", exact:true}).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(row).toContainText("150");
+  await expect(row).toContainText("v2");
+  expect(submitted).toEqual({value:150, version:1, reason:"Günlük trend ağırlığı düzenlendi"});
+  expect(unexpected).toEqual([]);
 });
 
 for(const scenario of [
