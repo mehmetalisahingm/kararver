@@ -13,6 +13,8 @@ export interface MediaStorage {
   presignUpload(key: string, file: { contentType: string; sizeBytes: number }, now: Date): Promise<PresignedUpload>;
   headPrivate(key: string): Promise<StoredObject | null>;
   presignPrivateRead(key: string, now: Date): Promise<{ url: string; expiresAt: Date }>;
+  /** Private nesneyi okur (KVKK veri paketi, #181: şifreli paket API'de çözülür). Nesne yoksa null. */
+  readPrivate(key: string): Promise<Buffer | null>;
   /** Moderatör onayı: işlenmiş (EXIF'siz) kopyayı private bucket'tan public bucket'a kopyalar. Tekrarı zararsızdır. */
   publishFromPrivate(privateKey: string, publicKey: string): Promise<void>;
   /** Onaylı görselin kaldırılması: public kopyayı siler. Nesne yoksa hata vermez. */
@@ -34,6 +36,9 @@ function isNotFound(err: unknown): boolean {
 }
 
 /** S3/R2 bağlantı kurma ve istek (8 MB indirme/yükleme dahil) üst sınırları. SDK varsayılanı sınırsızdır. */
+/** readPrivate üst sınırı: şifreli veri paketi (worker en çok 25 MB JSON üretir, gzip küçültür). */
+export const MAX_PRIVATE_READ_BYTES = 40 * 1024 * 1024;
+
 export const S3_CONNECTION_TIMEOUT_MS = 5_000;
 export const S3_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -66,6 +71,20 @@ export function createS3MediaStorage(config: StorageConfig): MediaStorage {
       try {
         const head = await client.send(new HeadObjectCommand({ Bucket, Key: key }));
         return { sizeBytes: head.ContentLength ?? 0, contentType: head.ContentType ?? null };
+      } catch (err) {
+        if (isNotFound(err)) return null;
+        throw err;
+      }
+    },
+
+    async readPrivate(key) {
+      try {
+        const res = await client.send(new GetObjectCommand({ Bucket, Key: key }));
+        if ((res.ContentLength ?? 0) > MAX_PRIVATE_READ_BYTES) {
+          res.Body?.transformToWebStream().cancel();
+          throw new Error(`private nesne çok büyük: ${res.ContentLength} bayt`);
+        }
+        return Buffer.from(await res.Body!.transformToByteArray());
       } catch (err) {
         if (isNotFound(err)) return null;
         throw err;

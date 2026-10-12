@@ -24,7 +24,10 @@ function isNotFound(err: unknown): boolean {
 export const S3_CONNECTION_TIMEOUT_MS = 5_000;
 export const S3_REQUEST_TIMEOUT_MS = 30_000;
 
-export function createS3WorkerStorage(config: StorageConfig): WorkerStorage {
+/** #181 veri paketi: süresi dolan şifreli paketi private bucket'tan siler. Nesne yoksa hata vermez (S3 DeleteObject). */
+export type PrivateDeleter = { deletePrivate(key: string): Promise<void> };
+
+export function createS3WorkerStorage(config: StorageConfig): WorkerStorage & PrivateDeleter {
   const client = new S3Client({
     endpoint: config.endpoint,
     region: config.region,
@@ -64,6 +67,9 @@ export function createS3WorkerStorage(config: StorageConfig): WorkerStorage {
     },
     async deletePublic(key) {
       await client.send(new DeleteObjectCommand({ Bucket: config.publicBucket, Key: key }));
+    },
+    async deletePrivate(key) {
+      await client.send(new DeleteObjectCommand({ Bucket: config.privateBucket, Key: key }));
     },
   };
 }

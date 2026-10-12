@@ -22,6 +22,7 @@ import {
 import { MEDIA_PROCESS_QUEUE, MEDIA_QUEUE_OPTIONS, processMedia } from "./jobs/media/job.ts";
 import { createSubprocessModerator } from "./jobs/media/moderator.ts";
 import { thresholdsFromPercent } from "./jobs/media/policy.ts";
+import { DATA_EXPORTS_CRON, DATA_EXPORTS_QUEUE, runDataExports } from "./jobs/data-exports/job.ts";
 import { createS3WorkerStorage } from "./jobs/media/storage.ts";
 import { createPrismaMediaJobStore } from "./jobs/media/store.ts";
 import { activateScheduled, FEATURED_ACTIVATE_CRON, FEATURED_ACTIVATE_QUEUE } from "./jobs/featured/activate.ts";
@@ -154,8 +155,16 @@ await boss.schedule(NOTIFICATIONS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_CRON, nul
 await boss.work(NOTIFICATIONS_CLEANUP_QUEUE, { batchSize: 1 }, async () => {
   await cleanupNotifications({ prisma, now: () => new Date(), log });
 });
+// data-exports.build: dakikada bir; bekleyen KVKK veri paketlerini hazırlar, süresi dolanları siler (jobs/data-exports/job.ts).
+const exportStorage = createS3WorkerStorage(config.storage);
+await boss.createQueue(DATA_EXPORTS_QUEUE, { policy: "singleton", retryLimit: 0 });
+await boss.schedule(DATA_EXPORTS_QUEUE, DATA_EXPORTS_CRON, null, { tz: "Europe/Istanbul" });
+await boss.work(DATA_EXPORTS_QUEUE, { batchSize: 1 }, async () => {
+  const result = await runDataExports({ prisma, storage: exportStorage, now: () => new Date(), log });
+  if (result.built || result.failed || result.lost || result.expired) log(result.failed ? "warn" : "info", "data-exports.build", result);
+});
 log("info", "worker hazır", {
-  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_QUEUE],
+  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_QUEUE, DATA_EXPORTS_QUEUE],
   concurrency: config.mediaConcurrency,
 });
 const heartbeatPath = process.env.WORKER_HEARTBEAT_PATH ?? "/tmp/kararver-worker-heartbeat.json";

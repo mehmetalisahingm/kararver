@@ -11,6 +11,8 @@ import { createRouter } from "./http/route.ts";
 import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import { registerDataExportRoutes } from "./modules/data-exports/routes.ts";
+import type { DataExportStore } from "./modules/data-exports/store.ts";
 import type { AdminUserStore } from "./modules/admin-users/store.ts";
 import type { PasswordHasher } from "./modules/auth/crypto.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
@@ -129,6 +131,8 @@ export type AppDeps = {
   reportStore?: ReportStore;
   /** Verilmezse admin kullanıcı, yaptırım ve rol route'ları (admin.users.*, admin.sanctions.*, admin.roles.put; KV-33) kaydedilmez. */
   adminUserStore?: AdminUserStore;
+  /** #181 KVKK veri dışa aktarma; paket okuma için media.storage da gerekir. */
+  dataExportStore?: DataExportStore;
   metricsStore?: MetricsStore;
   /** KV-186 operasyon yoklaması (DB, worker izi, pg-boss kuyrukları); verilmezse bu bileşenler `unknown`. */
   opsProbe?: OpsProbe;
@@ -350,6 +354,16 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       webUrl: config.webUrl,
     });
     registerRoleRoutes(route, { store: deps.adminUserStore, now });
+  }
+  if (deps.dataExportStore && deps.media) {
+    registerDataExportRoutes(route, {
+      store: deps.dataExportStore,
+      storage: deps.media.storage,
+      mailer: deps.mailer,
+      now,
+      tokenPepper: config.authTokenPepper,
+      webUrl: config.webUrl,
+    });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
   registerOpsRoutes(route, { probe: deps.opsProbe, telemetry, env: config.appEnv, startedAt, now });

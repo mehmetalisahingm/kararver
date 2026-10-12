@@ -15,6 +15,9 @@ Kırıcı değişiklik yok: yeni endpoint, şema ve yetki (minör).
 
 - **Eklendi:** `admin.ops.status` (`GET /admin/ops`, yalnız SUPER_ADMIN, yetki `ops.read`). API/DB/worker/kuyruk durumu, son 15 dakikanın 5xx oranı ve P50/P95/P99 gecikmesi, en yavaş route'lar, hız sınırı ve giriş kilidi sayıları, yedek ve restore tatbikatı kanıtı.
 - **Eklendi:** `OpsStatus`, `OpsHealth` şemaları. Telemetri yoksa `unknown` ya da `null` döner, hiçbir zaman 0 değil. Yanıtta IP, e-posta, bağlantı adresi ve sorgu dizesi yoktur.
+- **KVKK (#181):** `admin.users.dataExports.create` / `.list` / `.deliver` (`privacy.export.manage`) ve `dataExports.download` (`privacy.export.download`). Paket AES-256-GCM ile şifreli, 7 gün sonra silinir; bağlantı yalnız kullanıcının kayıtlı e-postasına gider, indirme oturum ve token gerektirir.
+- **Şemalar:** `DataExport`, `DataExportStatus`, `DataExportPackage`.
+
 ## 1.22.0 — 2026-10-11 (Mert, #181 hesap yönetimi: şifre sıfırlama)
 
 Kırıcı değişiklik yok: yeni endpoint ve yetki.
