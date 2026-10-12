@@ -200,6 +200,8 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `GET /admin/users/:id/activity`<br>Kullanıcının anket ve yorumları (gizli/kaldırılmış dahil) · `admin.users.activity` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `POST /admin/users/:id/sanctions`<br>Uyarı / kısıt / suspend / ban · `admin.sanctions.create` | A | 201 | key (ops.) | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `POST /admin/users/:id/sanctions/:sanctionId/lift`<br>Yaptırımı kaldır · `admin.sanctions.lift` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
+| `POST /admin/role-approvals`<br>Kritik rol değişikliği için MFA doğrulanmış onay talebi · `admin.roleApprovals.request` | SA | 201 | — | Utku `rbac` | Utku (admin UI) | #182 | hazır |
+| `POST /admin/role-approvals/:id/approve`<br>Farklı SUPER_ADMIN tarafından MFA doğrulanmış ikinci onay · `admin.roleApprovals.approve` | SA | 200 | — | Utku `rbac` | Utku (admin UI) | #182 | hazır |
 | `PUT /admin/users/:id/role`<br>Rol ata · `admin.roles.put` | SA | 200 | doğal | Utku `rbac` | Utku (admin UI) | #14 #35 | hazır |
 | `GET /admin/settings`<br>Bütün sistem ayarları (sürümlü) · `admin.settings.list` | A | 200 | — | Utku `settings` | Utku (admin UI) | #42 | hazır |
 | `PATCH /admin/settings/:key`<br>Tek ayarı değiştir (iyimser kilit) · `admin.settings.update` | SA | 200 | doğal | Utku `settings` | Utku (admin UI) | #42 | hazır |
@@ -268,7 +270,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
 | #180 | `GET /me/mfa`, `POST /me/mfa/setup`, `POST /me/mfa/confirm`, `POST /me/mfa/step-up` |
 | #181 | `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver` |
-| #182 | `GET /me/mfa`, `POST /me/mfa/step-up` |
+| #182 | `GET /me/mfa`, `POST /me/mfa/step-up`, `POST /admin/role-approvals`, `POST /admin/role-approvals/:id/approve` |
 | #186 | `GET /admin/ops` |
 <!-- END:unblocks -->
 
