@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import type { AdminClient, DataExportView, UserDetail, StrongSanction } from "./admin-client";
+import type { AdminClient, ContentJobAction, ContentJobPreviewView, ContentJobScope, ContentJobView, DataExportView, UserDetail, StrongSanction } from "./admin-client";
 import type { AdminRole } from "./admin-model";
 import { ActionDialog, errorMessage, formatDate, ListState, useAdminRoles, useRemoteList } from "./admin-ui";
 
@@ -53,6 +53,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       <p>{user.stats.pollCount} gönderi · {user.stats.commentCount} yorum · {user.stats.voteCount} oy</p>
       {canAssign ? <button className="kv-button" onClick={() => setAction("role")}>Yetkilendir / rolü değiştir</button> : null}
       <PasswordReset id={id} admin={admin} />
+      <ContentJobs id={id} admin={admin} />
       {canAssign ? <DataExports id={id} admin={admin} /> : null}
       {canAssign ? <UserSessions id={id} admin={admin} /> : null}
       <button className="kv-button" onClick={() => setAction("sanction")}>Uyar / kısıtla / askıya al / yasakla</button>
@@ -85,6 +86,94 @@ function PasswordReset({ id, admin }: { id: string; admin: AdminClient }) {
     <ActionDialog open={open} title="Şifre sıfırlama e-postası gönder" submitLabel="Gönder" onClose={() => setOpen(false)} onSubmit={async reason => {
       setResult(await admin.sendPasswordReset(id, reason));
     }}><p>Aynı hesap için bir dakikada en çok bir, saatte en çok beş istek gönderilebilir. Gerekçe yönetim geçmişine kaydedilir.</p></ActionDialog>
+  </section>;
+}
+
+const JOB_KIND: Record<ContentJobView["kind"], string> = { HIDE: "Toplu gizleme", REMOVE: "Toplu kaldırma", UNDO: "Geri alma" };
+const JOB_STATUS: Record<ContentJobView["status"], string> = { QUEUED: "Sırada", PROCESSING: "İşleniyor", DONE: "Bitti", FAILED: "Başarısız", CANCELLED: "Durduruldu" };
+const JOB_FAILURE: Record<string, string> = { actor_not_authorized: "İşi başlatanın yetkisi değişti", runner_error: "Beklenmeyen hata" };
+const SCOPE_LABEL: Record<ContentJobScope, string> = { all: "anketler ve yorumlar", polls: "yalnız anketler", comments: "yalnız yorumlar" };
+
+/** Kullanıcının içeriğini toplu gizleme/kaldırma (#181): önizleme → gerekçe → ayrı onay → kuyruk; bitmiş iş geri alınabilir. */
+function ContentJobs({ id, admin }: { id: string; admin: AdminClient }) {
+  const [action, setAction] = useState<ContentJobAction>("HIDE");
+  const [scope, setScope] = useState<ContentJobScope>("all");
+  const [preview, setPreview] = useState<ContentJobPreviewView | null>(null);
+  const [jobs, setJobs] = useState<ContentJobView[]>([]);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const [dialog, setDialog] = useState<{ kind: "create" } | { kind: "undo" | "cancel"; job: ContentJobView } | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    admin.contentJobs(id, controller.signal).then(list => { if (!controller.signal.aborted) { setJobs(list); setError(""); } }).catch(cause => { if (!controller.signal.aborted) setError(errorMessage(cause)); });
+    return () => controller.abort();
+  }, [admin, id, revision]);
+  const active = jobs.some(job => job.status === "QUEUED" || job.status === "PROCESSING");
+  // İş API'deki çalıştırıcıda işlenir (birkaç sn): sürerken liste kendiliğinden yenilenir.
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => setRevision(n => n + 1), 4_000);
+    return () => clearInterval(timer);
+  }, [active]);
+  async function runPreview() {
+    setBusy(true); setError(""); setNotice("");
+    try { setPreview(await admin.previewContentJob(id, action, scope)); } catch (cause) { setPreview(null); setError(errorMessage(cause)); } finally { setBusy(false); }
+  }
+  const total = preview ? preview.total : 0;
+  return <section className="kv-stack" aria-label="Toplu içerik işlemi">
+    <h3>Kullanıcının içeriği</h3>
+    <p className="kv-muted">Hesabın anket ve yorumlarını tek seferde gizle veya kaldır. Önce etkilenecek içerik sayılır, sonra gerekçeyle onaylarsın; işlem kuyrukta tek tek ve kayıt altında yapılır, bitince geri alınabilir.</p>
+    <label>İşlem<select className="kv-input" value={action} onChange={e => { setAction(e.target.value as ContentJobAction); setPreview(null); }}><option value="HIDE">Gizle</option><option value="REMOVE">Kaldır</option></select></label>
+    <label>Kapsam<select className="kv-input" value={scope} onChange={e => { setScope(e.target.value as ContentJobScope); setPreview(null); }}><option value="all">Anketler ve yorumlar</option><option value="polls">Yalnız anketler</option><option value="comments">Yalnız yorumlar</option></select></label>
+    <button className="kv-button kv-button--secondary" disabled={busy || active} onClick={() => void runPreview()}>{busy ? "Sayılıyor…" : "Etkilenecek içeriği say"}</button>
+    {active ? <p className="kv-muted">Bu hesapta devam eden bir işlem var; bitmesini bekle veya durdur.</p> : null}
+    {error ? <p role="alert">{error}</p> : null}
+    {notice ? <p role="status">{notice}</p> : null}
+    {preview ? <div className="kv-card" role="region" aria-label="Önizleme sonucu">
+      <p><strong>{total === 0 ? "Bu işleme uygun içerik yok." : `${preview.affected.polls} anket ve ${preview.affected.comments} yorum ${action === "HIDE" ? "gizlenecek" : "kaldırılacak"}.`}</strong></p>
+      <p className="kv-muted">Kapsam: {SCOPE_LABEL[preview.scope]}. {action === "HIDE" ? "Yalnız şu an görünür olanlar sayılır." : "Zaten kaldırılmış olanlar sayılmaz."} Önizlemeden sonra yazılan içerik etkilenmez. Tek işte en çok {preview.maxItems} içerik işlenir.</p>
+      {total > preview.maxItems ? <p role="alert">Çok fazla içerik: kapsamı daralt (yalnız anketler veya yalnız yorumlar).</p> : null}
+      <button className="kv-button" disabled={total === 0 || total > preview.maxItems} onClick={() => setDialog({ kind: "create" })}>Gerekçeyle onayla</button>
+    </div> : null}
+    {jobs.map(job => <article className="kv-card" key={job.id}>
+      <p><strong>{JOB_KIND[job.kind]}</strong> · {JOB_STATUS[job.status]}{job.failure ? ` · ${JOB_FAILURE[job.failure] ?? "Hata"}` : ""} · {formatDate(job.createdAt)}</p>
+      <p className="kv-muted">Beklenen: {job.expected.polls} anket, {job.expected.comments} yorum · Uygulanan: {job.applied} · Atlanan: {job.skipped} · Başarısız: {job.failed}{job.unchanged ? ` · Değişmeyen: ${job.unchanged}` : ""}</p>
+      <p className="kv-muted">Gerekçe: {job.reason}</p>
+      {job.status === "QUEUED" || job.status === "PROCESSING" ? <button className="kv-button kv-button--secondary" onClick={() => { setNotice(""); setDialog({ kind: "cancel", job }); }}>Durdur</button> : null}
+      {job.canUndo ? <button className="kv-button kv-button--secondary" onClick={() => { setNotice(""); setDialog({ kind: "undo", job }); }}>Geri al</button> : null}
+    </article>)}
+    {!jobs.length && !error ? <p className="kv-muted">Bu hesap için toplu işlem yok.</p> : null}
+    <ActionDialog
+      open={dialog !== null}
+      title={dialog?.kind === "undo" ? "Toplu işlemi geri al" : dialog?.kind === "cancel" ? "Toplu işlemi durdur" : action === "HIDE" ? "İçeriği toplu gizle" : "İçeriği toplu kaldır"}
+      submitLabel={dialog?.kind === "undo" ? "Geri al" : dialog?.kind === "cancel" ? "Durdur" : "Onayla ve kuyruğa al"}
+      onClose={() => setDialog(null)}
+      onSubmit={async reason => {
+        if (dialog?.kind === "undo") {
+          await admin.undoContentJob(id, dialog.job.id, reason);
+          setNotice("Geri alma kuyruğa alındı; yalnız işin uyguladığı ve sonradan değişmeyen içerik geri yüklenir.");
+        } else if (dialog?.kind === "cancel") {
+          await admin.cancelContentJob(id, dialog.job.id, reason);
+          setNotice("İş durduruldu; işlenmiş içerik olduğu gibi kaldı (geri alabilirsin).");
+        } else if (preview) {
+          try {
+            await admin.createContentJob(id, { action, scope, cutoffAt: preview.cutoffAt, expected: preview.affected, reason });
+          } catch (cause) {
+            setPreview(null); // eskiyen/değişen önizleme yeniden alınmalı
+            throw cause;
+          }
+          setPreview(null);
+          setNotice("İş kuyruğa alındı; içerik birkaç saniye içinde tek tek işlenir.");
+        }
+        setRevision(n => n + 1);
+      }}
+    >
+      {dialog?.kind === "undo" ? <p>Yalnızca bu işin uyguladığı ve önceki durumu görünür (aktif) olan içerik geri yüklenir. İşten sonra durumu değişen içeriğe dokunulmaz. Gerekçe yönetim geçmişine kaydedilir.</p>
+        : dialog?.kind === "cancel" ? <p>Kalan içeriğe dokunulmaz; işlenmiş içerik olduğu gibi kalır. Gerekçe yönetim geçmişine kaydedilir.</p>
+        : preview ? <p>{preview.affected.polls} anket ve {preview.affected.comments} yorum {action === "HIDE" ? "gizlenecek" : "kaldırılacak"}. Her içerik ayrı ayrı kayıt altına alınır; gerekçe hepsine yazılır. Onaydan önce içerik değişirse işlem reddedilir ve önizlemeyi yenilemen gerekir.</p> : null}
+    </ActionDialog>
   </section>;
 }
 

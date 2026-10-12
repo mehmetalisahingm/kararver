@@ -9,6 +9,13 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.24.0 — 2026-10-12 (Mert, #181 kullanıcı içeriğinin toplu gizlenmesi/kaldırılması)
+
+Kırıcı değişiklik yok: yeni endpoint ve yetki.
+
+- **Eklendi:** `admin.users.contentJobs.preview` (GET, etki sayacı), `.create` (ayrı onay, kuyruğa alır), `.list`, `.undo` ve `.cancel` (ADMIN+, `user.content.bulk`, kural `sanctionTarget`; gerekçeli, audit `user.content.bulk` `request`/`undo`/`cancel`). İçerik başına işlem mevcut moderasyon uygulamasından geçer (audit `moderation.*.apply`, olay, rapor kapanması). Tek işte en çok 500 içerik; hesapta tek açık iş; geri alma yalnız önceki durumu ACTIVE olan ve değişmemiş içeriği geri yükler.
+- Şemalar: `ContentJob`, `ContentJobPreview`, `ContentJobKind`, `ContentJobStatus`, `ContentJobScope`.
+
 ## 1.23.0 — 2026-10-12 (Faruk, operasyon merkezi, #186)
 
 Kırıcı değişiklik yok: yeni endpoint, şema ve yetki (minör).
