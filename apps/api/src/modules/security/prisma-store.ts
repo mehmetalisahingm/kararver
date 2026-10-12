@@ -68,7 +68,7 @@ export function createPrismaMfaStore(prisma: PrismaClient, pepper: string): MfaS
         if (!c || c.enabled_at || c.setup_session_id !== sessionId || c.pending_expires_at <= now) return "invalid" as const;
         if (c.locked_until && c.locked_until > now) return "locked" as const;
         const step = matchTotpStep({ base32Secret: recoverTotpSecret(c.secret_cipher, userId, pepper),
-          code, nowMs: now.getTime(), lastAcceptedStep: c.last_accepted_step });
+          code, nowMs: now.getTime(), lastAcceptedStep: Number(c.last_accepted_step) });
         if (step === null) { await recordFailure(tx, userId, c.failed_attempts, now); return "invalid" as const; }
         await tx.$executeRaw`UPDATE user_mfa_credentials
           SET enabled_at = ${now}::timestamptz, last_accepted_step = ${step},
@@ -86,7 +86,7 @@ export function createPrismaMfaStore(prisma: PrismaClient, pepper: string): MfaS
         if (!c?.enabled_at) return { kind: "invalid" as const };
         if (c.locked_until && c.locked_until > now) return { kind: "locked" as const };
         const step = matchTotpStep({ base32Secret: recoverTotpSecret(c.secret_cipher, userId, pepper),
-          code, nowMs: now.getTime(), lastAcceptedStep: c.last_accepted_step });
+          code, nowMs: now.getTime(), lastAcceptedStep: Number(c.last_accepted_step) });
         if (step === null) { await recordFailure(tx, userId, c.failed_attempts, now); return { kind: "invalid" as const }; }
         const expiresAt = new Date(now.getTime() + STEPUP_MS);
         await tx.$executeRaw`UPDATE user_mfa_credentials SET last_accepted_step = ${step},
