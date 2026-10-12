@@ -10,6 +10,16 @@ type SetupResult = { secret: string; uri: string; expiresAt: string };
 
 export default function SecurityPage() {
   const { user } = useProduct();
+  if (!user) return <section className="kv-card screen-stack">
+    <h1>Hesap güvenliği</h1>
+    <p>Güvenlik ayarlarını görüntülemek için giriş yap.</p>
+    <Link className="kv-button" href="/giris?returnTo=%2Fhesap%2Fguvenlik">Giriş yap</Link>
+  </section>;
+  // Each identity owns a separate component lifetime, including its secret, inputs and outstanding responses.
+  return <SecuritySettings key={user.id} userId={user.id} />;
+}
+
+function SecuritySettings({ userId }: { userId: string }) {
   const api = useMemo(() => new HttpClient(process.env.NEXT_PUBLIC_API_URL || "/api"), []);
   const [status, setStatus] = useState<Status | null>(null);
   const [setup, setSetup] = useState<SetupResult | null>(null);
@@ -23,14 +33,20 @@ export default function SecurityPage() {
     const result = await api.request("me.mfa.status") as Envelope<Status>;
     setStatus(result.data);
   }
+  async function retryStatus() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try { await refresh(); }
+    catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
   useEffect(() => {
-    if (!user?.id) return;
     let active = true;
     api.request("me.mfa.status")
       .then(r => { if (active) setStatus((r as Envelope<Status>).data); })
       .catch(e => { if (active) setError((e as Error).message); });
     return () => { active = false; };
-  }, [user?.id, api]);
+  }, [userId, api]);
 
   async function act(event: FormEvent, action: "setup" | "confirm" | "stepup") {
     event.preventDefault();
@@ -54,12 +70,6 @@ export default function SecurityPage() {
     finally { setBusy(false); }
   }
 
-  if (!user) return <section className="kv-card screen-stack">
-    <h1>Hesap güvenliği</h1>
-    <p>Güvenlik ayarlarını görüntülemek için giriş yap.</p>
-    <Link className="kv-button" href="/giris?returnTo=%2Fhesap%2Fguvenlik">Giriş yap</Link>
-  </section>;
-
   return <div className="screen-stack">
     <section className="kv-card screen-stack">
       <span className="eyebrow">HESAP GÜVENLİĞİ</span>
@@ -67,8 +77,9 @@ export default function SecurityPage() {
       <p className="kv-muted">Girişine ek olarak doğrulayıcı uygulamandaki altı haneli kodla kritik işlemleri onaylayabilirsin.</p>
       <p role="status" aria-live="polite">{status ? (status.enabled ? "TOTP doğrulaman etkin." : "TOTP doğrulaman henüz etkin değil.") : "Güvenlik durumun kontrol ediliyor."}</p>
       {error && <p role="alert" className="kv-help">{error}</p>}
+      {!status && error && <button className="kv-button" disabled={busy} onClick={() => void retryStatus()}>Güvenlik durumunu tekrar yükle</button>}
       {note && <p role="status" className="kv-help">{note}</p>}
-      {!status?.enabled && !setup && <form className="screen-stack" onSubmit={e => void act(e, "setup")}>
+      {status && !status.enabled && !setup && <form className="screen-stack" onSubmit={e => void act(e, "setup")}>
         <label>Mevcut şifren
           <input type="password" autoComplete="current-password" required minLength={10} maxLength={128} value={password} onChange={e => setPassword(e.target.value)} />
         </label>

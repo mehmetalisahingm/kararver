@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient, Role } from "@kararver/db";
 import { writeAudit } from "../audit/write.ts";
+import { decide, lockTarget } from "../admin-users/prisma-store.ts";
+import { superAdminCountForRoleRule } from "../admin-users/store.ts";
 import { consumeFreshStepup } from "./stepup-guard.ts";
 
 export type RoleApprovalView = {
@@ -9,6 +11,7 @@ export type RoleApprovalView = {
 };
 type Outcome = { kind: "ok"; data: RoleApprovalView } | { kind: "rejected"; reason: "forbidden" | "invalid" | "stale" };
 export interface RoleApprovalStore {
+  target(approvalId: string): Promise<{ targetUserId: string; requestedRole: Role } | null>;
   request(input: { actorId: string; sessionId: string; targetUserId: string; role: Role; reason: string; requestId: string; now: Date }): Promise<Outcome>;
   approve(input: { actorId: string; sessionId: string; approvalId: string; reason: string; requestId: string; now: Date }): Promise<Outcome>;
 }
@@ -22,6 +25,12 @@ type ApprovalRow = {
 
 export function createPrismaRoleApprovalStore(prisma: PrismaClient): RoleApprovalStore {
   return {
+    async target(approvalId) {
+      const row = await prisma.roleChangeApproval.findUnique({
+        where: { id: approvalId }, select: { targetUserId: true, requestedRole: true },
+      });
+      return row ? { targetUserId: row.targetUserId, requestedRole: row.requestedRole as Role } : null;
+    },
     async request(input) {
       return prisma.$transaction(async (tx) => {
         const actors = await tx.$queryRaw<{ id: string }[]>`
@@ -56,6 +65,11 @@ export function createPrismaRoleApprovalStore(prisma: PrismaClient): RoleApprova
     },
     async approve(input) {
       return prisma.$transaction(async (tx) => {
+        // Match role mutation lock order: target first, then approval. Reject before consuming MFA or writing audit.
+        const ref = await tx.roleChangeApproval.findUnique({ where: { id: input.approvalId }, select: { targetUserId: true } });
+        if (!ref) return { kind: "rejected" as const, reason: "stale" as const };
+        const target = await lockTarget(tx, ref.targetUserId);
+        if (!target || target.deleted) return { kind: "rejected" as const, reason: "stale" as const };
         const rows = await tx.$queryRaw<ApprovalRow[]>`
           SELECT * FROM role_change_approvals WHERE id = ${input.approvalId}::uuid FOR UPDATE`;
         const approval = rows[0];
@@ -63,6 +77,16 @@ export function createPrismaRoleApprovalStore(prisma: PrismaClient): RoleApprova
           return { kind: "rejected" as const, reason: "stale" as const };
         if (approval.initiator_id === input.actorId || approval.target_user_id === input.actorId)
           return { kind: "rejected" as const, reason: "forbidden" as const };
+        const role = await tx.userRole.findUnique({ where: { userId: target.id }, select: { role: true, updatedAt: true } });
+        if ((role?.role ?? "USER") !== approval.expected_role ||
+          (role?.updatedAt.getTime() ?? null) !== (approval.expected_updated_at?.getTime() ?? null))
+          return { kind: "rejected" as const, reason: "stale" as const };
+        const count = await tx.userRole.count({ where: { role: "SUPER_ADMIN", user: { status: "ACTIVE", deletedAt: null } } });
+        const decision = await decide(tx, input.actorId, "user.role.assign", {
+          targetUserId: target.id, targetRoles: role ? [role.role] : [], newRole: approval.requested_role,
+          activeSuperAdminCount: superAdminCountForRoleRule(count, { ...target, role: role?.role ?? null }),
+        }, input.now);
+        if (!decision.allowed) return { kind: "rejected" as const, reason: "forbidden" as const };
         const actors = await tx.$queryRaw<{ id: string }[]>`
           SELECT u.id FROM users u JOIN user_roles ur ON ur.user_id = u.id
           WHERE u.id = ${input.actorId}::uuid AND ur.role = 'SUPER_ADMIN'
