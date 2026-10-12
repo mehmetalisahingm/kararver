@@ -29,7 +29,7 @@ suite("SA #180 MFA PostgreSQL enrollment, replay and step-up", () => {
 
   before(async () => {
     h = await createHarness(backend!);
-    const id = randomUUID().slice(0, 12);
+    const id = randomUUID().replaceAll("-", "").slice(0, 12);
     const email = "mfa_" + id + "@example.test";
     const account = { email, username: "mfa_" + id, displayName: "MFA Test", password };
     assert.equal((await request("POST", "/auth/register", account)).statusCode, 202);
