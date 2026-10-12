@@ -2,7 +2,7 @@
 // cevap sözleşme şemasıyla doğrulanır (HttpClient). Yetki sunucudadır: istemci rol kontrolü yalnız menü/düğme
 // gizlemedir, ret 403 olarak gelir ve ekranda gösterilir.
 import type {
-  AdminUserSummary, AdminUserDetail, AdminUserActivity, AdminSession, Sanction, Metrics,
+  AdminUserSummary, AdminUserDetail, AdminUserActivity, AdminSession, Sanction, Metrics, OpsStatus,
   AdminCategory,
   AdminCommentItem,
   AdminPollItem,
@@ -41,6 +41,7 @@ export type UserDetail = ReturnType<typeof AdminUserDetail.parse>;
 export type UserActivity = ReturnType<typeof AdminUserActivity.parse>;
 export type UserSanction = ReturnType<typeof Sanction.parse>;
 export type MetricsView = ReturnType<typeof Metrics.parse>;
+export type OpsView = ReturnType<typeof OpsStatus.parse>;
 export type EmergencyState = { registration: boolean; pollCreation: boolean; comments: boolean; uploads: boolean; maintenance: boolean };
 /** admin.audit.list süzgeçleri (KV-39). from dahil, to hariç (ISO zaman). */
 export type AuditSearch = { action?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string };
@@ -107,6 +108,9 @@ const data = <T>(wire: unknown) => (wire as { data: T }).data;
 const flag = (value: boolean | undefined) => (value === undefined ? undefined : String(value));
 
 export class AdminClient {
+  async ops(signal?: AbortSignal) {
+    return data<OpsView>(await this.http.request("admin.ops.status", { signal }));
+  }
   async users(q?: string, cursor?: string, signal?: AbortSignal) {
     return page<UserSummary>(await this.http.request("admin.users.list", { query: { q: q || undefined, cursor, limit: "20" }, signal }));
   }
