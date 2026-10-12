@@ -17,6 +17,8 @@ export type RateLimiterDeps = {
   newAccountDays: () => Promise<number>;
   pepper: string;
   now: () => Date;
+  /** Ret olunca kural adlarıyla çağrılır (KV-186 operasyon telemetrisi); anahtar/IP/e-posta verilmez. */
+  onDeny?: (rules: string[], login: boolean) => void;
 };
 
 export type LoginGuard = {
@@ -92,6 +94,7 @@ export function createRateLimiter(deps: RateLimiterDeps): RateLimiter {
       { rateLimit: { endpoint: endpointId, rules: hit.map((c) => c.rule.name), keys: hit.map((c) => c.key), newAccount: fresh } },
       "hız sınırı aşıldı",
     );
+    deps.onDeny?.(hit.map((c) => c.rule.name), false);
     throw rateLimitError(retryAfter(over, now));
   }
 
@@ -118,6 +121,7 @@ export function createRateLimiter(deps: RateLimiterDeps): RateLimiter {
       ];
       if (over.length === 0) return;
       log.warn({ rateLimit: { endpoint: "auth.login", rules: over.map((o) => o.name), keys: over.map((o) => o.key) } }, "giriş denemesi sınırı");
+      deps.onDeny?.(over.map((o) => o.name), true);
       throw rateLimitError(retryAfter(over.map((o) => o.state), now));
     },
     async fail(email, ip) {
