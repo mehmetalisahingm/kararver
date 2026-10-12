@@ -1,9 +1,9 @@
 -- SA #182 — two distinct SUPER_ADMIN approvals before changing a SUPER_ADMIN role.
 CREATE TABLE role_change_approvals (
   id uuid PRIMARY KEY,
-  target_user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  initiator_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  approved_by_id uuid NULL REFERENCES users(id) ON DELETE RESTRICT,
+  target_user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  initiator_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  approved_by_id uuid NULL REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
   expected_role varchar(20) NOT NULL,
   expected_updated_at timestamptz NULL,
   requested_role varchar(20) NOT NULL,
