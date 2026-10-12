@@ -50,6 +50,7 @@
 | API ayakta mı | Railway `/health` kapısı (deploy) ve `staging-monitor` (30 dakikada bir) |
 | Worker çalışıyor mu | `/health` → `worker.status = ready`, `ageMs < 120 000` (heartbeat 10 sn'de bir) |
 | Çalışan sürüm | `/health` → `release.sha` |
+| Staging güncel mi | `staging-monitor` iki durumda alarm verir: (1) CI'ı yeşil son main commit'i 60 dakikadan uzun süredir staging'de değilse ve arada API/worker'ı etkileyen dosya varsa (web, `docs/`, `.github/` ve `.md` sayılmaz; Vercel bunları ayrı yayınlar); (2) main CI 24 saattir kırmızıysa. Railway yalnız yeşil commit'i deploy eder; 9–12 Ekim'de main 3 gün kırmızı kaldı, staging API güncellenmedi ama Vercel her merge'ü aldı (yeni web + eski API). |
 | Alarm | `.github/workflows/staging-monitor.yml`: sorun olunca `staging-alarm` etiketli tek bir issue açar ya da yorum ekler; düzelince kapatır. Bildirim, GitHub issue bildirimleriyle sorumluya gider. |
 | Uygulama hataları | Railway logları (`railway logs --service api`): `level=50` veya `[ERROR]`, `mail gönderilemedi`, `hız sınırı aşıldı` (şüpheli işlem) |
 | İş kuyruğu | Worker logları: `trends.refresh`, `snapshots.daily`, `events.dispatch`, `featured.activate`, `polls.expire`, `sanctions.expire`; `media.process` hataları (`MODERATION_TIMEOUT`, `MODEL_ERROR`) |
