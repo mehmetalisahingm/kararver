@@ -405,6 +405,8 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
     async revokeSessions(input) {
       return prisma.$transaction(async tx => {
         if (!(await lockTarget(tx, input.userId))) return null;
+        // Self-management needs the future step-up flow (#180/#182); fail closed until it exists.
+        if (input.actorId === input.userId) throw new ApiError("FORBIDDEN", "Bu ekrandan kendi oturumlarını sonlandıramazsın.");
         const decision = await decide(tx, input.actorId, "user.sessions.manage", {}, input.now);
         if (!decision.allowed) throw new ApiError("FORBIDDEN", "Oturum yönetimi için süper admin yetkisi gerekli.");
         const result = await tx.session.updateMany({ where: { userId: input.userId, revokedAt: null, expiresAt: { gt: input.now }, ...(input.sessionId ? { id: input.sessionId } : {}) }, data: { revokedAt: input.now } });

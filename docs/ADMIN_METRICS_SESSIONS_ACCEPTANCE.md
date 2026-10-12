@@ -19,6 +19,8 @@ Yalnız SUPER_ADMIN hedef hesabın geçerli oturumlarını listeler ve gerekçel
 
 İptal hedef kullanıcı ve isteğe bağlı oturum ID'siyle aynı transaction'da sınırlandırılır; audit'e aktör, hedef, kapsam, sayı, gerekçe ve request ID yazılır. Eski cookie sonraki istekte geçersizdir. Yetki transaction içinde yeniden okunur. Cursor başka kullanıcı listesinden taşınamaz.
 
+Yönetici kendi oturumlarını bu yönetim endpoint'iyle sonlandıramaz; #180/#182 yeniden doğrulama akışı tamamlanana kadar 403 ile kapalıdır. Normal kullanıcının kendi çıkış akışı kullanılabilir.
+
 #180 için MFA/yeniden kimlik doğrulama, güvenlik olayları ve anomali görünümü henüz tamamlanmamıştır.
 
 ## Kanıt

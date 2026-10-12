@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
+import { createPrismaAdminUserStore } from "../src/modules/admin-users/prisma-store.ts";
 
 const backend = prismaBackend();
 describe("admin session security (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok" }, () => {
@@ -35,10 +36,13 @@ describe("admin session security (postgres)", { skip: backend ? false : "TEST_DA
     const second = await user.login();
     const other = await account();
     const path = `/admin/users/${user.id}/sessions`;
+    await h.prisma!.session.create({ data: { userId: user.id, tokenHash: randomUUID().replaceAll("-", "").padEnd(64, "0"), createdAt: new Date(h.clock.now.getTime() - 60_000), expiresAt: h.clock.now } });
+    await h.prisma!.session.create({ data: { userId: user.id, tokenHash: randomUUID().replaceAll("-", "").padEnd(64, "0"), createdAt: h.clock.now, expiresAt: new Date(h.clock.now.getTime() + 60_000), revokedAt: h.clock.now } });
     assert.equal((await send("GET", path)).statusCode, 401);
     assert.equal((await send("GET", "/admin/metrics")).statusCode, 401);
     assert.equal((await send("GET", "/admin/metrics?range=7d", root.cookie)).statusCode, 200);
     assert.equal((await send("GET", "/admin/metrics?range=invalid", root.cookie)).statusCode, 400);
+    assert.equal((await send("POST", `/admin/users/${root.id}/sessions/revoke`, root.cookie, { reason: "Self session without step-up" })).statusCode, 403);
     for (const role of [undefined, "MODERATOR", "ADMIN"] as const) {
       const denied = role ? await account(role, root.id) : user;
       assert.equal((await send("GET", path, denied.cookie)).statusCode, 403);
@@ -64,11 +68,13 @@ describe("admin session security (postgres)", { skip: backend ? false : "TEST_DA
     assert.equal(revoked.statusCode, 200, revoked.body);
     assert.equal(revoked.json().data.revokedCount, 2);
     assert.deepEqual((await send("GET", path, root.cookie)).json().data, []);
-    for (const cookie of [user.cookie, second.cookie]) assert.equal((await send("GET", "/me", cookie)).statusCode, 401);
+    const replays = await Promise.all([user.cookie, second.cookie].map(cookie => send("GET", "/me", cookie)));
+    assert.deepEqual(replays.map(r => r.statusCode), [401, 401]);
     const audits = await h.prisma!.auditLog.findMany({ where: { targetId: user.id, action: "user.sessions.manage" } });
     assert.equal(audits.length, 2);
     assert.ok(audits.some(a => a.actorId === root.id && a.reason === "Lost device investigation" && (a.after as { revokedCount: number }).revokedCount === 2));
     await h.prisma!.userRole.delete({ where: { userId: root.id } });
+    await assert.rejects(createPrismaAdminUserStore(h.prisma!).revokeSessions({ actorId: root.id, userId: user.id, reason: "Stale role at transaction", requestId: randomUUID(), now: h.clock.now }), { code: "FORBIDDEN" });
     assert.equal((await send("POST", `${path}/revoke`, root.cookie, { reason: "Stale admin role" })).statusCode, 403);
   });
 });
