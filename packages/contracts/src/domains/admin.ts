@@ -169,7 +169,21 @@ const CategoryBody = z.strictObject({
 export const Metrics = z.strictObject({
   range: z.enum(["7d", "30d"]),
   generatedAt: Timestamp,
-  totals: z.strictObject({ users: Count, polls: Count, votes: Count, comments: Count, openReports: Count }),
+  totals: z.strictObject({
+    users: Count, polls: Count, votes: Count, comments: Count, openReports: Count,
+    // Optional for backwards-compatible test fixtures and staggered deployments.
+    activeUsers24h: Count.optional(),
+    registrations24h: Count.optional(),
+    activeCommunities: Count.optional(),
+    removedPolls: Count.optional(),
+    removedComments: Count.optional(),
+    activeAccounts: Count.optional(),
+    suspendedAccounts: Count.optional(),
+    communityMembers: Count.optional(),
+    pendingMedia: Count.optional(),
+    quarantinedMedia: Count.optional(),
+    moderationActions24h: Count.optional(),
+  }),
   series: z.array(
     z.strictObject({
       localDate: z.iso.date(),
@@ -182,8 +196,63 @@ export const Metrics = z.strictObject({
   ),
 });
 
+/** KV-186 operasyon merkezi: telemetri yoksa "unknown" (0 değil); kişisel veri, IP ve bağlantı adresi içermez. */
+export const OpsHealth = z.enum(["ok", "degraded", "down", "unknown"]);
+const Millis = z.number().min(0);
+export const OpsStatus = z.strictObject({
+  generatedAt: Timestamp,
+  release: z.strictObject({ sha: z.string().max(40).nullable(), env: z.string().max(20), startedAt: Timestamp }),
+  components: z.strictObject({
+    api: z.strictObject({ status: OpsHealth, uptimeSeconds: Count }),
+    database: z.strictObject({ status: OpsHealth, latencyMs: Millis.nullable(), version: z.string().max(40).nullable() }),
+    worker: z.strictObject({
+      status: OpsHealth,
+      /** Worker'ın son canlılık izi: heartbeat ya da tamamlanan son iş/cron turu. */
+      lastSeenAt: Timestamp.nullable(),
+      ageSeconds: Count.nullable(),
+    }),
+    queue: z.strictObject({
+      status: OpsHealth,
+      queues: z.array(
+        z.strictObject({
+          name: z.string().max(80),
+          waiting: Count,
+          active: Count,
+          failed24h: Count,
+          completed24h: Count,
+          oldestWaitingSeconds: Count.nullable(),
+        }),
+      ),
+    }),
+  }),
+  /** Bu API sürecinin son `windowMinutes` dakikası; süreç yeniden başlayınca sıfırlanır. */
+  http: z.strictObject({
+    scope: z.literal("process"),
+    windowMinutes: Count,
+    requests: Count,
+    errors5xx: Count,
+    errorRate: z.number().min(0).max(1).nullable(),
+    latencyMs: z.strictObject({ p50: Millis, p95: Millis, p99: Millis }).nullable(),
+    /** Route kalıbı (ör. /v1/polls/:id); kimlik ve sorgu dizesi yok. */
+    slowest: z.array(z.strictObject({ method: z.string().max(10), route: z.string().max(200), count: Count, p95Ms: Millis })),
+  }),
+  security: z.strictObject({
+    scope: z.literal("process"),
+    windowMinutes: Count,
+    rateLimited: Count,
+    loginLockouts: Count,
+    byRule: z.array(z.strictObject({ rule: z.string().max(80), count: Count })),
+  }),
+  backup: z.strictObject({
+    status: OpsHealth,
+    lastBackupAt: Timestamp.nullable(),
+    restoreDrill: z.strictObject({ at: z.iso.date(), environment: z.string().max(20), rtoSeconds: Count, reference: z.string().max(200) }).nullable(),
+  }),
+});
+
 export const AdminSession = z.strictObject({
   id: Id, createdAt: Timestamp, expiresAt: Timestamp, lastSeenAt: Timestamp.nullable(),
+  // Compatibility names: masked network (/24 or /48) and coarse browser/OS only; never raw identifiers.
   ipAddress: z.string().nullable(), userAgent: z.string().nullable(),
 });
 
@@ -672,7 +741,28 @@ export const adminEndpoints = [
     errors: [],
     idempotency: "none",
     cache: "private",
-    notes: ["actor_type=test/seed/admin hesaplar metriklerden hariçtir (KV-07)."],
+    notes: ["Operasyon sayaçları yönetici/test hesapları dahil veritabanı durumunu gösterir. KV-07 ürün analitiğinin actor_type dışlama kuralı ayrı ölçüm hattına aittir; bu endpoint ürün analitiği değildir."],
+  }),
+  defineEndpoint({
+    id: "admin.ops.status",
+    domain: "admin",
+    method: "GET",
+    path: "/admin/ops",
+    summary: "Operasyon durumu: bileşenler, kuyruk, hata/gecikme, hız sınırı, yedek",
+    auth: "super_admin",
+    provider: { owner: "Faruk", module: "ops" },
+    consumers: ["Faruk (operasyon merkezi UI)"],
+    unblocks: ["#186"],
+    availability: { status: "ready" },
+    request: {},
+    responses: { 200: dataOf(OpsStatus) },
+    errors: [],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "Eksik telemetri `unknown` döner, 0 değil. HTTP ve hız sınırı sayaçları süreç içidir (scope=process).",
+      "Ham bağlantı adresi, IP, e-posta ve istek gövdesi dönmez; route'lar kalıp olarak (`:id`) verilir.",
+    ],
   }),
   ...crud("/admin/featured", "admin.featured", FeaturedPlacement, FeaturedBody, mehmet("featured"), mehmetUi, ["#44"], "Öne çıkarma"),
   ...crud("/admin/announcements", "admin.announcements", Announcement, AnnouncementBody, mehmet("announcements"), mehmetUi, ["#44"], "Duyuru"),

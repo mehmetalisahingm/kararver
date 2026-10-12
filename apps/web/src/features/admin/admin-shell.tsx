@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Me, dataOf } from "@kararver/contracts";
@@ -19,6 +19,7 @@ import { ReportsPanel } from "./reports-panel";
 import { SettingsPanel } from "./settings-panel";
 import { UsersPanel } from "./users-panel";
 import { DashboardPanel } from "./dashboard-panel";
+import { OpsPanel } from "./ops-panel";
 
 function currentRoles(demo: boolean, email: string | undefined): AdminRole[] {
   if (!demo || !email) return [];
@@ -150,7 +151,8 @@ function livePanel(section: AdminSectionId, admin: AdminClient) {
 
 export function AdminSection({ section }: { section: AdminSectionId }) {
   const meta = sectionMeta[section];
-  const { client } = useProduct();
+  const { client, demo } = useProduct();
+  const roles = useContext(AdminRolesContext);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const dialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const openDialog = (trigger: HTMLButtonElement) => {
@@ -165,11 +167,20 @@ export function AdminSection({ section }: { section: AdminSectionId }) {
           <div><span className="eyebrow">YÖNETİM</span><h1>{meta.title}</h1><p className="kv-muted">{meta.intro}</p></div>
         </header>
         {live}
+        {section === "dashboard" && client.admin && roles.includes("SUPER_ADMIN") ? <OpsPanel admin={client.admin} /> : null}
       </>
     );
   }
+  // No real API client means no production-facing fake records or demo metrics.
+  if (!demo) {
+    return <section className="kv-card" role="alert">
+      <h1>{meta.title}</h1>
+      <p>Yönetim API bağlantısı kullanılamıyor. Gerçek metrik veya işlem gösterilemiyor.</p>
+    </section>;
+  }
   return (
     <>
+      <p role="status" className="kv-muted">DEMO ÖNİZLEMESİ — Aşağıdaki sayılar ve kayıtlar temsili; gerçek kullanıcı veya işlem verisi değildir.</p>
       <header className={styles.hero}>
         <div><span className="eyebrow">YÖNETİM</span><h1>{meta.title}</h1><p className="kv-muted">{meta.intro}</p></div>
         <button className="kv-button" onClick={(event) => openDialog(event.currentTarget)}>Örnek işlem</button>

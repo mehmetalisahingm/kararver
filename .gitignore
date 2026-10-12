@@ -36,3 +36,7 @@ onboarding-results/
 # KV-45: private beta measurements and derived reports (never commit participant records)
 beta-private/
 beta-reports/
+
+# Private browser sessions and local verification snapshots
+.playwright-cli/
+output/playwright/

@@ -203,6 +203,7 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `GET /admin/audit`<br>Değiştirilemez audit kayıtları · `admin.audit.list` | A | 200 | — | Utku `audit` | Utku (admin UI) | #41 | hazır |
 | `POST /admin/users/:id/point-adjustments`<br>Gerekçeli puan düzeltmesi · `admin.points.adjust` | A | 201 | **key zorunlu** | Mehmet `points` | Utku (admin UI) | #67 | hazır |
 | `GET /admin/metrics`<br>Dashboard metrikleri · `admin.metrics.get` | A | 200 | — | Mehmet `analytics` | Mehmet (admin UI) | #38 | hazır |
+| `GET /admin/ops`<br>Operasyon durumu: bileşenler, kuyruk, hata/gecikme, hız sınırı, yedek · `admin.ops.status` | SA | 200 | — | Faruk `ops` | Faruk (operasyon merkezi UI) | #186 | hazır |
 | `GET /admin/featured`<br>Öne çıkarma listesi · `admin.featured.list` | A | 200 | — | Mehmet `featured` | Mehmet (admin UI) | #44 | hazır |
 | `POST /admin/featured`<br>Öne çıkarma oluştur · `admin.featured.create` | A | 201 | key (ops.) | Mehmet `featured` | Mehmet (admin UI) | #44 | hazır |
 | `PATCH /admin/featured/:id`<br>Öne çıkarma düzenle · `admin.featured.update` | A | 200 | doğal | Mehmet `featured` | Mehmet (admin UI) | #44 | hazır |
@@ -262,6 +263,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
 | #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
 | #181 | `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver` |
+| #186 | `GET /admin/ops` |
 <!-- END:unblocks -->
 
 Bağımlılığı olmayan KV-03 tüketicileri: #8 (KV-06, mock fixture ve CI) bu paketin `examples` ve şemalarını mock sunucu için kullanır; #6 (KV-04) olay ve yetki sözleşmesini bu envanterdeki `auth` seviyeleriyle eşler.

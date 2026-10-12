@@ -5,8 +5,9 @@ import { defaultSettings } from "@kararver/contracts";
 import { createWorkerSettings } from "../src/settings.ts";
 import { TREND_CONFIG } from "../src/jobs/trends/config.ts";
 import { scoreQuery } from "../src/jobs/trends/score.ts";
+import { loadTrendSettings } from "../src/jobs/trends/settings.ts";
 
-type Row = { key: string; value: unknown };
+type Row = { key: string; value: unknown; version?: number };
 function fakePrisma(load: () => Promise<Row[]>) {
   return { systemSetting: { findMany: async () => load() } } as never;
 }
@@ -65,4 +66,52 @@ test("Haftanın Değişkenleri sorgusu eşikleri ayardan alır; verilmezse kayı
   const dflt = scoreQuery("WEEKLY_MOVERS", end).values;
   assert.ok(dflt.includes(TREND_CONFIG.movers.minVotes) && dflt.includes(TREND_CONFIG.movers.minActiveAccounts));
   assert.ok(!dflt.includes(77));
+});
+
+test("trend varsayılanları mevcut beş formatın hesaplarını korur", async () => {
+  const settings = createWorkerSettings(fakePrisma(async () => []), { now: () => new Date() });
+  const config = await loadTrendSettings(settings);
+  for (const key of Object.keys(config) as (keyof typeof config)[]) assert.deepEqual(config[key], TREND_CONFIG[key], key);
+});
+
+test("katsayı ve sürümler tek görüntüden; TTL sonrasında artar, ilgisiz ayar etkilemez", async () => {
+  let now = new Date(0);
+  let rows: Row[] = [
+    { key: "trends.dailyCommentWeightPercent", value: 75, version: 2 },
+    { key: "trends.weeklySmoothing", value: 22, version: 3 },
+    { key: "media.maxBytes", value: 4000, version: 90 },
+  ];
+  const settings = createWorkerSettings(fakePrisma(async () => rows), { now: () => now });
+  const first = await loadTrendSettings(settings);
+  assert.equal(first.daily.commentWeight, 0.75);
+  assert.equal(first.weeklyRising.smoothing, 22);
+  assert.equal(first.calculationVersion, 6);
+  rows = [{ key: "trends.dailyCommentWeightPercent", value: 50, version: 4 }, rows[1]!, rows[2]!];
+  assert.deepEqual(await loadTrendSettings(settings), first);
+  now = new Date(5001);
+  const next = await loadTrendSettings(settings);
+  assert.equal(next.daily.commentWeight, 0.5);
+  assert.equal(next.calculationVersion, 8);
+  assert.equal(first.daily.commentWeight, 0.75, "devam eden işin görüntüsü değişmez");
+  assert.ok(scoreQuery("DAILY_RISING", now, next.movers, next).values.includes(0.5));
+});
+
+test("invalidate sonrası DB hatasında ve bozuk ayarda son iyi görüntü korunur", async () => {
+  let rows: Row[] = [{ key: "trends.dailyGravityPercent", value: 150, version: 2 }];
+  let fail = false;
+  const settings = createWorkerSettings(fakePrisma(async () => {
+    if (fail) throw new Error("DB unavailable");
+    return rows;
+  }), { now: () => new Date() });
+  const expected = await loadTrendSettings(settings);
+  const copy = await settings.snapshot();
+  (copy.values as Record<string, unknown>)["trends.dailyGravityPercent"] = -1;
+  assert.equal((await loadTrendSettings(settings)).daily.gravity, 1.5, "istemci önbelleği değiştiremez");
+  settings.invalidate();
+  fail = true;
+  assert.deepEqual(await loadTrendSettings(settings), expected);
+  fail = false;
+  rows = [{ key: "trends.dailyGravityPercent", value: 0, version: 3 }];
+  settings.invalidate();
+  assert.deepEqual(await loadTrendSettings(settings), expected);
 });

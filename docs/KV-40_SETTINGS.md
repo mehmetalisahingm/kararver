@@ -41,7 +41,7 @@ Devam eden oturumlar etkilenmez (okuma, profil, giriş çalışır); yalnız yen
 | `comments.bodyMaxLength` | `comments.create`, `comments.update` | aynı kural: şema 2000 üst sınır |
 | `points.publishCost`, `points.initialGrant` | yayın maliyeti, `/me/points`, ilk giriş puanı | `initialGrant = 0` ledger'a sıfır girişi yazmaz |
 | `media.maxBytes/allowedTypes`, `features.uploads` | API medya + **worker** (`media.maxBytes` indirme sınırı) | |
-| `trends.moversMinVotes/moversMinActiveAccounts` | **worker** `trends.refresh` | her çalıştırmada okunur |
+| `trends.*` (13 anahtar) | **worker** `trends.refresh` | yorum sınırı, günlük/haftalık katsayılar ve bütün örneklem eşikleri; tek ayar görüntüsü ve hesap sürümü |
 | `feed.*` | "Senin İçin" feed | |
 | `limits.*` | KV-19 hız sınırlayıcı | varsayılanlar KV-19 politikasıdır |
 | `features.*`, `maintenance.enabled` | yukarıdaki tablo | |
@@ -66,7 +66,8 @@ Değerler teyit edilince `contracts settings.ts` kayıt defterine resmî varsay�
 
 - Çok süreçli dağıtımda değişiklik diğer süreçlerde ≤ 5 sn gecikir; anlık yayılım (Postgres `LISTEN/NOTIFY`) gerekirse ayrı iş.
 - Bakım modu istemciye `GET /config` ile yansır; web'in bakım ekranı bu PR'da yok (panel: ayrı PR).
-- Görsel risk eşikleri (`media.risk*`) bu işte yoktur; #40 kapsamında eklenir.
+- Görsel risk eşikleri (`media.risk*`) API ve worker tarafından tüketilir; orta/yüksek eşik ilişkisi doğrulanır.
+- Worker kapalı olan ücretsiz dağıtımda trend hesabı kendiliğinden çalışmaz. Ayarlar saklanır; iş çalıştırıcısı etkin olduğunda kullanılır. Bu modül, ayrı worker servisi veya ücretli plan açmaz.
 
 ## Yönetim paneli (`/admin/settings`)
 
@@ -76,3 +77,11 @@ Değerler teyit edilince `contracts settings.ts` kayıt defterine resmî varsay�
 - **Ayarlar:** gruplu tablolar (anket, yorum, görsel, puan, trend, feed, hız sınırları); açıklama, aralık, sürüm ("Varsayılan" = hiç değişmemiş), son değiştiren. "Değiştir" tipine göre giriş açar (tam sayı, açık/kapalı, görsel türü onay kutuları), aralığı istemcide de denetler; sunucu 400 verirse mesaj pencerede kalır.
 - **Eşzamanlı değişiklik:** eski sürüm 409 `VERSION_CONFLICT` verir; panel listeyi güncel sürümle yeniler, pencere mesajla açık kalır.
 - Anahtar ve açıklamalar contracts kayıt defterinden gelir; yeni ayar eklenince panelde otomatik görünür (testle korunur: her anahtarın açıklaması ve grubu var).
+
+## #42 tamamlama doğrulaması — 9 Ekim 2026
+
+- PostgreSQL 17 üzerinde 34 migration uygulanmış ayrı test veritabanında API ayarları, trend motoru ve snapshot testleri çalıştırıldı: 60 başarılı, 0 başarısız, 0 atlanan; contracts'ta önceden bulunan bir varsayılan-onay TODO'su ayrı raporlanır.
+- Yeni uçtan uca test gerçek SUPER_ADMIN isteğiyle örneklem eşiğini değiştirir, worker önbelleğinin 5 saniye sonra yenilendiğini ve aynı zaman diliminde yeni hesap sürümüyle sıralamanın değiştiğini doğrular. Önceki değere dönüş tekrar hesaplanır; iki düzenlemenin audit kayıtları kontrol edilir.
+- Yetkisiz değişiklik, aralık hatası, sürüm çatışması, eşzamanlı ayar yazımı ve devam eden oturumda acil anahtarların etkisi PostgreSQL testlerinden geçer.
+- Admin istemcisi ve ayar modeli: 30 test başarılı. Chromium masaüstü ve 360px mobilde yeni trend ayarının görünmesi, geçersiz değer reddi, gerekçe/sürümle kaydetme ve güncel değerin gösterilmesi: 2/2 başarılı. API ve worker TypeScript kontrolleri başarılı.
+- Bunlar yerel gerçek-veritabanı ve arayüz sözleşmesi kanıtlarıdır; staging güvenlik/kabul işleri #46, #53 ve üretim yayını #54 ayrıca izlenir.
