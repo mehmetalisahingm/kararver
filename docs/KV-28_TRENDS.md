@@ -46,9 +46,11 @@ Her kural için bir test var. Mutasyon kontrolü: sınır, yazar hariç tutma, g
 
 ## Katsayılar, sürüm ve zaman
 
-- Katsayılar `apps/worker/src/jobs/trends/config.ts` içinde, **sürümlü**: herhangi biri değişirse `calculationVersion` artar. Her çalıştırma sürümünü ve pencere başlangıcı/sonunu `trend_runs`'a, hesap zamanını (`finished_at` → API'de `meta.computedAt`) yazar. Aynı sürüm aynı veriden aynı sıralamayı verir.
+- Varsayılanlar yukarıdaki mevcut formüllerdir. `trends.*` kayıt defteri ve `jobs/trends/settings.ts` bunları admin panelinden değiştirilebilir yapar; `config.ts` formül sürümünü ve ayarsız test/araç varsayılanlarını tutar. Her çalıştırma sürümünü ve pencere başlangıcı/sonunu `trend_runs`'a, hesap zamanını (`finished_at` → API'de `meta.computedAt`) yazar.
 - **Değerler öneridir:** Plan formülün mantığını verir, sayı vermez. Mehmet teyidi bekliyor.
-- **Admin'den değiştirme** (plan: "Katsayılar admin/config üzerinden değiştirilebilir olmalıdır") KV-40 (#42) ayar servisiyle gelir. O zaman değer değişikliği sürümü de artırmalı ki eski ve yeni sıralamalar karışmasın. KV-04 açık konu 9'daki "trend katsayıları kayıtta yok" maddesi bu yüzden açık kalıyor.
+- **Admin'den değiştirme:** KV-40 (#42) ile yorum sınırı, günlük yorum/yorumcu ağırlığı, yaş sabiti/üssü, haftalık dengeleme ve beş formatın örneklem eşikleri bağlıdır. Yüzde son ekli ağırlıklar 100'e bölünür (50 → 0,5); varsayılan puan ve sıralamalar değişmez. Kayıt defteri tip/aralık denetimini ve panel açıklamasını birlikte sağlar.
+- **Tutarlı sürüm:** bütün formatlar tek DB ayar görüntüsünü kullanır. Hesap sürümü `(formülSürümü − 1) × 1.000.000 + ilgili ayar satırlarının sürüm toplamı + 1` olur. Satır silen/resetleyen bir admin API yoktur; her düzenleme ve geri alma sürümü artırır. Aynı değerle tekrar isteği sürümü artırmaz. Bir milyon ayar revizyonuna ulaşılırsa açık hata döner; sürüm başa sarılmaz. Formül değişikliğinde `config.ts` sürümü artırılır.
+- Ayar revizyonu değişince aynı 5 dakikalık dilim tekrar hesaplanabilir. DB hatasında son iyi değerler **sürümleriyle birlikte** korunur; invalidation da son iyi görüntüyü silmez. En fazla 5 saniyelik önbellek ve hata sonrası yeniden okuma testlidir.
 
 ## Job idempotency ve dayanıklılık
 
