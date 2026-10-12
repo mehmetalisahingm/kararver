@@ -53,6 +53,8 @@ import type { SettingsService } from "./modules/settings/service.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
 import { registerRoleRoutes } from "./modules/rbac/roles-routes.ts";
 import { registerMfaRoutes } from "./modules/security/routes.ts";
+import { registerRoleApprovalRoutes } from "./modules/security/approval-routes.ts";
+import type { RoleApprovalStore } from "./modules/security/approval-store.ts";
 import type { MfaStore } from "./modules/security/store.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
 import { registerRevisionRoutes } from "./modules/revisions/routes.ts";
@@ -86,6 +88,7 @@ export type AppDeps = {
   authStore: AuthStore;
   /** MFA endpoints only when a persistent store is available. */
   mfaStore?: MfaStore;
+  roleApprovalStore?: RoleApprovalStore;
   /** Rol, yaptırım ve topluluk moderatörlüğü (KV-12); her istekte okunur. */
   rbacStore: RbacStore;
   hasher: PasswordHasher;
@@ -359,6 +362,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       webUrl: config.webUrl,
     });
     registerRoleRoutes(route, { store: deps.adminUserStore, now });
+    if (deps.roleApprovalStore) registerRoleApprovalRoutes(route, { store: deps.roleApprovalStore, users: deps.adminUserStore, now });
   }
   if (deps.dataExportStore && deps.media) {
     registerDataExportRoutes(route, {

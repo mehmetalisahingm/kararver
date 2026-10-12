@@ -24,6 +24,7 @@ import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
 import { createPrismaProfileStore } from "./modules/profiles/prisma-store.ts";
 import { createPrismaRbacStore } from "./modules/rbac/prisma-store.ts";
 import { createPrismaMfaStore } from "./modules/security/prisma-store.ts";
+import { createPrismaRoleApprovalStore } from "./modules/security/approval-store.ts";
 import { createPrismaModerationStore } from "./modules/moderation/prisma-store.ts";
 import { createPrismaNotificationStore } from "./modules/notifications/prisma-store.ts";
 import { createPrismaReportStore } from "./modules/reports/prisma-store.ts";
@@ -62,6 +63,7 @@ const app = buildApp({
   settingsService,
   authStore: createPrismaAuthStore(prisma),
   mfaStore: createPrismaMfaStore(prisma, config.authTokenPepper),
+  roleApprovalStore: createPrismaRoleApprovalStore(prisma),
   rbacStore: createPrismaRbacStore(prisma),
   pollStore: createPrismaPollStore(prisma),
   profileStore: createPrismaProfileStore(prisma),
@@ -83,7 +85,7 @@ const app = buildApp({
   reportStore: createPrismaReportStore(prisma),
   moderationStore: createPrismaModerationStore(prisma),
   notificationStore: createPrismaNotificationStore(prisma),
-  adminUserStore: createPrismaAdminUserStore(prisma),
+  adminUserStore: createPrismaAdminUserStore(prisma, { enforceCriticalApprovals: config.roleApprovalsRequired }),
   dataExportStore: createPrismaDataExportStore(prisma),
   metricsStore: createPrismaMetricsStore(prisma),
   opsProbe: createPrismaOpsProbe(prisma),

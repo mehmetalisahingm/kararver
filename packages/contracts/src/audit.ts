@@ -53,7 +53,7 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   "privacy.export.download": ["download"],
   "user.sanction.lift": ["lift"],
   // admin.roles.put: grant = USER'a rol verme, revoke = rolü kaldırıp USER'a düşürme, change = rolden role geçiş.
-  "user.role.assign": ["grant", "revoke", "change"],
+  "user.role.assign": ["grant", "revoke", "change", "request", "approve"],
   "vote.invalidate": ["invalidate", "restore"],
   "community.moderator.assign": ["assign", "remove"],
   "category.manage": ["create", "update"],

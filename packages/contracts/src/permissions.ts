@@ -302,6 +302,8 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "me.mfa.setup": "account.update",
   "me.mfa.confirm": "account.update",
   "me.mfa.stepup": "account.update",
+  "admin.roleApprovals.request": "user.role.assign",
+  "admin.roleApprovals.approve": "user.role.assign",
   "admin.roles.put": "user.role.assign",
   "admin.users.passwordReset.send": "user.password.reset",
   "admin.users.dataExports.create": "privacy.export.manage",

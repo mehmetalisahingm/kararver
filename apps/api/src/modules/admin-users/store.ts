@@ -86,12 +86,12 @@ export type Mutation = { actorId: string; requestId: string; now: Date };
 /** reportId (KV-37): moderasyon kuyruğundan uygulanan yaptırım; rapor, hedefin sahibi bu kullanıcı olan bir rapor olmalı. */
 export type ApplyInput = Mutation & { userId: string; type: SanctionType; reason: string; endsAt: Date | null; reportId?: string };
 export type LiftInput = Mutation & { userId: string; sanctionId: string; reason: string };
-export type RoleInput = Mutation & { userId: string; role: Role; reason: string };
+export type RoleInput = Mutation & { userId: string; role: Role; reason: string; actorSessionId?: string; approvalId?: string };
 
 /** Transaction içi yeniden kontrolün sonucu: hedef yok, iş kuralı veya taze yetki reddi. */
 export type ApplyRejection = "not_found" | "already_active" | "user_deleted" | "last_super_admin" | "forbidden" | "report_not_found" | "report_mismatch";
 export type LiftRejection = "not_found" | "already_lifted" | "expired" | "forbidden";
-export type RoleRejection = "not_found" | "last_super_admin" | "self" | "forbidden";
+export type RoleRejection = "not_found" | "last_super_admin" | "self" | "forbidden" | "approval_required";
 
 export type RoleResult =
   | { kind: "changed" | "unchanged"; role: Role }

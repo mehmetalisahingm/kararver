@@ -16,6 +16,8 @@ const Env = z.object({
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   AUTH_TOKEN_PEPPER: z.string().min(32, "en az 32 karakter olmalı"),
   EMAIL_VERIFICATION_REQUIRED: bool.default(true),
+  /** Enables critical role enforcement only after 2 verified SUPER_ADMIN enrollments. */
+  ROLE_APPROVALS_REQUIRED: bool.default(false),
   MAIL_TRANSPORT: z.enum(["console", "smtp", "mailpit_api"]).default("console"),
   MAIL_FROM: z.string().min(3),
   // MAIL_TRANSPORT=smtp iken zorunlu: smtp://kullanici:parola@host:587 (STARTTLS) veya smtps://...:465 (TLS).
@@ -63,6 +65,7 @@ export type Config = {
   session: { cookieName: string; cookieDomain: string | null; secure: boolean; ttlMs: number };
   authTokenPepper: string;
   emailVerificationRequired?: boolean;
+  roleApprovalsRequired: boolean;
   mail: MailConfig;
   /** KV-19 hız sınırı açık mı (staging/production'da zorunlu). */
   rateLimitEnabled: boolean;
@@ -139,6 +142,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     authTokenPepper: e.AUTH_TOKEN_PEPPER,
     emailVerificationRequired: e.EMAIL_VERIFICATION_REQUIRED,
+    roleApprovalsRequired: e.ROLE_APPROVALS_REQUIRED,
     mail:
       e.MAIL_TRANSPORT === "smtp"
         ? { transport: "smtp", from: e.MAIL_FROM, smtpUrl: e.SMTP_URL, requireTls: deployed }
