@@ -13,7 +13,7 @@ describe("admin session security (postgres)", { skip: backend ? false : "TEST_DA
     headers: { origin: WEB_ORIGIN, ...(cookie ? { cookie } : {}), ...(payload === undefined ? {} : { "content-type": "application/json" }) },
     payload: payload === undefined ? undefined : JSON.stringify(payload),
   });
-  async function account(role?: "SUPER_ADMIN" | "ADMIN" | "MODERATOR") {
+  async function account(role?: "SUPER_ADMIN" | "ADMIN" | "MODERATOR", grantedById?: string) {
     const name = `ses_${randomUUID().replaceAll("-", "").slice(0, 10)}`;
     const data = { email: `${name}@example.test`, username: name, displayName: "Session test", password: "guclu-bir-sifre-1" };
     const mailIndex = h.mails.length;
@@ -25,7 +25,7 @@ describe("admin session security (postgres)", { skip: backend ? false : "TEST_DA
       return { id: res.json().data.id as string, cookie: sessionCookie(res.headers["set-cookie"] as string) };
     };
     const user = await login();
-    if (role) await h.prisma!.userRole.create({ data: { userId: user.id, role } });
+    if (role) await h.prisma!.userRole.create({ data: { userId: user.id, role, grantedById } });
     return { ...user, login };
   }
 
@@ -40,7 +40,7 @@ describe("admin session security (postgres)", { skip: backend ? false : "TEST_DA
     assert.equal((await send("GET", "/admin/metrics?range=7d", root.cookie)).statusCode, 200);
     assert.equal((await send("GET", "/admin/metrics?range=invalid", root.cookie)).statusCode, 400);
     for (const role of [undefined, "MODERATOR", "ADMIN"] as const) {
-      const denied = role ? await account(role) : user;
+      const denied = role ? await account(role, root.id) : user;
       assert.equal((await send("GET", path, denied.cookie)).statusCode, 403);
       assert.equal((await send("GET", "/admin/metrics", denied.cookie)).statusCode, role === "ADMIN" ? 200 : 403);
       assert.equal((await send("POST", `${path}/revoke`, denied.cookie, { reason: "Security test" })).statusCode, 403);
