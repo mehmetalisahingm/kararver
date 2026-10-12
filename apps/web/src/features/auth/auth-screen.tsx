@@ -39,6 +39,9 @@ export function AuthScreen({
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [postLoginError, setPostLoginError] = useState("");
+  const [interactive, setInteractive] = useState(false);
+  // Controlled fields must not accept input before hydration can preserve their change events.
+  useEffect(() => { setInteractive(true); }, []);
   useEffect(() => {
     if (demo || !["verify", "reset"].includes(mode)) return;
     const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
@@ -229,6 +232,7 @@ export function AuthScreen({
             <Field id="name" label="Görünen ad">
               <input
                 id="name"
+                disabled={!interactive}
                 name="name"
                 autoComplete="nickname"
                 required
@@ -240,11 +244,12 @@ export function AuthScreen({
             </Field>
           )}
           {mode === "register" && !demo && <Field id="username" label="Kullanıcı adı" help="3–30 karakter: küçük harf, rakam, alt çizgi.">
-            <input id="username" name="username" className="kv-input" autoComplete="username" required pattern="[a-z0-9_]{3,30}" minLength={3} maxLength={30} value={username} onChange={e => setUsername(e.target.value)} />
+            <input id="username" name="username" disabled={!interactive} className="kv-input" autoComplete="username" required pattern="[a-z0-9_]{3,30}" minLength={3} maxLength={30} value={username} onChange={e => setUsername(e.target.value)} />
           </Field>}
           {(demo || !["verify", "reset"].includes(mode)) && <Field id="email" label={demo ? "Demo e-posta" : "E-posta"}>
             <input
               id="email"
+              disabled={!interactive}
               name="email"
               type="email"
               autoComplete="email"
@@ -262,6 +267,7 @@ export function AuthScreen({
             >
               <input
                 id="password"
+                disabled={!interactive}
                 name="password"
                 type="password"
                 autoComplete={
@@ -281,6 +287,7 @@ export function AuthScreen({
             <Field id="code" label="Demo kodu">
               <input
                 id="code"
+                disabled={!interactive}
                 name="code"
                 autoComplete="one-time-code"
                 inputMode="numeric"
@@ -295,7 +302,7 @@ export function AuthScreen({
           )}
           {!demo && ["verify", "reset"].includes(mode) && <p className="kv-help">{code ? "E-postadaki bağlantı alındı. İşlemi tamamlamak için onayla." : "E-postana gönderilen bağlantıyı açmalısın."}</p>}
           <ErrorMessage message={error} />
-          <button className="kv-button" disabled={busy || (!demo && ["verify", "reset"].includes(mode) && !code)} aria-busy={busy}>
+          <button className="kv-button" disabled={!interactive || busy || (!demo && ["verify", "reset"].includes(mode) && !code)} aria-busy={!interactive || busy}>
             {busy
               ? "İşlem sürüyor…"
               : mode === "login"
