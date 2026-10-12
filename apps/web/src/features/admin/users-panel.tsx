@@ -52,6 +52,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       <p>{user.status} · Roller: {user.roles.join(", ")} · Son giriş: {formatDate(user.lastLoginAt)}</p>
       <p>{user.stats.pollCount} gönderi · {user.stats.commentCount} yorum · {user.stats.voteCount} oy</p>
       {canAssign ? <button className="kv-button" onClick={() => setAction("role")}>Yetkilendir / rolü değiştir</button> : null}
+      <PasswordReset id={id} admin={admin} />
       {canAssign ? <UserSessions id={id} admin={admin} /> : null}
       <button className="kv-button" onClick={() => setAction("sanction")}>Uyar / kısıtla / askıya al / yasakla</button>
       {user.activeSanctions.map(s => <article key={s.id}><p>{s.type} · {s.reason} · Bitiş: {formatDate(s.endsAt)}</p><button onClick={() => { setTarget(s.id); setAction("lift"); }}>Yaptırımı kaldır</button></article>)}
@@ -69,6 +70,20 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       {action === "role" ? <label>Rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value as AdminRole)}>{["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"].map(r => <option key={r}>{r}</option>)}</select></label> : null}
       {action === "sanction" ? <><label>Yaptırım<select className="kv-input" value={sanction} onChange={e => setSanction(e.target.value as typeof sanction)}>{["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING", "SUSPEND", "BAN"].map(s => <option key={s}>{s}</option>)}</select></label>{sanction === "SUSPEND" ? <label>Bitiş<input className="kv-input" type="datetime-local" value={endsAt} onChange={e => setEndsAt(e.target.value)} /></label> : null}</> : null}
     </ActionDialog>
+  </section>;
+}
+
+function PasswordReset({ id, admin }: { id: string; admin: AdminClient }) {
+  const [open, setOpen] = useState(false);
+  const [result, setResult] = useState<{ sent: boolean; expiresAt: string } | null>(null);
+  return <section className="kv-stack" aria-label="Şifre sıfırlama">
+    <h3>Şifre sıfırlama</h3>
+    <p className="kv-muted">Kullanıcının kayıtlı e-postasına 1 saat geçerli, tek kullanımlık bir bağlantı gider. Şifreyi ve bağlantıyı sen görmezsin; kullanıcı yeni şifresini kendisi belirler ve bütün oturumları kapanır.</p>
+    <button className="kv-button" onClick={() => { setResult(null); setOpen(true); }}>Şifre sıfırlama e-postası gönder</button>
+    {result ? <p role="status">{result.sent ? `Sıfırlama e-postası gönderildi; bağlantı ${formatDate(result.expiresAt)} tarihine kadar geçerli.` : "E-posta servisi cevap vermedi; bağlantı oluştu ama gönderilemedi. Bir dakika sonra tekrar dene."}</p> : null}
+    <ActionDialog open={open} title="Şifre sıfırlama e-postası gönder" submitLabel="Gönder" onClose={() => setOpen(false)} onSubmit={async reason => {
+      setResult(await admin.sendPasswordReset(id, reason));
+    }}><p>Aynı hesap için bir dakikada en çok bir, saatte en çok beş istek gönderilebilir. Gerekçe yönetim geçmişine kaydedilir.</p></ActionDialog>
   </section>;
 }
 

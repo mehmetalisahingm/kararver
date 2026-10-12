@@ -13,14 +13,35 @@ import { decodeCursor, encodeCursor } from "../../http/cursor.ts";
 import { ApiError } from "../../http/errors.ts";
 import { idempotencyKeyReused, readIdempotencyScope } from "../../http/idempotency.ts";
 import type { Route, RouteContext } from "../../http/route.ts";
-import type { AdminUserStore, ApplyRejection, LiftRejection, TargetInfo, TimeCursor } from "./store.ts";
+import type { Mailer } from "../../mail/mailer.ts";
+import { hashToken, newToken } from "../auth/crypto.ts";
+import { passwordResetMail, PASSWORD_RESET_TTL_MS } from "../auth/reset-mail.ts";
+import { rateLimitError } from "../rate-limit/limiter.ts";
+import type { AdminUserStore, ApplyRejection, LiftRejection, PasswordResetRejection, TargetInfo, TimeCursor } from "./store.ts";
 import { toActivity, toAdminUserDetail, toAdminUserSummary, toReport, toSanction } from "./view.ts";
 import { sessionView } from "./session-view.ts";
 
-export type AdminUserDeps = { store: AdminUserStore; now: () => Date; mediaPublicBaseUrl: string };
+export type AdminUserDeps = {
+  store: AdminUserStore;
+  now: () => Date;
+  mediaPublicBaseUrl: string;
+  /** Şifre sıfırlama e-postası (#181): token özeti için auth ile aynı pepper, bağlantı için web adresi. */
+  mailer: Mailer;
+  tokenPepper: string;
+  webUrl: string;
+};
+
+/** Aynı hesap için yönetici şifre sıfırlama sınırı (çift tıklama ve mail bombardımanı). */
+export const PASSWORD_RESET_COOLDOWN_MS = 60 * 1000;
+export const PASSWORD_RESET_HOURLY_LIMIT = 5;
 
 const userNotFound = () => new ApiError("NOT_FOUND", "Kullanıcı bulunamadı.");
 const conflict = (message: string, code: string) => new ApiError("CONFLICT", message, [{ code }]);
+
+const PASSWORD_RESET_REJECTIONS: Record<Exclude<PasswordResetRejection, "not_found" | "forbidden">, () => ApiError> = {
+  user_deleted: () => conflict("Silinmiş hesaba şifre sıfırlama bağlantısı gönderilemez.", "user_deleted"),
+  user_banned: () => conflict("Yasaklı hesaba şifre sıfırlama bağlantısı gönderilemez.", "user_banned"),
+};
 
 export const SANCTION_REJECTIONS: Record<Exclude<ApplyRejection | LiftRejection, "not_found" | "forbidden" | "report_not_found">, () => ApiError> = {
   report_mismatch: () => conflict("Rapor bu kullanıcının içeriğine ait değil.", "report_mismatch"),
@@ -111,6 +132,40 @@ export function registerAdminUserRoutes(route: Route, deps: AdminUserDeps): void
     const list = `admin.users.activity:${params.id}`;
     const rows = await store.listActivity(params.id, timeCursor(query.cursor, list), query.limit + 1);
     return { status: 200, body: timePage(list, rows, query.limit, toActivity) };
+  });
+
+  route("admin.users.passwordReset.send", async (ctx) => {
+    const { params, body, viewer, request } = ctx;
+    // İstek öncesi karar (hedef rolü DB'den); store aynı kararı kilitlerden sonra taze veriyle yeniden verir.
+    await authorizeTarget(store, ctx, params.id);
+    const at = now();
+    const raw = newToken();
+    const expiresAt = new Date(at.getTime() + PASSWORD_RESET_TTL_MS);
+    const result = await store.issuePasswordReset({
+      userId: params.id,
+      reason: body.reason,
+      tokenHash: hashToken(raw, deps.tokenPepper),
+      expiresAt,
+      cooldownMs: PASSWORD_RESET_COOLDOWN_MS,
+      hourlyLimit: PASSWORD_RESET_HOURLY_LIMIT,
+      actorId: viewer!.id,
+      requestId: request.id,
+      now: at,
+    });
+    if (result.kind === "limited") throw rateLimitError(result.retryAfterMs / 1000);
+    if (result.kind === "rejected") {
+      if (result.reason === "not_found") throw userNotFound();
+      if (result.reason === "forbidden") throw new ApiError("FORBIDDEN", "Bu işlem için yetkiniz yok.");
+      throw PASSWORD_RESET_REJECTIONS[result.reason]();
+    }
+    let sent = true;
+    try {
+      await deps.mailer.send(passwordResetMail(deps.webUrl, result.email, raw, "admin"));
+    } catch (err) {
+      sent = false;
+      request.log.error({ err }, "yönetici şifre sıfırlama e-postası gönderilemedi");
+    }
+    return { status: 202, body: { data: { sent, expiresAt: expiresAt.toISOString() } } };
   });
 
   route("admin.sanctions.create", async (ctx) => {

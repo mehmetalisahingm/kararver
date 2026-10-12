@@ -186,6 +186,7 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `GET /admin/users/:id`<br>Kullanıcı detayı, aktivite ve yaptırımlar · `admin.users.get` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id/sessions`<br>Aktif kullanıcı oturumları · `admin.users.sessions.list` | SA | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `POST /admin/users/:id/sessions/revoke`<br>Tek veya tüm aktif oturumları kapat · `admin.users.sessions.revoke` | SA | 200 | doğal | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
+| `POST /admin/users/:id/password-reset`<br>Kullanıcıya şifre sıfırlama bağlantısı e-postası gönder · `admin.users.passwordReset.send` | A | 202 | — | Utku `admin-users` | Utku (admin UI) | #181 | hazır |
 | `GET /admin/users/:id/sanctions`<br>Kullanıcının bütün yaptırım geçmişi (kaldırılan ve süresi dolanlar dahil) · `admin.users.sanctions` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id/reports`<br>Kullanıcıya (hesap veya içerik) yapılan ya da kullanıcının yaptığı raporlar · `admin.users.reports` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id/activity`<br>Kullanıcının anket ve yorumları (gizli/kaldırılmış dahil) · `admin.users.activity` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
@@ -256,6 +257,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #66 | `POST /polls`, `PUT /polls/:id/reaction`, `DELETE /polls/:id/reaction`, `PUT /comments/:id/reaction`, `DELETE /comments/:id/reaction` |
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
 | #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
+| #181 | `POST /admin/users/:id/password-reset` |
 <!-- END:unblocks -->
 
 Bağımlılığı olmayan KV-03 tüketicileri: #8 (KV-06, mock fixture ve CI) bu paketin `examples` ve şemalarını mock sunucu için kullanır; #6 (KV-04) olay ve yetki sözleşmesini bu envanterdeki `auth` seviyeleriyle eşler.
