@@ -90,6 +90,9 @@ model User {
   avatarMedia      MediaAsset?       @relation("UserAvatar", fields: [avatarMediaId], references: [id], onDelete: SetNull)
   sessions         Session[]
   mfaCredential    UserMfaCredential?
+  roleApprovalTargets    RoleChangeApproval[] @relation("RoleApprovalTarget")
+  roleApprovalRequests   RoleChangeApproval[] @relation("RoleApprovalRequester")
+  roleApprovalApprovals  RoleChangeApproval[] @relation("RoleApprovalApprover")
   authTokens       AuthToken[]
   // #181 KVKK veri dışa aktarma (admin.prisma)
   dataExports          DataExport[] @relation("DataExportSubject")
@@ -163,6 +166,31 @@ model UserMfaCredential {
 
   @@index([enabledAt], map: "user_mfa_credentials_enabled_idx")
   @@map("user_mfa_credentials")
+}
+
+// SA #182: explicit second-superadmin approval, no reuse after execution.
+model RoleChangeApproval {
+  id                 String    @id @db.Uuid
+  targetUserId       String    @map("target_user_id") @db.Uuid
+  initiatorId        String    @map("initiator_id") @db.Uuid
+  approvedById       String?   @map("approved_by_id") @db.Uuid
+  expectedRole       String    @map("expected_role") @db.VarChar(20)
+  expectedUpdatedAt  DateTime? @map("expected_updated_at") @db.Timestamptz(6)
+  requestedRole      String    @map("requested_role") @db.VarChar(20)
+  reason             String    @db.VarChar(500)
+  status             String    @default("PENDING") @db.VarChar(20)
+  createdAt          DateTime  @map("created_at") @db.Timestamptz(6)
+  expiresAt          DateTime  @map("expires_at") @db.Timestamptz(6)
+  approvedAt         DateTime? @map("approved_at") @db.Timestamptz(6)
+  consumedAt         DateTime? @map("consumed_at") @db.Timestamptz(6)
+
+  target     User  @relation("RoleApprovalTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  requester  User  @relation("RoleApprovalRequester", fields: [initiatorId], references: [id], onDelete: Restrict)
+  approver   User? @relation("RoleApprovalApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+
+  @@index([targetUserId, createdAt(sort: Desc)], map: "role_change_approvals_target_idx")
+  @@index([status, expiresAt], map: "role_change_approvals_expiry_idx")
+  @@map("role_change_approvals")
 }
 
 model SessionMfaStepup {
