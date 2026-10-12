@@ -8,6 +8,16 @@ import { UiError } from "../src/lib/model.ts";
 
 type Seen = { url: string; method: string; body: unknown; headers: Record<string, string> };
 
+test("operations use the private status contract and preserve unknown measurements", async () => {
+  const listing = client(() => reply("admin.ops.status", "ok"));
+  const result = await listing.admin.ops();
+  assert.equal(new URL(listing.calls[0].url).pathname, "/v1/admin/ops");
+  assert.equal(result.backup.status, "unknown");
+  assert.equal(result.backup.lastBackupAt, null);
+  const denied = client(() => new Response(JSON.stringify({ error: { code: "FORBIDDEN", message: "Yetki yok", details: [] }, requestId: "ops-denied" }), { status: 403 }));
+  await assert.rejects(denied.admin.ops(), (error: UiError) => error.code === "FORBIDDEN");
+});
+
 test("user list and role assignment use real admin contracts", async () => {
   const listing = client(() => reply("admin.users.list", "ok"));
   await listing.admin.users("faruk");
@@ -313,4 +323,22 @@ test("şifre sıfırlama (#181): POST, kullanıcı yolda, yalnız gerekçe gövd
   await assert.rejects(banned.admin.sendPasswordReset(id, "Kimlik destek kanalında doğrulandı"), (e) => e instanceof UiError && e.code === "CONFLICT");
   const limited = client(() => new Response(JSON.stringify({ error: { code: "RATE_LIMITED", message: "Çok fazla istek gönderdiniz.", details: [] }, requestId: "r" }), { status: 429 }));
   await assert.rejects(limited.admin.sendPasswordReset(id, "Kimlik destek kanalında doğrulandı"), (e) => e instanceof UiError && e.code === "RATE_LIMITED");
+});
+test("admin dashboard metrics allow 30-day real API range without client-side fake totals", async () => {
+  const payload = {
+    data: {
+      range: "30d",
+      generatedAt: "2026-10-09T00:00:00.000Z",
+      totals: { users: 12, polls: 3, votes: 17, comments: 4, openReports: 2 },
+      series: [{ localDate: "2026-10-08", activeUsers: 5, registrations: 2, polls: 1, votes: 3, comments: 1 }],
+    },
+  };
+  const { admin, calls } = client(() => new Response(JSON.stringify(payload), { status: 200 }));
+  const result = await admin.metrics(undefined, "30d");
+  const url = new URL(calls[0].url);
+  assert.equal(url.pathname, "/v1/admin/metrics");
+  assert.equal(url.searchParams.get("range"), "30d");
+  assert.equal(result.range, "30d");
+  assert.equal(result.totals.openReports, 2);
+  assert.equal(result.series[0].activeUsers, 5);
 });

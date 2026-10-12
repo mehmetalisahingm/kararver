@@ -55,6 +55,36 @@
 | İş kuyruğu | Worker logları: `trends.refresh`, `snapshots.daily`, `events.dispatch`, `featured.activate`, `polls.expire`, `sanctions.expire`; `media.process` hataları (`MODERATION_TIMEOUT`, `MODEL_ERROR`) |
 | Model | `MODERATION_TIMEOUT` oranı %1'i aşarsa eşzamanlılık düşürülür (KV-47 Medya) |
 
+### Operasyon merkezi API'si (#186)
+
+`GET /v1/admin/ops` (`admin.ops.status`) yalnız SUPER_ADMIN içindir (yetki `ops.read`, backend RBAC). Cevap `no-store`'dur ve tek bakışta şunları verir:
+
+| Bölüm | Kaynak | `ok` / `degraded` / `down` / `unknown` |
+|---|---|---|
+| `api` | Süreç | 15 dakikada ≥ 20 istek ve 5xx oranı > %5 ise `degraded` |
+| `database` | `SELECT current_setting('server_version')` süresi | > 500 ms `degraded`; sorgu hata verirse `down` |
+| `worker` | Dosya heartbeat'i (aynı serviste) ya da worker'ın son aldığı pg-boss işi (ayrı serviste). Dakikalık cron olduğu için iz sürekli tazelenir. | ≤ 3 dk `ok`, ≤ 10 dk `degraded`, daha eski `down`; iz yoksa `unknown` |
+| `queue` | `pgboss.queue` + `pgboss.job`: bekleyen, çalışan, son 24 saatte başarısız/tamamlanan, en eski bekleyen | 5 dakikadan eski bekleyen iş ya da 24 saatte başarısız iş varsa `degraded`; şema okunamazsa `unknown` |
+| `http` | Süreç içi son 15 dk: istek, 5xx, oran, P50/P95/P99, en yavaş 5 route | Ölçüm yoksa oran ve gecikme `null` |
+| `security` | Süreç içi son 15 dk: hız sınırı retleri ve giriş kilitleri, kural adına göre | — |
+| `backup` | Zamanlanmış yedek henüz yok, bu yüzden `lastBackupAt: null` ve `unknown`. Son restore tatbikatı: staging 2026-10-05, RTO 315 sn (#50). | — |
+
+**Kurallar:**
+- Ölçülemeyen değer `unknown` ya da `null` döner; 0 ya da `ok` gösterilmez.
+- Yanıtta IP, e-posta, kullanıcı kimliği, sorgu dizesi, bağlantı adresi ve hata ayrıntısı yoktur. Route'lar kalıp olarak tutulur (`/v1/polls/:id`); eşleşmeyen yollar `(eşleşmeyen)` diye sayılır.
+- `http` ve `security` sayaçları süreç içidir (`scope: "process"`). Yeniden başlatınca sıfırlanır; birden çok API kopyası varsa her kopya kendi sayacını verir.
+
+**Sağlık altyapısı bozulursa (fail-safe):**
+
+| Durum | Davranış |
+|---|---|
+| Operasyon API'si cevap vermiyor | `/health` ve `staging-monitor` bağımsızdır; alarm yine çalışır. |
+| Veritabanı yok | `/admin/ops` oturum doğrulayamaz (5xx). Karar `/health` ve Railway loglarından verilir. |
+| pg-boss şeması okunamıyor | Kuyruk ve worker `unknown`. Worker logları ve `/health` → `worker` kontrol edilir. |
+| Telemetri boş (yeni başlamış süreç) | Oran ve gecikme `null`. Panel "veri yok" gösterir, sağlıklı saymaz. |
+
+Bakım modu ve acil durum anahtarlarının değiştirilmesi bu API'de yoktur; KV-40 (`admin.emergency.put`, yalnız SUPER_ADMIN, gerekçe ve audit) ve iki onay için #182 kullanılır.
+
 **Log politikası:**
 - İstek logu yalnız istek kimliği, yöntem, yol ve süre içerir; IP, port ve başlık yazılmaz.
 - Çerez, `authorization`, `password` ve `token` alanları redakte edilir.

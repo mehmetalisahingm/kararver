@@ -48,6 +48,7 @@ import { createMemoryRbacStore } from "./memory-rbac-store.ts";
 import { createMemoryAuthStore } from "./memory-store.ts";
 import { createSettingsService, type SettingsService } from "../../src/modules/settings/service.ts";
 import { createPrismaSettingsStore } from "../../src/modules/settings/prisma-store.ts";
+import { createPrismaMetricsStore } from "../../src/modules/metrics/store.ts";
 import { resolveTestDatabaseUrl } from "./test-db.ts";
 
 export const WEB_ORIGIN = "http://localhost:3000";
@@ -256,6 +257,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     moderationStore: backend.prisma ? createPrismaModerationStore(backend.prisma) : undefined,
     adminUserStore: backend.prisma ? createPrismaAdminUserStore(backend.prisma) : undefined,
     dataExportStore: backend.prisma ? createPrismaDataExportStore(backend.prisma) : undefined,
+    metricsStore: backend.prisma ? createPrismaMetricsStore(backend.prisma, () => clock.now) : undefined,
     notificationStore: backend.prisma ? createPrismaNotificationStore(backend.prisma) : undefined,
     pollSettings: fixed ? async () => pollSettings : undefined,
     commentStore: backend.prisma ? createPrismaCommentStore(backend.prisma) : undefined,

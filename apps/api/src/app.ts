@@ -3,7 +3,6 @@ import type { DecisionStore } from "./modules/decisions/store.ts";
 // Fastify uygulaması. Bağımlılıklar dışarıdan verilir; server.ts gerçeklerini, testler kendi
 // store/mailer/saatini bağlar. Yeni modül: src/modules/<modül>/routes.ts + aşağıya bir satır.
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
 import { headers } from "@kararver/contracts";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Config } from "./config.ts";
@@ -74,6 +73,10 @@ import { registerVoteRoutes } from "./modules/votes/routes.ts";
 import type { VoteStore } from "./modules/votes/store.ts";
 import { registerMetricsRoutes } from "./modules/metrics/routes.ts";
 import type { MetricsStore } from "./modules/metrics/store.ts";
+import type { OpsProbe } from "./modules/ops/probe.ts";
+import { registerOpsRoutes } from "./modules/ops/routes.ts";
+import { readHeartbeatFile } from "./modules/ops/status.ts";
+import { createOpsTelemetry, type OpsTelemetry } from "./modules/ops/telemetry.ts";
 
 export type AppDeps = {
  decisionStore?: DecisionStore;
@@ -128,9 +131,13 @@ export type AppDeps = {
   reportStore?: ReportStore;
   /** Verilmezse admin kullanıcı, yaptırım ve rol route'ları (admin.users.*, admin.sanctions.*, admin.roles.put; KV-33) kaydedilmez. */
   adminUserStore?: AdminUserStore;
-  /** #181 KVKK veri dışa aktarma; paket okuma için media.storage da gerekir (ikisi birlikte verilirse route'lar kaydedilir). */
+  /** #181 KVKK veri dışa aktarma; paket okuma için media.storage da gerekir. */
   dataExportStore?: DataExportStore;
   metricsStore?: MetricsStore;
+  /** KV-186 operasyon yoklaması (DB, worker izi, pg-boss kuyrukları); verilmezse bu bileşenler `unknown`. */
+  opsProbe?: OpsProbe;
+  /** Süreç içi istek/hız sınırı telemetrisi; verilmezse uygulama kendi örneğini oluşturur (testler dışarıdan verir). */
+  opsTelemetry?: OpsTelemetry;
   /** Verilmezse admin içerik moderasyonu (anket/yorum) route'ları kaydedilmez. */
   moderationStore?: ModerationStore;
   /** Verilmezse bildirim okuma route'ları (notifications.*; KV-21) kaydedilmez. */
@@ -193,6 +200,15 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     reply.header(headers.requestId, request.id);
   });
 
+  // KV-186: istek telemetrisi yalnız route kalıbı, yöntem, durum ve süre tutar; ham yol (kimlik, sorgu dizesi) tutulmaz.
+  const startedAt = now();
+  const telemetry = deps.opsTelemetry ?? createOpsTelemetry();
+  app.addHook("onResponse", async (request, reply) => {
+    const route = request.routeOptions.url;
+    if (route === "/health" || request.method === "OPTIONS") return;
+    telemetry.recordRequest({ method: request.method, route: route ?? "(eşleşmeyen)", status: reply.statusCode, ms: reply.elapsedTime });
+  });
+
   registerErrorHandling(app);
   registerSecurity(app, config.allowedOrigins, { hsts: config.session.secure });
 
@@ -212,6 +228,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         newAccountDays: async () => (await pollSettings()).newAccountPeriodDays,
         pepper: config.authTokenPepper,
         now,
+        onDeny: (rules, login) => telemetry.recordRateLimit(rules, login),
       })
     : null;
   const route = createRouter(app, {
@@ -349,6 +366,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
+  registerOpsRoutes(route, { probe: deps.opsProbe, telemetry, env: config.appEnv, startedAt, now });
   if (deps.commentStore) {
     registerCommentRoutes(route, {
       store: deps.commentStore,
@@ -374,11 +392,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.get("/health", async (_request, reply) => {
     let worker: { status: string; at: string; ageMs: number } | { status: "unknown" } = { status: "unknown" };
-    try {
-      const file = process.env.WORKER_HEARTBEAT_PATH ?? "/tmp/kararver-worker-heartbeat.json";
-      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { status: string; at: string };
-      worker = { status: parsed.status, at: parsed.at, ageMs: Date.now() - Date.parse(parsed.at) };
-    } catch { /* worker may be disabled or separate */ }
+    // Worker kapalı ya da ayrı serviste olabilir: dosya yoksa "unknown".
+    const beat = readHeartbeatFile();
+    if (beat) worker = { status: beat.status, at: beat.at, ageMs: Date.now() - Date.parse(beat.at) };
     // KV-49 (#51): hangi sürümün çalıştığı (deploy SHA). Railway GitHub entegrasyonu RAILWAY_GIT_COMMIT_SHA verir.
     const sha = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null;
     return reply.header("Cache-Control", "no-store").send({ status: "ok", worker, release: { sha: sha ? sha.slice(0, 12) : null, env: config.appEnv } });

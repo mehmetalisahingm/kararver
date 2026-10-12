@@ -2,7 +2,7 @@
 // cevap sözleşme şemasıyla doğrulanır (HttpClient). Yetki sunucudadır: istemci rol kontrolü yalnız menü/düğme
 // gizlemedir, ret 403 olarak gelir ve ekranda gösterilir.
 import type {
-  AdminUserSummary, AdminUserDetail, AdminUserActivity, AdminSession, Sanction, Metrics,
+  AdminUserSummary, AdminUserDetail, AdminUserActivity, AdminSession, Sanction, Metrics, OpsStatus,
   AdminCategory,
   AdminCommentItem,
   AdminPollItem,
@@ -41,9 +41,10 @@ export type UserDetail = ReturnType<typeof AdminUserDetail.parse>;
 export type UserActivity = ReturnType<typeof AdminUserActivity.parse>;
 export type UserSanction = ReturnType<typeof Sanction.parse>;
 export type MetricsView = ReturnType<typeof Metrics.parse>;
+export type OpsView = ReturnType<typeof OpsStatus.parse>;
 export type EmergencyState = { registration: boolean; pollCreation: boolean; comments: boolean; uploads: boolean; maintenance: boolean };
 /** admin.audit.list süzgeçleri (KV-39). from dahil, to hariç (ISO zaman). */
-export type AuditSearch = { action?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string };
+export type AuditSearch = { action?: string; operation?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string };
 
 export type Page<T> = { items: T[]; next: string | null };
 type Wire<T> = { data: T[]; page: { nextCursor: string | null } };
@@ -107,6 +108,9 @@ const data = <T>(wire: unknown) => (wire as { data: T }).data;
 const flag = (value: boolean | undefined) => (value === undefined ? undefined : String(value));
 
 export class AdminClient {
+  async ops(signal?: AbortSignal) {
+    return data<OpsView>(await this.http.request("admin.ops.status", { signal }));
+  }
   async users(q?: string, cursor?: string, signal?: AbortSignal) {
     return page<UserSummary>(await this.http.request("admin.users.list", { query: { q: q || undefined, cursor, limit: "20" }, signal }));
   }
@@ -135,8 +139,9 @@ export class AdminClient {
   async liftSanction(id: string, sanctionId: string, reason: string) {
     return this.http.request("admin.sanctions.lift", { params: { id, sanctionId }, body: { reason } });
   }
-  async metrics(signal?: AbortSignal) {
-    return data<MetricsView>(await this.http.request("admin.metrics.get", { query: { range: "7d" }, signal }));
+  /** Return server-calculated aggregates; never substitute demo counters on API errors. */
+  async metrics(signal?: AbortSignal, range: "7d" | "30d" = "7d") {
+    return data<MetricsView>(await this.http.request("admin.metrics.get", { query: { range }, signal }));
   }
   /** Değiştirilemez yönetim geçmişi (KV-39); yalnız ADMIN+. Boş süzgeç gönderilmez. */
   async audit(search: AuditSearch, cursor?: string, signal?: AbortSignal) {

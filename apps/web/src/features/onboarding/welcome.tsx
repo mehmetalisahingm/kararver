@@ -64,6 +64,11 @@ export function Welcome({
 
       {step < 2 && <>
         <p className={styles.lead}>{step === 0 ? "Bir seçimin, düşündüğünden daha çok şey anlatır." : "Sor. Oy ver. Sonucu gör."}</p>
+        {step === 0 && <div className={styles.benefits} aria-label="KararVer'de neler yapabilirsin?">
+          <span><strong>01</strong> Sorunu paylaş</span>
+          <span><strong>02</strong> Farklı fikirleri keşfet</span>
+          <span><strong>03</strong> Kendi kararını ver</span>
+        </div>}
         <button disabled={!ready} className={styles.primary} onClick={() => setStep(step + 1)}>
           {step === 0 ? "Bir karar verelim" : "Kendin dene"} <span aria-hidden="true">↗</span>
         </button>

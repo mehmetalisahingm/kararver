@@ -35,13 +35,25 @@ export function useProduct() {
   return value;
 }
 const navigation = [
-  { href: "/", icon: "⌂", label: "Ana Sayfa" },
-  { href: "/kesfet", icon: "◇", label: "Keşfet" },
-  { href: "/topluluklar", icon: "◎", label: "Topluluklar" },
-  { href: "/olustur", icon: "+", label: "Oluştur" },
-  { href: "/bildirimler", icon: "♧", label: "Bildirimler" },
-  { href: "/hesap", icon: "○", label: "Hesabım" },
-];
+  { href: "/", icon: "home", label: "Ana Sayfa" },
+  { href: "/kesfet", icon: "compass", label: "Keşfet" },
+  { href: "/topluluklar", icon: "community", label: "Topluluklar" },
+  { href: "/olustur", icon: "plus", label: "Oluştur" },
+  { href: "/bildirimler", icon: "bell", label: "Bildirimler" },
+  { href: "/hesap", icon: "user", label: "Hesabım" },
+] as const;
+
+type NavigationIcon = (typeof navigation)[number]["icon"];
+function NavIcon({ kind }: { kind: NavigationIcon }) {
+  return <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {kind === "home" && <><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 21v-8h6v8"/></>}
+    {kind === "compass" && <><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"/></>}
+    {kind === "community" && <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>}
+    {kind === "plus" && <><path d="M12 5v14M5 12h14"/></>}
+    {kind === "bell" && <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>}
+    {kind === "user" && <><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></>}
+  </svg>;
+}
 
 export function ProductProvider({
   children,
@@ -65,11 +77,24 @@ export function ProductProvider({
   const [message, notify] = useState("");
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [returnTo, setReturn] = useState("/");
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [gate, setGate] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
   const pathname = usePathname();
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("kararver:theme");
+      if (saved === "light" || saved === "dark") setTheme(saved);
+    } catch { /* Private browsing or restricted storage: use safe light default. */ }
+  }, []);
+  function toggleTheme() {
+    setTheme(previous => {
+      const next = previous === "dark" ? "light" : "dark";
+      try { window.localStorage.setItem("kararver:theme", next); } catch { /* Retain in-memory preference. */ }
+      return next;
+    });
+  }
   useEffect(() => { setWelcomeSeen(hasWelcomeSeen()); }, [pathname]);
   const router = useRouter();
   const previousPath = useRef(pathname);
@@ -189,7 +214,7 @@ export function ProductProvider({
             aria-label={
               theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"
             }
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            onClick={toggleTheme}
           >
             {theme === "dark" ? "☀" : "☾"}
           </button>
@@ -229,7 +254,7 @@ export function ProductProvider({
                   href={n.href}
                   aria-current={pathname === n.href ? "page" : undefined}
                 >
-                  <span aria-hidden="true">{n.icon}</span>
+                  <span aria-hidden="true"><NavIcon kind={n.icon} /></span>
                   {n.label}
                   {n.href === "/bildirimler" && unreadNotifications > 0 ? (
                     <small className="notification-badge" aria-label={`${unreadNotifications} okunmamış bildirim`}>
@@ -334,7 +359,7 @@ export function ProductProvider({
               href={n.href}
               aria-current={pathname === n.href ? "page" : undefined}
             >
-              <span aria-hidden="true">{n.icon}</span>
+              <span aria-hidden="true"><NavIcon kind={n.icon} /></span>
               {n.label}
               {n.href === "/bildirimler" && unreadNotifications > 0 ? (
                 <small className="notification-badge" aria-label={`${unreadNotifications} okunmamış bildirim`}>

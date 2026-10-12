@@ -3,7 +3,7 @@
 // Katsayılar sürümlüdür: herhangi biri değişirse CALCULATION_VERSION artırılır. Her çalıştırma sürümünü
 // trend_runs.calculation_version'a yazar; aynı sürüm aynı veriden aynı sıralamayı verir (açıklanabilirlik).
 // Değerler Faruk'un önerisidir (PRODUCT_TEAM_PLAN §8 formül mantığını verir, sayı vermez); Mehmet teyidi bekliyor.
-// Admin'den değiştirme KV-40 (#42) ayar servisiyle; o zaman sürüm ayar değişikliğiyle birlikte artar.
+// Admin'den değiştirme KV-40 (#42) ayar servisiyle; settings.ts aynı görüntüden katsayıları ve hesap sürümünü üretir.
 import { defaultSettings } from "@kararver/contracts";
 
 export const TRENDS_QUEUE = "trends.refresh";

@@ -182,6 +182,7 @@ export const actions = Object.freeze({
   "settings.update": rule("super_admin", "Sistem ayarı değiştirme"),
   "privacy.export.manage": rule("super_admin", "KVKK veri dışa aktarma talebi ve teslimi (#181)"),
   "user.sessions.manage": rule("super_admin", "Kullanıcı oturumlarını yönetme"),
+  "ops.read": rule("super_admin", "Operasyon merkezi: bileşen, kuyruk, hata ve yedek durumu"),
   "emergency.update": rule("super_admin", "Acil durum anahtarları"),
 } satisfies Record<string, ActionRule>);
 
@@ -311,6 +312,7 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.audit.list": "audit.read",
   "admin.points.adjust": "points.adjust",
   "admin.metrics.get": "metrics.read",
+  "admin.ops.status": "ops.read",
   "admin.featured.list": "featured.manage",
   "admin.featured.create": "featured.manage",
   "admin.featured.update": "featured.manage",

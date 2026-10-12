@@ -258,7 +258,7 @@ export function AuthScreen({
             <Field
               id="password"
               label={demo ? (mode === "reset" ? "Yeni demo şifre" : "Demo şifre") : "Şifre"}
-              help={demo ? "En az 8 karakter. Gerçek şifreni kullanma." : "Yeni şifre 10–128 karakter olmalı."}
+              help={demo ? "En az 8 karakter. Gerçek şifreni kullanma." : mode === "login" ? "Mevcut şifreni gir." : "Yeni şifre 10–128 karakter olmalı."}
             >
               <input
                 id="password"
