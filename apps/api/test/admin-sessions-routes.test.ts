@@ -4,7 +4,7 @@ import { registerAdminUserRoutes } from "../src/modules/admin-users/routes.ts";
 
 function setup(store: any) {
   const handlers = new Map<string, any>();
-  registerAdminUserRoutes(((id: string, handler: any) => handlers.set(id, handler)) as any, { store, now: () => new Date("2026-10-09T10:00:00Z"), mediaPublicBaseUrl: "https://media.test" });
+  registerAdminUserRoutes(((id: string, handler: any) => handlers.set(id, handler)) as any, { store, now: () => new Date("2026-10-09T10:00:00Z"), mediaPublicBaseUrl: "https://media.test", mailer: { send: async () => {} }, tokenPepper: "pepper", webUrl: "https://web.test" });
   return handlers;
 }
 test("session list excludes token material and serializes timestamps", async () => {

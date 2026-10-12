@@ -47,6 +47,7 @@ const commentOnlyExcluded = (o: string) => o.endsWith("_trends") || o.endsWith("
 export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[]>>> = Object.freeze({
   "user.sanction": ["apply"],
   "user.sessions.manage": ["revoke"],
+  "user.password.reset": ["send"],
   "user.sanction.lift": ["lift"],
   // admin.roles.put: grant = USER'a rol verme, revoke = rolü kaldırıp USER'a düşürme, change = rolden role geçiş.
   "user.role.assign": ["grant", "revoke", "change"],
@@ -96,6 +97,7 @@ export function allowedAuditOperations(action: AuditAction): readonly string[] {
  */
 export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditAction>([
   "user.sessions.manage",
+  "user.password.reset",
   "user.sanction",
   "user.sanction.lift",
   "user.role.assign",

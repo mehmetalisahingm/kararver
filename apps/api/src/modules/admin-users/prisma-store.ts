@@ -163,6 +163,8 @@ async function syncStatus(tx: Tx, userId: string, current: UserStatus, now: Date
   return next;
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+
 const REVOKES_SESSIONS: ReadonlySet<SanctionType> = new Set(["SUSPEND", "BAN"]);
 
 export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore {
@@ -410,6 +412,51 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
         const result = await tx.session.updateMany({ where: { userId: input.userId, revokedAt: null, expiresAt: { gt: input.now }, ...(input.sessionId ? { id: input.sessionId } : {}) }, data: { revokedAt: input.now } });
         await writeAudit(tx, { source: "API", actorId: input.actorId, action: "user.sessions.manage", operation: "revoke", target: { type: "USER", id: input.userId }, reason: input.reason, before: null, after: { revokedCount: result.count, scope: input.sessionId ? "single" : "all" }, requestId: input.requestId, at: input.now });
         return result.count;
+      });
+    },
+    async issuePasswordReset(input) {
+      const { userId, actorId, now } = input;
+      return prisma.$transaction(async (tx) => {
+        const target = await lockTarget(tx, userId);
+        if (!target) return { kind: "rejected", reason: "not_found" } as const;
+        const role = await roleOf(tx, userId);
+        const decision = await decide(tx, actorId, "user.password.reset", { targetUserId: userId, targetRoles: role ? [role] : [] }, now);
+        if (!decision.allowed) return { kind: "rejected", reason: "forbidden" } as const;
+        if (target.deleted) return { kind: "rejected", reason: "user_deleted" } as const;
+        // Normal "şifremi unuttum" akışıyla aynı kural: yasaklı hesaba sıfırlama bağlantısı gönderilmez.
+        if (target.status === "BANNED") return { kind: "rejected", reason: "user_banned" } as const;
+
+        // Sıklık sınırı: hedef satırı kilitli olduğundan eşzamanlı iki istek burada sıraya girer; ikincisi birincinin audit'ini görür.
+        const recent = await tx.auditLog.findMany({
+          where: { action: "user.password.reset", targetType: "USER", targetId: userId, createdAt: { gt: new Date(now.getTime() - HOUR_MS) } },
+          orderBy: { createdAt: "asc" },
+          select: { createdAt: true },
+        });
+        const last = recent.at(-1);
+        if (last && now.getTime() - last.createdAt.getTime() < input.cooldownMs) {
+          return { kind: "limited", retryAfterMs: input.cooldownMs - (now.getTime() - last.createdAt.getTime()) } as const;
+        }
+        if (recent.length >= input.hourlyLimit) {
+          return { kind: "limited", retryAfterMs: recent[recent.length - input.hourlyLimit]!.createdAt.getTime() + HOUR_MS - now.getTime() } as const;
+        }
+
+        await tx.authToken.updateMany({ where: { userId, purpose: "PASSWORD_RESET", usedAt: null }, data: { usedAt: now } });
+        await tx.authToken.create({ data: { userId, purpose: "PASSWORD_RESET", tokenHash: input.tokenHash, expiresAt: input.expiresAt } });
+        const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } });
+        // Audit'te token, bağlantı ve e-posta yoktur; yalnız son geçerlilik zamanı.
+        await writeAudit(tx, {
+          source: "API",
+          actorId,
+          action: "user.password.reset",
+          operation: "send",
+          target: { type: "USER", id: userId },
+          reason: input.reason,
+          before: null,
+          after: { expiresAt: input.expiresAt.toISOString() },
+          requestId: input.requestId,
+          at: now,
+        });
+        return { kind: "issued", email: user.email } as const;
       });
     },
     async setRole(input) {

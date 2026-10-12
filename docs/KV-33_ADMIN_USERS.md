@@ -17,6 +17,7 @@ KV-33 üç PR'dır: **PR-A** `audit_logs` ve `writeAudit` (KV-39), **PR-B** bu b
 | `admin.users.activity` | `GET /admin/users/:id/activity` | `user.read` | — | yok |
 | `admin.sanctions.create` | `POST /admin/users/:id/sanctions` | `user.sanction` (`sanctionTarget`) | zorunlu | `user.sanction` / `apply` |
 | `admin.sanctions.lift` | `POST /admin/users/:id/sanctions/:sanctionId/lift` | `user.sanction.lift` (`sanctionTarget`) | zorunlu | `user.sanction.lift` / `lift` |
+| `admin.users.passwordReset.send` | `POST /admin/users/:id/password-reset` | `user.password.reset` (ADMIN+, `sanctionTarget`) | zorunlu | `user.password.reset` / `send` |
 | `admin.roles.put` | `PUT /admin/users/:id/role` | `user.role.assign` (SUPER_ADMIN, `roleAssignment`) | zorunlu | `user.role.assign` / `grant` \| `revoke` \| `change` |
 
 - **Arama (`q`):** en az 3 karakter (daha kısa 400). Kullanıcı adı ve görünen adda içerir araması (`kv_normalize … LIKE '%q%'`, KV-26 trigram GIN index'leri). `q` `@` içeriyorsa yalnız e-postada tam eşleşme (`email_normalized` unique index); e-postada içerir araması yoktur (PII taraması olmasın). Sayfalama `id DESC` (UUIDv7 ≈ kayıt zamanı). Silinmiş hesaplar durumlarıyla listelenir. Migration gerekmedi.
@@ -90,3 +91,18 @@ Kod: `apps/worker/src/jobs/sanctions/` · Test: `apps/worker/test/sanctions.test
   | Job önce `ACTIVE` yazar, yönetici bekler | Yönetici kilitten sonra `ACTIVE` görür, yeni SUSPEND ile `SUSPENDED` yazar; job'ın tek audit'i kalır |
 
 - **Index:** aday sorgusu `users_status_idx` ile başlar, her aday için `sanctions_user_id_lifted_at_ends_at_idx`; migration gerekmez. Test `EXPLAIN`'i `SET LOCAL enable_seqscan = off` ile koşar (boş/küçük tabloda planner seq scan seçmesin; index'in kullanılabildiği sınanır).
+
+## 7. Şifre sıfırlama başlatma — `admin.users.passwordReset.send` (#181)
+
+Yönetici, kullanıcının kayıtlı e-postasına tek kullanımlık sıfırlama bağlantısı gönderir. Yönetici şifreyi, token'ı veya bağlantıyı **hiçbir yerde görmez**: yanıt yalnız `{ sent, expiresAt }`'tir, audit `after` yalnız `expiresAt` tutar (token, bağlantı ve e-posta yoktur), kullanıcı yeni şifreyi kendisi belirler. Bağlantı, mevcut `auth.password.reset` akışıyla aynıdır (`/sifre-yenile#token=…`, 1 saat, tek kullanımlık, kullanılınca bütün oturumlar kapanır); token yalnız SHA-256 özetiyle (`auth_tokens`) saklanır.
+
+| Konu | Kural |
+|---|---|
+| Yetki | `user.password.reset`: ADMIN+; `sanctionTarget` kuralı: admin hedef SUPER_ADMIN ister, kimse kendi hesabına uygulayamaz (403; kendisi için normal "şifremi unuttum" vardır). Rol DB'den okunur; store kararı hedef kilitlendikten sonra taze veriyle yeniden verir. |
+| Hesap durumu | SUSPENDED/RESTRICTED hesaba gönderilir (kullanıcı şifresini yenileyip yaptırım bitince girebilir). BANNED → 409 `user_banned`, silinmiş → 409 `user_deleted`; normal "şifremi unuttum" akışıyla aynı kural. Reddedilen istek token, mail veya audit üretmez. |
+| Sıklık sınırı | Hesap başına ardışık istekler arası 60 sn ve saatte en çok 5; aşılırsa 429 `RATE_LIMITED` + `Retry-After`. Sınır hedef satırı kilitliyken audit kayıtlarından hesaplanır: aynı anda gelen iki istekten yalnız biri geçer (çift tıklama ve iki yöneticinin yarışı yeni token/mail üretmez). |
+| Önceki bağlantılar | Yeni token, hesabın kullanılmamış önceki sıfırlama token'larını geçersiz kılar; yalnız en son bağlantı çalışır. |
+| E-posta hatası | Token ve audit transaction'la yazılır, mail commit'ten sonra gönderilir. Servis hata verirse yanıt `sent=false`'tur (token oluşmuştur); panel "tekrar dene" der, 60 sn sonra yeni bağlantı üretilir. |
+| Audit | `user.password.reset` / `send`, gerekçe zorunlu, aktör, hedef, `requestId`. |
+
+Test: `apps/api/test/admin-password-reset.test.ts` (yetki matrisi, gerekçe, bağlantının çalışması ve oturumların kapanması, audit'te sır olmaması, ban/silinmiş, çift tıklama, saatlik sınır, eşzamanlı yarış, e-posta hatası). Kapsam dışı (#181'in sonraki dilimleri): e-posta adresi değişimi, hesap dondurma/geri alma akışı, kullanıcı içeriğinin toplu gizlenmesi, KVKK dışa aktarma ve anonimleştirme; kritik işlemlerde ikinci onay/MFA #182 ile gelir.
