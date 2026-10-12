@@ -19,7 +19,7 @@ describe("SA #180 TOTP RFC 6238", () => {
   test("rejects malformed, weak and noncanonical secrets", () => {
     assert.throws(() => decodeBase32("!") );
     assert.throws(() => decodeBase32("AAAA") );
-    assert.throws(() => decodeBase32("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJZ") );
+    assert.throws(() => decodeBase32("A".repeat(27) + "B") );
   });
   test("clock skew bounded and accepted counter replay forbidden", () => {
     assert.equal(matchTotpStep({ base32Secret: secret, code: "287082", nowMs: 59000, lastAcceptedStep: -1 }), 1);
