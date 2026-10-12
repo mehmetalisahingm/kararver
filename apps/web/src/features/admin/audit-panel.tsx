@@ -20,7 +20,7 @@ const dayStart = (day: string, plus = 0) => {
 const summary = (value: unknown) => (value === null || value === undefined ? "—" : JSON.stringify(value, null, 2));
 
 export function AuditPanel({ admin }: { admin: AdminClient }) {
-  const [draft, setDraft] = useState({ action: "", targetType: "", targetId: "", source: "", from: "", to: "" });
+  const [draft, setDraft] = useState({ actorId: "", operation: "", action: "", targetType: "", targetId: "", source: "", from: "", to: "" });
   const [search, setSearch] = useState<AuditSearch>({});
   const [open, setOpen] = useState<string | null>(null);
 
@@ -31,6 +31,8 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
     event.preventDefault();
     setOpen(null);
     setSearch({
+      actorId: draft.actorId.trim() || undefined,
+      operation: draft.operation.trim() || undefined,
       action: draft.action.trim() || undefined,
       targetType: draft.targetType || undefined,
       targetId: draft.targetId.trim() || undefined,
@@ -43,6 +45,8 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
   return (
     <>
       <form className={styles.toolbar} role="search" aria-label="Audit süzgeçleri" onSubmit={apply}>
+        <label>İşlemi yapan kullanıcı kimliği<input className="kv-input" value={draft.actorId} onChange={e => setDraft({ ...draft, actorId: e.target.value })} pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" title="Geçerli bir kullanıcı UUID kimliği girin" /></label>
+        <label>İşlem türü<input className="kv-input" value={draft.operation} maxLength={40} placeholder="ör. revoke, grant, remove" onChange={e => setDraft({ ...draft, operation: e.target.value })} /></label>
         <label>
           İşlem
           <input className="kv-input" placeholder="ör. user.sanction" value={draft.action} onChange={(e) => setDraft({ ...draft, action: e.target.value })} />
@@ -71,7 +75,7 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
         </label>
         <label>
           Bitiş
-          <input className="kv-input" type="date" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
+          <input className="kv-input" type="date" value={draft.to} min={draft.from || undefined} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
         </label>
         <button className="kv-button kv-button--secondary" type="submit">Süz</button>
       </form>

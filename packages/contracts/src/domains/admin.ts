@@ -169,7 +169,15 @@ const CategoryBody = z.strictObject({
 export const Metrics = z.strictObject({
   range: z.enum(["7d", "30d"]),
   generatedAt: Timestamp,
-  totals: z.strictObject({ users: Count, polls: Count, votes: Count, comments: Count, openReports: Count }),
+  totals: z.strictObject({
+    users: Count, polls: Count, votes: Count, comments: Count, openReports: Count,
+    // Optional for backwards-compatible test fixtures and staggered deployments.
+    activeUsers24h: Count.optional(),
+    registrations24h: Count.optional(),
+    activeCommunities: Count.optional(),
+    removedPolls: Count.optional(),
+    removedComments: Count.optional(),
+  }),
   series: z.array(
     z.strictObject({
       localDate: z.iso.date(),
