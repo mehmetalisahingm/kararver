@@ -130,6 +130,9 @@
   padding: 34px 28px 72px;
 }
 .app-sidebar { gap: 24px; top: 105px; }
+.product:has([aria-label="Yönetim navigasyonu"]) .app-layout { grid-template-columns: minmax(0, 1fr); }
+.product:has([aria-label="Yönetim navigasyonu"]) .app-layout > .app-sidebar,
+.product:has([aria-label="Yönetim navigasyonu"]) .app-layout > .app-aside { display: none; }
 .app-sidebar nav { gap: 5px; }
 .app-sidebar nav a {
   min-height: 52px;
