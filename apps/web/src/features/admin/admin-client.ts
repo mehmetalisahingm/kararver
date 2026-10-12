@@ -43,7 +43,7 @@ export type UserSanction = ReturnType<typeof Sanction.parse>;
 export type MetricsView = ReturnType<typeof Metrics.parse>;
 export type EmergencyState = { registration: boolean; pollCreation: boolean; comments: boolean; uploads: boolean; maintenance: boolean };
 /** admin.audit.list süzgeçleri (KV-39). from dahil, to hariç (ISO zaman). */
-export type AuditSearch = { action?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string };
+export type AuditSearch = { action?: string; operation?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string };
 
 export type Page<T> = { items: T[]; next: string | null };
 type Wire<T> = { data: T[]; page: { nextCursor: string | null } };
@@ -131,8 +131,9 @@ export class AdminClient {
   async liftSanction(id: string, sanctionId: string, reason: string) {
     return this.http.request("admin.sanctions.lift", { params: { id, sanctionId }, body: { reason } });
   }
-  async metrics(signal?: AbortSignal) {
-    return data<MetricsView>(await this.http.request("admin.metrics.get", { query: { range: "7d" }, signal }));
+  /** Return server-calculated aggregates; never substitute demo counters on API errors. */
+  async metrics(signal?: AbortSignal, range: "7d" | "30d" = "7d") {
+    return data<MetricsView>(await this.http.request("admin.metrics.get", { query: { range }, signal }));
   }
   /** Değiştirilemez yönetim geçmişi (KV-39); yalnız ADMIN+. Boş süzgeç gönderilmez. */
   async audit(search: AuditSearch, cursor?: string, signal?: AbortSignal) {

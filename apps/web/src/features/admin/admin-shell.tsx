@@ -150,7 +150,7 @@ function livePanel(section: AdminSectionId, admin: AdminClient) {
 
 export function AdminSection({ section }: { section: AdminSectionId }) {
   const meta = sectionMeta[section];
-  const { client } = useProduct();
+  const { client, demo } = useProduct();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const dialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const openDialog = (trigger: HTMLButtonElement) => {
@@ -168,8 +168,16 @@ export function AdminSection({ section }: { section: AdminSectionId }) {
       </>
     );
   }
+  // No real API client means no production-facing fake records or demo metrics.
+  if (!demo) {
+    return <section className="kv-card" role="alert">
+      <h1>{meta.title}</h1>
+      <p>Yönetim API bağlantısı kullanılamıyor. Gerçek metrik veya işlem gösterilemiyor.</p>
+    </section>;
+  }
   return (
     <>
+      <p role="status" className="kv-muted">DEMO ÖNİZLEMESİ — Aşağıdaki sayılar ve kayıtlar temsili; gerçek kullanıcı veya işlem verisi değildir.</p>
       <header className={styles.hero}>
         <div><span className="eyebrow">YÖNETİM</span><h1>{meta.title}</h1><p className="kv-muted">{meta.intro}</p></div>
         <button className="kv-button" onClick={(event) => openDialog(event.currentTarget)}>Örnek işlem</button>

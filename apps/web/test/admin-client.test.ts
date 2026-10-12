@@ -299,3 +299,22 @@ test("acil durum: yalnız verilen anahtarlar PUT gövdesinde; yanıt bütün ana
   assert.equal(state.uploads, false);
   assert.equal(state.maintenance, false);
 });
+
+test("admin dashboard metrics allow 30-day real API range without client-side fake totals", async () => {
+  const payload = {
+    data: {
+      range: "30d",
+      generatedAt: "2026-10-09T00:00:00.000Z",
+      totals: { users: 12, polls: 3, votes: 17, comments: 4, openReports: 2 },
+      series: [{ localDate: "2026-10-08", activeUsers: 5, registrations: 2, polls: 1, votes: 3, comments: 1 }],
+    },
+  };
+  const { admin, calls } = client(() => new Response(JSON.stringify(payload), { status: 200 }));
+  const result = await admin.metrics(undefined, "30d");
+  const url = new URL(calls[0].url);
+  assert.equal(url.pathname, "/v1/admin/metrics");
+  assert.equal(url.searchParams.get("range"), "30d");
+  assert.equal(result.range, "30d");
+  assert.equal(result.totals.openReports, 2);
+  assert.equal(result.series[0].activeUsers, 5);
+});
