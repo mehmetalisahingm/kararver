@@ -12,6 +12,9 @@ export const WORKER_DOWN_SECONDS = 600;
 /** Bekleyen en eski iş bu kadar saniyedir başlamadıysa kuyruk `degraded`. */
 export const QUEUE_BACKLOG_SECONDS = 300;
 export const DB_SLOW_MS = 500;
+/** Günlük yedek beklenir: 26 saate kadar `ok` (zamanlama kayması payı), 72 saate kadar `degraded`, sonra `down`. */
+export const BACKUP_OK_HOURS = 26;
+export const BACKUP_DOWN_HOURS = 72;
 /** 5xx oranı; az istekte gürültü olmasın diye en az `ERROR_RATE_MIN_REQUESTS` istek gerekir. */
 export const ERROR_RATE_DEGRADED = 0.05;
 export const ERROR_RATE_MIN_REQUESTS = 20;
@@ -40,6 +43,13 @@ export function classifyWorker(lastSeen: Date | null, now: Date): { status: Heal
   const ageSeconds = Math.max(0, Math.floor((now.getTime() - lastSeen.getTime()) / 1000));
   const status = ageSeconds <= WORKER_OK_SECONDS ? "ok" : ageSeconds <= WORKER_DOWN_SECONDS ? "degraded" : "down";
   return { status, lastSeenAt: lastSeen.toISOString(), ageSeconds };
+}
+
+/** Kayıt yoksa ya da okunamıyorsa `unknown`: "yedek yok" ile "bilinmiyor" ayrımı panelde `lastBackupAt` ile yapılır. */
+export function classifyBackup(last: Date | null, now: Date): Health {
+  if (!last) return "unknown";
+  const hours = (now.getTime() - last.getTime()) / 3_600_000;
+  return hours <= BACKUP_OK_HOURS ? "ok" : hours <= BACKUP_DOWN_HOURS ? "degraded" : "down";
 }
 
 export function classifyQueues(queues: QueueRow[]): Health {
@@ -73,10 +83,11 @@ export type OpsStatusDeps = {
 
 export async function buildOpsStatus(deps: OpsStatusDeps) {
   const { probe, telemetry } = deps;
-  const [database, workerSeen, queues] = await Promise.all([
+  const [database, workerSeen, queues, lastBackup] = await Promise.all([
     settle(probe ? () => probe.database() : undefined),
     settle(probe ? () => probe.workerLastSeen() : undefined),
     settle(probe ? () => probe.queues() : undefined),
+    settle(probe ? () => probe.lastBackup() : undefined),
   ]);
   const now = deps.now();
   // İki iz varsa yenisi: dosya heartbeat'i (aynı servis) ya da worker'ın aldığı son iş (ayrı servis).
@@ -100,7 +111,11 @@ export async function buildOpsStatus(deps: OpsStatusDeps) {
     },
     http,
     security,
-    // Zamanlanmış yedek henüz yok (KV-49 production listesi): son yedek bilinmiyor, tatbikat kanıtı KV-48'den.
-    backup: { status: "unknown" as Health, lastBackupAt: null, restoreDrill: { ...RESTORE_DRILL } },
+    // Son yedek `db:backup` kaydından (ops_backup_runs); tatbikat kanıtı KV-48'den.
+    backup: {
+      status: lastBackup.ok ? classifyBackup(lastBackup.value, now) : ("unknown" as Health),
+      lastBackupAt: lastBackup.ok && lastBackup.value ? lastBackup.value.toISOString() : null,
+      restoreDrill: { ...RESTORE_DRILL },
+    },
   };
 }
