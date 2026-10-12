@@ -8,6 +8,16 @@ import { UiError } from "../src/lib/model.ts";
 
 type Seen = { url: string; method: string; body: unknown; headers: Record<string, string> };
 
+test("operations use the private status contract and preserve unknown measurements", async () => {
+  const listing = client(() => reply("admin.ops.status", "ok"));
+  const result = await listing.admin.ops();
+  assert.equal(new URL(listing.calls[0].url).pathname, "/v1/admin/ops");
+  assert.equal(result.backup.status, "unknown");
+  assert.equal(result.backup.lastBackupAt, null);
+  const denied = client(() => new Response(JSON.stringify({ error: { code: "FORBIDDEN", message: "Yetki yok", details: [] }, requestId: "ops-denied" }), { status: 403 }));
+  await assert.rejects(denied.admin.ops(), (error: UiError) => error.code === "FORBIDDEN");
+});
+
 test("user list and role assignment use real admin contracts", async () => {
   const listing = client(() => reply("admin.users.list", "ok"));
   await listing.admin.users("faruk");

@@ -16,6 +16,7 @@
 :global(.product[data-theme="light"]) .toolbar > label { color: #181b25; }
 
 .table th.settingsHeader{opacity:1}
+.opsPanel{margin-block-start:32px}
 .tableWrap:focus-visible{outline:2px solid var(--kv-focus,var(--kv-accent));outline-offset:3px}
 .rangeFilter{display:grid;gap:6px;color:var(--kv-text)}
 :global(.product[data-theme="light"]) .rangeFilter{color:#181b25}

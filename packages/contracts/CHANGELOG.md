@@ -9,6 +9,12 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.23.0 — 2026-10-12 (Faruk, operasyon merkezi, #186)
+
+Kırıcı değişiklik yok: yeni endpoint, şema ve yetki (minör).
+
+- **Eklendi:** `admin.ops.status` (`GET /admin/ops`, yalnız SUPER_ADMIN, yetki `ops.read`). API/DB/worker/kuyruk durumu, son 15 dakikanın 5xx oranı ve P50/P95/P99 gecikmesi, en yavaş route'lar, hız sınırı ve giriş kilidi sayıları, yedek ve restore tatbikatı kanıtı.
+- **Eklendi:** `OpsStatus`, `OpsHealth` şemaları. Telemetri yoksa `unknown` ya da `null` döner, hiçbir zaman 0 değil. Yanıtta IP, e-posta, bağlantı adresi ve sorgu dizesi yoktur.
 ## 1.22.0 — 2026-10-11 (Mert, #181 hesap yönetimi: şifre sıfırlama)
 
 Kırıcı değişiklik yok: yeni endpoint ve yetki.

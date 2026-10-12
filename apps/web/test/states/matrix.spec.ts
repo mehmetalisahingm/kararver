@@ -79,6 +79,19 @@ test("all implemented routes: light/dark, overflow, landmarks and accessible nam
   expect(mock.unexpected).toEqual([]);
 });
 
+test("search remains readable immediately after repeated theme switches",async({page})=>{
+  await api(page);
+  await page.goto("/");
+  await expect(page.locator("main h1").first()).toBeVisible();
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  for(const theme of ["dark","light","dark","light"]) {
+    if(await page.locator(".product").getAttribute("data-theme")!==theme) await page.getByRole("button",{name:/tema/i}).click();
+    await expect(page.locator(".product")).toHaveAttribute("data-theme",theme);
+    const report=await new AxeBuilder({page}).include(".discovery-search").withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze();
+    expect(report.violations,`${theme} search after theme switch`).toEqual([]);
+  }
+});
+
 test("profile: loading, offline/500 retry, empty, 404 and failed pagination preserve content",async({page})=>{
   const {handlers}=await api(page);
   let release!:()=>void;const gate=new Promise<void>(r=>release=r);
