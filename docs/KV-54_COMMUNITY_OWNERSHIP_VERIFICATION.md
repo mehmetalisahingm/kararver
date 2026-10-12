@@ -69,7 +69,7 @@ PENDING ─► EXPIRED                  (30 gün karar yok; talep eden bilgilend
 - **Transaction:** topluluk satırı `FOR NO KEY UPDATE`, ardından eski/yeni sahip kullanıcıları tutarlı sırayla (id sırası) kilitlenir; uygunluk yeniden doğrulanır; `owner_id` güncellenir, eski sahibin üyeliği korunur (MEMBER/MODERATOR), audit ve olay aynı transaction'da yazılır.
 - **Son sahip koruması:** sahip tek başına topluluğu "sahipsiz bırakamaz": hesabını silmeden, topluluktan ayrılmadan veya kendi rolünü düşürmeden önce devretmeli ya da sahipliği bırakmayı seçmelidir (bırakma = `owner_id` boşalır, topluluk admin yönetimine döner, audit). Hesap silme/yasaklama sahiplik sorununu çözmeden bitmez: sahip BANNED olursa veya hesap silinirse topluluk otomatik admin yönetimine döner (`owner_id` boşalır, olay + audit) ve admin bilgilendirilir.
 - **Soğuma süresi:** devirden sonra 7 gün içinde yeni devir yapılamaz (devir zinciriyle kimliği gizleme/ticaret önleme).
-- **Admin zorunlu atama:** SUPER_ADMIN gerekçeyle sahibi atayabilir/değiştirebilir (sahibin kabulü gerekmez; eski sahibe bildirim gider). Kritik işlemdir: ikinci onay/step-up MFA (#182) gerektirir; o gelene kadar yalnız audit + gerekçe.
+- **Admin zorunlu atama:** SUPER_ADMIN gerekçeyle sahibi atayabilir/değiştirebilir (sahibin kabulü gerekmez; eski sahibe bildirim gider). Kritik işlemdir: ikinci onay/step-up MFA (#182) gerektirir. Bu güvenlik entegrasyonu tamamlanana kadar kritik sahiplik mutasyonları kapalı kalır; audit ve gerekçe ikinci onayın yerine geçmez.
 - **Audit:** `community.owner.transfer` (`propose`, `accept`, `decline`, `expire`), `community.owner.assign` (`assign`, `release`), önce/sonra özetinde yalnız kullanıcı kimlikleri.
 - **Örtüşme (#184):** #184 V1'de admin tarafındaki sahip değiştirme/atma ve son sahip korumasını uygular. Bu belge kuralların kaynağıdır; #184'ün ilk diliminde `owner_id` ve `assign/release` gelir, §4 talep/itiraz ve §5 iki taraflı devir V1.1 işidir.
 
@@ -77,7 +77,7 @@ PENDING ─► EXPIRED                  (30 gün karar yok; talep eden bilgilend
 
 **Amaç:** kullanıcı bir kuruma bağlı olduğunu (öğrenci/personel) kanıtlayabilsin; sonuç rozet ve kurumsal topluluk kabulü için kullanılabilsin. **Zorunlu değildir**, hiçbir V1 işlevi buna bağlanmaz.
 
-**Kurum kaydı (`institutions`, admin yönetir):** kimlik, ad ("Samsun Üniversitesi"), kısa ad, izinli e-posta alan adları (ör. `ogr.omu.edu.tr`), durum (ACTIVE/DISABLED). Alan adı listesini yalnız SUPER_ADMIN yönetir (`institution.manage`, gerekçeli, audit); kamu e-posta sağlayıcıları (gmail, outlook vb.) hiçbir kuruma eklenemez.
+**Kurum kaydı (`institutions`, admin yönetir):** kimlik, kurum adı, kısa ad, o kuruma ait olduğu ayrıca doğrulanan e-posta alan adları, durum (ACTIVE/DISABLED). İlk kurum/alan adı listesi §12/3'te karar bekler; örnek bir alan adı gerçek kurum doğrulaması sayılmaz. Alan adı listesini yalnız SUPER_ADMIN yönetir (`institution.manage`, gerekçeli, audit); kamu e-posta sağlayıcıları (gmail, outlook vb.) hiçbir kuruma eklenemez.
 
 **Akış:**
 1. Kullanıcı kurumu seçer ve kurumsal e-posta adresini girer (alan adı kurumun listesinde olmalı).
