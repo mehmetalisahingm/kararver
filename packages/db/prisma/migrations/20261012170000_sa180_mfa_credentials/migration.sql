@@ -3,7 +3,7 @@
 CREATE TABLE user_mfa_credentials (
   user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   secret_cipher bytea NOT NULL,
-  setup_session_id uuid NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  setup_session_id uuid NOT NULL,
   pending_expires_at timestamptz NOT NULL,
   enabled_at timestamptz NULL,
   last_accepted_step bigint NOT NULL DEFAULT -1,
