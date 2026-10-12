@@ -1,7 +1,7 @@
 -- SA #180: encrypted TOTP credentials; session-bound five-minute step-up.
 -- No MFA enforcement is enabled solely by this migration.
 CREATE TABLE user_mfa_credentials (
-  user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
   secret_cipher bytea NOT NULL,
   setup_session_id uuid NOT NULL,
   pending_expires_at timestamptz NOT NULL,
@@ -12,7 +12,7 @@ CREATE TABLE user_mfa_credentials (
 );
 CREATE INDEX user_mfa_credentials_enabled_idx ON user_mfa_credentials (enabled_at);
 CREATE TABLE session_mfa_stepups (
-  session_id uuid PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+  session_id uuid PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE ON UPDATE CASCADE,
   verified_at timestamptz NOT NULL,
   expires_at timestamptz NOT NULL,
   consumed_at timestamptz NULL,
