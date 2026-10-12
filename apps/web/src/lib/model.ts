@@ -148,6 +148,7 @@ export function safeReturnTo(value: string | null): string {
       /^\/hesap$/.test(value) ||
       /^\/bildirimler$/.test(value) ||
       /^\/ilgi-alanlari$/.test(value) ||
+      /^\/veri-indir$/.test(value) ||
       /^\/profil\/[a-z0-9_]{3,30}$/.test(value) ||
       /^\/admin(?:\/[A-Za-z0-9_-]+)?$/.test(value) ||
       /^\/karar\/[A-Za-z0-9_-]+$/.test(value))

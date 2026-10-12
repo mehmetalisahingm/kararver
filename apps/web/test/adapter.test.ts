@@ -114,6 +114,10 @@ test("draft guards and return target never allow external or ambiguous navigatio
   ])
     assert.equal(safeReturnTo(path), "/");
   assert.equal(safeReturnTo("/karar/calisma-sekli"), "/karar/calisma-sekli");
+  // #181: veri paketi bağlantısı giriş sonrası aynı sayfaya döner (sabit yol; token fragment'ı sessionStorage'dadır).
+  assert.equal(safeReturnTo("/veri-indir"), "/veri-indir");
+  assert.equal(safeReturnTo("/veri-indir?x=1"), "/");
+  assert.equal(safeReturnTo("/veri-indir/baska"), "/");
 });
 test("two demo accounts keep individual votes; logout removes private result visibility", async () => {
   const client = new DemoClient(0);

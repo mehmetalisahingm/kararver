@@ -8,6 +8,7 @@ import type {
   AdminPollItem,
   AuditEntry,
   Announcement,
+  DataExport,
   BannedMediaView,
   FeaturedPlacement,
   Category as PublicCategory,
@@ -36,6 +37,7 @@ export type Featured = ReturnType<typeof FeaturedPlacement.parse>;
 export type AnnouncementView = ReturnType<typeof Announcement.parse>;
 export type AuditRecord = ReturnType<typeof AuditEntry.parse>;
 export type SettingView = ReturnType<typeof Setting.parse>;
+export type DataExportView = ReturnType<typeof DataExport.parse>;
 export type UserSummary = ReturnType<typeof AdminUserSummary.parse>;
 export type UserDetail = ReturnType<typeof AdminUserDetail.parse>;
 export type UserActivity = ReturnType<typeof AdminUserActivity.parse>;
@@ -119,6 +121,18 @@ export class AdminClient {
   }
   async revokeUserSessions(id: string, reason: string, sessionId?: string) {
     return this.http.request("admin.users.sessions.revoke", { params: { id }, body: { reason, ...(sessionId ? { sessionId } : {}) } });
+  }
+  /** #181 KVKK: hesabın veri dışa aktarma talepleri (son 20). Paket içeriği hiçbir yanıtta yoktur. */
+  async dataExports(id: string, signal?: AbortSignal) {
+    return data<DataExportView[]>(await this.http.request("admin.users.dataExports.list", { params: { id }, signal }));
+  }
+  /** Idempotent: açık talep varsa aynısı döner. Yalnız SUPER_ADMIN. */
+  async requestDataExport(id: string, reason: string) {
+    return data<DataExportView>(await this.http.request("admin.users.dataExports.create", { params: { id }, body: { reason } }));
+  }
+  /** Hazır paketin indirme bağlantısını kullanıcının e-postasına gönderir; yanıtta bağlantı/token yoktur. */
+  async deliverDataExport(id: string, exportId: string, reason: string) {
+    return data<{ sent: boolean; linkExpiresAt: string }>(await this.http.request("admin.users.dataExports.deliver", { params: { id, exportId }, body: { reason } }));
   }
   /** #181: kullanıcıya sıfırlama bağlantısı e-postası; yanıtta token yoktur. sent=false: e-posta servisi cevap vermedi. */
   async sendPasswordReset(id: string, reason: string) {

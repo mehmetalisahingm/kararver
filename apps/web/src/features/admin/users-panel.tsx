@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import type { AdminClient, UserDetail, StrongSanction } from "./admin-client";
+import type { AdminClient, DataExportView, UserDetail, StrongSanction } from "./admin-client";
 import type { AdminRole } from "./admin-model";
 import { ActionDialog, errorMessage, formatDate, ListState, useAdminRoles, useRemoteList } from "./admin-ui";
 
@@ -53,6 +53,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       <p>{user.stats.pollCount} gönderi · {user.stats.commentCount} yorum · {user.stats.voteCount} oy</p>
       {canAssign ? <button className="kv-button" onClick={() => setAction("role")}>Yetkilendir / rolü değiştir</button> : null}
       <PasswordReset id={id} admin={admin} />
+      {canAssign ? <DataExports id={id} admin={admin} /> : null}
       {canAssign ? <UserSessions id={id} admin={admin} /> : null}
       <button className="kv-button" onClick={() => setAction("sanction")}>Uyar / kısıtla / askıya al / yasakla</button>
       {user.activeSanctions.map(s => <article key={s.id}><p>{s.type} · {s.reason} · Bitiş: {formatDate(s.endsAt)}</p><button onClick={() => { setTarget(s.id); setAction("lift"); }}>Yaptırımı kaldır</button></article>)}
@@ -84,6 +85,72 @@ function PasswordReset({ id, admin }: { id: string; admin: AdminClient }) {
     <ActionDialog open={open} title="Şifre sıfırlama e-postası gönder" submitLabel="Gönder" onClose={() => setOpen(false)} onSubmit={async reason => {
       setResult(await admin.sendPasswordReset(id, reason));
     }}><p>Aynı hesap için bir dakikada en çok bir, saatte en çok beş istek gönderilebilir. Gerekçe yönetim geçmişine kaydedilir.</p></ActionDialog>
+  </section>;
+}
+
+const EXPORT_STATUS: Record<DataExportView["status"], string> = {
+  PENDING: "Sırada",
+  PROCESSING: "Hazırlanıyor",
+  READY: "Hazır",
+  FAILED: "Başarısız",
+  EXPIRED: "Süresi doldu",
+};
+const EXPORT_FAILURE: Record<string, string> = { too_large: "Veri çok büyük", build_failed: "Paket hazırlanamadı" };
+const EXPORT_OPEN = new Set<DataExportView["status"]>(["PENDING", "PROCESSING", "READY"]);
+
+/** KVKK veri dışa aktarma (#181): yalnız SUPER_ADMIN. Yönetici paketi veya bağlantıyı görmez; bağlantı kullanıcının e-postasına gider. */
+function DataExports({ id, admin }: { id: string; admin: AdminClient }) {
+  const [items, setItems] = useState<DataExportView[]>([]);
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const [dialog, setDialog] = useState<{ kind: "request" } | { kind: "deliver"; exportId: string } | null>(null);
+  const [notice, setNotice] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    admin.dataExports(id, controller.signal).then(list => { if (!controller.signal.aborted) { setItems(list); setError(""); } }).catch(cause => { if (!controller.signal.aborted) setError(errorMessage(cause)); });
+    return () => controller.abort();
+  }, [admin, id, revision]);
+  const preparing = items.some(item => item.status === "PENDING" || item.status === "PROCESSING");
+  // Paket worker'da hazırlanır (en geç ~1-2 dk): hazırlanırken liste kendiliğinden yenilenir.
+  useEffect(() => {
+    if (!preparing) return;
+    const timer = setInterval(() => setRevision(n => n + 1), 10_000);
+    return () => clearInterval(timer);
+  }, [preparing]);
+  const hasOpen = items.some(item => EXPORT_OPEN.has(item.status));
+  return <section className="kv-stack" aria-label="KVKK veri dışa aktarma">
+    <h3>KVKK veri dışa aktarma</h3>
+    <p className="kv-muted">Kullanıcının kişisel veri paketi hazırlanır ve indirme bağlantısı yalnızca kullanıcının kayıtlı e-postasına gönderilir. Paketi ve bağlantıyı sen görmezsin; kullanıcı kendi oturumuyla indirir. Paket 7 gün sonra silinir.</p>
+    {error ? <p role="alert">{error}</p> : null}
+    {notice ? <p role="status">{notice}</p> : null}
+    <button className="kv-button" disabled={hasOpen} onClick={() => { setNotice(""); setDialog({ kind: "request" }); }}>Veri paketi talebi aç</button>
+    {hasOpen ? <p className="kv-muted">Bu hesap için açık bir talep var; yenisi talep süresi dolunca veya başarısız olunca açılabilir.</p> : null}
+    {items.map(item => <article className="kv-card" key={item.id}>
+      <p><strong>{EXPORT_STATUS[item.status]}</strong>{item.failure ? ` · ${EXPORT_FAILURE[item.failure] ?? "Hata"}` : ""} · Talep: {formatDate(item.requestedAt)}</p>
+      {item.status === "READY" ? <p className="kv-muted">Boyut: {Math.max(1, Math.round((item.sizeBytes ?? 0) / 1024))} KB · Silinme: {formatDate(item.expiresAt)} · Son gönderim: {item.deliveredAt ? formatDate(item.deliveredAt) : "Henüz gönderilmedi"} · İndirme: {item.downloadCount}</p> : null}
+      {item.status === "READY" ? <button className="kv-button kv-button--secondary" onClick={() => { setNotice(""); setDialog({ kind: "deliver", exportId: item.id }); }}>{item.deliveredAt ? "Bağlantıyı yeniden gönder" : "Bağlantıyı kullanıcıya gönder"}</button> : null}
+    </article>)}
+    {!items.length && !error ? <p className="kv-muted">Bu hesap için talep yok.</p> : null}
+    <ActionDialog
+      open={dialog !== null}
+      title={dialog?.kind === "deliver" ? "Bağlantıyı kullanıcıya gönder" : "Veri paketi talebi aç"}
+      submitLabel={dialog?.kind === "deliver" ? "Gönder" : "Talep aç"}
+      onClose={() => setDialog(null)}
+      onSubmit={async reason => {
+        if (dialog?.kind === "deliver") {
+          const result = await admin.deliverDataExport(id, dialog.exportId, reason);
+          setNotice(result.sent ? `Bağlantı kullanıcının e-postasına gönderildi; ${formatDate(result.linkExpiresAt)} tarihine kadar geçerli.` : "E-posta servisi cevap vermedi; bağlantı oluştu ama gönderilemedi. Bir dakika sonra tekrar dene.");
+        } else {
+          await admin.requestDataExport(id, reason);
+          setNotice("Talep alındı; paket birkaç dakika içinde hazırlanır.");
+        }
+        setRevision(n => n + 1);
+      }}
+    >
+      {dialog?.kind === "deliver"
+        ? <p>Kullanıcının kimliğini destek kanalında doğruladığını gerekçede belirt. Bağlantı 24 saat geçerlidir, en çok 3 indirme hakkı vardır ve yalnızca kayıtlı e-postaya gider.</p>
+        : <p>Talep ve gerekçe yönetim geçmişine kaydedilir. Kısıtlı (askıda/yasaklı) veya silinmiş hesaplar için talep açılamaz.</p>}
+    </ActionDialog>
   </section>;
 }
 
