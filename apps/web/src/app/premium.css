@@ -56,6 +56,8 @@
 /* Keep field labels readable while WebKit invalidates inherited theme colors. */
 .product[data-theme="light"] label { color: #292826; }
 .product[data-theme="dark"] label { color: #f7f2e8; }
+.product[data-theme="light"] .discovery-search { background: #ffffff; color: #292826; }
+.product[data-theme="dark"] .discovery-search { background: #23211d; color: #f7f2e8; }
 .product .kv-muted, .product .kv-help { color: var(--kv-muted); }
 .product .eyebrow { font-size: 11px; letter-spacing: .14em; font-weight: 800; }
 .product .kv-card {
