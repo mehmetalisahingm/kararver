@@ -456,6 +456,62 @@ describe("KVKK veri dışa aktarma (postgres)", { skip: backend ? false : "TEST_
     assert.equal((await auditOf(user.id, "download")).length, MAX_DOWNLOADS);
   });
 
+  test("depolama okunurken yenilenen bağlantı eski indirmeyi reddeder; yeni token hakkı harcanmaz", async () => {
+    const user = await signUp();
+    const { id, token } = await readyAndDelivered(user);
+    h.clock.advance(DELIVER_COOLDOWN_MS + 1000);
+    const original = h.storage.readPrivate;
+    h.storage.readPrivate = async (key) => {
+      assert.equal((await deliver(user.id, id)).statusCode, 202);
+      return original(key);
+    };
+    try {
+      assertError(await download(token, user.cookie), 400, "TOKEN_INVALID_OR_EXPIRED");
+    } finally {
+      h.storage.readPrivate = original;
+    }
+    assert.equal((await rowOf(id)).downloadCount, 0);
+    assert.equal((await auditOf(user.id, "download")).length, 0);
+    assert.equal((await download(tokenFrom(mailsTo(user.email).at(-1)), user.cookie)).statusCode, 200);
+  });
+
+  test("depolama okunurken bağlantı veya paket süresi dolarsa güncel saatle reddedilir", async () => {
+    for (const field of ["tokenExpiresAt", "expiresAt"] as const) {
+      const user = await signUp();
+      const { id, token } = await readyAndDelivered(user);
+      await db.dataExport.update({ where: { id }, data: { [field]: new Date(h.clock.now.getTime() + 10_000) } });
+      const original = h.storage.readPrivate;
+      h.storage.readPrivate = async (key) => {
+        h.clock.advance(10_000);
+        return original(key);
+      };
+      try {
+        assertError(await download(token, user.cookie), 400, "TOKEN_INVALID_OR_EXPIRED");
+      } finally {
+        h.storage.readPrivate = original;
+      }
+      assert.equal((await rowOf(id)).downloadCount, 0, field);
+      assert.equal((await auditOf(user.id, "download")).length, 0, field);
+    }
+  });
+
+  test("depolama okunurken dondurulan hesap paket alamaz", async () => {
+    const user = await signUp();
+    const { id, token } = await readyAndDelivered(user);
+    const original = h.storage.readPrivate;
+    h.storage.readPrivate = async (key) => {
+      await db.user.update({ where: { id: user.id }, data: { status: "SUSPENDED" } });
+      return original(key);
+    };
+    try {
+      assertError(await download(token, user.cookie), 400, "TOKEN_INVALID_OR_EXPIRED");
+    } finally {
+      h.storage.readPrivate = original;
+    }
+    assert.equal((await rowOf(id)).downloadCount, 0);
+    assert.equal((await auditOf(user.id, "download")).length, 0);
+  });
+
   test("bağlantı 24 saat sonra geçersiz; paket hâlâ durur, yeniden teslim yeni bağlantı verir", async () => {
     const { user } = await richUser();
     const { id, token } = await readyAndDelivered(user);
@@ -506,6 +562,30 @@ describe("KVKK veri dışa aktarma (postgres)", { skip: backend ? false : "TEST_
     assert.equal(next.statusCode, 202);
     assert.notEqual(next.json().data.id, id);
   });
+
+  test("depolama silinemese de süresi dolan anahtar hemen silinir; şifreli nesne sonraki tur temizlenir", async () => {
+    const user = await signUp();
+    const { id } = await readyAndDelivered(user);
+    const objectKey = (await rowOf(id)).objectKey!;
+    await db.dataExport.update({ where: { id }, data: { expiresAt: h.clock.now } });
+    const logs: unknown[] = [];
+    await runWorker({
+      storage: {
+        writePrivate: async (key, data) => void h.storage.blobs.set(key, data),
+        deletePrivate: async () => { throw new Error("secret signed storage URL"); },
+      },
+      log: (_level, _message, fields) => void logs.push(fields),
+    });
+    const row = await rowOf(id);
+    assert.equal(row.status, "EXPIRED");
+    assert.deepEqual([row.encKey, row.tokenHash, row.tokenExpiresAt], [null, null, null]);
+    assert.equal(row.objectKey, objectKey);
+    assert.ok(h.storage.blobs.has(objectKey));
+    assert.equal(JSON.stringify(logs).includes("secret signed storage URL"), false);
+    await runWorker();
+    assert.equal((await rowOf(id)).objectKey, null);
+    assert.equal(h.storage.blobs.has(objectKey), false);
+  });
 });
 
 // ─── Şifreleme biçimi (veritabanı gerekmez) ───────────────────
@@ -532,6 +612,7 @@ test("şifreleme: worker biçimi API ile çözülür; yanlış anahtar, yanlış
 
 test("e-posta servisi hata verirse sent=false döner; yanıt token içermez, store'a yalnız özet gider", async () => {
   const handlers = new Map<string, any>();
+  const logs: unknown[] = [];
   let input: any;
   registerDataExportRoutes(((id: string, handler: any) => handlers.set(id, handler)) as any, {
     store: {
@@ -543,7 +624,7 @@ test("e-posta servisi hata verirse sent=false döner; yanıt token içermez, sto
     storage: { readPrivate: async () => null },
     mailer: {
       send: async () => {
-        throw new Error("smtp down");
+        throw new Error("smtp down: secret export link and recipient");
       },
     },
     now: () => new Date("2026-10-11T10:00:00Z"),
@@ -554,10 +635,11 @@ test("e-posta servisi hata verirse sent=false döner; yanıt token içermez, sto
     params: { id: "u", exportId: "e" },
     body: { reason: REASON },
     viewer: { id: "admin" },
-    request: { id: "req", log: { error() {} } },
+    request: { id: "req", log: { error(value: unknown) { logs.push(value); } } },
   });
   assert.equal(res.status, 202);
   assert.deepEqual(res.body.data, { sent: false, linkExpiresAt: "2026-10-12T10:00:00.000Z" });
   assert.match(input.tokenHash, /^[0-9a-f]{64}$/);
   assert.equal(input.token, undefined);
+  assert.deepEqual(logs, [{ exportId: "e", failure: "mail_failed" }]);
 });

@@ -48,7 +48,7 @@ export interface DataExportStore {
   findDownloadable(input: { userId: string; tokenHash: string; now: Date; maxDownloads: number }): Promise<DownloadTicket | null>;
   /**
    * Paket başarıyla çözüldükten sonra: indirme sayacı artar (koşullu: hak bitmişse false) ve audit yazılır, aynı transaction.
-   * Eşzamanlı indirmelerde sayaç hakkı aşmaz.
+   * Eşzamanlı indirmelerde sayaç hakkı aşmaz; bağlantı ve paket süresi ile token yeniden kontrol edilir.
    */
-  recordDownload(input: { userId: string; exportId: string; requestId: string; now: Date; maxDownloads: number }): Promise<boolean>;
+  recordDownload(input: { userId: string; exportId: string; tokenHash: string; requestId: string; now: Date; maxDownloads: number }): Promise<boolean>;
 }
