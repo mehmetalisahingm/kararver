@@ -96,36 +96,38 @@ async function buildOne(deps: DataExportDeps, claimed: Claimed, claimedAt: Date)
     }
     return "built";
   } catch (err) {
-    deps.log("error", "data-exports.build başarısız", { id: claimed.id, error: err instanceof Error ? err.message : String(err) });
+    deps.log("error", "data-exports.build başarısız", { id: claimed.id, failure: failureCode(err) });
     if (objectKey) await storage.deletePrivate(objectKey).catch(() => {});
     await prisma.dataExport.updateMany({ where: guard, data: { status: "FAILED", failure: failureCode(err), claimedAt: null } });
     return "failed";
   }
 }
 
-/** Süresi dolan paketleri siler: önce nesne, sonra anahtar/token (nesne silinemezse satır READY kalır, sonraki tur yeniden dener). */
+/** Süresi dolunca anahtar/token hemen silinir; depolama erişilemiyorsa şifreli nesnenin silinmesi yeniden denenir. */
 async function expirePackages(deps: DataExportDeps): Promise<number> {
   const { prisma, storage } = deps;
-  const due = await prisma.dataExport.findMany({
+  const closed = await prisma.dataExport.updateMany({
     where: { status: "READY", expiresAt: { lte: deps.now() } },
+    data: { status: "EXPIRED", encKey: null, tokenHash: null, tokenExpiresAt: null },
+  });
+  const due = await prisma.dataExport.findMany({
+    where: { status: "EXPIRED", objectKey: { not: null } },
     orderBy: { expiresAt: "asc" },
     take: 100,
     select: { id: true, objectKey: true },
   });
-  let expired = 0;
   for (const row of due) {
     try {
       if (row.objectKey) await storage.deletePrivate(row.objectKey);
-      const done = await prisma.dataExport.updateMany({
-        where: { id: row.id, status: "READY" },
-        data: { status: "EXPIRED", objectKey: null, encKey: null, tokenHash: null, tokenExpiresAt: null },
+      await prisma.dataExport.updateMany({
+        where: { id: row.id, status: "EXPIRED", objectKey: row.objectKey },
+        data: { objectKey: null },
       });
-      expired += done.count;
-    } catch (err) {
-      deps.log("warn", "data-exports süresi dolan paket silinemedi", { id: row.id, error: err instanceof Error ? err.message : String(err) });
+    } catch {
+      deps.log("warn", "data-exports süresi dolan paket silinemedi", { id: row.id, failure: "delete_failed" });
     }
   }
-  return expired;
+  return closed.count;
 }
 
 export async function runDataExports(deps: DataExportDeps): Promise<DataExportResult> {
