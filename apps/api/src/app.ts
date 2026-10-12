@@ -341,7 +341,14 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerNotificationRoutes(route, { store: deps.notificationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
   if (deps.adminUserStore) {
-    registerAdminUserRoutes(route, { store: deps.adminUserStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+    registerAdminUserRoutes(route, {
+      store: deps.adminUserStore,
+      now,
+      mediaPublicBaseUrl: config.mediaPublicBaseUrl,
+      mailer: deps.mailer,
+      tokenPepper: config.authTokenPepper,
+      webUrl: config.webUrl,
+    });
     registerRoleRoutes(route, { store: deps.adminUserStore, now });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });

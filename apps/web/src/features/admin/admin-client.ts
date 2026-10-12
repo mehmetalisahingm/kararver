@@ -120,6 +120,10 @@ export class AdminClient {
   async revokeUserSessions(id: string, reason: string, sessionId?: string) {
     return this.http.request("admin.users.sessions.revoke", { params: { id }, body: { reason, ...(sessionId ? { sessionId } : {}) } });
   }
+  /** #181: kullanıcıya sıfırlama bağlantısı e-postası; yanıtta token yoktur. sent=false: e-posta servisi cevap vermedi. */
+  async sendPasswordReset(id: string, reason: string) {
+    return data<{ sent: boolean; expiresAt: string }>(await this.http.request("admin.users.passwordReset.send", { params: { id }, body: { reason } }));
+  }
   async user(id: string, signal?: AbortSignal) {
     return data<UserDetail>(await this.http.request("admin.users.get", { params: { id }, signal }));
   }

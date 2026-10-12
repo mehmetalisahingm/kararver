@@ -310,6 +310,20 @@ test("acil durum: yalnız verilen anahtarlar PUT gövdesinde; yanıt bütün ana
   assert.equal(state.maintenance, false);
 });
 
+test("şifre sıfırlama (#181): POST, kullanıcı yolda, yalnız gerekçe gövdede; yanıtta token yok; 429 ve 409 yüzeye çıkar", async () => {
+  const id = "01998b9a-0000-7000-8000-000000000020";
+  const sending = client(() => reply("admin.users.passwordReset.send", "ok"));
+  const result = await sending.admin.sendPasswordReset(id, "Kimlik destek kanalında doğrulandı");
+  assert.equal(sending.calls[0].method, "POST");
+  assert.ok(sending.calls[0].url.endsWith(`/admin/users/${id}/password-reset`));
+  assert.deepEqual(sending.calls[0].body, { reason: "Kimlik destek kanalında doğrulandı" });
+  assert.deepEqual(Object.keys(result).sort(), ["expiresAt", "sent"]);
+
+  const banned = client(() => reply("admin.users.passwordReset.send", "banned"));
+  await assert.rejects(banned.admin.sendPasswordReset(id, "Kimlik destek kanalında doğrulandı"), (e) => e instanceof UiError && e.code === "CONFLICT");
+  const limited = client(() => new Response(JSON.stringify({ error: { code: "RATE_LIMITED", message: "Çok fazla istek gönderdiniz.", details: [] }, requestId: "r" }), { status: 429 }));
+  await assert.rejects(limited.admin.sendPasswordReset(id, "Kimlik destek kanalında doğrulandı"), (e) => e instanceof UiError && e.code === "RATE_LIMITED");
+});
 test("admin dashboard metrics allow 30-day real API range without client-side fake totals", async () => {
   const payload = {
     data: {
