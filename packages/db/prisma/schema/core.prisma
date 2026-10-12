@@ -89,6 +89,7 @@ model User {
 
   avatarMedia      MediaAsset?       @relation("UserAvatar", fields: [avatarMediaId], references: [id], onDelete: SetNull)
   sessions         Session[]
+  mfaCredential    UserMfaCredential?
   authTokens       AuthToken[]
   // #181 KVKK veri dışa aktarma (admin.prisma)
   dataExports          DataExport[] @relation("DataExportSubject")
@@ -146,6 +147,35 @@ model User {
   @@map("users")
 }
 
+// SA #180 MFA credential: secret ciphertext only, never the plaintext enrollment QR.
+// Setup is bound to the issuing session by UUID; deleting an expired session must not delete the enabled credential.
+model UserMfaCredential {
+  userId             String   @id @map("user_id") @db.Uuid
+  secretCipher       Bytes    @map("secret_cipher")
+  setupSessionId     String   @map("setup_session_id") @db.Uuid
+  pendingExpiresAt   DateTime @map("pending_expires_at") @db.Timestamptz(6)
+  enabledAt          DateTime? @map("enabled_at") @db.Timestamptz(6)
+  lastAcceptedStep   BigInt   @default(-1) @map("last_accepted_step")
+  failedAttempts     Int      @default(0) @map("failed_attempts")
+  lockedUntil        DateTime? @map("locked_until") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([enabledAt], map: "user_mfa_credentials_enabled_idx")
+  @@map("user_mfa_credentials")
+}
+
+model SessionMfaStepup {
+  sessionId String    @id @map("session_id") @db.Uuid
+  verifiedAt DateTime @map("verified_at") @db.Timestamptz(6)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_mfa_stepups")
+}
+
 model Session {
   id         String    @id @default(uuid(7)) @db.Uuid
   userId     String    @map("user_id") @db.Uuid
@@ -159,6 +189,7 @@ model Session {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mfaStepup SessionMfaStepup?
 
   @@index([userId])
   @@index([expiresAt])
