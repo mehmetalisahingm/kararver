@@ -36,7 +36,7 @@ export function DashboardPanel({ admin }: { admin: AdminClient }) {
   return (
     <section className="kv-stack" aria-label="Canlı yönetim metrikleri">
       <div className="kv-row kv-between">
-        <label>Dönem
+        <label className={styles.rangeFilter}>Dönem
           <select className="kv-input" value={range} onChange={event => setRange(event.target.value as Range)}>
             <option value="7d">Son 7 gün</option>
             <option value="30d">Son 30 gün</option>
