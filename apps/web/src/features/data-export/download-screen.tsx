@@ -26,7 +26,9 @@ export function DataExportDownloadScreen() {
   const [failure, setFailure] = useState({ message: "", retryable: false });
 
   useEffect(() => {
-    setToken(resolveToken(window.location.hash, sessionStore()));
+    const resolved = resolveToken(window.location.hash, sessionStore());
+    // Strict Mode may repeat setup after the fragment was removed; keep the in-memory link if storage is blocked.
+    setToken(current => resolved ?? current);
     // Token adres çubuğunda ve geçmişte kalmasın.
     if (window.location.hash) window.history.replaceState(window.history.state, "", window.location.pathname);
     setChecked(true);
