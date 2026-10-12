@@ -53,6 +53,9 @@
 }
 .product :is(h1,h2,h3) { color: var(--kv-text); text-wrap: balance; }
 .product a { text-underline-offset: 4px; }
+/* Keep field labels readable while WebKit invalidates inherited theme colors. */
+.product[data-theme="light"] label { color: #292826; }
+.product[data-theme="dark"] label { color: #f7f2e8; }
 .product .kv-muted, .product .kv-help { color: var(--kv-muted); }
 .product .eyebrow { font-size: 11px; letter-spacing: .14em; font-weight: 800; }
 .product .kv-card {
