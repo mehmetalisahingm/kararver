@@ -172,6 +172,17 @@ Payload şemaları `events.ts` içindedir (strict zod). Kabul koşulundaki alanl
 | `maintenance.enabled` | boolean | — | **yok** | `maintenance` | aynı |
 | `trends.moversMinVotes` | integer | 0 – sınırsız | 30 | hayır | DATA_MODEL §8.3 "Eşikler" |
 | `trends.moversMinActiveAccounts` | integer | 0 – sınırsız | 10 | hayır | DATA_MODEL §8.3 "Eşikler" |
+| `trends.commentCapPerUser` | integer | 1 – 100 | 3 | hayır | KV-28: hesap başına yorum katkısı sınırı |
+| `trends.dailyCommentWeightPercent` | integer | 0 – 1000 | 50 | hayır | KV-28: günlük yorum ağırlığı; yüzde birimi |
+| `trends.dailyCommenterWeightPercent` | integer | 0 – 1000 | 100 | hayır | KV-28: günlük tekil yorumcu ağırlığı; yüzde birimi |
+| `trends.dailyAgeOffsetHours` | integer | 1 – 168 | 2 | hayır | KV-28: günlük yaş dengelemesi, saat |
+| `trends.dailyGravityPercent` | integer | 1 – 500 | 120 | hayır | KV-28: günlük yaş üssü; yüzde birimi |
+| `trends.dailyMinParticipants` | integer | 1 – 100000 | 5 | hayır | KV-28: günlük en az tekil katılımcı |
+| `trends.weeklySmoothing` | integer | 1 – 100000 | 10 | hayır | KV-28: haftalık dengeleme sabiti |
+| `trends.weeklyMinNewVoters` | integer | 1 – 100000 | 10 | hayır | KV-28: haftalık en az yeni oy veren |
+| `trends.mostVotedMinVoters` | integer | 1 – 100000 | 1 | hayır | KV-28: en çok oy verilende en az oy veren |
+| `trends.discussedCommenterWeightPercent` | integer | 0 – 1000 | 200 | hayır | KV-28: konuşulanlar tekil yorumcu ağırlığı; yüzde birimi |
+| `trends.discussedMinCommenters` | integer | 1 – 100000 | 1 | hayır | KV-28: konuşulanlarda en az tekil yorumcu |
 | `feed.explorationPercent` | integer | 0 – 50 | **yok** | hayır | PRODUCT_TEAM_PLAN §7 ve #29 ayar olarak ister, değer vermez. Öneri 20 (Faruk, KV-27) |
 | `feed.maxSameAuthorPerWindow` | integer | 1 – 10 | **yok** | hayır | aynı. Öneri 2 |
 | `feed.maxSameCategoryPerWindow` | integer | 1 – 10 | **yok** | hayır | aynı. Öneri 4 |
