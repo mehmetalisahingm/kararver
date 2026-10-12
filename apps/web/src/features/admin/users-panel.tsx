@@ -96,7 +96,7 @@ function UserSessions({ id, admin }: { id: string; admin: AdminClient }) {
     <button className="kv-button" disabled={!sessions.items.length} onClick={() => setSelection("all")}>Tüm oturumları kapat</button>
     {sessions.items.map(session => <article className="kv-card" key={session.id}>
       <p>{session.userAgent ?? "Bilinmeyen cihaz"}</p>
-      <p>IP: {session.ipAddress ?? "Kaydedilmedi"} · Son etkinlik: {formatDate(session.lastSeenAt)} · Bitiş: {formatDate(session.expiresAt)}</p>
+      <p>Ağ (maskeli): {session.ipAddress ?? "Kaydedilmedi"} · Son etkinlik: {formatDate(session.lastSeenAt)} · Bitiş: {formatDate(session.expiresAt)}</p>
       <button className="kv-button kv-button--secondary" onClick={() => setSelection(session.id)}>Bu oturumu kapat</button>
     </article>)}
     <ListState remote={sessions} empty="Aktif oturum bulunmuyor." />

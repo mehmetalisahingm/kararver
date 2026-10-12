@@ -177,6 +177,12 @@ export const Metrics = z.strictObject({
     activeCommunities: Count.optional(),
     removedPolls: Count.optional(),
     removedComments: Count.optional(),
+    activeAccounts: Count.optional(),
+    suspendedAccounts: Count.optional(),
+    communityMembers: Count.optional(),
+    pendingMedia: Count.optional(),
+    quarantinedMedia: Count.optional(),
+    moderationActions24h: Count.optional(),
   }),
   series: z.array(
     z.strictObject({
@@ -192,6 +198,7 @@ export const Metrics = z.strictObject({
 
 export const AdminSession = z.strictObject({
   id: Id, createdAt: Timestamp, expiresAt: Timestamp, lastSeenAt: Timestamp.nullable(),
+  // Compatibility names: masked network (/24 or /48) and coarse browser/OS only; never raw identifiers.
   ipAddress: z.string().nullable(), userAgent: z.string().nullable(),
 });
 
@@ -614,7 +621,7 @@ export const adminEndpoints = [
     errors: [],
     idempotency: "none",
     cache: "private",
-    notes: ["actor_type=test/seed/admin hesaplar metriklerden hariçtir (KV-07)."],
+    notes: ["Operasyon sayaçları yönetici/test hesapları dahil veritabanı durumunu gösterir. KV-07 ürün analitiğinin actor_type dışlama kuralı ayrı ölçüm hattına aittir; bu endpoint ürün analitiği değildir."],
   }),
   ...crud("/admin/featured", "admin.featured", FeaturedPlacement, FeaturedBody, mehmet("featured"), mehmetUi, ["#44"], "Öne çıkarma"),
   ...crud("/admin/announcements", "admin.announcements", Announcement, AnnouncementBody, mehmet("announcements"), mehmetUi, ["#44"], "Duyuru"),
