@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import type { AdminClient, AuditRecord, AuditSearch } from "./admin-client.ts";
 import { ListState, formatDate, shortId, useRemoteList } from "./admin-ui";
 import styles from "./admin-shell.module.css";
+import { buildAuditExport, MAX_AUDIT_EXPORT_ROWS, type AuditExportFormat } from "./audit-export";
 
 const sourceLabels: Record<AuditRecord["source"], string> = { API: "Yönetici", CLI: "Komut satırı", WORKER: "Sistem işi" };
 const targetTypes = ["USER", "POLL", "COMMENT", "MEDIA", "COMMUNITY", "CATEGORY", "REPORT", "VOTE", "SETTING", "ANNOUNCEMENT", "FEATURED"];
@@ -26,6 +27,16 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
 
   const load = useCallback((cursor: string | undefined, signal: AbortSignal) => admin.audit(search, cursor, signal), [admin, search]);
   const list = useRemoteList(load);
+  const exportDisabled = list.loading || list.loadingMore || !!list.error || list.items.length === 0 || list.items.length > MAX_AUDIT_EXPORT_ROWS;
+  function download(format: AuditExportFormat) {
+    if (exportDisabled) return;
+    const file = buildAuditExport(list.items, format, search, new Date());
+    const url = URL.createObjectURL(new Blob([file.text], { type: file.contentType }));
+    const link = document.createElement("a");
+    link.href = url; link.download = file.filename;
+    document.body.append(link); link.click(); link.remove();
+    URL.revokeObjectURL(url);
+  }
 
   const apply = (event: React.FormEvent) => {
     event.preventDefault();
@@ -80,6 +91,11 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
         <button className="kv-button kv-button--secondary" type="submit">Süz</button>
       </form>
       <p className="kv-help">Kayıtlar değiştirilemez ve silinemez. Önce/sonra özetinde parola, e-posta, oturum ve oy seçimi bulunmaz.</p>
+      <div className={styles.toolbar} role="group" aria-label="Audit dışa aktarma">
+        <button className="kv-button kv-button--secondary" disabled={exportDisabled} onClick={() => download("csv")}>Yüklenen kayıtları CSV indir</button>
+        <button className="kv-button kv-button--secondary" disabled={exportDisabled} onClick={() => download("json")}>Yüklenen kayıtları JSON indir</button>
+        <p className="kv-help">Dosya yalnız yüklenen {list.items.length} kaydı içerir. En fazla {MAX_AUDIT_EXPORT_ROWS} kayıt indirilebilir; kapsamı tarih ve diğer süzgeçlerle daraltabilirsin.</p>
+      </div>
 
       {list.items.length > 0 ? (
         <div className={styles.tableWrap}>
