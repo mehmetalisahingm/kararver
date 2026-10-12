@@ -53,6 +53,8 @@ export function DashboardPanel({ admin }: { admin: AdminClient }) {
       {current && !loading && !error ? <>
         <div className={styles.grid} aria-label="Veritabanından gelen toplamlar">
           <Stat label="Kullanıcı (silinmemiş)" value={current.totals.users} />
+          <Stat label="Aktif hesap" value={current.totals.activeAccounts} />
+          <Stat label="Askıya alınmış hesap" value={current.totals.suspendedAccounts} />
           <Stat label="Anket (silinmemiş)" value={current.totals.polls} />
           <Stat label="Toplam oy" value={current.totals.votes} />
           <Stat label="Yorum (silinmemiş)" value={current.totals.comments} />
@@ -60,6 +62,10 @@ export function DashboardPanel({ admin }: { admin: AdminClient }) {
           <Stat label="Aktif kullanıcı / son 24 saat" value={current.totals.activeUsers24h} />
           <Stat label="Yeni kayıt / son 24 saat" value={current.totals.registrations24h} />
           <Stat label="Aktif topluluk" value={current.totals.activeCommunities} />
+          <Stat label="Aktif toplulukların tekil aktif üyeleri" value={current.totals.communityMembers} />
+          <Stat label="İşlenmeyi bekleyen medya" value={current.totals.pendingMedia} />
+          <Stat label="Karantinadaki medya" value={current.totals.quarantinedMedia} />
+          <Stat label="Moderasyon işlemi / son 24 saat" value={current.totals.moderationActions24h} />
           <Stat label="Kaldırılan anket" value={current.totals.removedPolls} />
           <Stat label="Kaldırılan yorum" value={current.totals.removedComments} />
         </div>
@@ -101,6 +107,7 @@ export function DashboardPanel({ admin }: { admin: AdminClient }) {
         <p className="kv-muted">
           Son güncelleme: <time dateTime={current.generatedAt}>{new Date(current.generatedAt).toLocaleString("tr-TR")}</time>.
           Günlük tablo kullanıcı metriği oturum açma olaylarından, son 24 saat aktif kullanıcı metriği ise geçerli oturumların son kullanımından hesaplanır; ikisi de gerçek zamanlı çevrimiçi kullanıcı sayısı değildir.
+          Toplamlar operasyon içindir; yönetici ve test hesapları da dahildir. Topluluk üyeleri birden çok topluluğa katılsa da bir kez sayılır.
           Servis hata oranı ve worker durumu henüz bu API'den gelmiyor; değer uydurulmaz.
         </p>
       </> : null}

@@ -15,6 +15,7 @@ import { idempotencyKeyReused, readIdempotencyScope } from "../../http/idempoten
 import type { Route, RouteContext } from "../../http/route.ts";
 import type { AdminUserStore, ApplyRejection, LiftRejection, TargetInfo, TimeCursor } from "./store.ts";
 import { toActivity, toAdminUserDetail, toAdminUserSummary, toReport, toSanction } from "./view.ts";
+import { sessionView } from "./session-view.ts";
 
 export type AdminUserDeps = { store: AdminUserStore; now: () => Date; mediaPublicBaseUrl: string };
 
@@ -83,7 +84,7 @@ export function registerAdminUserRoutes(route: Route, deps: AdminUserDeps): void
     const rows = await store.listSessions(params.id, cursor?.id ?? null, query.limit + 1, now());
     const items = rows.slice(0, query.limit);
     const nextCursor = rows.length > query.limit ? encodeCursor(key, [], items.at(-1)!.id) : null;
-    return { status: 200, body: { data: items.map(s => ({ ...s, createdAt: s.createdAt.toISOString(), expiresAt: s.expiresAt.toISOString(), lastSeenAt: s.lastSeenAt?.toISOString() ?? null })), page: { nextCursor, hasMore: nextCursor !== null } } };
+    return { status: 200, body: { data: items.map(sessionView), page: { nextCursor, hasMore: nextCursor !== null } } };
   });
   route("admin.users.sessions.revoke", async ({ params, body, viewer, request }) => {
     const revokedCount = await store.revokeSessions({ userId: params.id, sessionId: body.sessionId, reason: body.reason, actorId: viewer!.id, requestId: request.id, now: now() });
