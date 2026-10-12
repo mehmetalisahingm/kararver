@@ -218,6 +218,35 @@ describe("operasyon yoklaması (postgres + gerçek pg-boss)", { skip: backend ? 
     assert.equal(status.components.worker.status, "unknown");
   });
 
+  test("toplu içerik işleri (#181) kendi tablosundan kuyruk olarak; tablo yoksa listede yok", async () => {
+    // #211 migration'ının ilgili kolonları; test kendi şemasında çalışır (public.content_jobs'a dokunmaz).
+    const table = `${schema}.content_jobs`;
+    await h.prisma!.$executeRawUnsafe(
+      `CREATE TABLE ${table} (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), status text NOT NULL, claimed_at timestamptz,
+         finished_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now())`,
+    );
+    await h.prisma!.$executeRawUnsafe(
+      `INSERT INTO ${table} (status, claimed_at, finished_at, created_at, updated_at) VALUES
+         ('QUEUED', NULL, NULL, now() - interval '2 hours', now() - interval '10 minutes'),
+         ('PROCESSING', now() - interval '20 minutes', NULL, now() - interval '1 hour', now() - interval '20 minutes'),
+         ('PROCESSING', now() - interval '30 seconds', NULL, now() - interval '1 hour', now() - interval '30 seconds'),
+         ('FAILED', NULL, now() - interval '1 hour', now() - interval '2 hours', now() - interval '1 hour'),
+         ('DONE', NULL, now() - interval '1 hour', now() - interval '2 hours', now() - interval '1 hour'),
+         ('DONE', NULL, now() - interval '2 days', now() - interval '3 days', now() - interval '2 days')`,
+    );
+    const queues = await createPrismaOpsProbe(h.prisma!, { schema, contentJobsTable: table }).queues();
+    const jobs = queues.find((q) => q.name === "content.jobs");
+    assert.ok(jobs, queues.map((q) => q.name).join(","));
+    assert.deepEqual([jobs.waiting, jobs.active, jobs.failed24h, jobs.completed24h], [1, 2, 1, 1]);
+    // En eski bekleme: 20 dakikadır sahiplenmesi tazelenmeyen (takılmış) iş; 2 saatlik oluşturulma zamanı değil.
+    assert.ok(jobs.oldestWaitingSeconds! >= 1190 && jobs.oldestWaitingSeconds! < 1300, String(jobs.oldestWaitingSeconds));
+    assert.equal(classifyQueues([jobs]), "degraded");
+
+    const without = await createPrismaOpsProbe(h.prisma!, { schema, contentJobsTable: "public.yok_content_jobs" }).queues();
+    assert.ok(!without.some((q) => q.name === "content.jobs"));
+    assert.throws(() => createPrismaOpsProbe(h.prisma!, { contentJobsTable: "content_jobs; DROP TABLE users" }), /geçersiz tablo/);
+  });
+
   test("kuyruk sayıları, bekleyen iş ve worker izi gerçek pg-boss tablolarından", async () => {
     await boss.createQueue("ops.ok");
     await boss.createQueue("ops.backlog");
