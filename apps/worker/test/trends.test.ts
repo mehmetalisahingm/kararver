@@ -168,6 +168,19 @@ describe("trends.refresh (postgres)", { skip: url ? false : "TEST_DATABASE_URL y
     assert.equal(await db.trendRun.count({ where: { windowEnd: slot, format: "WEEKLY_MOST_VOTED" } }), 1);
   });
 
+  test("ayar sürümü değişince eski RUNNING bitmeden yeni iş açılmaz; bitince yeni sürüm hesaplanır", async () => {
+    const end = freshEnd();
+    const run = await db.trendRun.create({data: {
+      format: "DAILY_RISING", calculationVersion: 1, windowStart: new Date(end.getTime() - DAY), windowEnd: end, startedAt: end,
+    }});
+    const next = {...deps(end), scoringSettings: async () => ({...TREND_CONFIG, calculationVersion: 2})};
+    assert.deepEqual(await refreshFormat(next, "DAILY_RISING", end), {format: "DAILY_RISING", status: "SKIPPED", reason: "in_progress"});
+    await db.trendRun.update({where:{id:run.id},data:{status:"SUCCEEDED",finishedAt:end}});
+    const result = await refreshFormat(next, "DAILY_RISING", end);
+    assert.equal(result.status, "SUCCEEDED");
+    assert.equal(await db.trendRun.count({where:{format:"DAILY_RISING",windowEnd:end,calculationVersion:2,status:"SUCCEEDED"}}), 1);
+  });
+
   test("çalıştırma açan transaction commit etmeden ikinci worker beklenir ve yeni çalıştırma açmaz", async () => {
     // HTTP/Promise yarışı zamanlamaya bağlı; burada çakışan worker elle tutulur. Kilit olmasaydı ikinci worker
     // commit edilmemiş RUNNING satırını göremez ve aynı dilim için ikinci çalıştırmayı açardı.
