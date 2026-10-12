@@ -19,7 +19,7 @@ export function registerMfaRoutes(route: Route, deps: {
     if (!ok) throw new ApiError("FORBIDDEN", "Kimlik yeniden doğrulanamadı.");
     const result = await deps.store.begin({ userId: viewer!.id, sessionId: viewer!.sessionId,
       email: viewer!.user.email, now: deps.now() });
-    if (result.kind === "session") throw new ApiError("UNAUTHORIZED", "Oturum geçersiz.");
+    if (result.kind === "session") throw new ApiError("UNAUTHENTICATED", "Oturum geçersiz.");
     if (result.kind === "conflict") throw new ApiError("CONFLICT", "MFA zaten etkin.");
     return { status: 200, body: { data: { secret: result.secret, uri: result.uri,
       expiresAt: result.expiresAt.toISOString() } } };
