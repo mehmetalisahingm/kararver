@@ -314,3 +314,21 @@ test("şifre sıfırlama (#181): POST, kullanıcı yolda, yalnız gerekçe gövd
   const limited = client(() => new Response(JSON.stringify({ error: { code: "RATE_LIMITED", message: "Çok fazla istek gönderdiniz.", details: [] }, requestId: "r" }), { status: 429 }));
   await assert.rejects(limited.admin.sendPasswordReset(id, "Kimlik destek kanalında doğrulandı"), (e) => e instanceof UiError && e.code === "RATE_LIMITED");
 });
+test("admin dashboard metrics allow 30-day real API range without client-side fake totals", async () => {
+  const payload = {
+    data: {
+      range: "30d",
+      generatedAt: "2026-10-09T00:00:00.000Z",
+      totals: { users: 12, polls: 3, votes: 17, comments: 4, openReports: 2 },
+      series: [{ localDate: "2026-10-08", activeUsers: 5, registrations: 2, polls: 1, votes: 3, comments: 1 }],
+    },
+  };
+  const { admin, calls } = client(() => new Response(JSON.stringify(payload), { status: 200 }));
+  const result = await admin.metrics(undefined, "30d");
+  const url = new URL(calls[0].url);
+  assert.equal(url.pathname, "/v1/admin/metrics");
+  assert.equal(url.searchParams.get("range"), "30d");
+  assert.equal(result.range, "30d");
+  assert.equal(result.totals.openReports, 2);
+  assert.equal(result.series[0].activeUsers, 5);
+});
