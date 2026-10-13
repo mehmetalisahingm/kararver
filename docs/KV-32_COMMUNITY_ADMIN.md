@@ -81,7 +81,7 @@ Tasarım: [KV-54](./KV-54_COMMUNITY_OWNERSHIP_VERIFICATION.md) §3 ve §5. Bu di
 **KV-54 §10 senaryoları:** I1 (bayrak kapalıyken V1 aynı: mevcut topluluk testleri değişmeden geçer), I2, I3 (mevcut testler), I4/I5 (sahip admin uçlarına, moderatör atamaya, yaptırıma, başka topluluğa erişemez: 403), I10'un ayrılma ve BAN kısmı, I18 (bayrak kapanınca atama 503, sahiplik korunur).
 
 **Bilinen sınırlar**
-- **Hesap silme/anonimleştirme** akışı henüz yok (#181 sonraki dilim): geldiğinde `releaseOwnedCommunities` (`communities/owner.ts`) aynı transaction'da çağrılmalı; o zamana kadar yalnız BAN yolu bağlıdır.
+- **Hesap anonimleştirme** (#181, [KV-33 §10](./KV-33_ADMIN_USERS.md#10-hesap-anonimleştirme-ve-yasal-saklama)) `releaseOwnedCommunities`'i aynı transaction'da çağırır (audit `trigger: anonymize`); BAN ve anonimleştirme yolları bağlıdır.
 - Sahip değişimi/bırakma için **olay (outbox) ve bildirim** yok; yalnız audit. Eski/yeni sahibe bildirim KV-54 S3 ile gelir.
 - Zorunlu atama kritik işlemdir; **ikinci onay/MFA (#182, PR #206) bağlanmadı** (gerekçe + audit var). #206 merge olunca `community.owner.assign` için ikinci onay istenmesi önerilir.
 - 3 topluluk sınırı ve uygunluk kuralları KV-54 §12'deki öneri değerlerdir (Mehmet teyidi bekliyor).

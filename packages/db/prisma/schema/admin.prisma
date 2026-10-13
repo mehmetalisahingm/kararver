@@ -390,3 +390,43 @@ model DataExport {
   @@index([status, createdAt])
   @@map("data_exports")
 }
+
+// #181 hesap anonimleştirme (KV-33 §10): kişisel veri temizliğinin kalıcı, kişisel veri içermeyen kaydı. Hesap başına
+// en çok bir satır: aynı hesabı ikinci kez anonimleştirme isteği bu satırı bulur ve değişiklik yapmaz (idempotency).
+// `summary` yalnız sayıları taşır; ad, e-posta veya içerik yok. `storage_cleaned_at`: avatar nesnelerinin depodan
+// silindiği an (worker); boşken temizlik bekliyor demektir.
+model AccountErasure {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  userId           String    @unique @map("user_id") @db.Uuid
+  requestedById    String    @map("requested_by_id") @db.Uuid
+  reason           String    @db.VarChar(500)
+  summary          Json
+  storageCleanedAt DateTime? @map("storage_cleaned_at") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user        User @relation("AccountErasureSubject", fields: [userId], references: [id], onDelete: Restrict)
+  requestedBy User @relation("AccountErasureRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+
+  @@index([storageCleanedAt, createdAt])
+  @@map("account_erasures")
+}
+
+// #181 yasal saklama (legal hold): açık kayıt varken hesap anonimleştirilemez. Hesap başına en çok bir açık kayıt
+// (kısmi unique index, migration). Kayıtlar silinmez; bırakma `released_*` alanlarını doldurur.
+model UserLegalHold {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  reason         String    @db.VarChar(500)
+  placedById     String    @map("placed_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  releasedById   String?   @map("released_by_id") @db.Uuid
+  releasedReason String?   @map("released_reason") @db.VarChar(500)
+  releasedAt     DateTime? @map("released_at") @db.Timestamptz(3)
+
+  user       User  @relation("LegalHoldSubject", fields: [userId], references: [id], onDelete: Restrict)
+  placedBy   User  @relation("LegalHoldPlacer", fields: [placedById], references: [id], onDelete: Restrict)
+  releasedBy User? @relation("LegalHoldReleaser", fields: [releasedById], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("user_legal_holds")
+}

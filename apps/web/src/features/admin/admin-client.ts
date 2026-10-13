@@ -2,6 +2,9 @@
 // cevap sözleşme şemasıyla doğrulanır (HttpClient). Yetki sunucudadır: istemci rol kontrolü yalnız menü/düğme
 // gizlemedir, ret 403 olarak gelir ve ekranda gösterilir.
 import type {
+  AccountErasurePreview,
+  AccountErasureResult,
+  LegalHold,
   AdminUserSummary, AdminUserDetail, AdminUserActivity, AdminSession, Sanction, Metrics, OpsStatus,
   AdminCategory,
   AdminCommentItem,
@@ -48,6 +51,9 @@ export type CommunityThresholdView = ReturnType<typeof CommunityThreshold.parse>
 export type CommunityMemberView = ReturnType<typeof CommunityMember.parse>;
 export type CommunityOwnerView = ReturnType<typeof CommunityOwnerRef.parse>;
 export type DataExportView = ReturnType<typeof DataExport.parse>;
+export type ErasurePreviewView = ReturnType<typeof AccountErasurePreview.parse>;
+export type ErasureResultView = ReturnType<typeof AccountErasureResult.parse>;
+export type LegalHoldView = ReturnType<typeof LegalHold.parse>;
 export type UserSummary = ReturnType<typeof AdminUserSummary.parse>;
 export type UserDetail = ReturnType<typeof AdminUserDetail.parse>;
 export type UserActivity = ReturnType<typeof AdminUserActivity.parse>;
@@ -143,6 +149,21 @@ export class AdminClient {
   /** Hazır paketin indirme bağlantısını kullanıcının e-postasına gönderir; yanıtta bağlantı/token yoktur. */
   async deliverDataExport(id: string, exportId: string, reason: string) {
     return data<{ sent: boolean; linkExpiresAt: string }>(await this.http.request("admin.users.dataExports.deliver", { params: { id, exportId }, body: { reason } }));
+  }
+  /** #181 KVKK anonimleştirme önizlemesi (salt okuma): etki sayıları ve engeller. Yalnız SUPER_ADMIN. */
+  async erasurePreview(id: string, signal?: AbortSignal) {
+    return data<ErasurePreviewView>(await this.http.request("admin.users.erasure.preview", { params: { id }, signal }));
+  }
+  /** GERİ ALINAMAZ. Gerekçe ve hesabın kullanıcı adı (yazılı teyit) gerekir; zaten anonimleştirilmişse status=unchanged. */
+  async anonymizeUser(id: string, reason: string, confirmUsername: string) {
+    return data<ErasureResultView>(await this.http.request("admin.users.erasure.create", { params: { id }, body: { reason, confirmUsername } }));
+  }
+  /** Yasal saklama koyar (idempotent); açıkken anonimleştirme engellenir. */
+  async putLegalHold(id: string, reason: string) {
+    return data<{ legalHold: LegalHoldView }>(await this.http.request("admin.users.legalHold.put", { params: { id }, body: { reason } }));
+  }
+  async releaseLegalHold(id: string, reason: string) {
+    return data<{ legalHold: null }>(await this.http.request("admin.users.legalHold.release", { params: { id }, body: { reason } }));
   }
   /** #181: kullanıcıya sıfırlama bağlantısı e-postası; yanıtta token yoktur. sent=false: e-posta servisi cevap vermedi. */
   async sendPasswordReset(id: string, reason: string) {

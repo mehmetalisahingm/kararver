@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AdminClient, DataExportView, UserDetail, StrongSanction } from "./admin-client";
 import type { AdminRole } from "./admin-model";
+import { AccountErasure } from "./account-erasure";
 import { ActionDialog, errorMessage, formatDate, ListState, useAdminRoles, useRemoteList } from "./admin-ui";
 
 export function UsersPanel({ admin }: { admin: AdminClient }) {
@@ -55,6 +56,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       <PasswordReset id={id} admin={admin} />
       {canAssign ? <DataExports id={id} admin={admin} /> : null}
       {canAssign ? <UserSessions id={id} admin={admin} /> : null}
+      {canAssign ? <AccountErasure id={id} admin={admin} onAnonymized={refresh} /> : null}
       <button className="kv-button" onClick={() => setAction("sanction")}>Uyar / kısıtla / askıya al / yasakla</button>
       {user.activeSanctions.map(s => <article key={s.id}><p>{s.type} · {s.reason} · Bitiş: {formatDate(s.endsAt)}</p><button onClick={() => { setTarget(s.id); setAction("lift"); }}>Yaptırımı kaldır</button></article>)}
       <h3>Gönderiler ve yorumlar</h3>

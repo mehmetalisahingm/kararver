@@ -274,6 +274,35 @@ export const DataExport = z.strictObject({
 });
 const ExportParams = z.strictObject({ id: Id, exportId: Id });
 
+/** #181 hesap anonimleştirme (KV-33 §10): anonimleştirmeyi engelleyen durumlar. */
+export const ErasureBlocker = z.enum(["legal_hold", "active_sanction", "has_role", "export_in_progress"]);
+/** Yasal saklama kaydı: açıkken hesap anonimleştirilemez. Gerekçe yöneticiler içindir; kullanıcıya gösterilmez. */
+export const LegalHold = z.strictObject({ id: Id, reason: z.string(), placedAt: Timestamp, placedById: Id });
+/** Salt okunur etki özeti. Anonimleştirilmiş hesapta `willRemove` sayıları 0, `anonymized` true'dur. */
+export const AccountErasurePreview = z.strictObject({
+  userId: Id,
+  /** Yazılı teyit için: yönetici bu kullanıcı adını yazar. Anonimleştirmeden sonra tombstone adıdır. */
+  username: z.string(),
+  anonymized: z.boolean(),
+  anonymizedAt: Timestamp.nullable(),
+  canAnonymize: z.boolean(),
+  blockers: z.array(ErasureBlocker),
+  legalHold: LegalHold.nullable(),
+  /** Silinecek veya boşaltılacak kayıt adetleri. */
+  willRemove: z.strictObject({
+    sessions: Count,
+    dataExports: Count,
+    avatar: Count,
+    communityMemberships: Count,
+    ownedCommunities: Count,
+    pendingCommunityRequests: Count,
+    preferences: Count,
+  }),
+  /** Korunan (kimliksiz) kayıt adetleri: yazar adı anonim kalır. */
+  willRetain: z.strictObject({ polls: Count, comments: Count, votes: Count, reportsFiled: Count }),
+});
+export const AccountErasureResult = z.strictObject({ status: z.enum(["anonymized", "unchanged"]), anonymizedAt: Timestamp });
+
 /** Kullanıcının indirdiği paket: sürümlü, koleksiyonlar serbest biçimli satırlar (sözleşme alan alan sabitlenmez). */
 export const DataExportPackage = z.strictObject({
   schemaVersion: z.literal(1),
@@ -286,6 +315,7 @@ const settings = { owner: "Utku", module: "settings" } as const;
 const adminUsers = { owner: "Utku", module: "admin-users" } as const;
 const mehmet = (module: string) => ({ owner: "Mehmet", module }) as const;
 const categories = { owner: "Faruk", module: "categories" } as const;
+const accountErasure = { owner: "Mert", module: "account-erasure" } as const;
 const utkuUi = ["Utku (admin UI)"];
 const mehmetUi = ["Mehmet (admin UI)"];
 
@@ -499,6 +529,47 @@ export const adminEndpoints = [
       "409 CONFLICT details[0].code: not_ready (PENDING/PROCESSING/FAILED), expired (paket silinmiş). Talep başka hesaba aitse 404.",
       "sent=false: e-posta servisi cevap vermedi; token oluşmuştur, bekleme süresi sonrası tekrar denenir.",
     ],
+  }),
+  defineEndpoint({
+    id: "admin.users.erasure.preview", domain: "admin", method: "GET", path: "/admin/users/:id/erasure",
+    summary: "Hesap anonimleştirme önizlemesi (etki özeti, engeller)", auth: "super_admin", provider: accountErasure, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(AccountErasurePreview) }, errors: ["NOT_FOUND"], idempotency: "none", cache: "private",
+    notes: [
+      "Salt okuma: hiçbir şey yazmaz. Yetki user.anonymize (SUPER_ADMIN, sanctionTarget: kendi hesabı için kullanılamaz).",
+      "blockers: legal_hold (açık yasal saklama), active_sanction (süresi dolmamış, WARNING dışı yaptırım: ban/askı kaçırma riski, meşru menfaat saklaması), has_role (önce rol kaldırılır), export_in_progress (kullanıcının erişim hakkı için bekleyen/işlenen veri paketi talebi). Engel varken canAnonymize=false.",
+      "Kapsam, saklama ve silme tablosu: docs/KV-33_ADMIN_USERS.md §10.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.erasure.create", domain: "admin", method: "POST", path: "/admin/users/:id/erasure",
+    summary: "Hesabı geri alınamaz biçimde anonimleştir", auth: "super_admin", provider: accountErasure, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: Reason, confirmUsername: z.string().trim().min(1).max(60) }) },
+    responses: { 200: dataOf(AccountErasureResult) }, errors: ["CONFLICT", "NOT_FOUND"], idempotency: "natural", cache: "private",
+    notes: [
+      "GERİ ALINAMAZ. Gövdede gerekçe ve hesabın o anki kullanıcı adı (yazılı teyit) zorunludur; eşleşmezse 409 confirmation_mismatch ve hiçbir şey değişmez.",
+      "Tek transaction: kişisel alanlar tombstone değerleriyle değişir (e-posta, kullanıcı adı, görünen ad, biyografi, avatar, parola özeti), oturum ve token'lar silinir, tercihler/bildirim ayarları/kayıt listesi silinir, topluluk üyelikleri çıkarılır ve sahip olunan topluluklar yönetici yönetimine döner, bekleyen topluluk başvuruları reddedilir, hazır veri paketleri geçersiz kılınır. Anket, yorum, oy, rapor ve audit kayıtları korunur (yazar adı anonim görünür).",
+      "Idempotent: hesap zaten anonimleştirilmişse 200 status=unchanged döner; değişiklik ve audit yoktur. Eşzamanlı iki istekten yalnız biri uygular (hedef satır kilidi + hesap başına tek kayıt).",
+      "409 CONFLICT details[0].code: confirmation_mismatch, legal_hold, active_sanction, has_role, export_in_progress. Önizleme aynı engelleri listeler.",
+      "Avatar dosyaları depodan worker tarafından silinir (en geç ~1 dk); DB'de görsel hemen yayından kalkar.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.legalHold.put", domain: "admin", method: "PUT", path: "/admin/users/:id/legal-hold",
+    summary: "Hesaba yasal saklama koy (anonimleştirmeyi engeller)", auth: "super_admin", provider: accountErasure, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(z.strictObject({ legalHold: LegalHold })) }, errors: ["CONFLICT", "NOT_FOUND"], idempotency: "natural", cache: "private",
+    notes: [
+      "Idempotent: açık kayıt varsa o döner; değişiklik ve audit yoktur (gerekçe değiştirilmez). 409 user_deleted: anonimleştirilmiş hesaba kayıt konmaz.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.legalHold.release", domain: "admin", method: "POST", path: "/admin/users/:id/legal-hold/release",
+    summary: "Yasal saklamayı kaldır", auth: "super_admin", provider: accountErasure, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(z.strictObject({ legalHold: z.null() })) }, errors: ["NOT_FOUND"], idempotency: "natural", cache: "private",
+    notes: ["Idempotent: açık kayıt yoksa 200 döner; değişiklik ve audit yoktur. Kayıt silinmez, bırakma alanları dolar."],
   }),
   ...(["sanctions", "reports", "activity"] as const).map((sub) =>
     defineEndpoint({

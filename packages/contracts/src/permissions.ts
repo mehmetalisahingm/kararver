@@ -185,6 +185,11 @@ export const actions = Object.freeze({
   "community.owner.assign": rule("super_admin", "Topluluk sahibi atama/kaldırma (yönetici zorunlu atama; #184, KV-54 S1)"),
   "privacy.export.manage": rule("super_admin", "KVKK veri dışa aktarma talebi ve teslimi (#181)"),
   "user.sessions.manage": rule("super_admin", "Kullanıcı oturumlarını yönetme"),
+  "user.anonymize": rule("super_admin", "Hesabı geri alınamaz biçimde anonimleştirme (KVKK silme, #181); kendi hesabı için kullanılamaz", {
+    guard: "sanctionTarget",
+    requires: ["targetUserId", "targetRoles"],
+  }),
+  "user.legalHold.manage": rule("super_admin", "Hesaba yasal saklama koyma/kaldırma; açıkken anonimleştirme engellenir (#181)"),
   "ops.read": rule("super_admin", "Operasyon merkezi: bileşen, kuyruk, hata ve yedek durumu"),
   "emergency.update": rule("super_admin", "Acil durum anahtarları"),
 } satisfies Record<string, ActionRule>);
@@ -309,6 +314,10 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.sanctions.lift": "user.sanction.lift",
   "admin.roles.put": "user.role.assign",
   "admin.users.passwordReset.send": "user.password.reset",
+  "admin.users.erasure.preview": "user.anonymize",
+  "admin.users.erasure.create": "user.anonymize",
+  "admin.users.legalHold.put": "user.legalHold.manage",
+  "admin.users.legalHold.release": "user.legalHold.manage",
   "admin.users.dataExports.create": "privacy.export.manage",
   "admin.users.dataExports.list": "privacy.export.manage",
   "admin.users.dataExports.deliver": "privacy.export.manage",

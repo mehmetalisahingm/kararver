@@ -197,6 +197,10 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /admin/users/:id/data-exports`<br>KVKK veri dışa aktarma talebi başlat · `admin.users.dataExports.create` | SA | 202 | doğal | Mert `data-exports` | Utku (admin UI) | #181 | hazır |
 | `GET /admin/users/:id/data-exports`<br>Hesabın veri dışa aktarma talepleri (son 20) · `admin.users.dataExports.list` | SA | 200 | — | Mert `data-exports` | Utku (admin UI) | #181 | hazır |
 | `POST /admin/users/:id/data-exports/:exportId/deliver`<br>Hazır paketin indirme bağlantısını kullanıcının e-postasına gönder · `admin.users.dataExports.deliver` | SA | 202 | — | Mert `data-exports` | Utku (admin UI) | #181 | hazır |
+| `GET /admin/users/:id/erasure`<br>Hesap anonimleştirme önizlemesi (etki özeti, engeller) · `admin.users.erasure.preview` | SA | 200 | — | Mert `account-erasure` | Utku (admin UI) | #181 | hazır |
+| `POST /admin/users/:id/erasure`<br>Hesabı geri alınamaz biçimde anonimleştir · `admin.users.erasure.create` | SA | 200 | doğal | Mert `account-erasure` | Utku (admin UI) | #181 | hazır |
+| `PUT /admin/users/:id/legal-hold`<br>Hesaba yasal saklama koy (anonimleştirmeyi engeller) · `admin.users.legalHold.put` | SA | 200 | doğal | Mert `account-erasure` | Utku (admin UI) | #181 | hazır |
+| `POST /admin/users/:id/legal-hold/release`<br>Yasal saklamayı kaldır · `admin.users.legalHold.release` | SA | 200 | doğal | Mert `account-erasure` | Utku (admin UI) | #181 | hazır |
 | `GET /admin/users/:id/sanctions`<br>Kullanıcının bütün yaptırım geçmişi (kaldırılan ve süresi dolanlar dahil) · `admin.users.sanctions` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id/reports`<br>Kullanıcıya (hesap veya içerik) yapılan ya da kullanıcının yaptığı raporlar · `admin.users.reports` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id/activity`<br>Kullanıcının anket ve yorumları (gizli/kaldırılmış dahil) · `admin.users.activity` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
@@ -268,7 +272,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #66 | `POST /polls`, `PUT /polls/:id/reaction`, `DELETE /polls/:id/reaction`, `PUT /comments/:id/reaction`, `DELETE /comments/:id/reaction` |
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
 | #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
-| #181 | `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver` |
+| #181 | `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver`, `GET /admin/users/:id/erasure`, `POST /admin/users/:id/erasure`, `PUT /admin/users/:id/legal-hold`, `POST /admin/users/:id/legal-hold/release` |
 | #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
 | #186 | `GET /admin/ops` |
 <!-- END:unblocks -->

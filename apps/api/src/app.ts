@@ -11,6 +11,8 @@ import { createRouter } from "./http/route.ts";
 import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import { registerAccountErasureRoutes } from "./modules/account-erasure/routes.ts";
+import type { AccountErasureStore } from "./modules/account-erasure/store.ts";
 import { registerDataExportRoutes } from "./modules/data-exports/routes.ts";
 import type { DataExportStore } from "./modules/data-exports/store.ts";
 import type { AdminUserStore } from "./modules/admin-users/store.ts";
@@ -137,6 +139,8 @@ export type AppDeps = {
   adminUserStore?: AdminUserStore;
   /** #181 KVKK veri dışa aktarma; paket okuma için media.storage da gerekir. */
   dataExportStore?: DataExportStore;
+  /** #181 hesap anonimleştirme ve yasal saklama; adminUserStore ile birlikte kaydedilir (hedef rolü okunur). */
+  accountErasureStore?: AccountErasureStore;
   metricsStore?: MetricsStore;
   /** KV-186 operasyon yoklaması (DB, worker izi, pg-boss kuyrukları); verilmezse bu bileşenler `unknown`. */
   opsProbe?: OpsProbe;
@@ -375,6 +379,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       tokenPepper: config.authTokenPepper,
       webUrl: config.webUrl,
     });
+  }
+  if (deps.accountErasureStore && deps.adminUserStore) {
+    registerAccountErasureRoutes(route, { store: deps.accountErasureStore, users: deps.adminUserStore, now });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
   registerOpsRoutes(route, { probe: deps.opsProbe, telemetry, env: config.appEnv, startedAt, now });

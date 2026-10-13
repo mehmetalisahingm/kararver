@@ -9,6 +9,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.27.0 — 2026-10-14 (Mert, #181 hesap anonimleştirme ve yasal saklama)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, şemalar ve yetkiler (yalnız SUPER_ADMIN).
+
+- **Eklendi:** `admin.users.erasure.preview` (salt okunur etki özeti ve engeller), `admin.users.erasure.create` (geri alınamaz anonimleştirme; gerekçe + kullanıcı adıyla yazılı teyit; idempotent), `admin.users.legalHold.put` / `admin.users.legalHold.release` (yasal saklama: açıkken anonimleştirme engellenir). Yetkiler `user.anonymize` (sanctionTarget: kendi hesabı için kullanılamaz) ve `user.legalHold.manage`; audit `user.anonymize` (`anonymize`) ve `user.legalHold.manage` (`place`, `release`), ikisi de gerekçeli.
+- Şemalar: `AccountErasurePreview`, `AccountErasureResult`, `ErasureBlocker`, `LegalHold`.
+- **Davranış:** anonimleştirilmiş hesabın kullanıcı adı `silinmis_<12 hane>`, görünen adı "Silinmiş hesap" olur; içerik ve oylar korunur. 409 kodları: `confirmation_mismatch`, `legal_hold`, `active_sanction`, `has_role`, `export_in_progress`, `user_deleted`.
+
 ## 1.26.0 — 2026-10-13 (Mert, #184 topluluk sahibi atama, KV-54 S1)
 
 Kırıcı değişiklik yok: yeni endpoint'ler, yeni (boş olabilen) alan ve ayar; varsayılan kapalı bayrak arkasında.

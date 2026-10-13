@@ -54,6 +54,9 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   // #181 KVKK: talep ve teslim yönetici işlemidir (gerekçeli); indirme kullanıcının kendi işlemidir.
   "privacy.export.manage": ["request", "deliver"],
   "privacy.export.download": ["download"],
+  // #181 anonimleştirme: geri alınamaz; yasal saklama koyma/kaldırma ayrı işlemdir.
+  "user.anonymize": ["anonymize"],
+  "user.legalHold.manage": ["place", "release"],
   "user.sanction.lift": ["lift"],
   // admin.roles.put: grant = USER'a rol verme, revoke = rolü kaldırıp USER'a düşürme, change = rolden role geçiş.
   "user.role.assign": ["grant", "revoke", "change"],
@@ -106,6 +109,8 @@ export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditActi
   "user.password.reset",
   "community.owner.assign",
   "privacy.export.manage",
+  "user.anonymize",
+  "user.legalHold.manage",
   "user.sanction",
   "user.sanction.lift",
   "user.role.assign",
