@@ -65,14 +65,22 @@ jobs:
       - run: pnpm security:test
       - run: pnpm --filter @kararver/web test
       - run: pnpm --filter @kararver/web build
-      - name: Demo koruması — APP_ENV=production + demo build hata vermeli
+      - name: Demo koruması — izin listesi dışındaki her ortamda demo build hata vermeli (#187)
         run: |
-          if APP_ENV=production NEXT_PUBLIC_KV_DATA_MODE=demo pnpm --filter @kararver/web build > demo-build.log 2>&1; then
-            cat demo-build.log
-            echo "::error::APP_ENV=production + NEXT_PUBLIC_KV_DATA_MODE=demo build başarılı oldu"
-            exit 1
-          fi
-          grep -F "NEXT_PUBLIC_KV_DATA_MODE=demo APP_ENV=production ortamında kullanılamaz" demo-build.log
+          check() {
+            local expected="$1"; shift
+            if env "$@" NEXT_PUBLIC_KV_DATA_MODE=demo pnpm --filter @kararver/web build > demo-build.log 2>&1; then
+              cat demo-build.log
+              echo "::error::$* + NEXT_PUBLIC_KV_DATA_MODE=demo build başarılı oldu"
+              exit 1
+            fi
+            grep -F "$expected" demo-build.log
+          }
+          check "NEXT_PUBLIC_KV_DATA_MODE=demo APP_ENV=production ortamında kullanılamaz" APP_ENV=production
+          check "NEXT_PUBLIC_KV_DATA_MODE=demo APP_ENV=staging ortamında kullanılamaz" APP_ENV=staging
+          check "NEXT_PUBLIC_KV_DATA_MODE=demo APP_ENV=(tanımsız) ortamında kullanılamaz" -u APP_ENV
+          check "NEXT_PUBLIC_KV_DATA_MODE=demo APP_ENV=prod ortamında kullanılamaz" APP_ENV=prod
+          check "NEXT_PUBLIC_KV_DATA_MODE=demo VERCEL_ENV=production dağıtımında kullanılamaz" APP_ENV=preview VERCEL_ENV=production
       - name: Demo koruması — APP_ENV=preview + demo build geçmeli
         run: pnpm --filter @kararver/web build
         env:

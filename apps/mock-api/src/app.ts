@@ -17,8 +17,9 @@ const REQUEST_ID = /^[A-Za-z0-9._-]{8,128}$/;
 const DEFAULT_ORIGINS = "http://127.0.0.1:3000,http://localhost:3000";
 
 export function assertNotProduction(env: NodeJS.ProcessEnv): void {
-  if (env.NODE_ENV === "production" || env.APP_ENV === "production") {
-    throw new Error("Mock API production ortamında açılmaz (NODE_ENV/APP_ENV=production)");
+  // #187: sahte cevaplar (rol dahil) yalnız yerel geliştirme içindir; staging de dağıtılmış ortam sayılır.
+  if (env.NODE_ENV === "production" || env.APP_ENV === "production" || env.APP_ENV === "staging") {
+    throw new Error("Mock API staging/production ortamında açılmaz (NODE_ENV=production veya APP_ENV=staging/production)");
   }
 }
 
