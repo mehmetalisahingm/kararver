@@ -27,7 +27,8 @@ function currentRoles(demo: boolean, email: string | undefined): AdminRole[] {
 }
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
-  const { demo, user } = useProduct();
+  const { user } = useProduct();
+  const demo = process.env.NEXT_PUBLIC_KV_DATA_MODE === "demo"; // #187: build sabiti; api modunda demo rol eşlemesi bundle'dan elenir
   const pathname = usePathname();
   const [roles, setRoles] = useState<AdminRole[]>(() => currentRoles(demo, user?.email));
   const [ready, setReady] = useState(demo || !user);
@@ -87,6 +88,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // #187: yetkisiz bölüme URL ile gelinirse panel açılıp backend 403'üne düşmez; menü kalır, içerikte erişim reddi
+  // ve ilk yetkili bölüme bağlantı gösterilir. Menü/bölüm gizleme kullanıcı deneyimidir; yetki backend RBAC'tedir.
+  const current = adminNav.find((item) => (item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href)));
+  const sectionAllowed = !current || canSeeAdminItem(roles, current);
+
   return (
     <div className={styles.shell}>
       <aside className={styles.nav} aria-label="Yönetim navigasyonu">
@@ -102,23 +108,49 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         })}
         <div className={styles.role}>Rol: {roles.join(", ")}</div>
       </aside>
-      <section className={styles.content}><AdminRolesContext.Provider value={roles}>{children}</AdminRolesContext.Provider></section>
+      <section className={styles.content}>
+        {sectionAllowed ? (
+          <AdminRolesContext.Provider value={roles}>{children}</AdminRolesContext.Provider>
+        ) : (
+          <div className={`kv-card ${styles.denied}`}>
+            <span className="eyebrow">YÖNETİM</span>
+            <h1>Bu bölüm için yetkin yok</h1>
+            <p className="kv-muted">{current?.label} bölümü rolüne açık değil. Erişebildiğin bölümler soldaki menüde.</p>
+            {visible[0] ? <Link className="kv-button" href={visible[0].href}>{visible[0].label} bölümüne git</Link> : null}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
 
-const sectionMeta: Record<AdminSectionId, { title: string; intro: string; metric: [string, string][] }> = {
-  dashboard: { title: "Yönetim merkezi", intro: "Operasyon, moderasyon ve sistem alanlarına tek noktadan erişim.", metric: [["Açık rapor", "12"], ["İncelemedeki medya", "7"], ["Aktif topluluk", "24"]] },
-  users: { title: "Kullanıcılar", intro: "Hesap, rol ve yaptırım işlemleri için ortak çalışma alanı.", metric: [["Aktif", "1.248"], ["Kısıtlı", "9"], ["Yeni / 24s", "43"]] },
-  polls: { title: "İçerikler", intro: "Anket ve tartışmaların görünürlük ve moderasyon durumu.", metric: [["Aktif", "386"], ["Kilitli", "4"], ["İncelemede", "11"]] },
-  comments: { title: "Yorumlar", intro: "Yorum ve cevap moderasyonu için filtrelenebilir liste.", metric: [["Bugün", "214"], ["Raporlu", "8"], ["Kaldırılan", "3"]] },
-  reports: { title: "Raporlar", intro: "Açık raporları gerekçeli biçimde sonuçlandırma kuyruğu.", metric: [["Açık", "12"], ["Bugün sonuçlanan", "31"], ["SLA dışı", "2"]] },
-  media: { title: "Medya", intro: "Karantina, inceleme ve görsel risk durumları.", metric: [["Bekleyen", "7"], ["Karantina", "2"], ["Onaylanan", "118"]] },
-  categories: { title: "Kategoriler", intro: "Kategori sırası, açıklama ve aktiflik yönetimi.", metric: [["Aktif", "13"], ["Pasif", "1"], ["İçerik", "386"]] },
-  communities: { title: "Topluluklar", intro: "Topluluk durumu, üyelik ve moderasyon bağlantıları.", metric: [["Aktif", "24"], ["Üye", "3.912"], ["Moderatör", "38"]] },
-  featured: { title: "Öne çıkarılanlar", intro: "Öne çıkarılan içerik ve zamanlanmış duyuru alanı.", metric: [["Aktif", "5"], ["Planlı", "2"], ["Biten", "17"]] },
-  settings: { title: "Sistem ayarları", intro: "Sunucu tarafı feature switch ve acil durum anahtarları.", metric: [["Ayar", "18"], ["Değişen / 7g", "3"], ["Acil anahtar", "4"]] },
-  audit: { title: "Audit geçmişi", intro: "Kim, neyi, ne zaman ve hangi gerekçeyle değiştirdi görünümü.", metric: [["Bugün", "83"], ["Başarısız", "2"], ["Kritik", "6"]] },
+const sectionMeta: Record<AdminSectionId, { title: string; intro: string }> = {
+  dashboard: { title: "Yönetim merkezi", intro: "Operasyon, moderasyon ve sistem alanlarına tek noktadan erişim." },
+  users: { title: "Kullanıcılar", intro: "Hesap, rol ve yaptırım işlemleri için ortak çalışma alanı." },
+  polls: { title: "İçerikler", intro: "Anket ve tartışmaların görünürlük ve moderasyon durumu." },
+  comments: { title: "Yorumlar", intro: "Yorum ve cevap moderasyonu için filtrelenebilir liste." },
+  reports: { title: "Raporlar", intro: "Açık raporları gerekçeli biçimde sonuçlandırma kuyruğu." },
+  media: { title: "Medya", intro: "Karantina, inceleme ve görsel risk durumları." },
+  categories: { title: "Kategoriler", intro: "Kategori sırası, açıklama ve aktiflik yönetimi." },
+  communities: { title: "Topluluklar", intro: "Topluluk durumu, üyelik ve moderasyon bağlantıları." },
+  featured: { title: "Öne çıkarılanlar", intro: "Öne çıkarılan içerik ve zamanlanmış duyuru alanı." },
+  settings: { title: "Sistem ayarları", intro: "Sunucu tarafı feature switch ve acil durum anahtarları." },
+  audit: { title: "Audit geçmişi", intro: "Kim, neyi, ne zaman ve hangi gerekçeyle değiştirdi görünümü." },
+};
+
+/** Yalnız demo önizlemesinin temsili sayıları; api modu build'inde kullanılmaz ve bundle'dan elenir (#187). */
+const demoMetrics: Record<AdminSectionId, [string, string][]> = {
+  dashboard: [["Açık rapor", "12"], ["İncelemedeki medya", "7"], ["Aktif topluluk", "24"]],
+  users: [["Aktif", "1.248"], ["Kısıtlı", "9"], ["Yeni / 24s", "43"]],
+  polls: [["Aktif", "386"], ["Kilitli", "4"], ["İncelemede", "11"]],
+  comments: [["Bugün", "214"], ["Raporlu", "8"], ["Kaldırılan", "3"]],
+  reports: [["Açık", "12"], ["Bugün sonuçlanan", "31"], ["SLA dışı", "2"]],
+  media: [["Bekleyen", "7"], ["Karantina", "2"], ["Onaylanan", "118"]],
+  categories: [["Aktif", "13"], ["Pasif", "1"], ["İçerik", "386"]],
+  communities: [["Aktif", "24"], ["Üye", "3.912"], ["Moderatör", "38"]],
+  featured: [["Aktif", "5"], ["Planlı", "2"], ["Biten", "17"]],
+  settings: [["Ayar", "18"], ["Değişen / 7g", "3"], ["Acil anahtar", "4"]],
+  audit: [["Bugün", "83"], ["Başarısız", "2"], ["Kritik", "6"]],
 };
 
 /** Gerçek API'ye bağlı bölümler. Diğerleri kendi işlerinde bağlanır. */
@@ -151,7 +183,8 @@ function livePanel(section: AdminSectionId, admin: AdminClient) {
 
 export function AdminSection({ section }: { section: AdminSectionId }) {
   const meta = sectionMeta[section];
-  const { client, demo } = useProduct();
+  const { client } = useProduct();
+  const demo = process.env.NEXT_PUBLIC_KV_DATA_MODE === "demo";
   const roles = useContext(AdminRolesContext);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const dialogTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -186,7 +219,7 @@ export function AdminSection({ section }: { section: AdminSectionId }) {
         <button className="kv-button" onClick={(event) => openDialog(event.currentTarget)}>Örnek işlem</button>
       </header>
       <div className={styles.grid} aria-label="Özet metrikler">
-        {meta.metric.map(([label, value]) => <div className={styles.metric} key={label}><span className="kv-muted">{label}</span><strong>{value}</strong></div>)}
+        {demoMetrics[section].map(([label, value]) => <div className={styles.metric} key={label}><span className="kv-muted">{label}</span><strong>{value}</strong></div>)}
       </div>
       <div className={styles.toolbar} aria-label="Yönetim filtreleri">
         <label>Arama<input className="kv-input" placeholder="ID, başlık veya kullanıcı" /></label>

@@ -213,6 +213,12 @@ describe("production reddi", () => {
     assert.throws(() => buildMockApp({ env: { APP_ENV: "production" }, logger: false }), /production/);
   });
 
+  test("APP_ENV=staging ile uygulama kurulmaz (#187); local açılır", async () => {
+    assert.throws(() => buildMockApp({ env: { APP_ENV: "staging" }, logger: false }), /staging\/production ortamında açılmaz/);
+    const local = buildMockApp({ env: { APP_ENV: "local" }, logger: false });
+    await local.close();
+  });
+
   test("sunucu NODE_ENV=production ile açılmayı reddeder", () => {
     const server = path.resolve(import.meta.dirname, "../src/server.ts");
     const result = spawnSync(process.execPath, [server], {

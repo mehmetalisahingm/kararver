@@ -47,6 +47,22 @@ test("ADMIN dashboard never requests SUPER_ADMIN operations", async ({ page }) =
   expect(requests).toBe(0);
 });
 
+test("operations: older API responses keep the panel usable without new security fields", async ({ page }) => {
+  const mock = await api(page);
+  const body = sample("admin.ops.status");
+  delete body.data.security.lockedLogins;
+  delete body.data.security.adminActions24h;
+  mock.handlers.set("admin.ops.status", r => r.fulfill({ json: body }));
+  await page.goto("/admin");
+  const panel = page.getByRole("region", { name: "Operasyon durumu", exact: true });
+  const security = panel.getByRole("article").filter({ hasText: "Güvenlik olayları (bütün sunucular)" });
+  await expect(security).toContainText("Şu an kilitli giriş: Ölçüm yok");
+  await expect(security).toContainText("Kritik yönetici işlemleri: Ölçüm yok");
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+  await expect(panel.getByRole("region", { name: "İş kuyrukları tablosu" })).toBeVisible();
+  expect(mock.unexpected).toEqual([]);
+});
+
 test("operations: security events without DB data say unknown, not zero", async ({ page }) => {
   const mock = await api(page);
   const body = sample("admin.ops.status");
