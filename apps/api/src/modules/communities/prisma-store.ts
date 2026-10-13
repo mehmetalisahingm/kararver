@@ -123,12 +123,17 @@ export function createPrismaCommunityStore(prisma: PrismaClient): CommunityStore
     },
 
     async leave(communityId, userId) {
-      await prisma.$transaction(async (tx) => {
+      return prisma.$transaction(async (tx) => {
+        // Satır kilidi: eşzamanlı sahip atama/bırakma ile sıraya girer (sahip üyeliğini yarışta kaybetmez).
+        const [community] = await tx.$queryRaw<{ owner_id: string | null }[]>`
+          SELECT owner_id::text AS owner_id FROM communities WHERE id = ${communityId}::uuid FOR UPDATE`;
+        if (community?.owner_id === userId) return "owner_must_release" as const;
         const deleted = await tx.$executeRaw`
           DELETE FROM community_memberships WHERE community_id = ${communityId}::uuid AND user_id = ${userId}::uuid`;
         if (deleted === 1) {
           await tx.community.update({ where: { id: communityId }, data: { memberCount: { decrement: 1 } } });
         }
+        return "left" as const;
       });
     },
 

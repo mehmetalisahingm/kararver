@@ -69,6 +69,16 @@ const FEED_PROPOSAL = (value: number) =>
  */
 const RATE_SOURCE = "docs/KV-19_RATE_LIMIT.md \"Değerler\": Mehmet onayı, #21 (2026-10-08; PR #152 tablosu referans)";
 
+/** Varsayılanı resmî kaynakta olan, public olmayan mantıksal ayar. */
+const boolSetting = (description: string, value: boolean, source: string): SettingDefinition => ({
+  type: "boolean",
+  description,
+  min: null,
+  max: null,
+  default: { value, source },
+  publicPath: null,
+});
+
 const NO_SWITCH_DEFAULT =
   "PRODUCT_TEAM_PLAN §16 'Sistem ayarları' ve 'Acil durum kontrolleri' anahtarı tanımlar, varsayılan değer vermez";
 
@@ -212,6 +222,13 @@ export const settingsRegistry = Object.freeze({
     10,
     `docs/V1_USER_FLOW.md "Başlangıç puanı ve yayın maliyeti — V1": 10 puan`,
     ["points", "publishCost"],
+  ),
+  // #184 / KV-54 S1: topluluk sahipliği. Varsayılan kapalı: kapalıyken sistem V1 ile birebir aynı davranır (sahip atanamaz,
+  // başvuru onayı sahip atamaz); mevcut sahiplik verisi korunur ve okunur.
+  "communities.ownershipEnabled": boolSetting(
+    "Topluluk sahipliği açık (sahip atama; başvuru onayında başvuranı sahip yapma)",
+    false,
+    "docs/KV-54_COMMUNITY_OWNERSHIP_VERIFICATION.md §2 madde 1: bayraklar varsayılan kapalıdır",
   ),
   "features.registration": flag("Yeni kayıt açık", ["features", "registration"], NO_SWITCH_DEFAULT),
   "features.pollCreation": flag("Anket oluşturma açık", ["features", "pollCreation"], NO_SWITCH_DEFAULT),

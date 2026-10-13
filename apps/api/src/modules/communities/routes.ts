@@ -72,7 +72,9 @@ export function registerCommunityRoutes(route: Route, deps: CommunityDeps): void
 
   route("communities.leave", async ({ params, viewer }) => {
     if (!(await store.exists(params.id))) throw notFound();
-    await store.leave(params.id, viewer!.id);
+    if ((await store.leave(params.id, viewer!.id)) === "owner_must_release") {
+      throw new ApiError("CONFLICT", "Topluluğun sahibi ayrılamaz; önce sahipliği bırak.", [{ code: "owner_must_release" }]);
+    }
     return { status: 204, body: null };
   });
 }

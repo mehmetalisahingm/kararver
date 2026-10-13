@@ -17,6 +17,7 @@ import type { AdminUserStore } from "./modules/admin-users/store.ts";
 import type { PasswordHasher } from "./modules/auth/crypto.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerCommunityAdminRoutes } from "./modules/communities/admin-routes.ts";
+import { registerCommunityOwnerRoutes, type CommunityOwnerStore } from "./modules/communities/owner.ts";
 import { registerCommunityAdminReadRoutes, type CommunityAdminReadStore } from "./modules/communities/admin-read.ts";
 import { registerCommunityRoutes } from "./modules/communities/routes.ts";
 import type { CommunityStore } from "./modules/communities/store.ts";
@@ -149,6 +150,10 @@ export type AppDeps = {
   commentStore?: CommentStore;
   /** Acil durum anahtarı features.comments (KV-40, #42); verilmezse açık. */
   isCommentsEnabled?: () => Promise<boolean>;
+  /** communities.ownershipEnabled (#184); verilmezse ayar servisinden, o da yoksa kapalı. */
+  isOwnershipEnabled?: () => Promise<boolean>;
+  /** #184 / KV-54 S1 topluluk sahibi atama/bırakma. */
+  communityOwnerStore?: CommunityOwnerStore;
   /** Üçü birlikte verilirse medya route'ları kaydedilir (config.storage yoksa server vermez). */
   media?: { store: MediaStore; storage: MediaStorage; queue: MediaQueue; settings?: () => Promise<MediaSettings> };
   /** Log seviyesi/hedefi; verilmezse config.logLevel ile stdout. Testler log akışını yakalar. */
@@ -222,6 +227,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const feedSettings = deps.feedSettings ?? (settings ? () => settings.feedSettings() : async () => DEFAULT_FEED_SETTINGS);
   const mediaSettings = deps.media?.settings ?? (settings ? () => settings.mediaSettings() : async () => DEFAULT_MEDIA_SETTINGS);
   const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
+  const isOwnershipEnabled = deps.isOwnershipEnabled ?? (settings ? () => settings.isOwnershipEnabled() : async () => false);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
   const limiter = deps.rateLimitStore
@@ -340,7 +346,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
     registerCommunityAdminRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
-  if (deps.communityRequestStore) registerCommunityRequestRoutes(route, deps.communityRequestStore, now);
+  if (deps.communityRequestStore) registerCommunityRequestRoutes(route, deps.communityRequestStore, now, { isOwnershipEnabled });
+  if (deps.communityOwnerStore) registerCommunityOwnerRoutes(route, { store: deps.communityOwnerStore, now, isOwnershipEnabled });
   if (deps.communityAdminReadStore) registerCommunityAdminReadRoutes(route, { store: deps.communityAdminReadStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });

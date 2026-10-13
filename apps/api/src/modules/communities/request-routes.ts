@@ -4,6 +4,8 @@ import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
 import type { PrismaClient } from "@kararver/db";
 import { writeAudit } from "../audit/write.ts";
+import { lockTarget } from "../admin-users/prisma-store.ts";
+import { isEligibleOwner, MAX_OWNED_COMMUNITIES, ownedCount } from "./owner.ts";
 
 export type CommunityRequestInput = {
   name: string; slug: string; description?: string; categoryId?: string;
@@ -20,7 +22,8 @@ export type CommunityRequestStore = {
   create(userId: string, input: CommunityRequestInput): Promise<{ row: CommunityRequestRecord; created: boolean }>;
   mine(userId: string): Promise<CommunityRequestRecord[]>;
   queue(status?: CommunityRequestRecord["status"]): Promise<CommunityRequestRecord[]>;
-  decide(id: string, decision: "APPROVE" | "REJECT", reason: string, actorId: string, requestId: string, now: Date): Promise<CommunityRequestRecord>;
+  /** assignOwner: communities.ownershipEnabled açıkken başvuran onayla birlikte topluluğun sahibi olur (uygunsa; aksi halde sahipsiz kalır). */
+  decide(id: string, decision: "APPROVE" | "REJECT", reason: string, actorId: string, requestId: string, now: Date, assignOwner?: boolean): Promise<CommunityRequestRecord>;
 };
 
 const conflict = (message = "Bu topluluk adresi kullanılıyor veya başvuru zaten değerlendirildi.") =>
@@ -86,7 +89,7 @@ export function createPrismaCommunityRequestStore(prisma: PrismaClient): Communi
       const rows = await prisma.communityRequest.findMany({ where: status ? { status } : {}, orderBy: { createdAt: "desc" }, take: 100, include: detailInclude });
       return rows.map(summary);
     },
-    async decide(id, decision, reason, actorId, requestId, now) {
+    async decide(id, decision, reason, actorId, requestId, now, assignOwner = false) {
       try {
         await prisma.$transaction(async (tx) => {
           // FOR UPDATE serializes concurrent approvals/rejections of the same request.
@@ -99,6 +102,7 @@ export function createPrismaCommunityRequestStore(prisma: PrismaClient): Communi
             throw conflict("Başvuru daha önce farklı bir kararla sonuçlandırılmış.");
           }
           let communityId: string | null = null;
+          let ownerAssigned = false;
           if (decision === "APPROVE") {
             // If an admin created the same slug while the request was pending, reject safely.
             if (await tx.community.count({ where: { slug: r.slug } })) throw conflict();
@@ -112,6 +116,19 @@ export function createPrismaCommunityRequestStore(prisma: PrismaClient): Communi
             await tx.communityMembership.create({ data: {
               communityId: community.id, userId: r.requesterId, role: "MEMBER",
             } });
+            // KV-54 S1: bayrak açıkken başvuran sahip olur (uygunluk ve 3 topluluk sınırı yeniden doğrulanır; değilse sahipsiz kalır,
+            // onay engellenmez). Başvuranın kullanıcı satırı kilitlenir: eşzamanlı atama/BAN ile sıraya girer.
+            if (assignOwner && (await lockTarget(tx, r.requesterId)) && (await isEligibleOwner(tx, r.requesterId)) &&
+              (await ownedCount(tx, r.requesterId)) < MAX_OWNED_COMMUNITIES) {
+              await tx.community.update({ where: { id: community.id }, data: { ownerId: r.requesterId } });
+              ownerAssigned = true;
+              await writeAudit(tx, {
+                source: "API", actorId, action: "community.owner.assign", operation: "assign",
+                target: { type: "COMMUNITY", id: community.id }, reason,
+                before: { ownerId: null }, after: { ownerId: r.requesterId, trigger: "request_approval", requestId: id },
+                requestId, at: now,
+              });
+            }
           }
           const after = decision === "APPROVE" ? {
             status: "APPROVED" as const, communityId, approvedAt: now,
@@ -123,7 +140,7 @@ export function createPrismaCommunityRequestStore(prisma: PrismaClient): Communi
             operation: decision === "APPROVE" ? "approve" : "reject",
             target: { type: "COMMUNITY", id: communityId ?? id },
             reason, before: { status: r.status, requestId: id },
-            after: { status: after.status, requestId: id, ...(communityId ? { communityId } : {}) },
+            after: { status: after.status, requestId: id, ...(communityId ? { communityId } : {}), ...(ownerAssigned ? { ownerAssigned } : {}) },
             requestId, at: now,
           });
         }, { maxWait: 10_000, timeout: 30_000 });
@@ -143,7 +160,7 @@ const serialize = (r: CommunityRequestRecord) => ({
   createdAt: r.createdAt.toISOString(),
 });
 
-export function registerCommunityRequestRoutes(route: Route, store: CommunityRequestStore, now: () => Date) {
+export function registerCommunityRequestRoutes(route: Route, store: CommunityRequestStore, now: () => Date, options: { isOwnershipEnabled?: () => Promise<boolean> } = {}) {
   route("communities.requests.create", async ({ body, viewer }) => {
     const result = await store.create(viewer!.id, body);
     return { status: result.created ? 201 : 200, body: { data: serialize(result.row) } };
@@ -155,6 +172,11 @@ export function registerCommunityRequestRoutes(route: Route, store: CommunityReq
     status: 200, body: { data: (await store.queue(query.status)).map(serialize) },
   }));
   route("admin.communities.requests.decide", async ({ params, body, viewer, request }) => ({
-    status: 200, body: { data: serialize(await store.decide(params.id, body.decision, body.reason, viewer!.id, request.id, now())) },
+    status: 200,
+    body: {
+      data: serialize(
+        await store.decide(params.id, body.decision, body.reason, viewer!.id, request.id, now(), body.decision === "APPROVE" && options.isOwnershipEnabled ? await options.isOwnershipEnabled() : false),
+      ),
+    },
   }));
 }

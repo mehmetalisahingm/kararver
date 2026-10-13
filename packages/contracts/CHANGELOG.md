@@ -9,6 +9,15 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.26.0 — 2026-10-13 (Mert, #184 topluluk sahibi atama, KV-54 S1)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, yeni (boş olabilen) alan ve ayar; varsayılan kapalı bayrak arkasında.
+
+- **Eklendi:** `admin.communities.owner.put` (SUPER_ADMIN, gerekçeli zorunlu atama; `503 FEATURE_DISABLED` bayrak kapalıyken; `user_not_eligible`/`owner_limit`), `admin.communities.owner.release` (SUPER_ADMIN, gerekçeli), `communities.owner.release` (sahip kendi sahipliğini bırakır). Yetkiler `community.owner.assign` (super_admin) ve `community.owner.release` (owner); audit `community.owner.assign` (`assign`/`release`/`auto_release`) ve `community.owner.release`.
+- **Değişti (additive):** `AdminCommunityRow` ve `AdminCommunityOverview` artık `owner` (`CommunityOwnerRef | null`) taşır. Public şemalar değişmedi.
+- **Ayar:** `communities.ownershipEnabled` (boolean, varsayılan **false**). Kapalıyken #172 başvuru onayı sahip atamaz; mevcut sahiplik korunur.
+- **Davranış:** sahip topluluktan ayrılamaz (`communities.leave` 409 `owner_must_release`); BAN uygulanan hesabın sahip olduğu topluluklar otomatik yönetici yönetimine döner. Yeni `community_role` değeri yok.
+
 ## 1.25.0 — 2026-10-13 (Mert, #184 topluluk yönetim görünümü)
 
 Kırıcı değişiklik yok: yeni salt okuma endpoint'leri ve yetki.

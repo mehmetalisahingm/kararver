@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { examples } from "@kararver/contracts/fixtures";
 import { AdminClient } from "../src/features/admin/admin-client.ts";
 import type { CommunityOverviewView, CommunityThresholdView } from "../src/features/admin/admin-client.ts";
-import { statusImpactText, THRESHOLD_BADGE, thresholdText } from "../src/features/admin/community-model.ts";
+import { ownerText, statusImpactText, THRESHOLD_BADGE, thresholdText } from "../src/features/admin/community-model.ts";
 import { HttpClient } from "../src/lib/http-client.ts";
 
 const base: CommunityThresholdView = {
@@ -75,4 +75,29 @@ test("istemci: liste süzgeci ve sayfa boyutu sorguda; genel bakış ve üye lis
   assert.equal(mUrl.pathname, `/v1/admin/communities/${id}/members`);
   assert.deepEqual([mUrl.searchParams.get("q"), mUrl.searchParams.get("role")], ["den", "MEMBER"]);
   assert.equal(members.items[0]!.role, "MEMBER");
+});
+
+test("sahip metni: sahipsiz topluluk yönetici yönetimindedir; sahipli satır kullanıcı adını gösterir (e-posta yok)", () => {
+  assert.match(ownerText(null), /yönetici yönetiminde/);
+  assert.equal(ownerText({ displayName: "Deniz", username: "deniz" }), "Sahip: Deniz (@deniz)");
+});
+
+test("istemci: sahip atama PUT (kullanıcı ve gerekçe gövdede), bırakma POST; 503 FEATURE_DISABLED ve 409 owner_limit yüzeye çıkar", async () => {
+  const id = "01998b9a-0000-7000-8000-000000000940";
+  const user = "01998b9a-0000-7000-8000-000000000001";
+  const ok = client("admin.communities.owner.put", "ok");
+  const result = await ok.admin.putCommunityOwner(id, user, "Topluluğu kuran kullanıcı sahip olarak atandı");
+  assert.equal(ok.calls[0]!.method, "PUT");
+  assert.ok(ok.calls[0]!.url.endsWith(`/admin/communities/${id}/owner`));
+  assert.equal(result.owner?.username, "deniz");
+
+  const released = client("admin.communities.owner.release", "ok");
+  assert.deepEqual(await released.admin.releaseCommunityOwner(id, "Sahip hesabı bırakmak istedi"), { owner: null });
+  assert.equal(released.calls[0]!.method, "POST");
+  assert.ok(released.calls[0]!.url.endsWith(`/admin/communities/${id}/owner/release`));
+
+  for (const [name, code] of [["disabled", "FEATURE_DISABLED"], ["limit", "CONFLICT"]] as const) {
+    const failing = client("admin.communities.owner.put", name);
+    await assert.rejects(failing.admin.putCommunityOwner(id, user, "Topluluğu kuran kullanıcı sahip olarak atandı"), (e) => (e as { code?: string }).code === code);
+  }
 });

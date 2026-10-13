@@ -57,4 +57,33 @@ Yönetici panelindeki **Topluluklar** sekmesinde "Topluluk durumu ve eşik" böl
 ## 6. Test ve sınırlar
 
 - `apps/api/test/community-admin-read.test.ts`: saf eşik fonksiyonu (tüm durumlar ve sınır anı), yetki matrisi, kapalı topluluklar dahil liste, süzgeç ve sayfalama (cursor süzgece bağlı), sayılar (silinmiş hesap ve kaldırılmış anket sayılmaz), etki sayıları, salt okuma, yönetim izi, **başvuru → onay → süre dolumu → worker kapanışı → yeniden açma** uçtan uca, 10 üyeye ulaşan topluluğun kapanmaması, üye listesi görünürlük ayarına takılmaz ve hassas alan taşımaz.
-- **Kapsam dışı (#184'ün sonraki dilimleri):** sahip atama/devir ve son sahip koruması ([KV-54](./KV-54_COMMUNITY_OWNERSHIP_VERIFICATION.md) S1–S3; kritik teyit #182'ye bağlı), üyelik rolü değiştirme/çıkarma, katılım koşulları, moderatör kapsam ihlallerinde 403 + audit görünürlüğü.
+- **Kapsam dışı (#184'ün sonraki dilimleri):** sahip devri ve sahiplik talebi ([KV-54](./KV-54_COMMUNITY_OWNERSHIP_VERIFICATION.md) S2–S3; kritik teyit #182'ye bağlı), sahibe yetki verme, üyelik rolü değiştirme/çıkarma, katılım koşulları, moderatör kapsam ihlallerinde 403 + audit görünürlüğü.
+
+## 7. Topluluk sahibi — atama ve koruma (KV-54 S1)
+
+Tasarım: [KV-54](./KV-54_COMMUNITY_OWNERSHIP_VERIFICATION.md) §3 ve §5. Bu dilim **yalnız altyapıdır**: sahip kaydı, yönetici atama/bırakma, son sahip koruması. Sahiplik şimdilik **ek yetki vermez** (düzenleme, moderatör atama, devir ve talep KV-54 S2–S3).
+
+**Bayrak:** `communities.ownershipEnabled` (KV-40 ayarı, **varsayılan kapalı**). Kapalıyken sistem V1 ile birebir aynıdır: `admin.communities.owner.put` 503 `FEATURE_DISABLED`, #172 başvuru onayı sahip atamaz. Mevcut sahiplik verisi korunur ve okunur; **bırakma bayrak kapalıyken de çalışır** (güvenli yön).
+
+| Konu | Kural |
+|---|---|
+| Model | `communities.owner_id` (boş olabilir = yönetici yönetimi). **Yeni `community_role` değeri yok:** mevcut rol mantığı ve V1 endpoint'leri değişmedi |
+| Atama | `admin.communities.owner.put` (SUPER_ADMIN, gerekçeli): aday **ACTIVE, silinmemiş, e-postası gerçekten doğrulanmış** olmalı (`user_not_eligible`; geçici doğrulama gevşetmesi yok sayılır) ve en çok **3** topluluğa sahip olabilir (`owner_limit`). Üye değilse MEMBER olarak eklenir (sayaç aynı transaction'da); mevcut moderatör rolü korunur. Aynı kullanıcı zaten sahipse değişiklik ve audit yok (idempotent). Eski sahip değişimde üye kalır |
+| Bırakma | `admin.communities.owner.release` (SUPER_ADMIN, gerekçeli) ve `communities.owner.release` (sahibin kendisi; başkası ve sahipsiz topluluk 403). Üyelik ve içerik etkilenmez |
+| Son sahip koruması | Sahip topluluktan **ayrılamaz** (`communities.leave` 409 `owner_must_release`): önce sahipliği bırakır. DB tetikleyicileri (migration) aynı kuralı doğrudan SQL'e ve yarışa karşı da uygular: sahip üye olmak zorundadır, sahibin üyeliği silinemez |
+| #172 başvuru onayı | Bayrak açıkken başvuran onayla birlikte sahip olur (aynı transaction; ikinci audit `community.owner.assign` / `assign`, `trigger: request_approval`). Uygun değilse (3 sınırı, doğrulanmamış e-posta) topluluk **sahipsiz kalır, onay engellenmez**. Bayrak kapalıyken audit biçimi V1 ile aynıdır |
+| BAN | BAN uygulanan hesabın sahip olduğu topluluklar **aynı transaction'da** yönetici yönetimine döner (audit `community.owner.assign` / `auto_release`, aktör yaptırımı uygulayan yönetici, gerekçe yaptırım gerekçesi; yaptırım audit'inde `communitiesReleased`, yalnız > 0 iken). SUSPEND sahipliği düşürmez (süreli, topluluk sahibini bekler) |
+| Kilit sırası | Önce aday kullanıcı satırı (`FOR NO KEY UPDATE`: aynı kullanıcıya iki atama ve BAN sıraya girer, 3 sınırı yarışta aşılmaz), sonra topluluk satırı (`FOR UPDATE`: leave, atama, bırakma sıraya girer). BAN yolu da kullanıcıdan topluluğa gider: döngü yok |
+| Görünüm | `AdminCommunityRow` ve `AdminCommunityOverview` `owner` taşır (kimlik, kullanıcı adı, görünen ad; e-posta yok). Public şemalar değişmedi. Panelde genel bakışta sahip satırı; SUPER_ADMIN için "Sahip ata/değiştir/kaldır" |
+
+**Audit:** `community.owner.assign` (`assign`, `release`, `auto_release`; gerekçe zorunlu) ve `community.owner.release` (sahibin kendi bırakması; gerekçesiz). Hedef `COMMUNITY`; önce/sonra yalnız kullanıcı kimlikleri.
+
+**KV-54 §10 senaryoları:** I1 (bayrak kapalıyken V1 aynı: mevcut topluluk testleri değişmeden geçer), I2, I3 (mevcut testler), I4/I5 (sahip admin uçlarına, moderatör atamaya, yaptırıma, başka topluluğa erişemez: 403), I10'un ayrılma ve BAN kısmı, I18 (bayrak kapanınca atama 503, sahiplik korunur).
+
+**Bilinen sınırlar**
+- **Hesap silme/anonimleştirme** akışı henüz yok (#181 sonraki dilim): geldiğinde `releaseOwnedCommunities` (`communities/owner.ts`) aynı transaction'da çağrılmalı; o zamana kadar yalnız BAN yolu bağlıdır.
+- Sahip değişimi/bırakma için **olay (outbox) ve bildirim** yok; yalnız audit. Eski/yeni sahibe bildirim KV-54 S3 ile gelir.
+- Zorunlu atama kritik işlemdir; **ikinci onay/MFA (#182, PR #206) bağlanmadı** (gerekçe + audit var). #206 merge olunca `community.owner.assign` için ikinci onay istenmesi önerilir.
+- 3 topluluk sınırı ve uygunluk kuralları KV-54 §12'deki öneri değerlerdir (Mehmet teyidi bekliyor).
+
+**Test:** `apps/api/test/community-owner.test.ts` (bayrak varsayılan kapalı ve açılıp kapanması, yetki matrisi, atama/idempotency/değişim/üyelik ekleme, uygunluk, 3 sınırı ve **4 paralel atamada sınırın aşılmaması**, iki kullanıcının aynı anda atanması, bırakma, sahibin kendi bırakması, ayrılma koruması ve DB tetikleyicileri, **ayrılma ile atama yarışı**, #172 onayı (açık/kapalı/sınır), BAN ve SUSPEND, sahibin ek yetkisi olmadığı, liste/genel bakış görünümü).

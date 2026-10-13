@@ -43,6 +43,9 @@ export const CommunityThreshold = z.strictObject({
   daysLeft: Count.nullable(),
 });
 
+/** Topluluk sahibi (#184 / KV-54 S1): yalnız kimlik ve görünen ad; e-posta yok. null = sahipsiz (yönetici yönetimi, V1 davranışı). */
+export const CommunityOwnerRef = z.strictObject({ id: Id, username: z.string(), displayName: z.string() });
+
 export const AdminCommunityRow = z.strictObject({
   id: Id,
   slug: z.string(),
@@ -53,6 +56,7 @@ export const AdminCommunityRow = z.strictObject({
   moderators: Count,
   polls: Count,
   createdAt: Timestamp,
+  owner: CommunityOwnerRef.nullable(),
   threshold: CommunityThreshold,
 });
 
@@ -87,6 +91,8 @@ export const AdminCommunityOverview = z.strictObject({
 });
 
 const communities = { owner: "Mert", module: "communities" } as const;
+const OwnerReason = z.string().trim().min(3).max(500);
+const OwnerResult = z.strictObject({ owner: CommunityOwnerRef.nullable() });
 const requestsProvider = { owner: "Mehmet", module: "community-requests" } as const;
 const web = ["Ümit (web)", "Mert (topluluk UI, KV-31)"];
 const SlugParams = z.strictObject({ slug: z.string().regex(/^[a-z0-9-]{2,60}$/) });
@@ -124,6 +130,37 @@ const CommunityRequestBody = z.strictObject({
 });
 
 export const communityEndpoints = [
+  defineEndpoint({
+    id: "admin.communities.owner.put", domain: "communities", method: "PUT", path: "/admin/communities/:id/owner",
+    summary: "Topluluğa sahip ata veya sahibi değiştir (yönetici zorunlu atama)", auth: "super_admin", provider: communities, consumers: ["KararVer admin"],
+    unblocks: ["#184"], availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ userId: Id, reason: OwnerReason }) },
+    responses: { 200: dataOf(OwnerResult) }, errors: ["CONFLICT", "NOT_FOUND", "FEATURE_DISABLED"], idempotency: "natural", cache: "private",
+    notes: [
+      "communities.ownershipEnabled kapalıyken 503 FEATURE_DISABLED (varsayılan kapalı; V1 davranışı). Aynı kullanıcı zaten sahipse değişiklik ve audit yoktur (idempotent).",
+      "Sahip uygun olmalı: hesap ACTIVE, silinmemiş ve e-postası gerçekten doğrulanmış (geçici doğrulama gevşetmesi yok sayılır); aynı anda en çok 3 topluluğa sahip olabilir. 409 CONFLICT details[0].code: user_not_eligible, owner_limit. Kullanıcı yoksa 404.",
+      "Sahip aynı zamanda üyedir: üyeliği yoksa MEMBER olarak eklenir (sayaç aynı transaction'da). Mevcut moderatör rolü korunur. DB tetikleyicisi sahip olan kullanıcının üyeliğinin silinmesini engeller.",
+      "Sahiplik şu an ek yetki vermez (düzenleme, moderatör atama, devir sonraki dilimler: KV-54 S2–S3); yalnız kayıttır. Kritik işlemdir: ikinci onay/MFA (#182) gelene kadar gerekçe + audit (community.owner.assign / assign).",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.communities.owner.release", domain: "communities", method: "POST", path: "/admin/communities/:id/owner/release",
+    summary: "Topluluğun sahibini kaldır (topluluk yönetici yönetimine döner)", auth: "super_admin", provider: communities, consumers: ["KararVer admin"],
+    unblocks: ["#184"], availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: OwnerReason }) },
+    responses: { 200: dataOf(OwnerResult) }, errors: [], idempotency: "natural", cache: "private",
+    notes: ["Sahip yoksa değişiklik ve audit yoktur. Bayrak kapalıyken de çalışır (güvenli yön). Üyelik ve içerik etkilenmez. Audit community.owner.assign / release."],
+  }),
+  defineEndpoint({
+    id: "communities.owner.release", domain: "communities", method: "POST", path: "/communities/:id/owner/release",
+    summary: "Sahip kendi sahipliğini bırakır", auth: "owner", provider: communities, consumers: web, unblocks: ["#184"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(OwnerResult) }, errors: [], idempotency: "natural", cache: "private",
+    notes: [
+      "Yalnız o topluluğun sahibi (başkası 403; sahip yoksa da 403). Topluluk yönetici yönetimine döner; üyelik ve içerik etkilenmez. Audit community.owner.release / release.",
+      "Sahip topluluktan ayrılamaz: communities.leave 409 owner_must_release (önce sahipliği bırakır).",
+    ],
+  }),
   defineEndpoint({
     id: "admin.communities.listAll", domain: "communities", method: "GET", path: "/admin/communities",
     summary: "Yönetici topluluk listesi (kapalı olanlar dahil)", auth: "admin", provider: communities, consumers: ["KararVer admin"],
@@ -238,7 +275,7 @@ export const communityEndpoints = [
     availability: { status: "ready" },
     request: { params: IdParams },
     responses: { 204: Empty },
-    errors: [],
+    errors: ["CONFLICT"],
     idempotency: "natural",
     cache: "private",
   }),

@@ -22,6 +22,7 @@ import { createPrismaDataExportStore } from "../../src/modules/data-exports/pris
 import { createPrismaAuthStore } from "../../src/modules/auth/prisma-store.ts";
 import { createPrismaCategoryAdminStore } from "../../src/modules/categories/prisma-store.ts";
 import { createPrismaCommunityAdminReadStore } from "../../src/modules/communities/admin-read.ts";
+import { createPrismaCommunityOwnerStore } from "../../src/modules/communities/owner.ts";
 import { createPrismaCommunityStore } from "../../src/modules/communities/prisma-store.ts";
 import { createPrismaCommunityRequestStore } from "../../src/modules/communities/request-routes.ts";
 import type { AuthStore, UserStatus } from "../../src/modules/auth/store.ts";
@@ -254,6 +255,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     communityStore: backend.prisma ? createPrismaCommunityStore(backend.prisma) : undefined,
     communityRequestStore: backend.prisma ? createPrismaCommunityRequestStore(backend.prisma) : undefined,
     communityAdminReadStore: backend.prisma ? createPrismaCommunityAdminReadStore(backend.prisma) : undefined,
+    communityOwnerStore: backend.prisma ? createPrismaCommunityOwnerStore(backend.prisma) : undefined,
     onboardingStore: backend.prisma ? createPrismaOnboardingStore(backend.prisma) : undefined,
     reportStore: backend.prisma ? createPrismaReportStore(backend.prisma) : undefined,
     moderationStore: backend.prisma ? createPrismaModerationStore(backend.prisma) : undefined,

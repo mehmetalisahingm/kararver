@@ -39,7 +39,11 @@ export interface CommunityStore {
   /** Satır eklendiyse sayaç aynı transaction'da artar; zaten üyeyse mevcut rol döner. */
   join(communityId: string, userId: string, now: Date): Promise<CommunityRole>;
   /** Satır silindiyse sayaç aynı transaction'da azalır; üye değilse hiçbir şey yapmaz. */
-  leave(communityId: string, userId: string): Promise<void>;
+  /**
+   * Topluluk satırı kilitlenir; kullanıcı topluluğun SAHİBİ ise ayrılamaz ("owner_must_release": önce sahipliği bırakmalı, #184).
+   * Üye değilse hiçbir şey yapmaz ("left").
+   */
+  leave(communityId: string, userId: string): Promise<"left" | "owner_must_release">;
 
   // ── Admin (KV-32, #34) ──
   /** Durumdan bağımsız; yönetici kapatılmış topluluğu da görür. */

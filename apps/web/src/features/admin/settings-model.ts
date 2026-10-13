@@ -26,6 +26,7 @@ export const groupLabels: Record<string, string> = {
   trends: "Trend",
   feed: "Senin İçin akışı",
   limits: "Hız sınırları",
+  communities: "Topluluklar",
   features: "Özellikler",
   maintenance: "Bakım",
 };

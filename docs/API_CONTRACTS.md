@@ -151,6 +151,9 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 
 | Endpoint | Yetki | Başarı | Idempotency | Sağlayıcı | Tüketici | Açtığı iş | Durum |
 |---|---|---|---|---|---|---|---|
+| `PUT /admin/communities/:id/owner`<br>Topluluğa sahip ata veya sahibi değiştir (yönetici zorunlu atama) · `admin.communities.owner.put` | SA | 200 | doğal | Mert `communities` | KararVer admin | #184 | hazır |
+| `POST /admin/communities/:id/owner/release`<br>Topluluğun sahibini kaldır (topluluk yönetici yönetimine döner) · `admin.communities.owner.release` | SA | 200 | doğal | Mert `communities` | KararVer admin | #184 | hazır |
+| `POST /communities/:id/owner/release`<br>Sahip kendi sahipliğini bırakır · `communities.owner.release` | O | 200 | doğal | Mert `communities` | Ümit (web), Mert (topluluk UI, KV-31) | #184 | hazır |
 | `GET /admin/communities`<br>Yönetici topluluk listesi (kapalı olanlar dahil) · `admin.communities.listAll` | A | 200 | — | Mert `communities` | KararVer admin | #184 | hazır |
 | `GET /admin/communities/:id/overview`<br>Topluluk genel bakış: durum, etki sayıları, eşik ve son yönetim izi · `admin.communities.overview` | A | 200 | — | Mert `communities` | KararVer admin | #184 | hazır |
 | `GET /admin/communities/:id/members`<br>Yönetici üye listesi (arama ve rol süzgeçli) · `admin.communities.members` | A | 200 | — | Mert `communities` | KararVer admin | #184 | hazır |
@@ -266,7 +269,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
 | #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
 | #181 | `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver` |
-| #184 | `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
+| #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
 | #186 | `GET /admin/ops` |
 <!-- END:unblocks -->
 

@@ -8,6 +8,7 @@ import type {
   AdminCommunityOverview,
   AdminCommunityRow,
   CommunityMember,
+  CommunityOwnerRef,
   CommunityThreshold,
   AdminPollItem,
   AuditEntry,
@@ -45,6 +46,7 @@ export type CommunityRowView = ReturnType<typeof AdminCommunityRow.parse>;
 export type CommunityOverviewView = ReturnType<typeof AdminCommunityOverview.parse>;
 export type CommunityThresholdView = ReturnType<typeof CommunityThreshold.parse>;
 export type CommunityMemberView = ReturnType<typeof CommunityMember.parse>;
+export type CommunityOwnerView = ReturnType<typeof CommunityOwnerRef.parse>;
 export type DataExportView = ReturnType<typeof DataExport.parse>;
 export type UserSummary = ReturnType<typeof AdminUserSummary.parse>;
 export type UserDetail = ReturnType<typeof AdminUserDetail.parse>;
@@ -254,6 +256,14 @@ export class AdminClient {
   }
   async communityMembers(id: string, filter: { q?: string; role?: "MEMBER" | "MODERATOR"; cursor?: string }, signal?: AbortSignal) {
     return page<CommunityMemberView>(await this.http.request("admin.communities.members", { params: { id }, query: { q: filter.q, role: filter.role, cursor: filter.cursor, limit: "20" }, signal }));
+  }
+  /** #184 / KV-54 S1: yönetici zorunlu sahip atama (yalnız SUPER_ADMIN; communities.ownershipEnabled kapalıyken 503). */
+  async putCommunityOwner(id: string, userId: string, reason: string) {
+    return data<{ owner: CommunityOwnerView | null }>(await this.http.request("admin.communities.owner.put", { params: { id }, body: { userId, reason } }));
+  }
+  /** Sahibi kaldırır; topluluk yönetici yönetimine döner (bayrak kapalıyken de çalışır). */
+  async releaseCommunityOwner(id: string, reason: string) {
+    return data<{ owner: null }>(await this.http.request("admin.communities.owner.release", { params: { id }, body: { reason } }));
   }
   async createCommunity(input: CommunityInput, key: string) {
     return data<CommunityDetailView>(await this.http.request("admin.communities.create", { body: input, key }));

@@ -117,6 +117,7 @@ model User {
   moderationActionsAgainst ModerationAction[]       @relation("ModerationTargetUser")
   // Mert — community.prisma (KV-31)
   createdCommunities       Community[]              @relation("CommunityCreator")
+  ownedCommunities         Community[]              @relation("CommunityOwner")
   communityRequests        CommunityRequest[]
   communityMemberships     CommunityMembership[]
   // Utku — admin.prisma (KV-12)

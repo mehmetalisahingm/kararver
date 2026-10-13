@@ -69,6 +69,8 @@ export type SettingsService = {
   rateLimitSettings(): Promise<RateLimitSettings>;
   isRegistrationEnabled(): Promise<boolean>;
   isCommentsEnabled(): Promise<boolean>;
+  /** communities.ownershipEnabled (#184, KV-54 S1): varsayılan kapalı. */
+  isOwnershipEnabled(): Promise<boolean>;
   isMaintenance(): Promise<boolean>;
   /** Yorum üst sınırı (comments.bodyMaxLength); sözleşme şeması 2000 karakterle üst sınırdır, ayar yalnız daraltır. */
   commentMaxLength(): Promise<number>;
@@ -200,6 +202,9 @@ export function createSettingsService(store: SettingsStore, options: SettingsSer
     },
     async isCommentsEnabled() {
       return bool(await service.values(), "features.comments");
+    },
+    async isOwnershipEnabled() {
+      return bool(await service.values(), "communities.ownershipEnabled");
     },
     async isMaintenance() {
       return bool(await service.values(), "maintenance.enabled");
