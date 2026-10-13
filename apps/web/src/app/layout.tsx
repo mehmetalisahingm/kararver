@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="tr">
       <body>
-        <ProductProvider demo={process.env.NEXT_PUBLIC_KV_DATA_MODE === "demo"}>
+        <ProductProvider>
           <SourceAttribution />
           {children}
         </ProductProvider>

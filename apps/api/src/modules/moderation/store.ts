@@ -177,6 +177,9 @@ const SOURCES: Record<StatusAction, readonly ContentStatus[]> = {
   REMOVE: ["ACTIVE", "UNDER_REVIEW", "HIDDEN", "LOCKED"],
 };
 
+/** Bu işlemin uygulanabildiği (geçişi geçerli) durumlar; toplu işlem önizlemesi aynı kuralı kullanır (#181). */
+export const eligibleSources = (action: StatusAction): readonly ContentStatus[] => SOURCES[action];
+
 /** Hedef durum zaten bu ise "same" (idempotent), geçiş tanımlıysa yeni durum, değilse "invalid". */
 export function statusTransition(current: ContentStatus, action: StatusAction): ContentStatus | "same" | "invalid" {
   const target = TARGET[action];

@@ -164,6 +164,10 @@ export const actions = Object.freeze({
     requires: ["targetUserId", "targetRoles"],
   }),
   "privacy.export.download": rule("user", "Kendi KVKK veri paketini indirme (#181)"),
+  "user.content.bulk": rule("admin", "Kullanıcının içeriğini toplu gizleme/kaldırma/geri alma; admin hedef SUPER_ADMIN ister", {
+    guard: "sanctionTarget",
+    requires: ["targetUserId", "targetRoles"],
+  }),
   "user.password.reset": rule("admin", "Kullanıcıya şifre sıfırlama e-postası gönderme; admin hedef SUPER_ADMIN ister", {
     guard: "sanctionTarget",
     requires: ["targetUserId", "targetRoles"],
@@ -309,6 +313,11 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.sanctions.lift": "user.sanction.lift",
   "admin.roles.put": "user.role.assign",
   "admin.users.passwordReset.send": "user.password.reset",
+  "admin.users.contentJobs.preview": "user.content.bulk",
+  "admin.users.contentJobs.create": "user.content.bulk",
+  "admin.users.contentJobs.list": "user.content.bulk",
+  "admin.users.contentJobs.undo": "user.content.bulk",
+  "admin.users.contentJobs.cancel": "user.content.bulk",
   "admin.users.dataExports.create": "privacy.export.manage",
   "admin.users.dataExports.list": "privacy.export.manage",
   "admin.users.dataExports.deliver": "privacy.export.manage",

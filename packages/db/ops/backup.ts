@@ -90,8 +90,41 @@ export async function backup(connectionString: string, outDir: string, now = new
   }
 }
 
+/** Yalnız etiket: dosya yolu, bucket adresi ya da bağlantı bilgisi değil (migration CHECK'i de zorlar). */
+export const DESTINATION = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+
+/**
+ * KV-186 (#186): başarılı yedeği yedeklenen veritabanına kaydeder; /admin/ops "son yedek" alanını buradan okur.
+ * Döküm ve manifest yazıldıktan sonra çağrılır; kayıt dökümün içinde değildir (snapshot'tan sonra yazılır).
+ */
+export async function recordBackupRun(connectionString: string, manifest: Manifest, destination: string, finishedAt = new Date()): Promise<void> {
+  if (!DESTINATION.test(destination)) throw new Error(`geçersiz yedek hedefi etiketi: ${destination}`);
+  const prisma = createPrismaClient(connectionString);
+  try {
+    await prisma.opsBackupRun.create({
+      data: {
+        finishedAt,
+        destination,
+        sizeBytes: BigInt(manifest.sizeBytes),
+        sha256: manifest.sha256,
+        durationMs: manifest.dumpMs,
+        serverVersion: manifest.serverVersion.split(" ")[0]!.slice(0, 40),
+      },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 if (import.meta.main) {
-  const { values } = parseArgs({ options: { out: { type: "string", default: path.resolve(import.meta.dirname, "../backups") } } });
+  const { values } = parseArgs({
+    options: {
+      out: { type: "string", default: path.resolve(import.meta.dirname, "../backups") },
+      // Zamanlanmış yedek, dosyayı yükledikten sonra kendi hedefini verir (ör. --destination r2).
+      destination: { type: "string", default: "local" },
+      "no-record": { type: "boolean", default: false },
+    },
+  });
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL tanımlı değil");
   const { file, manifest } = await backup(url, values.out!);
@@ -103,4 +136,11 @@ if (import.meta.main) {
   );
   const bad = manifest.invariants.filter((i) => i.violations > 0);
   for (const i of bad) console.warn(`  ⚠ tutarlılık: ${i.name}: ${i.violations} ihlal (yedek yine de alındı)`);
+  if (!values["no-record"]) {
+    // Kayıt başarısız olsa da yedek geçerlidir; uyarı verilir, çıkış kodu değişmez.
+    await recordBackupRun(url, manifest, values.destination!).then(
+      () => console.log(`  kayıt: ops_backup_runs (${values.destination})`),
+      (err: unknown) => console.warn(`  ⚠ yedek kaydı yazılamadı: ${err instanceof Error ? err.message : String(err)}`),
+    );
+  }
 }

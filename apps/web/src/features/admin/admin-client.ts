@@ -13,6 +13,8 @@ import type {
   AdminPollItem,
   AuditEntry,
   Announcement,
+  ContentJob,
+  ContentJobPreview,
   DataExport,
   BannedMediaView,
   FeaturedPlacement,
@@ -48,6 +50,10 @@ export type CommunityThresholdView = ReturnType<typeof CommunityThreshold.parse>
 export type CommunityMemberView = ReturnType<typeof CommunityMember.parse>;
 export type CommunityOwnerView = ReturnType<typeof CommunityOwnerRef.parse>;
 export type DataExportView = ReturnType<typeof DataExport.parse>;
+export type ContentJobView = ReturnType<typeof ContentJob.parse>;
+export type ContentJobPreviewView = ReturnType<typeof ContentJobPreview.parse>;
+export type ContentJobAction = "HIDE" | "REMOVE";
+export type ContentJobScope = "all" | "polls" | "comments";
 export type UserSummary = ReturnType<typeof AdminUserSummary.parse>;
 export type UserDetail = ReturnType<typeof AdminUserDetail.parse>;
 export type UserActivity = ReturnType<typeof AdminUserActivity.parse>;
@@ -131,6 +137,23 @@ export class AdminClient {
   }
   async revokeUserSessions(id: string, reason: string, sessionId?: string) {
     return this.http.request("admin.users.sessions.revoke", { params: { id }, body: { reason, ...(sessionId ? { sessionId } : {}) } });
+  }
+  /** #181 toplu içerik işlemi: salt okuma önizleme (etki sayacı). */
+  async previewContentJob(id: string, action: ContentJobAction, scope: ContentJobScope, signal?: AbortSignal) {
+    return data<ContentJobPreviewView>(await this.http.request("admin.users.contentJobs.preview", { params: { id }, query: { action, scope }, signal }));
+  }
+  /** Ayrı onay: sunucu sayıları cutoffAt ile yeniden hesaplar; farklıysa 409 preview_stale. */
+  async createContentJob(id: string, input: { action: ContentJobAction; scope: ContentJobScope; cutoffAt: string; expected: { polls: number; comments: number }; reason: string }) {
+    return data<ContentJobView>(await this.http.request("admin.users.contentJobs.create", { params: { id }, body: input }));
+  }
+  async contentJobs(id: string, signal?: AbortSignal) {
+    return data<ContentJobView[]>(await this.http.request("admin.users.contentJobs.list", { params: { id }, signal }));
+  }
+  async undoContentJob(id: string, jobId: string, reason: string) {
+    return data<ContentJobView>(await this.http.request("admin.users.contentJobs.undo", { params: { id, jobId }, body: { reason } }));
+  }
+  async cancelContentJob(id: string, jobId: string, reason: string) {
+    return data<ContentJobView>(await this.http.request("admin.users.contentJobs.cancel", { params: { id, jobId }, body: { reason } }));
   }
   /** #181 KVKK: hesabın veri dışa aktarma talepleri (son 20). Paket içeriği hiçbir yanıtta yoktur. */
   async dataExports(id: string, signal?: AbortSignal) {

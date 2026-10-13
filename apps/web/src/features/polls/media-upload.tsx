@@ -27,8 +27,11 @@ export function MediaUpload({client,disabled,onChange}:{client:MediaClient;disab
     try {
       let ticket=item.ticket;
       if (!item.uploaded) {
-        // Reuse the key to renew an expired URL without creating a second media asset.
-        ticket=await client.begin(item.file,item.key,signal);patch(item.key,{ticket});
+        // A failed PUT does not consume another upload ticket while its URL is valid.
+        // Renew expired tickets with the same key, preserving the media asset.
+        if (!ticket || Date.parse(ticket.upload.expiresAt) <= Date.now() + 30_000) {
+          ticket=await client.begin(item.file,item.key,signal);patch(item.key,{ticket});
+        }
         await client.put(ticket,item.file,signal);patch(item.key,{uploaded:true});
       }
       const media=item.media ? await client.get(item.media.id,signal) : await client.complete(ticket!.mediaId,signal);

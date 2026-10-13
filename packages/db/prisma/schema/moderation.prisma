@@ -126,3 +126,84 @@ model ModerationAction {
   @@index([reportId])
   @@map("moderation_actions")
 }
+
+// #181: kullanıcıya ait içeriğin toplu gizlenmesi/kaldırılması (ve geri alınması). Önizleme → gerekçe → ayrı onay → kuyruk;
+// iş API sürecindeki çalıştırıcıda (modules/content-jobs/runner.ts) öğe öğe mevcut moderasyon uygulamasıyla işlenir. Hesap
+// başına en çok bir açık iş migration'daki kısmi unique index'le sağlanır (content_jobs_one_open_per_user_key).
+enum ContentJobKind {
+  HIDE
+  REMOVE
+  UNDO
+
+  @@map("content_job_kind")
+}
+
+enum ContentJobStatus {
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+  CANCELLED
+
+  @@map("content_job_status")
+}
+
+enum ContentJobItemResult {
+  APPLIED
+  UNCHANGED
+  FAILED
+  SKIPPED
+
+  @@map("content_job_item_result")
+}
+
+model ContentJob {
+  id              String           @id @default(uuid(7)) @db.Uuid
+  userId          String           @map("user_id") @db.Uuid
+  requestedById   String           @map("requested_by_id") @db.Uuid
+  kind            ContentJobKind
+  status          ContentJobStatus @default(QUEUED)
+  reason          String           @db.VarChar(500)
+  includePolls    Boolean          @map("include_polls")
+  includeComments Boolean          @map("include_comments")
+  cutoffAt        DateTime         @map("cutoff_at") @db.Timestamptz(3)
+  expectedPolls    Int             @default(0) @map("expected_polls")
+  expectedComments Int             @default(0) @map("expected_comments")
+  undoOfId        String?          @unique @map("undo_of_id") @db.Uuid
+  applied         Int              @default(0)
+  unchanged       Int              @default(0)
+  failed          Int              @default(0)
+  skipped         Int              @default(0)
+  failure         String?          @db.VarChar(60)
+  claimedAt       DateTime?        @map("claimed_at") @db.Timestamptz(3)
+  startedAt       DateTime?        @map("started_at") @db.Timestamptz(3)
+  finishedAt      DateTime?        @map("finished_at") @db.Timestamptz(3)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user        User             @relation("ContentJobSubject", fields: [userId], references: [id], onDelete: Restrict)
+  requestedBy User             @relation("ContentJobRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  undoOf      ContentJob?      @relation("ContentJobUndo", fields: [undoOfId], references: [id], onDelete: Restrict)
+  undoneBy    ContentJob?      @relation("ContentJobUndo")
+  items       ContentJobItem[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@map("content_jobs")
+}
+
+model ContentJobItem {
+  jobId      String               @map("job_id") @db.Uuid
+  targetType String               @map("target_type") @db.VarChar(10)
+  targetId   String               @map("target_id") @db.Uuid
+  fromStatus String?              @map("from_status") @db.VarChar(20)
+  toStatus   String?              @map("to_status") @db.VarChar(20)
+  result     ContentJobItemResult
+  detail     String?              @db.VarChar(60)
+  createdAt  DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  job ContentJob @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@id([jobId, targetType, targetId])
+  @@map("content_job_items")
+}

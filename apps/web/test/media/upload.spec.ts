@@ -27,7 +27,7 @@ test("media upload/complete retry, ordered publication and failed publish retain
   const {handlers}=await api(page);const keys:string[]=[];let uploads=0,completes=0,puts=0,publishes=0;const bodies:any[]=[];
   handlers.set("media.uploads.create",async r=>{
     keys.push(r.request().headers()["idempotency-key"]);uploads++;
-    const id=uploads<=2?ids[0]:ids[1];
+    const id=uploads===1?ids[0]:ids[1];
     await r.fulfill({status:201,json:{data:{mediaId:id,upload:{method:"PUT",url:`https://storage.test/${id}`,headers:{"Content-Type":"image/png"},expiresAt:"2030-01-01T00:00:00.000Z"}}}});
   });
   await page.route("https://storage.test/**",async r=>{puts++;if(puts===1)await r.abort();else await r.fulfill({status:200});});
@@ -44,7 +44,7 @@ test("media upload/complete retry, ordered publication and failed publish retain
   await expect(page.locator("main").getByRole("alert")).toContainText("İstek tamamlanamadı");
   await page.getByRole("button",{name:"Yüklemeyi tekrar dene"}).click();
   await expect(page.getByText("Görsel onaylandı.",{exact:true})).toBeVisible();
-  expect(uploads).toBe(2);expect(puts).toBe(2);expect(keys[0]).toBe(keys[1]);
+  expect(uploads).toBe(1);expect(puts).toBe(2);expect(keys).toHaveLength(1);
   await page.getByLabel("Görsel ekle",{exact:true}).setInputFiles({...file,name:"ikinci.png"});
   await expect(page.getByText("Görsel onaylandı.",{exact:true})).toHaveCount(2);
   await page.getByRole("button",{name:"2. görseli önceye taşı"}).click();
@@ -60,6 +60,26 @@ test("media upload/complete retry, ordered publication and failed publish retain
   }
   await expect(page).toHaveURL(/\/karar\//);
   expect(bodies.map(b=>b.mediaIds)).toEqual([[ids[1],ids[0]],[ids[1],ids[0]]]);
+});
+
+test("expired upload URL renews with the same key before retrying storage",async({page})=>{
+  const {handlers}=await api(page);const keys:string[]=[];const putUrls:string[]=[];
+  handlers.set("media.uploads.create",async r=>{
+    keys.push(r.request().headers()["idempotency-key"]);
+    await r.fulfill({status:201,json:{data:{mediaId:ids[0],upload:{method:"PUT",url:`https://storage.test/ticket-${keys.length}`,headers:{"Content-Type":"image/png"},expiresAt:keys.length===1?"2020-01-01T00:00:00.000Z":"2030-01-01T00:00:00.000Z"}}}});
+  });
+  await page.route("https://storage.test/**",async r=>{
+    putUrls.push(r.request().url());
+    await r.fulfill({status:putUrls.length===1?403:200});
+  });
+  handlers.set("media.complete",r=>r.fulfill({status:202,json:{data:view(ids[0],"APPROVED")}}));
+  await page.goto("/olustur");
+  await page.getByLabel("Görsel ekle",{exact:true}).setInputFiles(file);
+  await expect(page.getByRole("alert").filter({hasText:"Dosya yüklenemedi"})).toBeVisible();
+  await page.getByRole("button",{name:"Yüklemeyi tekrar dene"}).click();
+  await expect(page.getByText("Görsel onaylandı.",{exact:true})).toBeVisible();
+  expect(keys).toHaveLength(2);expect(keys[0]).toBe(keys[1]);
+  expect(putUrls).toEqual(["https://storage.test/ticket-1","https://storage.test/ticket-2"]);
 });
 
 test("media validation, private pending/quarantine, status retry and rejection",async({page})=>{

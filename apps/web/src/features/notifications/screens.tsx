@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import surfaces from "../../components/content-surfaces.module.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ErrorMessage, Loading } from "../../components/fields";
@@ -301,7 +302,7 @@ export function NotificationsScreen() {
   }
 
   return (
-    <div className="screen-stack">
+    <div className={`screen-stack ${surfaces.screen}`}>
       <section className="notification-heading">
         <div>
           <span className="eyebrow">BİLDİRİMLER</span>
@@ -332,6 +333,7 @@ export function NotificationsScreen() {
         <section className="kv-card kv-state">
           <h2>{unreadOnly ? "Okunmamış bildirimin yok." : "Henüz bildirimin yok."}</h2>
           <p className="kv-muted">Yeni hareketler olduğunda burada görünecek.</p>
+          <Link href="/kesfet" className="kv-button kv-button--secondary">Konuları keşfet</Link>
         </section>
       ) : null}
 

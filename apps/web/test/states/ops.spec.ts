@@ -17,6 +17,9 @@ test("operations: error retry, unknown data, keyboard table and permission failu
   await expect(panel.getByRole("alert")).toHaveCount(0);
   await expect(panel.getByRole("article").filter({ has: page.getByRole("heading", { name: "Veritabanı", exact: true }) })).toContainText("Gecikme: Ölçüm yok");
   await expect(panel.getByRole("article").filter({ has: page.getByRole("heading", { name: "API hata oranı", exact: true }) })).toContainText("Ölçüm yok");
+  const security = panel.getByRole("article").filter({ has: page.getByRole("heading", { name: "Güvenlik olayları (bütün sunucular)", exact: true }) });
+  await expect(security).toContainText("Şu an kilitli giriş: 1 e-posta · 0 IP");
+  await expect(security.getByRole("row", { name: /user\.sanction apply 3/ })).toBeVisible();
   const table = panel.getByRole("region", { name: "İş kuyrukları tablosu" });
   await table.focus();
   await expect(table).toBeFocused();
@@ -42,4 +45,35 @@ test("ADMIN dashboard never requests SUPER_ADMIN operations", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Günlük oy hareketi", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Operasyon durumu", exact: true })).toHaveCount(0);
   expect(requests).toBe(0);
+});
+
+test("operations: older API responses keep the panel usable without new security fields", async ({ page }) => {
+  const mock = await api(page);
+  const body = sample("admin.ops.status");
+  delete body.data.security.lockedLogins;
+  delete body.data.security.adminActions24h;
+  mock.handlers.set("admin.ops.status", r => r.fulfill({ json: body }));
+  await page.goto("/admin");
+  const panel = page.getByRole("region", { name: "Operasyon durumu", exact: true });
+  const security = panel.getByRole("article").filter({ hasText: "Güvenlik olayları (bütün sunucular)" });
+  await expect(security).toContainText("Şu an kilitli giriş: Ölçüm yok");
+  await expect(security).toContainText("Kritik yönetici işlemleri: Ölçüm yok");
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+  await expect(panel.getByRole("region", { name: "İş kuyrukları tablosu" })).toBeVisible();
+  expect(mock.unexpected).toEqual([]);
+});
+
+test("operations: security events without DB data say unknown, not zero", async ({ page }) => {
+  const mock = await api(page);
+  const body = sample("admin.ops.status");
+  body.data.security.lockedLogins = null;
+  body.data.security.adminActions24h = null;
+  mock.handlers.set("admin.ops.status", r => r.fulfill({ json: body }));
+  await page.goto("/admin");
+  const security = page.getByRole("region", { name: "Operasyon durumu", exact: true }).getByRole("article")
+    .filter({ has: page.getByRole("heading", { name: "Güvenlik olayları (bütün sunucular)", exact: true }) });
+  await expect(security).toContainText("Şu an kilitli giriş: Ölçüm yok");
+  await expect(security).toContainText("Kritik yönetici işlemleri: Ölçüm yok");
+  await expect(security.getByRole("table")).toHaveCount(0);
+  expect(mock.unexpected).toEqual([]);
 });

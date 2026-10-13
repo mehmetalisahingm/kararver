@@ -51,6 +51,8 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   // #184 topluluk sahipliği: yönetici atama/bırakma ve BAN'da otomatik bırakma (aktör = yaptırımı uygulayan yönetici); sahibin kendi bırakması ayrı.
   "community.owner.assign": ["assign", "release", "auto_release"],
   "community.owner.release": ["release"],
+  // #181 toplu içerik işi: iş düzeyi kayıt; içerik başına kayıt moderation.*.apply'dadır.
+  "user.content.bulk": ["request", "undo", "cancel"],
   // #181 KVKK: talep ve teslim yönetici işlemidir (gerekçeli); indirme kullanıcının kendi işlemidir.
   "privacy.export.manage": ["request", "deliver"],
   "privacy.export.download": ["download"],
@@ -105,6 +107,7 @@ export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditActi
   "user.sessions.manage",
   "user.password.reset",
   "community.owner.assign",
+  "user.content.bulk",
   "privacy.export.manage",
   "user.sanction",
   "user.sanction.lift",

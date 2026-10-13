@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { demoModeViolation } from "./src/lib/demo-mode.ts";
 
 /**
  * KV-49 (#51) güvenlik başlıkları. Hiçbir kaynağı kısıtlamayan, kırılma riski olmayan set: çerçeveleme yasağı
@@ -15,6 +16,9 @@ const SECURITY_HEADERS = [
 
 const config: NextConfig = {
   poweredByHeader: false,
+  // #187: veri kipi her build'de koda gömülür (tanımsızsa api). Gömülmezse demo dalları ölü koda dönüşmez ve
+  // demo hesapları/örnek veriler staging/production JS'ine girer (scripts/scan-demo-strings.mjs).
+  env: { NEXT_PUBLIC_KV_DATA_MODE: process.env.NEXT_PUBLIC_KV_DATA_MODE || "api" },
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
@@ -32,10 +36,10 @@ const config: NextConfig = {
   },
 };
 
-// KV-06: demo verisi staging/production'a taşınmaz. `next build` her zaman NODE_ENV=production verdiği için
-// ölçüt APP_ENV'dir; APP_ENV yok/local/preview iken demo build'e izin verilir.
+// KV-06 / #187: demo verisi staging/production'a taşınmaz. `next build` her zaman NODE_ENV=production verdiği için
+// ölçüt APP_ENV'dir: demo yalnız APP_ENV=local/preview ile açılır, Vercel production dağıtımında hiç açılmaz.
 export default (): NextConfig => {
-  if (process.env.NEXT_PUBLIC_KV_DATA_MODE === "demo" && ["production", "staging"].includes(process.env.APP_ENV ?? ""))
-    throw new Error(`NEXT_PUBLIC_KV_DATA_MODE=demo APP_ENV=${process.env.APP_ENV} ortamında kullanılamaz (KV-06)`);
+  const violation = demoModeViolation(process.env);
+  if (violation) throw new Error(violation);
   return config;
 };
