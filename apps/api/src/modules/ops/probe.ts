@@ -33,6 +33,10 @@ export const CRITICAL_ADMIN_ACTIONS = [
   "user.sessions.manage",
   "user.password.reset",
   "user.content.bulk",
+  // #181 / #184 (#228, #222): geri alınamaz anonimleştirme, yasal saklama ve topluluk sahibi ataması.
+  "user.anonymize",
+  "user.legalHold.manage",
+  "community.owner.assign",
   "privacy.export.manage",
   "settings.update",
   "emergency.update",

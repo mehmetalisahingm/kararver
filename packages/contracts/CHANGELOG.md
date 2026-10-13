@@ -14,7 +14,7 @@ Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahi
 Kırıcı değişiklik yok: yanıta alan eklendi (minör). Sağlayıcı ve tüketici aynı PR'da güncellendi.
 
 - **Eklendi:** `OpsStatus.security.lockedLogins` (`{ emails, ips }` | null): bütün API süreçlerinde şu an giriş kilidindeki e-posta ve IP anahtarı sayısı (KV-19 sayaçlarından). Ham e-posta/IP dönmez.
-- **Eklendi:** `OpsStatus.security.adminActions24h` (`[{ action, operation, count }]` | null): son 24 saatteki kritik yönetici işlemleri (rol, yaptırım, oturum iptali, parola sıfırlama, KVKK dışa aktarma, ayar, acil durum, puan, toplu içerik), audit kayıtlarından. Okunamazsa `null`, 0 değil.
+- **Eklendi:** `OpsStatus.security.adminActions24h` (`[{ action, operation, count }]` | null): son 24 saatteki kritik yönetici işlemleri (rol, yaptırım, oturum iptali, parola sıfırlama, toplu içerik, anonimleştirme, yasal saklama, topluluk sahibi, KVKK dışa aktarma, ayar, acil durum, puan), audit kayıtlarından. Okunamazsa `null`, 0 değil.
 
 ## 1.24.0 — 2026-10-12 (Mert, #181 kullanıcı içeriğinin toplu gizlenmesi/kaldırılması)
 
