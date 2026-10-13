@@ -91,10 +91,15 @@ async function checkWeb() {
   const { res, text, error } = await get(`${webBase}/`);
   if (error) return report("FAIL", "web GET /", `istek başarısız: ${error.message}`);
   checkHeaders("web GET /", `${webBase}/`, res);
+  if (res.status === 500) {
+    // #187: demo build staging/production'da başlatılırsa Next her isteğe 500 döner (instrumentation.ts).
+    return report("FAIL", "web GET /", "HTTP 500 — web loglarında event=demo_mode_forbidden varsa yanlış (demo) build deploy edilmiş");
+  }
   if (res.status !== 200) return report("FAIL", "web GET /", `HTTP ${res.status}`);
   report("PASS", "web GET /", "200");
-  if (/demo-banner|demo-controls/.test(text)) report("FAIL", "web demo modu kapalı", "HTML'de demo afişi var");
-  else report("PASS", "web demo modu kapalı", "HTML'de demo afişi yok");
+  // Demo modu RSC payload'ında ProductProvider prop'u olarak görünür ("demo":true); eski demo sınıfları da aranır.
+  if (/\\"demo\\":true|"demo":true|demo-banner|demo-controls/.test(text)) report("FAIL", "web demo modu kapalı", "sayfa demo modunda (\"demo\":true)");
+  else report("PASS", "web demo modu kapalı", "sayfa api modunda");
   // Bugün ne web ne API bu başlıkları vermiyor; --strict ile zorunlu olur.
   const recommended = {
     "content-security-policy": "Content-Security-Policy",

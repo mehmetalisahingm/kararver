@@ -50,9 +50,11 @@
 | API ayakta mı | Railway `/health` kapısı (deploy) ve `staging-monitor` (30 dakikada bir) |
 | Worker çalışıyor mu | `/health` → `worker.status = ready`, `ageMs < 120 000` (heartbeat 10 sn'de bir) |
 | Çalışan sürüm | `/health` → `release.sha` |
+| Web ayakta ve doğru build mi | `staging-monitor` web ana sayfasını (`STAGING_WEB_URL`, varsayılan Vercel staging) yönlendirmeleri izleyerek açar: 200 dışı yanıt ya da sayfada `"demo":true` (demo build, #187) alarmdır. API sağlıklıyken web çökmüşse ya da yanlış build yayındaysa da alarm çıkar. |
 | Staging güncel mi | `staging-monitor` iki durumda alarm verir: (1) CI'ı yeşil son main commit'i 60 dakikadan uzun süredir staging'de değilse ve arada API/worker'ı etkileyen dosya varsa (web, `docs/`, `.github/` ve `.md` sayılmaz; Vercel bunları ayrı yayınlar); (2) main CI 24 saattir kırmızıysa. Railway yalnız yeşil commit'i deploy eder; 9–12 Ekim'de main 3 gün kırmızı kaldı, staging API güncellenmedi ama Vercel her merge'ü aldı (yeni web + eski API). |
 | Alarm | `.github/workflows/staging-monitor.yml`: sorun olunca `staging-alarm` etiketli tek bir issue açar ya da yorum ekler; düzelince kapatır. Bildirim, GitHub issue bildirimleriyle sorumluya gider. |
 | Uygulama hataları | Railway logları (`railway logs --service api`): `level=50` veya `[ERROR]`, `mail gönderilemedi`, `hız sınırı aşıldı` (şüpheli işlem) |
+| Yanlış web build'i (#187) | Vercel web loglarında `"event":"demo_mode_forbidden"` görürseniz **yanlış build deploy edilmiştir**: demo modunda (`NEXT_PUBLIC_KV_DATA_MODE=demo`) alınmış bir build staging/production'da çalışıyor. Web her isteğe 500 döner, smoke `web GET /` FAIL verir. Süreç bilerek kapanmaz. Müdahale: önceki deploy'a rollback, sonra web ortamında `NEXT_PUBLIC_KV_DATA_MODE=api` ve `APP_ENV=staging/production` ile yeniden build. Normalde build koruması bu build'i baştan reddeder. |
 | İş kuyruğu | Worker logları: `trends.refresh`, `snapshots.daily`, `events.dispatch`, `featured.activate`, `polls.expire`, `sanctions.expire`; `media.process` hataları (`MODERATION_TIMEOUT`, `MODEL_ERROR`) |
 | Model | `MODERATION_TIMEOUT` oranı %1'i aşarsa eşzamanlılık düşürülür (KV-47 Medya) |
 
@@ -67,8 +69,8 @@
 | `worker` | Dosya heartbeat'i (aynı serviste) ya da worker'ın son aldığı pg-boss işi (ayrı serviste). Dakikalık cron olduğu için iz sürekli tazelenir. | ≤ 3 dk `ok`, ≤ 10 dk `degraded`, daha eski `down`; iz yoksa `unknown` |
 | `queue` | `pgboss.queue` + `pgboss.job`: bekleyen, çalışan, son 24 saatte başarısız/tamamlanan, en eski bekleyen. Ayrıca `content.jobs`: toplu içerik işleri (#181), kendi tablosundan (`content_jobs`); bekleme işin son durum değişikliğinden ölçülür, sahiplenmesi 5 dakikayı aşan çalışan iş de bekliyor sayılır; tablo yoksa satır görünmez | 5 dakikadan eski bekleyen iş ya da 24 saatte başarısız iş varsa `degraded`; şema okunamazsa `unknown` |
 | `http` | Süreç içi son 15 dk: istek, 5xx, oran, P50/P95/P99, en yavaş 5 route | Ölçüm yoksa oran ve gecikme `null` |
-| `security` | Süreç içi son 15 dk: hız sınırı retleri ve giriş kilitleri, kural adına göre | — |
-| `backup` | Zamanlanmış yedek henüz yok, bu yüzden `lastBackupAt: null` ve `unknown`. Son restore tatbikatı: staging 2026-10-05, RTO 315 sn (#50). | — |
+| `security` | Süreç içi son 15 dk: hız sınırı retleri ve giriş kilitleri, kural adına göre. **Bütün sunucular (DB):** `lockedLogins`, şu an kilitli e-posta/IP anahtarı sayısı (KV-19 sayaçları, aynı eşik); `adminActions24h`, son 24 saatteki kritik yönetici işlemleri (rol, yaptırım, oturum iptali, parola sıfırlama, toplu içerik, KVKK dışa aktarma, ayar, acil durum, puan) audit'ten. Ham e-posta/IP/anahtar özeti dönmez. | DB okunamazsa `null` ("Ölçüm yok"), 0 değil. Eşik yok: olağandışı artış (toplu yaptırım, art arda rol değişikliği) panelde görünür, karar insanda |
+| `backup` | `db:backup` kaydı (`ops_backup_runs`, KV-48 "Yedek kaydı"). Son restore tatbikatı: staging 2026-10-05, RTO 315 sn (#50). | Son yedek ≤ 26 sa `ok`, ≤ 72 sa `degraded`, daha eski `down`; kayıt yoksa `unknown` |
 
 **Kurallar:**
 - Ölçülemeyen değer `unknown` ya da `null` döner; 0 ya da `ok` gösterilmez.

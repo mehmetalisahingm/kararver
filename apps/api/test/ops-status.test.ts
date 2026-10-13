@@ -11,7 +11,8 @@ import { DEFAULT_RATE_LIMIT_SETTINGS } from "../src/modules/rate-limit/policy.ts
 import { ErrorBody, OpsStatus } from "@kararver/contracts";
 import { PgBoss } from "pg-boss";
 import { createPrismaOpsProbe } from "../src/modules/ops/probe.ts";
-import { buildOpsStatus, classifyQueues, classifyWorker, RESTORE_DRILL } from "../src/modules/ops/status.ts";
+import { buildOpsStatus, classifyBackup, classifyQueues, classifyWorker, RESTORE_DRILL } from "../src/modules/ops/status.ts";
+import { recordBackupRun, type Manifest } from "../../../packages/db/ops/backup.ts";
 import { createOpsTelemetry, percentile } from "../src/modules/ops/telemetry.ts";
 import { createHarness, memoryBackend, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 import { rbacSeeds } from "./support/rbac-probe.ts";
@@ -70,6 +71,11 @@ describe("operasyon telemetrisi (birim)", () => {
     assert.equal(classifyQueues([q]), "ok");
     assert.equal(classifyQueues([{ ...q, waiting: 3, oldestWaitingSeconds: 900 }]), "degraded");
     assert.equal(classifyQueues([{ ...q, failed24h: 1 }]), "degraded");
+    const h = (n: number) => ago(n * 3600);
+    assert.equal(classifyBackup(null, now), "unknown");
+    assert.equal(classifyBackup(h(25), now), "ok");
+    assert.equal(classifyBackup(h(30), now), "degraded");
+    assert.equal(classifyBackup(h(80), now), "down");
   });
 
   test("yoklama hata verirse bileşen down/unknown; yanıt yine sözleşmeye uyar", async () => {
@@ -77,7 +83,8 @@ describe("operasyon telemetrisi (birim)", () => {
       throw new Error("bağlantı yok: postgres://gizli@host/db");
     };
     const status = await buildOpsStatus({
-      probe: { database: fail, workerLastSeen: fail, queues: fail },
+      probe: { database: fail, workerLastSeen: fail, queues: fail, lastBackup: fail, securitySignals: fail },
+      loginLimits: async () => ({ email: 5, ip: 20 }),
       telemetry: createOpsTelemetry(),
       env: "test",
       startedAt: new Date(),
@@ -86,6 +93,8 @@ describe("operasyon telemetrisi (birim)", () => {
     OpsStatus.parse(status);
     assert.equal(status.components.database.status, "down");
     assert.equal(status.components.queue.status, "unknown");
+    assert.deepEqual([status.backup.status, status.backup.lastBackupAt], ["unknown", null]);
+    assert.deepEqual([status.security.lockedLogins, status.security.adminActions24h], [null, null]);
     assert.ok(!JSON.stringify(status).includes("postgres://"), "hata ayrıntısı/bağlantı adresi sızmaz");
   });
 });
@@ -148,6 +157,7 @@ describe("admin.ops.status (memory)", () => {
     assert.deepEqual(data.components.database, { status: "unknown", latencyMs: null, version: null });
     assert.equal(data.components.queue.status, "unknown");
     assert.deepEqual(data.components.queue.queues, []);
+    assert.deepEqual([data.security.lockedLogins, data.security.adminActions24h], [null, null], "DB yoklaması yoksa bilinmiyor (null), 0 değil");
     assert.deepEqual(data.backup, { status: "unknown", lastBackupAt: null, restoreDrill: { ...RESTORE_DRILL } });
     assert.equal(data.release.env, "test");
   });
@@ -245,6 +255,82 @@ describe("operasyon yoklaması (postgres + gerçek pg-boss)", { skip: backend ? 
     const without = await createPrismaOpsProbe(h.prisma!, { schema, contentJobsTable: "public.yok_content_jobs" }).queues();
     assert.ok(!without.some((q) => q.name === "content.jobs"));
     assert.throws(() => createPrismaOpsProbe(h.prisma!, { contentJobsTable: "content_jobs; DROP TABLE users" }), /geçersiz tablo/);
+  });
+
+  test("son yedek: db:backup kaydı panelde; yanlış hedef etiketi ve sha reddedilir", async () => {
+    const url = resolveTestDatabaseUrl(path.resolve(import.meta.dirname, "../../.."))!;
+    const probe = createPrismaOpsProbe(h.prisma!, { schema });
+    const status = (at: Date) => buildOpsStatus({ probe, telemetry: createOpsTelemetry(), env: "test", startedAt: at, now: () => at });
+    const manifest = { sizeBytes: 4096, sha256: "a".repeat(64), dumpMs: 1200, serverVersion: "17.10 (EDB)" } as Manifest;
+    const finished = new Date(Date.now() + 365 * 86_400_000); // diğer testlerin kayıtlarından yeni olsun
+    await recordBackupRun(url, manifest, "local", finished);
+    try {
+      const fresh = await status(new Date(finished.getTime() + 3_600_000));
+      OpsStatus.parse(fresh);
+      assert.deepEqual([fresh.backup.status, fresh.backup.lastBackupAt], ["ok", finished.toISOString()]);
+      assert.equal((await status(new Date(finished.getTime() + 100 * 3_600_000))).backup.status, "down");
+      const row = await h.prisma!.opsBackupRun.findFirst({ where: { finishedAt: finished } });
+      assert.deepEqual([row?.destination, row?.sizeBytes, row?.serverVersion], ["local", 4096n, "17.10"]);
+      await assert.rejects(recordBackupRun(url, manifest, "s3://bucket/key", finished), /geçersiz yedek hedefi/);
+      // DB CHECK'i de korur (araç dışından yazılsa bile): adres ve geçersiz sha kabul edilmez.
+      const insert = (destination: string, sha: string) =>
+        h.prisma!.$executeRaw`INSERT INTO ops_backup_runs (finished_at, destination, size_bytes, sha256, duration_ms, server_version)
+          VALUES (now(), ${destination}, 1, ${sha}, 1, '17')`;
+      await assert.rejects(insert("https://x", "a".repeat(64)));
+      await assert.rejects(insert("local", "xyz"));
+    } finally {
+      await h.prisma!.opsBackupRun.deleteMany({ where: { finishedAt: finished } });
+    }
+  });
+
+  test("güvenlik sinyalleri bütün süreçlerden (DB): giriş kilidi ve 24 saatlik kritik yönetici işlemleri; ham veri yok", async () => {
+    const inject = (method: "POST", url: string, body: unknown, cookie?: string, ip?: string) =>
+      h.app.inject({
+        method,
+        url: `/v1${url}`,
+        remoteAddress: ip,
+        headers: { origin: WEB_ORIGIN, "content-type": "application/json", "idempotency-key": randomUUID(), ...(cookie ? { cookie } : {}) },
+        payload: JSON.stringify(body),
+      });
+    const signUp = async (label: string) => {
+      const id = randomUUID().replaceAll("-", "").slice(0, 10);
+      const account = { email: `sig_${label}_${id}@example.test`, username: `sig_${label}_${id}`.slice(0, 30), displayName: "Sig", password: "guclu-bir-sifre-1" };
+      const mailCount = h.mails.length;
+      assert.equal((await inject("POST", "/auth/register", account)).statusCode, 202);
+      assert.equal((await inject("POST", "/auth/email/verify", { token: tokenFrom(h.mails[mailCount]) })).statusCode, 200);
+      const login = await inject("POST", "/auth/login", { email: account.email, password: account.password });
+      return { cookie: sessionCookie(login.headers["set-cookie"] as string), id: login.json().data.id as string, email: account.email };
+    };
+    // Sayaç bitişi ve audit zamanı uygulama saatinden, sorgu penceresi DB saatinden (now()); production'da ikisi aynıdır.
+    h.clock.now = new Date();
+    const limits = { email: 3, ip: 1000 };
+    Object.assign(h.rateLimitSettings, { loginFailuresPerEmail: limits.email });
+    const probe = createPrismaOpsProbe(h.prisma!, { schema });
+    const read = async () => {
+      const s = await buildOpsStatus({ probe, telemetry: createOpsTelemetry(), env: "test", startedAt: new Date(), now: () => new Date(), loginLimits: async () => limits });
+      OpsStatus.parse(s);
+      return s;
+    };
+    const before = (await read()).security;
+    assert.ok(before.lockedLogins && before.adminActions24h, "DB okunabiliyor: null değil");
+    const count = (list: Array<{ action: string; operation: string; count: number }> | null, action: string, operation: string) =>
+      list!.find((a) => a.action === action && a.operation === operation)?.count ?? 0;
+
+    const root = await signUp("root");
+    const target = await signUp("target");
+    await rbacSeeds(h).setRole(root.id, "SUPER_ADMIN", null);
+    // Hedef hesap için 3 yanlış parola → e-posta anahtarı kilitlenir (KV-19 login.email).
+    for (let i = 0; i < limits.email; i++) await inject("POST", "/auth/login", { email: target.email, password: "yanlis-parola-xx" }, undefined, `198.51.100.${40 + i}`);
+    const sanction = await inject("POST", `/admin/users/${target.id}/sanctions`, { type: "WARNING", reason: "Güvenlik sinyali testi" }, root.cookie);
+    assert.equal(sanction.statusCode, 201, sanction.body);
+
+    const after = (await read()).security;
+    assert.equal(after.lockedLogins!.emails, before.lockedLogins!.emails + 1);
+    assert.equal(count(after.adminActions24h, "user.sanction", "apply"), count(before.adminActions24h, "user.sanction", "apply") + 1);
+    // Kritik olmayan işlemler listede yok; yanıt ham e-posta, IP ya da anahtar özeti içermez.
+    assert.ok(after.adminActions24h!.every((a) => a.action !== "revision.read" && a.action !== "category.manage"));
+    const body = JSON.stringify(after);
+    for (const leak of [target.email, "198.51.100.", "login.email:"]) assert.ok(!body.includes(leak), leak);
   });
 
   test("kuyruk sayıları, bekleyen iş ve worker izi gerçek pg-boss tablolarından", async () => {

@@ -9,6 +9,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.25.0 — 2026-10-13 (Faruk, operasyon merkezi güvenlik sinyalleri, #186)
+
+Kırıcı değişiklik yok: yanıta alan eklendi (minör). Sağlayıcı ve tüketici aynı PR'da güncellendi.
+
+- **Eklendi:** `OpsStatus.security.lockedLogins` (`{ emails, ips }` | null): bütün API süreçlerinde şu an giriş kilidindeki e-posta ve IP anahtarı sayısı (KV-19 sayaçlarından). Ham e-posta/IP dönmez.
+- **Eklendi:** `OpsStatus.security.adminActions24h` (`[{ action, operation, count }]` | null): son 24 saatteki kritik yönetici işlemleri (rol, yaptırım, oturum iptali, parola sıfırlama, toplu içerik, anonimleştirme, yasal saklama, topluluk sahibi, KVKK dışa aktarma, ayar, acil durum, puan), audit kayıtlarından. Okunamazsa `null`, 0 değil.
+- **Uyumluluk:** yeni güvenlik alanlarını henüz göndermeyen API yanıtları `null` olarak okunur; mevcut operasyon ölçümleri kullanılabilir kalır. Yeni alanlar gönderildiğinde sıkı doğrulama korunur.
+
 ## 1.24.0 — 2026-10-12 (Mert, #181 kullanıcı içeriğinin toplu gizlenmesi/kaldırılması)
 
 Kırıcı değişiklik yok: yeni endpoint ve yetki.
