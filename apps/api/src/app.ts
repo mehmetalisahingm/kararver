@@ -225,10 +225,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
+  const rateLimitSettings =
+    deps.rateLimitSettings ?? (deps.settingsService ? () => deps.settingsService!.rateLimitSettings() : async () => DEFAULT_RATE_LIMIT_SETTINGS);
   const limiter = deps.rateLimitStore
     ? createRateLimiter({
         store: deps.rateLimitStore,
-        settings: deps.rateLimitSettings ?? (deps.settingsService ? () => deps.settingsService!.rateLimitSettings() : async () => DEFAULT_RATE_LIMIT_SETTINGS),
+        settings: rateLimitSettings,
         newAccountDays: async () => (await pollSettings()).newAccountPeriodDays,
         pepper: config.authTokenPepper,
         now,
@@ -371,7 +373,17 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
-  registerOpsRoutes(route, { probe: deps.opsProbe, telemetry, env: config.appEnv, startedAt, now });
+  registerOpsRoutes(route, {
+    probe: deps.opsProbe,
+    telemetry,
+    env: config.appEnv,
+    startedAt,
+    now,
+    loginLimits: async () => {
+      const s = await rateLimitSettings();
+      return { email: s.loginFailuresPerEmail, ip: s.loginFailuresPerIp };
+    },
+  });
   if (deps.commentStore) {
     registerCommentRoutes(route, {
       store: deps.commentStore,

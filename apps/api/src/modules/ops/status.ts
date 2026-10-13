@@ -1,7 +1,7 @@
 // KV-186 (#186) operasyon durumu: yoklama + süreç telemetrisinden `OpsStatus` üretir. Kural: ölçülemeyen şey
 // `unknown`/`null` döner, asla 0 ya da "ok" değil (fail-safe gösterim). Eşikler KV-49 izleme tablosuyla uyumludur.
 import fs from "node:fs";
-import type { OpsProbe, QueueRow } from "./probe.ts";
+import type { LoginLimits, OpsProbe, QueueRow } from "./probe.ts";
 import type { HttpSnapshot, OpsTelemetry, SecuritySnapshot } from "./telemetry.ts";
 
 export type Health = "ok" | "degraded" | "down" | "unknown";
@@ -79,15 +79,18 @@ export type OpsStatusDeps = {
   env: string;
   startedAt: Date;
   now: () => Date;
+  /** KV-19 giriş sınırları (`limits.loginFailuresPer*`); kilit sayımı aynı eşiği kullanır. */
+  loginLimits?: () => Promise<LoginLimits>;
 };
 
 export async function buildOpsStatus(deps: OpsStatusDeps) {
   const { probe, telemetry } = deps;
-  const [database, workerSeen, queues, lastBackup] = await Promise.all([
+  const [database, workerSeen, queues, lastBackup, signals] = await Promise.all([
     settle(probe ? () => probe.database() : undefined),
     settle(probe ? () => probe.workerLastSeen() : undefined),
     settle(probe ? () => probe.queues() : undefined),
     settle(probe ? () => probe.lastBackup() : undefined),
+    settle(probe && deps.loginLimits ? async () => probe.securitySignals(await deps.loginLimits!()) : undefined),
   ]);
   const now = deps.now();
   // İki iz varsa yenisi: dosya heartbeat'i (aynı servis) ya da worker'ın aldığı son iş (ayrı servis).
@@ -110,7 +113,11 @@ export async function buildOpsStatus(deps: OpsStatusDeps) {
       queue: queues.ok ? { status: classifyQueues(queues.value), queues: queues.value } : { status: "unknown" as Health, queues: [] },
     },
     http,
-    security,
+    security: {
+      ...security,
+      lockedLogins: signals.ok ? signals.value.lockedLogins : null,
+      adminActions24h: signals.ok ? signals.value.adminActions24h : null,
+    },
     // Son yedek `db:backup` kaydından (ops_backup_runs); tatbikat kanıtı KV-48'den.
     backup: {
       status: lastBackup.ok ? classifyBackup(lastBackup.value, now) : ("unknown" as Health),
