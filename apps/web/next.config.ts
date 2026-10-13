@@ -16,6 +16,9 @@ const SECURITY_HEADERS = [
 
 const config: NextConfig = {
   poweredByHeader: false,
+  // #187: veri kipi her build'de koda gömülür (tanımsızsa api). Gömülmezse demo dalları ölü koda dönüşmez ve
+  // demo hesapları/örnek veriler staging/production JS'ine girer (scripts/scan-demo-strings.mjs).
+  env: { NEXT_PUBLIC_KV_DATA_MODE: process.env.NEXT_PUBLIC_KV_DATA_MODE || "api" },
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },

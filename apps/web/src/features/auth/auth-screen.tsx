@@ -28,7 +28,8 @@ export function AuthScreen({
   initialEmail?: string;
   onboarding?: boolean;
 }) {
-  const { client, demo, user, syncUser, notify, returnTo } = useProduct();
+  const { client, user, syncUser, notify, returnTo } = useProduct();
+  const demo = process.env.NEXT_PUBLIC_KV_DATA_MODE === "demo"; // #187: build sabiti, api modunda demo notu ve hesapları bundle'dan elenir
   const router = useRouter();
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");

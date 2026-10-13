@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiClient } from "../lib/api-client";
-import { DemoClient } from "../lib/demo-client";
+import type { DemoClient } from "../lib/demo-client";
 import { WelcomeEntry, WelcomeResume } from "../features/onboarding/welcome-entry";
 import { hasWelcomeSeen } from "../lib/welcome-draft";
 import { emptyDraft, safeReturnTo } from "../lib/model";
@@ -55,14 +55,17 @@ function NavIcon({ kind }: { kind: NavigationIcon }) {
   </svg>;
 }
 
-export function ProductProvider({
-  children,
-  demo,
-}: {
-  children: ReactNode;
-  demo: boolean;
-}) {
-  const [client] = useState<ProductClient>(() => demo ? new DemoClient() : new ApiClient(process.env.NEXT_PUBLIC_API_URL ?? ""));
+export function ProductProvider({ children }: { children: ReactNode }) {
+  // #187: build sabiti; api modu build'inde demo dalları ölü koddur ve bundle'dan elenir. DemoClient yalnız demo
+  // dalında yüklenir: statik import kullanılmasa da modülü (demo hesapları, örnek anketler) bundle'da tutardı.
+  const demo = process.env.NEXT_PUBLIC_KV_DATA_MODE === "demo";
+  const [client] = useState<ProductClient>(() => {
+    if (process.env.NEXT_PUBLIC_KV_DATA_MODE === "demo") {
+      const { DemoClient } = require("../lib/demo-client") as typeof import("../lib/demo-client");
+      return new DemoClient();
+    }
+    return new ApiClient(process.env.NEXT_PUBLIC_API_URL ?? "");
+  });
   // Demo forms also wait for hydration so early input cannot be discarded.
   const [sessionReady, setSessionReady] = useState(false);
   const [welcomeSeen, setWelcomeSeen] = useState<boolean | null>(null);
@@ -304,7 +307,7 @@ export function ProductProvider({
               <Link href="/karar/tatil-rotasi">Sıradaki tatil rotan</Link>
               <Link href="/karar/ilk-bisiklet">İlk bisikletini seçerken</Link>
             </div>}
-            {client instanceof DemoClient && (
+            {demo && (
               <details className="demo-controls">
                 <summary>Demo test araçları</summary>
                 <p>Sonraki istekte bir hata örneği gösterir.</p>
@@ -327,7 +330,7 @@ export function ProductProvider({
                   <button
                     key={operation}
                     onClick={() => {
-                      client.failNext(operation);
+                      (client as DemoClient).failNext(operation);
                       notify(
                         `${label} için sonraki istekte hata örneği etkin.`,
                       );
@@ -340,7 +343,7 @@ export function ProductProvider({
                 <button
                   className="kv-button kv-button--ghost"
                   onClick={() => {
-                    client.expireDiscoveryPages();
+                    (client as DemoClient).expireDiscoveryPages();
                     notify(
                       "Demo liste imleçleri sıfırlandı. Devamını yüklerken yenileme istenecek.",
                     );
