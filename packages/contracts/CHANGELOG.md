@@ -9,6 +9,13 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.25.0 — 2026-10-13 (Mert, #184 topluluk yönetim görünümü)
+
+Kırıcı değişiklik yok: yeni salt okuma endpoint'leri ve yetki.
+
+- **Eklendi:** `admin.communities.listAll` (kapalı topluluklar dahil, durum ve ad/slug süzgeci), `admin.communities.overview` (etki sayıları, 7 gün / 10 üye eşiğinin durumu, son 10 yönetim izi) ve `admin.communities.members` (arama ve rol süzgeçli yönetici üye listesi). ADMIN+, `community.admin.read`. Hepsi salt okuma; hassas alan yok.
+- Şemalar: `AdminCommunityRow`, `AdminCommunityOverview`, `CommunityThreshold`, `CommunityThresholdState`, `AdminCommunityStatus`.
+
 ## 1.23.0 — 2026-10-12 (Faruk, operasyon merkezi, #186)
 
 Kırıcı değişiklik yok: yeni endpoint, şema ve yetki (minör).

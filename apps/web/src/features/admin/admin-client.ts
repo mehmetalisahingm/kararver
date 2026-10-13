@@ -5,6 +5,10 @@ import type {
   AdminUserSummary, AdminUserDetail, AdminUserActivity, AdminSession, Sanction, Metrics, OpsStatus,
   AdminCategory,
   AdminCommentItem,
+  AdminCommunityOverview,
+  AdminCommunityRow,
+  CommunityMember,
+  CommunityThreshold,
   AdminPollItem,
   AuditEntry,
   Announcement,
@@ -37,6 +41,10 @@ export type Featured = ReturnType<typeof FeaturedPlacement.parse>;
 export type AnnouncementView = ReturnType<typeof Announcement.parse>;
 export type AuditRecord = ReturnType<typeof AuditEntry.parse>;
 export type SettingView = ReturnType<typeof Setting.parse>;
+export type CommunityRowView = ReturnType<typeof AdminCommunityRow.parse>;
+export type CommunityOverviewView = ReturnType<typeof AdminCommunityOverview.parse>;
+export type CommunityThresholdView = ReturnType<typeof CommunityThreshold.parse>;
+export type CommunityMemberView = ReturnType<typeof CommunityMember.parse>;
 export type DataExportView = ReturnType<typeof DataExport.parse>;
 export type UserSummary = ReturnType<typeof AdminUserSummary.parse>;
 export type UserDetail = ReturnType<typeof AdminUserDetail.parse>;
@@ -236,6 +244,16 @@ export class AdminClient {
   }
   async communities(cursor?: string, signal?: AbortSignal) {
     return page<Community>(await this.http.request("communities.list", { query: { cursor, limit: "20" }, signal }));
+  }
+  /** #184: kapalı topluluklar dahil liste; her satırda 7 gün / 10 üye eşiği özeti. */
+  async communitiesAll(filter: { status?: "ACTIVE" | "HIDDEN"; q?: string; cursor?: string }, signal?: AbortSignal) {
+    return page<CommunityRowView>(await this.http.request("admin.communities.listAll", { query: { status: filter.status, q: filter.q, cursor: filter.cursor, limit: "20" }, signal }));
+  }
+  async communityOverview(id: string, signal?: AbortSignal) {
+    return data<CommunityOverviewView>(await this.http.request("admin.communities.overview", { params: { id }, signal }));
+  }
+  async communityMembers(id: string, filter: { q?: string; role?: "MEMBER" | "MODERATOR"; cursor?: string }, signal?: AbortSignal) {
+    return page<CommunityMemberView>(await this.http.request("admin.communities.members", { params: { id }, query: { q: filter.q, role: filter.role, cursor: filter.cursor, limit: "20" }, signal }));
   }
   async createCommunity(input: CommunityInput, key: string) {
     return data<CommunityDetailView>(await this.http.request("admin.communities.create", { body: input, key }));

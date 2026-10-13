@@ -25,6 +25,67 @@ export const CommunityDetail = z.strictObject({
 /** Üye listesinde e-posta, gerçek kimlik, hesap durumu yok (V1_USER_FLOW). */
 export const CommunityMember = z.strictObject({ user: PublicUser, role: CommunityRole, joinedAt: Timestamp });
 
+/** #184 yönetici görünümü: kapalı topluluklar dahil; hassas alan yok (üye listesinde yalnız PublicUser). */
+export const AdminCommunityStatus = z.enum(["ACTIVE", "HIDDEN"]);
+
+/** #172 başvuruyla açılan topluluğun 7 gün / 10 üye eşiği. NOT_APPLICABLE: yönetici açtı, eşik uygulanmaz. */
+export const CommunityThresholdState = z.enum(["NOT_APPLICABLE", "IN_PROGRESS", "REACHED", "OVERDUE", "AUTO_CLOSED", "REOPENED"]);
+export const CommunityThreshold = z.strictObject({
+  state: CommunityThresholdState,
+  requestId: Id.nullable(),
+  requiredMembers: Count,
+  /** Canlı üye sayısı (önbellek sütunu değil, üyelik satırları). */
+  members: Count,
+  approvedAt: Timestamp.nullable(),
+  approvalDeadline: Timestamp.nullable(),
+  closedAt: Timestamp.nullable(),
+  /** IN_PROGRESS iken kalan gün (yukarı yuvarlanmış); diğer durumlarda null. */
+  daysLeft: Count.nullable(),
+});
+
+export const AdminCommunityRow = z.strictObject({
+  id: Id,
+  slug: z.string(),
+  name: z.string(),
+  status: AdminCommunityStatus,
+  membersVisibility: MembersVisibility,
+  members: Count,
+  moderators: Count,
+  polls: Count,
+  createdAt: Timestamp,
+  threshold: CommunityThreshold,
+});
+
+export const AdminCommunityOverview = z.strictObject({
+  ...AdminCommunityRow.shape,
+  description: z.string().nullable(),
+  createdBy: z.strictObject({ id: Id, username: z.string(), displayName: z.string() }),
+  /** Kapatma/açma ve silinen içerik dışındaki etkiyi önizlemek için sayılar (hepsi şu anki durum). */
+  impact: z.strictObject({
+    members: Count,
+    moderators: Count,
+    /** Silinmemiş (REMOVED olmayan) anketler. */
+    polls: Count,
+    activePolls: Count,
+    /** Hâlâ oy alan (ACTIVE ve süresi dolmamış) anketler. */
+    openPolls: Count,
+    /** ACTIVE anketlerdeki ACTIVE yorum toplamı. */
+    comments: Count,
+    openReports: Count,
+  }),
+  /** Son 10 yönetim izi (audit): kim, ne zaman, ne yaptı, gerekçe. Önce/sonra özeti dönmez. */
+  recentChanges: z.array(
+    z.strictObject({
+      at: Timestamp,
+      action: z.string(),
+      operation: z.string(),
+      reason: z.string().nullable(),
+      /** null: sistem (worker) işlemi. */
+      actor: z.strictObject({ id: Id, username: z.string(), displayName: z.string() }).nullable(),
+    }),
+  ),
+});
+
 const communities = { owner: "Mert", module: "communities" } as const;
 const requestsProvider = { owner: "Mehmet", module: "community-requests" } as const;
 const web = ["Ümit (web)", "Mert (topluluk UI, KV-31)"];
@@ -63,6 +124,38 @@ const CommunityRequestBody = z.strictObject({
 });
 
 export const communityEndpoints = [
+  defineEndpoint({
+    id: "admin.communities.listAll", domain: "communities", method: "GET", path: "/admin/communities",
+    summary: "Yönetici topluluk listesi (kapalı olanlar dahil)", auth: "admin", provider: communities, consumers: ["KararVer admin"],
+    unblocks: ["#184"], availability: { status: "ready" },
+    request: { query: z.strictObject({ ...CursorQuery.shape, status: AdminCommunityStatus.optional(), q: z.string().trim().min(2).max(60).optional() }) },
+    responses: { 200: pageOf(AdminCommunityRow) }, errors: ["INVALID_CURSOR"], idempotency: "none", cache: "private",
+    notes: [
+      "En yeni önce (createdAt, id). q ad veya slug içinde arar (en az 2 karakter). Cursor status ve q'ya bağlıdır; filtre değişince eski cursor 400 INVALID_CURSOR.",
+      "threshold her satırda özetlenir: yönetici açtıysa NOT_APPLICABLE, #172 başvurusuyla açıldıysa 7 gün / 10 üye eşiğinin durumu.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.communities.overview", domain: "communities", method: "GET", path: "/admin/communities/:id/overview",
+    summary: "Topluluk genel bakış: durum, etki sayıları, eşik ve son yönetim izi", auth: "admin", provider: communities, consumers: ["KararVer admin"],
+    unblocks: ["#184"], availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(AdminCommunityOverview) }, errors: [], idempotency: "none", cache: "private",
+    notes: [
+      "Kapatma/açma kararından önce etkiyi önizlemek içindir (salt okuma). Kapatılan topluluk public liste/sayfadan, katılımdan ve yeni anket açmaktan çıkar; üyelikler, anketler ve moderatör rolleri silinmez (KV-32).",
+      "threshold.state: IN_PROGRESS (süre sürüyor), REACHED (süre doldu, 10+ üye), OVERDUE (süre doldu, eşik altı: günlük worker kapanışı bekleniyor; elle HIDDEN yapılmış topluluğu worker kapatmaz), AUTO_CLOSED (worker kapattı), REOPENED (otomatik kapanıştan sonra yönetici yeniden açtı; yeniden otomatik kapanmaz).",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.communities.members", domain: "communities", method: "GET", path: "/admin/communities/:id/members",
+    summary: "Yönetici üye listesi (arama ve rol süzgeçli)", auth: "admin", provider: communities, consumers: ["KararVer admin"],
+    unblocks: ["#184"], availability: { status: "ready" },
+    request: { params: IdParams, query: z.strictObject({ ...CursorQuery.shape, q: z.string().trim().min(2).max(60).optional(), role: CommunityRole.optional() }) },
+    responses: { 200: pageOf(CommunityMember) }, errors: ["INVALID_CURSOR"], idempotency: "none", cache: "private",
+    notes: [
+      "membersVisibility yöneticiye uygulanmaz (kapalı topluluk dahil); ama yanıt public listeyle aynı şemadır: e-posta, gerçek kimlik ve hesap durumu yok.",
+      "q kullanıcı adı veya görünen adda arar (en az 2 karakter). Silinmiş hesaplar listelenmez. Katılım zamanına göre yeniden eskiye.",
+    ],
+  }),
   defineEndpoint({
     id: "communities.list",
     domain: "communities",
