@@ -116,6 +116,13 @@ export function AuthScreen({
     const hasWelcomeDraft = Boolean(readWelcomeDraft());
     syncUser();
     setPassword("");
+    // A successful login can still be unverified. Do not silently finish
+    // onboarding or consume the saved interests until verification succeeds.
+    if (!demo && client.current()?.verified === false) {
+      notify("E-posta doğrulaması gerekiyor. Tanıtım seçimlerin korunuyor.");
+      router.push(`/dogrula${emailSuffix}`);
+      return;
+    }
     if (onboarding || hasWelcomeDraft) {
       try {
         await applyWelcomeSelection();
@@ -186,6 +193,9 @@ export function AuthScreen({
           ? "Birlikte düşünmek için küçük bir adım."
           : demo ? "Örnek hesap akışını burada deneyebilirsin." : "Hesabını güvenle yönet."}
       </p>
+      {mode === "verify" && !demo && user && !user.verified && !done && (
+        <p className="kv-muted" role="status">E-posta adresin henüz doğrulanmadı. Gelen kutundaki bağlantıyı aç veya aşağıdan yeni bağlantı iste.</p>
+      )}
       {demo && <div className="demo-note">
         Yalnızca demo bilgileri kullan. Hazır hesap:{" "}
         <strong>umit@example.test</strong> / <strong>Demo12345!</strong>. Diğer
