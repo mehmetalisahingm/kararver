@@ -12,7 +12,36 @@ export type OpsProbe = {
   queues(): Promise<QueueRow[]>;
   /** Son başarılı yedek (KV-48 `db:backup` kaydı); hiç yoksa null. Tablo yoksa hata fırlatır. */
   lastBackup(): Promise<Date | null>;
+  /** Bütün süreçlerin ortak tabloları: giriş kilitleri (KV-19 sayaçları) ve 24 saatlik kritik yönetici işlemleri (audit). */
+  securitySignals(limits: LoginLimits): Promise<SecuritySignals>;
 };
+
+export type LoginLimits = { email: number; ip: number };
+export type SecuritySignals = {
+  lockedLogins: { emails: number; ips: number };
+  adminActions24h: Array<{ action: string; operation: string; count: number }>;
+};
+
+/**
+ * Hesap, yetki ve veri üzerinde etkisi büyük yönetici işlemleri (KV-04). Kısa sürede olağandışı artış (ör. toplu yaptırım,
+ * art arda rol değişikliği) ele geçirilmiş bir yönetici hesabının ilk izidir; panel sayıları gösterir, eşik koymaz.
+ */
+export const CRITICAL_ADMIN_ACTIONS = [
+  "user.role.assign",
+  "user.sanction",
+  "user.sanction.lift",
+  "user.sessions.manage",
+  "user.password.reset",
+  "user.content.bulk",
+  // #181 / #184 (#228, #222): geri alınamaz anonimleştirme, yasal saklama ve topluluk sahibi ataması.
+  "user.anonymize",
+  "user.legalHold.manage",
+  "community.owner.assign",
+  "privacy.export.manage",
+  "settings.update",
+  "emergency.update",
+  "points.adjust",
+] as const;
 
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
 const TABLE = /^[a-z_][a-z0-9_]{0,62}.[a-z_][a-z0-9_]{0,62}$/;
@@ -39,6 +68,20 @@ export function createPrismaOpsProbe(prisma: PrismaClient, options: { schema?: s
         `SELECT max(COALESCE(completed_on, started_on)) AS at FROM ${job} WHERE started_on > now() - interval '1 day'`,
       );
       return row?.at ?? null;
+    },
+    async securitySignals(limits) {
+      // Kilit, KV-19 giriş korumasıyla aynı kuraldır: süresi geçmemiş penceredeki başarısız deneme sayısı ≥ sınır.
+      // Anahtar pepper'lı özettir; ham e-posta/IP yoktur, yalnız sayılır.
+      const [locked] = await prisma.$queryRaw<Array<{ emails: number; ips: number }>>`
+        SELECT
+          count(*) FILTER (WHERE key LIKE 'login.email:%' AND count >= ${limits.email})::int AS emails,
+          count(*) FILTER (WHERE key LIKE 'login.ip:%' AND count >= ${limits.ip})::int AS ips
+        FROM rate_limit_counters WHERE expires_at > now()`;
+      const actions = await prisma.$queryRaw<Array<{ action: string; operation: string; count: number }>>`
+        SELECT action, operation, count(*)::int AS count FROM audit_logs
+        WHERE created_at > now() - interval '24 hours' AND action = ANY(${[...CRITICAL_ADMIN_ACTIONS]}::text[])
+        GROUP BY action, operation ORDER BY count DESC, action, operation`;
+      return { lockedLogins: locked ?? { emails: 0, ips: 0 }, adminActions24h: actions };
     },
     async lastBackup() {
       const [row] = await prisma.$queryRaw<Array<{ at: Date | null }>>`SELECT max(finished_at) AS at FROM ops_backup_runs`;

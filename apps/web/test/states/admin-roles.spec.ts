@@ -115,7 +115,9 @@ for (const path of SECTIONS) {
     failing = false;
     const retry = main.getByRole("button", { name: /tekrar dene/i });
     for (let i = 0; i < 10 && (await retry.count()) > 0; i++) {
+      const previousCount = await retry.count();
       await retry.first().click();
+      await expect(retry).toHaveCount(previousCount - 1);
       await expect(main.locator('[aria-busy="true"]')).toHaveCount(0);
     }
     await expect(main.getByRole("alert")).toHaveCount(0);

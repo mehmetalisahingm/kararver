@@ -242,6 +242,10 @@ export const OpsStatus = z.strictObject({
     rateLimited: Count,
     loginLockouts: Count,
     byRule: z.array(z.strictObject({ rule: z.string().max(80), count: Count })),
+    /** Bütün süreçler (DB): şu an giriş kilidindeki e-posta ve IP anahtarı sayısı (KV-19). Okunamazsa null. */
+    lockedLogins: z.strictObject({ emails: Count, ips: Count }).nullable().default(null),
+    /** Bütün süreçler (DB): son 24 saatteki kritik yönetici işlemleri (audit). Okunamazsa null. */
+    adminActions24h: z.array(z.strictObject({ action: z.string().max(80), operation: z.string().max(40), count: Count })).nullable().default(null),
   }),
   backup: z.strictObject({
     status: OpsHealth,
