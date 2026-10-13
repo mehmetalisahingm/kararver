@@ -44,6 +44,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     }
     if (!user) {
       setRoles([]);
+      setError("");
+      setAccessFailure(null);
       setReady(true);
       return;
     }
@@ -58,6 +60,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       headers: { accept: "application/json" },
     })
       .then(async (response) => {
+        if (controller.signal.aborted) return;
         if (response.status === 401 || response.status === 403) {
           setRoles([]);
           setAccessFailure(response.status === 401 ? "expired" : "forbidden");
@@ -65,10 +68,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const parsed = dataOf(Me).parse(await response.json());
+        if (controller.signal.aborted) return;
         setRoles(parsed.data.roles as AdminRole[]);
       })
       .catch((error) => {
-        if (error?.name !== "AbortError") { setRoles([]); setError("Yönetim yetkisi kontrol edilemedi. Bağlantını kontrol edip tekrar deneyebilirsin."); }
+        if (!controller.signal.aborted && error?.name !== "AbortError") { setRoles([]); setError("Yönetim yetkisi kontrol edilemedi. Bağlantını kontrol edip tekrar deneyebilirsin."); }
       })
       .finally(() => {
         if (!controller.signal.aborted) setReady(true);
