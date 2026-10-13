@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import surfaces from "../../../components/content-surfaces.module.css";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useProduct } from "../../../components/product-provider";
@@ -77,21 +78,21 @@ export default function Page() {
   if (!profile) return <section className="kv-card kv-state"><h1>Profil demo modunda kullanılamıyor.</h1><p>Gerçek API modunda public profil, gönderiler ve yorumlar burada gösterilir.</p><Link href="/">Akışa dön</Link></section>;
 
   return (
-    <div className="screen-stack">
+    <div className={`screen-stack ${surfaces.screen}`}>
       <Link href="/" className="back-link">← Akışa dön</Link>
       <ErrorMessage message={pageError} />
       {busy && <p role="status">Devamı yükleniyor…</p>}
-      <section className="kv-card screen-stack">
+      <section className={`kv-card screen-stack ${surfaces.profileHeader}`}>
         <div className="kv-row kv-between">
           <div>
-            <span className="eyebrow">PUBLIC PROFİL</span>
+            <span className="eyebrow">PROFİL</span>
             <h1>{profile.displayName}</h1>
             <p className="kv-muted">@{profile.username}</p>
           </div>
           {profile.avatarUrl && <img src={profile.avatarUrl} alt="" width={72} height={72} />}
         </div>
         {profile.bio && <p>{profile.bio}</p>}
-        <div className="kv-row" aria-label="Profil istatistikleri">
+        <div className={surfaces.stats} aria-label="Profil istatistikleri">
           <span className="kv-badge">{profile.stats.pollCount} gönderi</span>
           <span className="kv-badge">{profile.stats.votesReceived} alınan oy</span>
           <span className="kv-badge">{profile.stats.commentCount} yorum</span>

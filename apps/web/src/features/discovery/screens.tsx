@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import surfaces from "../../components/content-surfaces.module.css";
 import { useRouter } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
@@ -252,7 +253,7 @@ function SearchCard({ item }: { item: SearchResult }) {
     return (
       <article className="kv-card search-summary">
         <span className="eyebrow">KULLANICI</span>
-        <h2>{item.user.displayName}</h2>
+        <h2><Link href={`/profil/${encodeURIComponent(item.user.username)}`}>{item.user.displayName}</Link></h2>
         <p>@{item.user.username}</p>
         <p className="kv-help">Herkese açık kullanıcı özeti.</p>
       </article>
@@ -417,7 +418,7 @@ export function DiscoveryScreen({
   const categories = useCategories();
   const category = categories.data?.find((c) => c.slug === categorySlug);
   return (
-    <div className="screen-stack">
+    <div className={`screen-stack ${surfaces.screen}`}>
       <DiscoveryNav current={categorySlug ? "categories" : "feed"} />
       <div className="discovery-hero">
         <span className="eyebrow">HER FİKİR YENİ BİR BAKIŞ AÇISI</span>
@@ -464,7 +465,7 @@ export function DiscoveryScreen({
 export function CategoryDirectory() {
   const categories = useCategories();
   return (
-    <div className="screen-stack">
+    <div className={`screen-stack ${surfaces.screen}`}>
       <DiscoveryNav current="categories" />
       <div className="discovery-hero">
         <span className="eyebrow">İLGİN NEREDEYSE</span>
@@ -687,7 +688,7 @@ export function TrendsScreen({ query }: { query: Query }) {
   const { user } = useProduct();
   const categories = useCategories();
   return (
-    <div className="screen-stack">
+    <div className={`screen-stack ${surfaces.screen}`}>
       <DiscoveryNav current="trends" />
       <div className="discovery-hero trend-hero">
         <span className="eyebrow">TOPLULUK NE DÜŞÜNÜYOR?</span>
