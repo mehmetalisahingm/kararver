@@ -208,3 +208,36 @@ test("registration confirms login and retains post-signup interests retry after 
   expect(registrations).toBe(1); expect(logins).toBe(1); expect(writes).toBe(2);
   expect(await page.evaluate(()=>localStorage.getItem("kv-welcome-draft-v1"))).toBeNull();
 });
+
+test("unverified sign-in redirects to email verification without consuming onboarding draft", async ({page}) => {
+  const mock = await api(page);
+  const categoryId = sample("categories.list").data[0].id as string;
+  let writes = 0;
+  mock.handlers.set("me.get", r => r.fulfill({status: 401, json: failure("UNAUTHENTICATED")}));
+  mock.handlers.set("auth.login", r => {
+    const response = sample("auth.login");
+    response.data.emailVerified = false;
+    return r.fulfill({json: response});
+  });
+  mock.handlers.set("interests.put", r => {
+    writes++;
+    return r.fulfill({json: {data: {categoryIds: [categoryId]}}});
+  });
+  await page.addInitScript(({categoryId}) => {
+    localStorage.setItem("kv-welcome-v1", "1");
+    localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({
+      version: 1, categoryIds: [categoryId], demoChoice: "wait", returnTo: "/",
+    }));
+  }, {categoryId});
+  await page.goto("/giris?onboarding=1&returnTo=%2F");
+  await page.getByLabel("E-posta", {exact: true}).fill("unverified@example.test");
+  await page.getByLabel("Şifre", {exact: true}).fill("test-password");
+  await page.getByRole("button", {name: "Giriş yap", exact: true}).click();
+
+  await expect(page).toHaveURL(/\\/dogrula\\?returnTo=%2F&onboarding=1/);
+  await expect(page.getByRole("status").filter({hasText: "E-posta adresin henüz doğrulanmadı."})).toBeVisible();
+  await expect(page.getByRole("button", {name: "Doğrulama bağlantısını yeniden gönder"})).toBeVisible();
+  expect(writes).toBe(0);
+  expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).not.toBeNull();
+  expect(mock.unexpected).toEqual([]);
+});
