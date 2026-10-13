@@ -20,6 +20,7 @@ KV-33 üç PR'dır: **PR-A** `audit_logs` ve `writeAudit` (KV-39), **PR-B** bu b
 | `admin.users.passwordReset.send` | `POST /admin/users/:id/password-reset` | `user.password.reset` (ADMIN+, `sanctionTarget`) | zorunlu | `user.password.reset` / `send` |
 | `admin.users.dataExports.create` / `.list` / `.deliver` | `POST`/`GET /admin/users/:id/data-exports`, `POST …/:exportId/deliver` | `privacy.export.manage` (SUPER_ADMIN) | zorunlu (create, deliver) | `privacy.export.manage` / `request` \| `deliver` |
 | `dataExports.download` | `POST /me/data-export/download` | `privacy.export.download` (kullanıcı, kendi paketi) | yok | `privacy.export.download` / `download` |
+| `admin.users.contentJobs.preview` / `.create` / `.list` / `.undo` / `.cancel` | `GET …/content-jobs/preview`, `POST`/`GET /admin/users/:id/content-jobs`, `POST …/:jobId/undo`, `POST …/:jobId/cancel` | `user.content.bulk` (ADMIN+, `sanctionTarget`) | zorunlu (create, undo, cancel) | `user.content.bulk` / `request` \| `undo` \| `cancel` |
 | `admin.roles.put` | `PUT /admin/users/:id/role` | `user.role.assign` (SUPER_ADMIN, `roleAssignment`) | zorunlu | `user.role.assign` / `grant` \| `revoke` \| `change` |
 
 - **Arama (`q`):** en az 3 karakter (daha kısa 400). Kullanıcı adı ve görünen adda içerir araması (`kv_normalize … LIKE '%q%'`, KV-26 trigram GIN index'leri). `q` `@` içeriyorsa yalnız e-postada tam eşleşme (`email_normalized` unique index); e-postada içerir araması yoktur (PII taraması olmasın). Sayfalama `id DESC` (UUIDv7 ≈ kayıt zamanı). Silinmiş hesaplar durumlarıyla listelenir. Migration gerekmedi.
@@ -119,7 +120,7 @@ Kullanıcının kendi kişisel verisinin paketini hazırlar ve **yalnız kullan�
 2. Worker `data-exports.build` (dakikada bir): `FOR UPDATE SKIP LOCKED` ile sahiplenir, paketi toplar (JSON → gzip → **AES-256-GCM**, rastgele anahtar, AAD = talep id'si), private bucket'a `exports/<id>-<rastgele>.bin` olarak yazar, satırı `READY` yapar (anahtar yalnız bu satırda). Takılan `PROCESSING` talep 10 dk sonra yeniden alınır; talebi kaybeden deneme kendi nesnesini siler. Hata → `FAILED` + kısa kod (`build_failed`, `too_large`; 25 MB JSON ve koleksiyon başına 50 bin satır sınırı); ham hata metni DB'ye yazılmaz. FAILED talep açık sayılmaz, yeni talep açılabilir.
 3. `admin.users.dataExports.deliver` (SUPER_ADMIN, gerekçeli): talep `READY` iken yönetici kimlik doğrulamasını (destek kanalı vb.) yaptığını gerekçeyle beyan eder. Yeni bir indirme token'ı üretilir (yalnız SHA-256 özeti saklanır, önceki bağlantıyı geçersiz kılar) ve bağlantı (`/veri-indir#token=…`) **yalnız hesabın kayıtlı e-postasına** gider. Bağlantı 24 saat (ve paket süresi) geçerlidir. Hesap başına 60 sn bekleme ve saatte 3 gönderim (429).
 4. `dataExports.download` (kullanıcı): **hem** token **hem** paketin sahibi olan oturum gerekir; başkasının oturumu ya da yanlış token aynı `TOKEN_INVALID_OR_EXPIRED` yanıtını alır (hesap/paket varlığı sızmaz). Paket sunucuda çözülür (GCM etiketi doğrulanmazsa veri dönmez) ve JSON olarak döner. Teslim başına en çok 3 indirme; sayaç paket çözüldükten sonra, koşullu `UPDATE` ile düşer (eşzamanlı indirmeler hakkı aşamaz). Her indirme audit'e yazılır.
-5. Paket 7 gün sonra silinir: worker nesneyi, anahtarı ve token'ı siler, talep `EXPIRED` olur (anahtar silindiğinden nesne artık hiç okunamaz). Nesne silinemezse satır `READY` kalır ve sonraki tur dener.
+5. Paket 7 gün sonra `EXPIRED` olur: worker anahtarı ve token'ı önce siler. Depolama erişilemiyorsa şifreli nesnenin silinmesi sonraki tur yeniden denenir; bu sırada anahtar tutulmaz. İndirme tamamlanırken güncel token, iki süre ve aktif hesap tekrar kontrol edilir. Mail/depolama hataları yalnız kısa kodlarla loglanır; ham hata mesajları kişisel veri veya bağlantı taşıyabilir.
 
 **Audit** (hepsi `target = USER`, token/bağlantı/e-posta/içerik yok): `privacy.export.manage` `request` (`after: { exportId }`), `deliver` (`after: { exportId, linkExpiresAt }`); `privacy.export.download` `download` (aktör kullanıcının kendisi, `after: { exportId, downloadNumber }`).
 
@@ -148,3 +149,29 @@ Kullanıcının kendi kişisel verisinin paketini hazırlar ve **yalnız kullan�
 5. **Görsel dosyaları** pakete eklensin mi (boyut ve sızıntı yüzeyi büyür).
 
 **Kapsam dışı (sonraki dilimler):** anonimleştirme/silme (geri alınamaz onay, saklama/yasal tutma ayrımı), e-posta değişimi, toplu içerik gizleme; kritik işlemlerde ikinci onay/MFA #182.
+
+## 9. Kullanıcı içeriğinin toplu gizlenmesi/kaldırılması (#181)
+
+Bir hesabın anket ve yorumlarını tek seferde gizler veya kaldırır; **önizleme → gerekçe → ayrı onay → kuyruk**, bitince **geri alınabilir**. Genel (hesaptan bağımsız, kapsamlı) toplu moderasyon #183'tür; bu bölüm yalnız tek hesaba ait içerik içindir.
+
+**Akış**
+
+1. `admin.users.contentJobs.preview` (GET, salt okuma): işlem (`HIDE`/`REMOVE`) ve kapsam (`all`/`polls`/`comments`) için etkilenecek anket ve yorum sayısı + `cutoffAt` (önizleme anı). Uygunluk **mevcut moderasyon geçiş tablosundan** gelir (`eligibleSources`): HIDE yalnız `ACTIVE`; REMOVE `ACTIVE`, `UNDER_REVIEW`, `HIDDEN`, `LOCKED`; `REMOVED` olanlar sayılmaz. Yalnız `cutoffAt`'tan önce yazılan içerik sayılır ve işlenir.
+2. `admin.users.contentJobs.create` (**ayrı onay**, gerekçe zorunlu): sunucu sayıları `cutoffAt` ile **yeniden hesaplar**; önizlemedekinden farklıysa 409 `preview_stale`, `cutoffAt` 15 dakikadan eskiyse 409 `preview_expired`, uygun içerik yoksa `nothing_to_do`, tek işte 500'ü aşıyorsa `too_many` (kapsamı daralt). Başarılıysa iş `QUEUED` olur; iş düzeyi audit `user.content.bulk` / `request` (gerekçe, request id, iş id ve sayılar).
+3. API sürecindeki çalıştırıcı (`modules/content-jobs/runner.ts`, 5 sn'de bir; `FOR UPDATE SKIP LOCKED` ile çok süreçte güvenli) işi 25'lik gruplarla işler. **Her içerik mevcut moderasyon uygulamasından (`ModerationStore.apply`) geçer**: satır kilidi, durum geçişi, yorum sayaçları, `moderation_actions`, içerik başına audit (`moderation.poll|comment.apply`, request id `content-job:<id>`), `moderation.applied` olayı ve açık raporların kapanması aynı öğe transaction'ında yapılır; bu modül yeni bir geçiş kuralı icat etmez. Sonuç `content_job_items`'a (APPLIED/UNCHANGED/FAILED/SKIPPED, önceki ve sonraki durum) yazılır; kısmi başarısızlık işi durdurmaz, sayaçlarda görünür.
+4. Her grupta **aktörün yetkisi ve hedefin rolü yeniden doğrulanır** (`authorize`, `sanctionTarget`): aktör yetkisini kaybettiyse veya hedef bu arada admin olduysa (ve aktör yalnız ADMIN ise) iş `FAILED` (`actor_not_authorized`) olur ve kalan içeriğe dokunulmaz.
+5. Tur bütçesi (20 sn) dolarsa iş `QUEUED`'a döner ve kaldığı yerden sürer; `PROCESSING`'de 5 dk takılan iş yeniden alınır. İşlenmiş içerik tekrar seçilmez (öğe kaydı + anti-join), yani çift işlem ve kaybolan içerik yoktur.
+
+**Eşzamanlılık ve sınırlar:** hesap başına en çok bir açık iş (kısmi unique index `content_jobs_one_open_per_user_key` + hedef kullanıcı satırı kilidi): yedi paralel onaydan biri başarılı, kalanı 409 `job_open`. Kimse kendi hesabına uygulayamaz; admin hedef SUPER_ADMIN ister. Silinmiş (anonimleştirilmiş) hesaba iş açılamaz (`user_deleted`).
+
+**Durdurma (`cancel`, gerekçeli):** kuyruktaki veya işlenmekte olan iş `CANCELLED` olur; çalıştırıcı her öğeden önce durumu okur ve kalan içeriğe dokunmaz. Koşullu güncelleme: iş aynı anda bittiyse 409 `not_cancellable`. İşlenmiş içerik olduğu gibi kalır.
+
+**Geri alma (`undo`, gerekçeli) — güvenli ve sürüm kontrollü:** `UNDO` işi, asıl işte **uygulanmış ve önceki durumu `ACTIVE`** olan içeriğe `RESTORE` uygular. (1) Önceki durumu `HIDDEN`/`LOCKED`/`UNDER_REVIEW` olan içerik geri alınmaz: `RESTORE` `ACTIVE` yapar, yani daha görünür olurdu. (2) İşten sonra durumu başka biri değiştirdiyse (yeniden kaldırma, geri yükleme vb.) o öğe `SKIPPED` (`changed`) olur, dokunulmaz. (3) Bir işin en çok bir geri alması vardır (`undo_of_id` unique); geri almanın geri alınması yoktur; açık iş varken geri alma açılmaz. (4) Silinmiş/anonimleştirilmiş hesapta geri alma reddedilir (`user_deleted`): silinmiş veri geri üretilmez. Gerekçe, `moderation_actions` ve audit her öğeye yazılır.
+
+**Bilinen sınırlar**
+- Öğe kaydı, öğe transaction'ının ardından yazılır; ikisi arasında süreç ölürse içerik uygulanmış ama işte kaydı yoktur: yeniden seçilmez ve yalnız bu iş üzerinden geri alınamaz (`moderation_actions`'ta görünür).
+- Her işlenen içerik için sahibine ayrı bir `MODERATION_APPLIED` bildirimi gider (geri alma dahil): 500 içerikte 500 bildirim. Toplulaştırılmış bildirim ayrı iştir (KV-21 tüketicisi).
+- Çalıştırıcı API sürecinde koşar; ağır yük için ileride worker'a taşınabilir (aynı tablo ve SKIP LOCKED sözleşmesi).
+- İkinci onay/MFA (#182, PR #206) bu işlere henüz bağlanmadı; bağlanınca eşik üstü işler için ikinci yönetici onayı istenmesi önerilir.
+
+**Test:** `apps/api/test/content-jobs.test.ts` (yetki matrisi, önizleme sayımı ve salt okuma, onayda yeniden sayım/eskime/süre/boş/çok fazla, HIDE ve REMOVE'un mevcut moderasyon yoluyla uygulanması — sayaçlar, geçmiş, audit, rapor kapanması, başkasının ve cutoff sonrası içeriğin dokunulmazlığı, yedi paralel onay, tur bütçesi ve kaldığı yerden devam, takılmış iş, aktör yetkisini kaybetme, hedef rol yükselmesi, silinmiş hesap, durdurma, güvenli ve sürüm kontrollü geri alma, çift geri alma).

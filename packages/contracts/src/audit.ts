@@ -48,6 +48,8 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   "user.sanction": ["apply"],
   "user.sessions.manage": ["revoke"],
   "user.password.reset": ["send"],
+  // #181 toplu içerik işi: iş düzeyi kayıt; içerik başına kayıt moderation.*.apply'dadır.
+  "user.content.bulk": ["request", "undo", "cancel"],
   // #181 KVKK: talep ve teslim yönetici işlemidir (gerekçeli); indirme kullanıcının kendi işlemidir.
   "privacy.export.manage": ["request", "deliver"],
   "privacy.export.download": ["download"],
@@ -101,6 +103,7 @@ export function allowedAuditOperations(action: AuditAction): readonly string[] {
 export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditAction>([
   "user.sessions.manage",
   "user.password.reset",
+  "user.content.bulk",
   "privacy.export.manage",
   "user.sanction",
   "user.sanction.lift",

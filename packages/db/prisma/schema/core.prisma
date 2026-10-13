@@ -97,6 +97,9 @@ model User {
   // #181 KVKK veri dışa aktarma (admin.prisma)
   dataExports          DataExport[] @relation("DataExportSubject")
   dataExportsRequested DataExport[] @relation("DataExportRequester")
+  // #181 toplu içerik işleri (moderation.prisma)
+  contentJobs          ContentJob[] @relation("ContentJobSubject")
+  contentJobsRequested ContentJob[] @relation("ContentJobRequester")
   idempotencyKeys  IdempotencyKey[]
   polls            Poll[]
   votes            Vote[]

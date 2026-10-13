@@ -123,12 +123,14 @@ export function createPrismaDataExportStore(prisma: PrismaClient): DataExportSto
       return { exportId: row.id, objectKey: row.objectKey, encKey: Buffer.from(row.encKey) };
     },
 
-    async recordDownload({ userId, exportId, requestId, now, maxDownloads }) {
+    async recordDownload({ userId, exportId, tokenHash, requestId, now, maxDownloads }) {
       return prisma.$transaction(async (tx) => {
         const at = now.toISOString();
         const rows = await tx.$queryRaw<{ n: number }[]>(Prisma.sql`
           UPDATE data_exports SET download_count = download_count + 1, last_downloaded_at = ${at}::timestamptz, updated_at = ${at}::timestamptz
           WHERE id = ${exportId}::uuid AND user_id = ${userId}::uuid AND status = 'READY' AND download_count < ${maxDownloads}
+            AND token_hash = ${tokenHash} AND token_expires_at > ${at}::timestamptz AND expires_at > ${at}::timestamptz
+            AND EXISTS (SELECT 1 FROM users WHERE id = ${userId}::uuid AND status = 'ACTIVE' AND deleted_at IS NULL)
           RETURNING download_count::int AS n`);
         if (rows.length === 0) return false;
         await writeAudit(tx, {

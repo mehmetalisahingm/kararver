@@ -105,29 +105,30 @@ export function registerDataExportRoutes(route: Route, deps: DataExportDeps): vo
     let sent = true;
     try {
       await deps.mailer.send(dataExportMail(deps.webUrl, result.email, raw));
-    } catch (err) {
+    } catch {
       sent = false;
-      request.log.error({ err }, "veri paketi bağlantısı e-postası gönderilemedi");
+      request.log.error({ exportId: params.exportId, failure: "mail_failed" }, "veri paketi bağlantısı e-postası gönderilemedi");
     }
     return { status: 202, body: { data: { sent, linkExpiresAt: result.linkExpiresAt.toISOString() } } };
   });
 
   route("dataExports.download", async ({ body, viewer, request }) => {
     const at = now();
+    const tokenHash = hashToken(body.token, deps.tokenPepper);
     // Hem token hem sahip oturum gerekir; başkasının oturumuyla gelen token aynı hatayı alır (varlık sızmaz).
-    const ticket = await store.findDownloadable({ userId: viewer!.id, tokenHash: hashToken(body.token, deps.tokenPepper), now: at, maxDownloads: MAX_DOWNLOADS });
+    const ticket = await store.findDownloadable({ userId: viewer!.id, tokenHash, now: at, maxDownloads: MAX_DOWNLOADS });
     if (!ticket) throw invalidLink();
     let data: unknown;
     try {
       const blob = await storage.readPrivate(ticket.objectKey);
       if (!blob) throw new Error("paket nesnesi yok");
       data = decryptPackage(blob, ticket.encKey, ticket.exportId);
-    } catch (err) {
-      request.log.error({ err, exportId: ticket.exportId }, "veri paketi okunamadı");
+    } catch {
+      request.log.error({ exportId: ticket.exportId, failure: "read_failed" }, "veri paketi okunamadı");
       throw new ApiError("INTERNAL_ERROR", "Veri paketi şu an okunamadı. Daha sonra tekrar dene.");
     }
     // Hak, paket başarıyla çözüldükten sonra düşer; eşzamanlı indirmelerde sayaç hakkı aşmaz (aşan taraf geçersiz bağlantı alır).
-    if (!(await store.recordDownload({ userId: viewer!.id, exportId: ticket.exportId, requestId: request.id, now: at, maxDownloads: MAX_DOWNLOADS }))) {
+    if (!(await store.recordDownload({ userId: viewer!.id, exportId: ticket.exportId, tokenHash, requestId: request.id, now: now(), maxDownloads: MAX_DOWNLOADS }))) {
       throw invalidLink();
     }
     return { status: 200, body: { data } };

@@ -42,7 +42,15 @@
 | `revision.read` | `admin.revisions.polls`, `admin.revisions.comments` | revisions (**bu PR**): geçmişin ilk sayfası açılınca bir kayıt; sonraki sayfalar aynı okumanın devamı |
 | `settings.update`, `emergency.update` | `admin.settings.update`, `admin.emergency.put` | settings (Mert #153): değer ve sürüm aynı transaction'da, önce/sonra özetiyle |
 
+## Yüklenen kayıtların CSV/JSON çıktısı (#185 ilk dilim)
+
+Audit ekranındaki API'nin yetkili kullanıcıya döndürdüğü, hassas alanlardan arındırılmış kayıtlar CSV veya JSON olarak indirilebilir. Bu işlem yalnız yüklenen kayıtları kapsar; bütün tarihçeyi indirdiği iddia edilmez. Boş, yüklenen, hatalı veya 1000 kayıttan büyük listede indirme kapalıdır; kapsam tarih/aktör/hedef/işlem süzgeçleriyle daraltılır.
+
+JSON çıktısı `loaded_records` kapsamı, kayıt sayısı, uygulanan süzgeçler ve UTC üretim zamanı taşır. CSV UTF-8 BOM, RFC uyumlu tırnaklama ve formül başlangıçları/boşluk/kontrol karakterleri için apostrof koruması kullanır. Yalnız izinli görünüm alanları seçilir; yanıtın ek alanları ve avatar bağlantıları dışa aktarılmaz. Audit verisi sunucuda değiştirilmez; dosya, daha önce yetkili API okumasıyla yüklenmiş veriden tarayıcıda oluşturulur.
+
+Kalan #185 kapsamı: sunucuda bütün tarihçe export'u ve kayıt/erişim denetimi, requestId/sonuç/zaman dilimi gelişmiş sorgusu, kritik alarm ve sürümlü telafi/undo işlemleri. Undo append-only kayıtları güncellemez; ayrı mutasyon, yetki ve yeni audit ister.
+
 ## Açık konular
 
-- **Saklama süresi:** V1'de audit kayıtları **süresiz** saklanıyor (append-only; silme trigger'la yasak). Kayıtlarda kişisel veri yok: kullanıcı kimliği, işlem ve hassas alandan arındırılmış özet var. Süre sınırı (ör. KVKK gereği) istenirse silme, ayrı ve gerekçeli bir migration ile trigger'ın kapsamı daraltılarak yapılır. Karar: Mehmet (ürün).
+- **Saklama süresi:** V1'de audit kayıtları **süresiz** saklanıyor (append-only; silme trigger'la yasak). Kayıtlarda kullanıcı kimliği, aktörün görünen adı/kullanıcı adı, işlem ve hassas alandan arındırılmış özet var. Süre sınırı (ör. KVKK gereği) istenirse silme, ayrı ve gerekçeli bir migration ile trigger'ın kapsamı daraltılarak yapılır. Karar: Mehmet (ürün).
 - **`…_utku_kv39_audit_logs` migration'ı transaction'a sarılı değil:** Main'e girmiş migration değiştirilemez (Prisma checksum). `db:check-migrations` bunu uyarı olarak raporluyor. Sonraki migration'lar `BEGIN/COMMIT` ile sarılı (KV-48).

@@ -6,9 +6,12 @@ import { buildApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
 import { createMailer } from "./mail/mailer.ts";
 import { createPrismaAdminUserStore } from "./modules/admin-users/prisma-store.ts";
+import { createPrismaContentJobStore } from "./modules/content-jobs/prisma-store.ts";
+import { startContentJobRunner } from "./modules/content-jobs/runner.ts";
 import { createPrismaDataExportStore } from "./modules/data-exports/prisma-store.ts";
 import { createArgon2Hasher } from "./modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "./modules/auth/prisma-store.ts";
+import { createPrismaCommunityAdminReadStore } from "./modules/communities/admin-read.ts";
 import { createPrismaCommunityStore } from "./modules/communities/prisma-store.ts";
 import { createPrismaCommunityRequestStore } from "./modules/communities/request-routes.ts";
 import { createPrismaMediaStore } from "./modules/media/prisma-store.ts";
@@ -81,12 +84,14 @@ const app = buildApp({
   rateLimitStore: config.rateLimitEnabled ? createPrismaRateLimitStore(prisma) : undefined,
   communityStore: createPrismaCommunityStore(prisma),
   communityRequestStore: createPrismaCommunityRequestStore(prisma),
+  communityAdminReadStore: createPrismaCommunityAdminReadStore(prisma),
   onboardingStore: createPrismaOnboardingStore(prisma),
   reportStore: createPrismaReportStore(prisma),
   moderationStore: createPrismaModerationStore(prisma),
   notificationStore: createPrismaNotificationStore(prisma),
   adminUserStore: createPrismaAdminUserStore(prisma, { enforceCriticalApprovals: config.roleApprovalsRequired }),
   dataExportStore: createPrismaDataExportStore(prisma),
+  contentJobStore: createPrismaContentJobStore(prisma),
   metricsStore: createPrismaMetricsStore(prisma),
   opsProbe: createPrismaOpsProbe(prisma),
   commentStore: createPrismaCommentStore(prisma),
@@ -99,8 +104,17 @@ const app = buildApp({
 });
 if (!config.storage) app.log.warn("S3_* tanımlı değil: medya endpoint'leri kapalı");
 
+// #181 toplu içerik işleri: DB kuyruğunu işleyen çalıştırıcı (FOR UPDATE SKIP LOCKED; çok süreçte güvenli).
+const contentJobRunner = startContentJobRunner({
+  prisma,
+  moderation: createPrismaModerationStore(prisma),
+  now: () => new Date(),
+  log: (level, message, fields) => app.log[level](fields, message),
+});
+
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, "kapanıyor");
+  contentJobRunner.stop();
   await app.close();
   await mediaQueue?.stop();
   await prisma.$disconnect();

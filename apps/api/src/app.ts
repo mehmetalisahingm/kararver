@@ -11,12 +11,15 @@ import { createRouter } from "./http/route.ts";
 import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import { registerContentJobRoutes } from "./modules/content-jobs/routes.ts";
+import type { ContentJobStore } from "./modules/content-jobs/store.ts";
 import { registerDataExportRoutes } from "./modules/data-exports/routes.ts";
 import type { DataExportStore } from "./modules/data-exports/store.ts";
 import type { AdminUserStore } from "./modules/admin-users/store.ts";
 import type { PasswordHasher } from "./modules/auth/crypto.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerCommunityAdminRoutes } from "./modules/communities/admin-routes.ts";
+import { registerCommunityAdminReadRoutes, type CommunityAdminReadStore } from "./modules/communities/admin-read.ts";
 import { registerCommunityRoutes } from "./modules/communities/routes.ts";
 import type { CommunityStore } from "./modules/communities/store.ts";
 import { registerCommunityRequestRoutes, type CommunityRequestStore } from "./modules/communities/request-routes.ts";
@@ -132,6 +135,8 @@ export type AppDeps = {
   /** Verilmezse topluluk route'ları kaydedilmez. */
   communityStore?: CommunityStore;
   communityRequestStore?: CommunityRequestStore;
+  /** #184 yönetici topluluk görünümü (salt okuma): kapalı topluluklar, etki/eşik genel bakışı, üye arama. */
+  communityAdminReadStore?: CommunityAdminReadStore;
   /** Verilmezse onboarding/ilgi route'ları kaydedilmez. */
   onboardingStore?: OnboardingStore;
   /** Verilmezse rapor route'u kaydedilmez. */
@@ -140,6 +145,8 @@ export type AppDeps = {
   adminUserStore?: AdminUserStore;
   /** #181 KVKK veri dışa aktarma; paket okuma için media.storage da gerekir. */
   dataExportStore?: DataExportStore;
+  /** #181 kullanıcı içeriğinin toplu gizlenmesi; adminUserStore ile birlikte verilirse route'lar kaydedilir (işi runner.ts işler). */
+  contentJobStore?: ContentJobStore;
   metricsStore?: MetricsStore;
   /** KV-186 operasyon yoklaması (DB, worker izi, pg-boss kuyrukları); verilmezse bu bileşenler `unknown`. */
   opsProbe?: OpsProbe;
@@ -228,10 +235,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
+  const rateLimitSettings =
+    deps.rateLimitSettings ?? (deps.settingsService ? () => deps.settingsService!.rateLimitSettings() : async () => DEFAULT_RATE_LIMIT_SETTINGS);
   const limiter = deps.rateLimitStore
     ? createRateLimiter({
         store: deps.rateLimitStore,
-        settings: deps.rateLimitSettings ?? (deps.settingsService ? () => deps.settingsService!.rateLimitSettings() : async () => DEFAULT_RATE_LIMIT_SETTINGS),
+        settings: rateLimitSettings,
         newAccountDays: async () => (await pollSettings()).newAccountPeriodDays,
         pepper: config.authTokenPepper,
         now,
@@ -346,6 +355,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerCommunityAdminRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
   if (deps.communityRequestStore) registerCommunityRequestRoutes(route, deps.communityRequestStore, now);
+  if (deps.communityAdminReadStore) registerCommunityAdminReadRoutes(route, { store: deps.communityAdminReadStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
   if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
@@ -363,6 +373,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     });
     registerRoleRoutes(route, { store: deps.adminUserStore, now });
     if (deps.roleApprovalStore) registerRoleApprovalRoutes(route, { store: deps.roleApprovalStore, users: deps.adminUserStore, now });
+    if (deps.contentJobStore) registerContentJobRoutes(route, { store: deps.contentJobStore, users: deps.adminUserStore, now });
   }
   if (deps.dataExportStore && deps.media) {
     registerDataExportRoutes(route, {
@@ -375,7 +386,17 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
-  registerOpsRoutes(route, { probe: deps.opsProbe, telemetry, env: config.appEnv, startedAt, now });
+  registerOpsRoutes(route, {
+    probe: deps.opsProbe,
+    telemetry,
+    env: config.appEnv,
+    startedAt,
+    now,
+    loginLimits: async () => {
+      const s = await rateLimitSettings();
+      return { email: s.loginFailuresPerEmail, ip: s.loginFailuresPerIp };
+    },
+  });
   if (deps.commentStore) {
     registerCommentRoutes(route, {
       store: deps.commentStore,

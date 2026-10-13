@@ -96,6 +96,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // Console mailer doğrulama/sıfırlama bağlantısını loga yazar; sadece local ve test içindir.
     throw new Error("API yapılandırması geçersiz → MAIL_TRANSPORT=console sadece local/test ortamında kullanılabilir");
   }
+  if (deployed && env.NEXT_PUBLIC_KV_DATA_MODE === "demo") {
+    // #187: demo yalnız web'in izole önizlemesidir; staging/production ortamında demo işareti dağıtım hatasıdır.
+    throw new Error("API yapılandırması geçersiz → NEXT_PUBLIC_KV_DATA_MODE=demo staging/production'da kullanılamaz (#187)");
+  }
   if (e.MAIL_TRANSPORT === "smtp") {
     // Değer yazılmaz: parola içerir.
     let url: URL | null = null;

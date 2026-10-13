@@ -50,6 +50,18 @@ export function OpsPanel({ admin }: { admin: AdminClient }) {
           <tbody>{status.components.queue.queues.map(q => <tr key={q.name}><th scope="row">{q.name}</th><td>{measure(q.waiting)}</td><td>{measure(q.active)}</td><td>{measure(q.failed24h)}</td><td>{measure(q.completed24h)}</td><td>{q.oldestWaitingSeconds == null ? "Bekleyen iş yok" : measure(q.oldestWaitingSeconds, " sn")}</td></tr>)}</tbody>
         </table>
       </div> : <p>Kuyruk ölçümü bulunmuyor.</p>}
+      <article className="kv-card"><h3>Güvenlik olayları (bütün sunucular)</h3>
+        <p>Şu an kilitli giriş: {status.security.lockedLogins ? `${measure(status.security.lockedLogins.emails)} e-posta · ${measure(status.security.lockedLogins.ips)} IP` : "Ölçüm yok"}</p>
+        {status.security.adminActions24h == null ? <p>Kritik yönetici işlemleri: Ölçüm yok</p>
+          : status.security.adminActions24h.length === 0 ? <p>Son 24 saatte kritik yönetici işlemi yok.</p>
+          : <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Kritik yönetici işlemleri tablosu">
+            <table className={styles.table}>
+              <caption>Son 24 saatteki kritik yönetici işlemleri</caption>
+              <thead><tr><th scope="col">İşlem</th><th scope="col">Tür</th><th scope="col">Sayı</th></tr></thead>
+              <tbody>{status.security.adminActions24h.map(a => <tr key={`${a.action}:${a.operation}`}><th scope="row">{a.action}</th><td>{a.operation}</td><td>{measure(a.count)}</td></tr>)}</tbody>
+            </table>
+          </div>}
+      </article>
       <article className="kv-card"><h3>Yedek ve geri yükleme</h3><p>Yedek durumu: {health[status.backup.status]} · Son yedek: {date(status.backup.lastBackupAt)}</p>
         {status.backup.restoreDrill ? <p>Son kayıtlı geri yükleme tatbikatı: {status.backup.restoreDrill.at} · {status.backup.restoreDrill.environment} · {measure(status.backup.restoreDrill.rtoSeconds, " sn")}</p> : <p>Geri yükleme tatbikatı bilgisi yok.</p>}
       </article>
