@@ -234,7 +234,7 @@ test("unverified sign-in redirects to email verification without consuming onboa
   await page.getByLabel("Şifre", {exact: true}).fill("test-password");
   await page.getByRole("button", {name: "Giriş yap", exact: true}).click();
 
-  await expect(page).toHaveURL(/\\/dogrula\\?returnTo=%2F&onboarding=1/);
+  await expect(page).toHaveURL(/dogrula[?]returnTo=%2F&onboarding=1/);
   await expect(page.getByRole("status").filter({hasText: "E-posta adresin henüz doğrulanmadı."})).toBeVisible();
   await expect(page.getByRole("button", {name: "Doğrulama bağlantısını yeniden gönder"})).toBeVisible();
   expect(writes).toBe(0);
