@@ -45,3 +45,10 @@ test("focus ring is visible against each theme and onboarding text is legible",(
   assert.ok(contrast(welcome["--ink"],"#faf8f2")>=7);
   assert.ok(contrast(welcome["--accent"],"#faf8f2")>=4.5);
 });
+test("admin navigation uses theme tokens, not the retired violet selection color",()=>{
+  const adminCss=readFileSync(new URL("../src/features/admin/admin-shell.module.css",import.meta.url),"utf8");
+  assert.doesNotMatch(adminCss,/124\s*,\s*92\s*,\s*255/);
+  assert.match(adminCss,/\.nav a\[aria-current="page"\][^}]*var\(--kv-primary\)/);
+  assert.match(adminCss,/\.nav a:focus-visible[^}]*var\(--kv-focus\)/);
+  assert.match(adminCss,/\.nav a\{min-height:44px/);
+});
