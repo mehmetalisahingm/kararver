@@ -168,6 +168,9 @@ jobs:
       - run: pnpm --filter @kararver/web build
         env:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+      # #187: api modu build'inde demo izi yok (liste: scripts/demo-forbidden-strings.json); bulunursa iş kırılır.
+      - name: Demo izi taraması — api modu web build'i
+        run: node scripts/scan-demo-strings.mjs
       # Gerçek API: Prisma store'ları + yukarıda migrate edilen DATABASE_URL, NODE_ENV=production.
       # APP_ENV=production/staging bugün açılamıyor (SMTP mailer yok, TECH_DECISIONS §10 #2); o yüzden APP_ENV=test.
       - name: Start API (production build modu, gerçek Postgres)
