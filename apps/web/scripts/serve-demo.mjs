@@ -14,7 +14,8 @@ const child = spawn(
   ],
   {
     stdio: "inherit",
-    env: { ...process.env, NEXT_PUBLIC_KV_DATA_MODE: "demo" },
+    // #187: demo yalnız izinli APP_ENV ile açılır; verilmemişse yerel geliştirme sayılır.
+    env: { ...process.env, APP_ENV: process.env.APP_ENV || "local", NEXT_PUBLIC_KV_DATA_MODE: "demo" },
   },
 );
 for (const signal of ["SIGTERM", "SIGINT"])

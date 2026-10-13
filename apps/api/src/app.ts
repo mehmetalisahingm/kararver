@@ -11,6 +11,8 @@ import { createRouter } from "./http/route.ts";
 import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import { registerContentJobRoutes } from "./modules/content-jobs/routes.ts";
+import type { ContentJobStore } from "./modules/content-jobs/store.ts";
 import { registerDataExportRoutes } from "./modules/data-exports/routes.ts";
 import type { DataExportStore } from "./modules/data-exports/store.ts";
 import type { AdminUserStore } from "./modules/admin-users/store.ts";
@@ -136,6 +138,8 @@ export type AppDeps = {
   adminUserStore?: AdminUserStore;
   /** #181 KVKK veri dışa aktarma; paket okuma için media.storage da gerekir. */
   dataExportStore?: DataExportStore;
+  /** #181 kullanıcı içeriğinin toplu gizlenmesi; adminUserStore ile birlikte verilirse route'lar kaydedilir (işi runner.ts işler). */
+  contentJobStore?: ContentJobStore;
   metricsStore?: MetricsStore;
   /** KV-186 operasyon yoklaması (DB, worker izi, pg-boss kuyrukları); verilmezse bu bileşenler `unknown`. */
   opsProbe?: OpsProbe;
@@ -224,10 +228,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
+  const rateLimitSettings =
+    deps.rateLimitSettings ?? (deps.settingsService ? () => deps.settingsService!.rateLimitSettings() : async () => DEFAULT_RATE_LIMIT_SETTINGS);
   const limiter = deps.rateLimitStore
     ? createRateLimiter({
         store: deps.rateLimitStore,
-        settings: deps.rateLimitSettings ?? (deps.settingsService ? () => deps.settingsService!.rateLimitSettings() : async () => DEFAULT_RATE_LIMIT_SETTINGS),
+        settings: rateLimitSettings,
         newAccountDays: async () => (await pollSettings()).newAccountPeriodDays,
         pepper: config.authTokenPepper,
         now,
@@ -358,6 +364,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       webUrl: config.webUrl,
     });
     registerRoleRoutes(route, { store: deps.adminUserStore, now });
+    if (deps.contentJobStore) registerContentJobRoutes(route, { store: deps.contentJobStore, users: deps.adminUserStore, now });
   }
   if (deps.dataExportStore && deps.media) {
     registerDataExportRoutes(route, {
@@ -370,7 +377,17 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
-  registerOpsRoutes(route, { probe: deps.opsProbe, telemetry, env: config.appEnv, startedAt, now });
+  registerOpsRoutes(route, {
+    probe: deps.opsProbe,
+    telemetry,
+    env: config.appEnv,
+    startedAt,
+    now,
+    loginLimits: async () => {
+      const s = await rateLimitSettings();
+      return { email: s.loginFailuresPerEmail, ip: s.loginFailuresPerIp };
+    },
+  });
   if (deps.commentStore) {
     registerCommentRoutes(route, {
       store: deps.commentStore,

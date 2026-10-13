@@ -9,12 +9,27 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
-## 1.25.0 — 2026-10-13 (Mert, #184 topluluk yönetim görünümü)
+## 1.26.0 — 2026-10-13 (Mert, #184 topluluk yönetim görünümü)
 
 Kırıcı değişiklik yok: yeni salt okuma endpoint'leri ve yetki.
 
 - **Eklendi:** `admin.communities.listAll` (kapalı topluluklar dahil, durum ve ad/slug süzgeci), `admin.communities.overview` (etki sayıları, 7 gün / 10 üye eşiğinin durumu, son 10 yönetim izi) ve `admin.communities.members` (arama ve rol süzgeçli yönetici üye listesi). ADMIN+, `community.admin.read`. Hepsi salt okuma; hassas alan yok.
 - Şemalar: `AdminCommunityRow`, `AdminCommunityOverview`, `CommunityThreshold`, `CommunityThresholdState`, `AdminCommunityStatus`.
+
+## 1.25.0 — 2026-10-13 (Faruk, operasyon merkezi güvenlik sinyalleri, #186)
+
+Kırıcı değişiklik yok: yanıta alan eklendi (minör). Sağlayıcı ve tüketici aynı PR'da güncellendi.
+
+- **Eklendi:** `OpsStatus.security.lockedLogins` (`{ emails, ips }` | null): bütün API süreçlerinde şu an giriş kilidindeki e-posta ve IP anahtarı sayısı (KV-19 sayaçlarından). Ham e-posta/IP dönmez.
+- **Eklendi:** `OpsStatus.security.adminActions24h` (`[{ action, operation, count }]` | null): son 24 saatteki kritik yönetici işlemleri (rol, yaptırım, oturum iptali, parola sıfırlama, toplu içerik, anonimleştirme, yasal saklama, topluluk sahibi, KVKK dışa aktarma, ayar, acil durum, puan), audit kayıtlarından. Okunamazsa `null`, 0 değil.
+- **Uyumluluk:** yeni güvenlik alanlarını henüz göndermeyen API yanıtları `null` olarak okunur; mevcut operasyon ölçümleri kullanılabilir kalır. Yeni alanlar gönderildiğinde sıkı doğrulama korunur.
+
+## 1.24.0 — 2026-10-12 (Mert, #181 kullanıcı içeriğinin toplu gizlenmesi/kaldırılması)
+
+Kırıcı değişiklik yok: yeni endpoint ve yetki.
+
+- **Eklendi:** `admin.users.contentJobs.preview` (GET, etki sayacı), `.create` (ayrı onay, kuyruğa alır), `.list`, `.undo` ve `.cancel` (ADMIN+, `user.content.bulk`, kural `sanctionTarget`; gerekçeli, audit `user.content.bulk` `request`/`undo`/`cancel`). İçerik başına işlem mevcut moderasyon uygulamasından geçer (audit `moderation.*.apply`, olay, rapor kapanması). Tek işte en çok 500 içerik; hesapta tek açık iş; geri alma yalnız önceki durumu ACTIVE olan ve değişmemiş içeriği geri yükler.
+- Şemalar: `ContentJob`, `ContentJobPreview`, `ContentJobKind`, `ContentJobStatus`, `ContentJobScope`.
 
 ## 1.23.0 — 2026-10-12 (Faruk, operasyon merkezi, #186)
 

@@ -1,0 +1,45 @@
+{
+  "$comment": "#187: api modu (staging/production) web build'inde bulunmaması gereken demo izleri. scripts/scan-demo-strings.mjs okur; .map dosyaları taranmaz. Her dizge yalnız demo kodunda geçmeli; api modunun meşru kodunda geçen bir dizge buraya eklenmez. Modül yolları listede yok: production build'inde modül kimlikleri hash'lidir, demo build'inde de görünmezler.",
+  "strings": [
+    {
+      "value": "example.test",
+      "why": "demo hesapları (umit@/deniz@example.test)"
+    },
+    {
+      "value": "Demo12345!",
+      "why": "demo şifresi"
+    },
+    {
+      "value": "Yalnızca demo bilgileri kullan",
+      "why": "giriş ekranı demo notu"
+    },
+    {
+      "value": "Demo ortamı · Örnek veriler",
+      "why": "demo afişi"
+    },
+    {
+      "value": "Demo test araçları",
+      "why": "demo hata enjeksiyon paneli"
+    },
+    {
+      "value": "DEMO ÖNİZLEMESİ",
+      "why": "yönetim demo önizlemesi"
+    },
+    {
+      "value": "İkinci örnek kayıt",
+      "why": "yönetim demo tablosu"
+    },
+    {
+      "value": "Uzaktan mı, ofisten mi daha verimli",
+      "why": "DemoClient örnek anketi"
+    },
+    {
+      "value": "inceleme nedeniyle kilitlendi",
+      "why": "DemoClient örnek anketi"
+    },
+    {
+      "value": "calisma-sekli",
+      "why": "demo/fixture anket kimliği"
+    }
+  ]
+}

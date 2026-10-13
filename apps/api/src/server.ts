@@ -6,6 +6,8 @@ import { buildApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
 import { createMailer } from "./mail/mailer.ts";
 import { createPrismaAdminUserStore } from "./modules/admin-users/prisma-store.ts";
+import { createPrismaContentJobStore } from "./modules/content-jobs/prisma-store.ts";
+import { startContentJobRunner } from "./modules/content-jobs/runner.ts";
 import { createPrismaDataExportStore } from "./modules/data-exports/prisma-store.ts";
 import { createArgon2Hasher } from "./modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "./modules/auth/prisma-store.ts";
@@ -85,6 +87,7 @@ const app = buildApp({
   notificationStore: createPrismaNotificationStore(prisma),
   adminUserStore: createPrismaAdminUserStore(prisma),
   dataExportStore: createPrismaDataExportStore(prisma),
+  contentJobStore: createPrismaContentJobStore(prisma),
   metricsStore: createPrismaMetricsStore(prisma),
   opsProbe: createPrismaOpsProbe(prisma),
   commentStore: createPrismaCommentStore(prisma),
@@ -97,8 +100,17 @@ const app = buildApp({
 });
 if (!config.storage) app.log.warn("S3_* tanımlı değil: medya endpoint'leri kapalı");
 
+// #181 toplu içerik işleri: DB kuyruğunu işleyen çalıştırıcı (FOR UPDATE SKIP LOCKED; çok süreçte güvenli).
+const contentJobRunner = startContentJobRunner({
+  prisma,
+  moderation: createPrismaModerationStore(prisma),
+  now: () => new Date(),
+  log: (level, message, fields) => app.log[level](fields, message),
+});
+
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, "kapanıyor");
+  contentJobRunner.stop();
   await app.close();
   await mediaQueue?.stop();
   await prisma.$disconnect();
