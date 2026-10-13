@@ -64,6 +64,29 @@ jobs:
           printf '%s\n' "${problems[@]}" > problems.txt
           [ ${#problems[@]} -eq 0 ] && echo "ok=true" >> "$GITHUB_OUTPUT" || echo "ok=false" >> "$GITHUB_OUTPUT"
 
+      # Web (Vercel) ayrı yayınlanır; API sağlıklıyken web çökmüş ya da yanlış (demo) build yayında olabilir (#187).
+      # Ana sayfa 200 dönmeli ve sayfa api modunda olmalı: demo modu RSC payload'ında "demo":true olarak görünür.
+      - name: Web kontrolü
+        id: web
+        env:
+          WEB_URL: ${{ vars.STAGING_WEB_URL || 'https://kararver-staging.vercel.app' }}
+        shell: bash
+        run: |
+          set -u
+          problems=()
+          code=$(curl -sS -L --max-redirs 3 --max-time 20 -o web.html -w '%{http_code}' "${WEB_URL%/}/") || code="000"
+          if [ "$code" != "200" ]; then
+            problems+=("web ana sayfa HTTP $code (500 ise loglarda event=demo_mode_forbidden olabilir)")
+          elif grep -qE '\\"demo\\":true|"demo":true|demo-banner|demo-controls' web.html; then
+            problems+=("web demo modunda yayında (\"demo\":true): yanlış build")
+          fi
+          {
+            echo "- Web: \`$WEB_URL\` → HTTP $code"
+            if [ ${#problems[@]} -gt 0 ]; then printf -- '- ✖ %s\n' "${problems[@]}"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "${problems[@]}" >> problems.txt
+          [ ${#problems[@]} -eq 0 ] && echo "ok=true" >> "$GITHUB_OUTPUT" || echo "ok=false" >> "$GITHUB_OUTPUT"
+
       # Railway yalnız CI'ı yeşil main commit'ini deploy eder. 9–12 Ekim'de main 3 gün kırmızı kaldı ve staging API hiç
       # güncellenmedi; Vercel ise her merge'ü aldı (yeni web + eski API). Bu adım iki durumu da alarma çevirir:
       # (1) staging, CI'ı yeşil son main commit'inin DEPLOY_LAG_MAX_MIN dakikadan uzun süre gerisinde,
@@ -126,7 +149,7 @@ jobs:
       - name: Alarm issue'sunu aç / güncelle / kapat
         env:
           GH_TOKEN: ${{ github.token }}
-          OK: ${{ steps.health.outputs.ok == 'true' && steps.lag.outputs.ok != 'false' }}
+          OK: ${{ steps.health.outputs.ok == 'true' && steps.web.outputs.ok == 'true' && steps.lag.outputs.ok != 'false' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         shell: bash
         run: |
