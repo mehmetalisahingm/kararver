@@ -151,6 +151,7 @@ export const actions = Object.freeze({
   "community.request.queue": rule("admin", "Topluluk başvuru kuyruğu"),
   "community.request.review": rule("admin", "Topluluk başvurusunu gerekçeyle karara bağlama"),
   "community.update": rule("admin", "Topluluk düzenleme/kapatma"),
+  "community.admin.read": rule("admin", "Topluluk yönetim görünümü: kapalı toplulukları listeleme, etki/eşik genel bakışı, üye arama (#184)"),
   "community.moderator.assign": rule("admin", "Topluluk moderatörü atama/kaldırma"),
   "user.read": rule("admin", "Kullanıcı arama ve detay"),
   "user.sanction": rule("admin", "Yaptırım uygulama; admin hedef SUPER_ADMIN ister", {
@@ -283,6 +284,9 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.communities.requests.decide": "community.request.review",
   "admin.communities.create": "community.create",
   "admin.communities.update": "community.update",
+  "admin.communities.listAll": "community.admin.read",
+  "admin.communities.overview": "community.admin.read",
+  "admin.communities.members": "community.admin.read",
   "admin.communities.moderators.put": "community.moderator.assign",
   "admin.communities.moderators.delete": "community.moderator.assign",
 

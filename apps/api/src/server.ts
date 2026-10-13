@@ -11,6 +11,7 @@ import { startContentJobRunner } from "./modules/content-jobs/runner.ts";
 import { createPrismaDataExportStore } from "./modules/data-exports/prisma-store.ts";
 import { createArgon2Hasher } from "./modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "./modules/auth/prisma-store.ts";
+import { createPrismaCommunityAdminReadStore } from "./modules/communities/admin-read.ts";
 import { createPrismaCommunityStore } from "./modules/communities/prisma-store.ts";
 import { createPrismaCommunityRequestStore } from "./modules/communities/request-routes.ts";
 import { createPrismaMediaStore } from "./modules/media/prisma-store.ts";
@@ -79,6 +80,7 @@ const app = buildApp({
   rateLimitStore: config.rateLimitEnabled ? createPrismaRateLimitStore(prisma) : undefined,
   communityStore: createPrismaCommunityStore(prisma),
   communityRequestStore: createPrismaCommunityRequestStore(prisma),
+  communityAdminReadStore: createPrismaCommunityAdminReadStore(prisma),
   onboardingStore: createPrismaOnboardingStore(prisma),
   reportStore: createPrismaReportStore(prisma),
   moderationStore: createPrismaModerationStore(prisma),
