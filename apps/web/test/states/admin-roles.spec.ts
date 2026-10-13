@@ -98,10 +98,6 @@ const ok = (id: string) => (examples.some((e) => e.endpoint === id && e.status >
 
 for (const path of SECTIONS) {
   test(`${path}: 500 hatası görünür, tekrar dene ile toparlanır`, async ({ page }) => {
-    // Bilinen eksik (#187 PR-4 bulgusu): topluluk başvuru kuyruğu (community-request-queue.tsx) 500'de "Başvurular
-    // yüklenemedi." gösterir ama tekrar dene düğmesi yok, hata sonraki başarılı yüklemede de temizlenmez ve aynı anda
-    // "Bu durumda başvuru yok." der. Düzeltilince fixme kaldırılır.
-    test.fixme(path === "/admin/communities", "topluluk başvuru kuyruğunda retry yok ve hata temizlenmiyor");
     const mock = await as(page, "SUPER_ADMIN");
     let failing = true;
     for (const endpoint of panelReads) {
