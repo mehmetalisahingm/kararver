@@ -14,6 +14,7 @@ import {
   validateDraft,
 } from "../../lib/model";
 import type { FieldErrors } from "../../lib/model";
+import styles from "./polls.module.css";
 export function Composer() {
   const { client, demo, draft, setDraft, user, syncUser, requireUser, notify } =
     useProduct();
@@ -84,7 +85,7 @@ export function Composer() {
     }
   }
   return (
-    <section className="screen-stack">
+    <section className={`screen-stack ${styles.editor}`}>
       <div>
         <span className="eyebrow">BİR SORU, YENİ BAKIŞ AÇILARI</span>
         <h1>Aklında ne var?</h1>
@@ -92,7 +93,13 @@ export function Composer() {
           Bir anket aç veya seçenek eklemeden bir tartışma başlat.
         </p>
       </div>
+      <nav aria-label="Oluşturma adımları">
+        <ol className={styles.steps}>{[["compose-story","1 · Sorunu hazırla"],["compose-settings","2 · Yayını düzenle"],["compose-media","3 · Görseller ve önizleme"]].map(([target,label])=><li key={target}><button type="button" onClick={()=>document.getElementById(target)?.focus()}>{label}</button></li>)}</ol>
+      </nav>
       <form className="kv-card screen-stack" onSubmit={review} noValidate>
+        <section className={styles.section} aria-labelledby="compose-story">
+          <h2 id="compose-story" tabIndex={-1}>1 · Sorunu hazırla</h2>
+          <p className={styles.hint}>Net bir soru yaz. Anket için birbirinden farklı seçenekler ekle.</p>
         <fieldset disabled={busy}>
           <legend>İçerik türü</legend>
           <div className="kind-switch">
@@ -227,6 +234,9 @@ export function Composer() {
             </div>
           </fieldset>
         )}
+        </section>
+        <section className={styles.section} aria-labelledby="compose-settings">
+          <h2 id="compose-settings" tabIndex={-1}>2 · Yayını düzenle</h2>
         <Field id="category" label="Kategori" error={errors.category}>
           <select
             id="category"
@@ -285,6 +295,9 @@ export function Composer() {
           />
           Yorumlara izin ver
         </label>
+        </section>
+        <section className={styles.section} aria-labelledby="compose-media">
+          <h2 id="compose-media" tabIndex={-1}>3 · Görseller ve önizleme</h2>
         {client instanceof ApiClient && user?.verified ? <MediaUpload client={client.media} disabled={busy} onChange={setMedia}/> : <p className="kv-help">Fotoğraf zorunlu değil. {demo ? "Görsel yükleme gerçek API modunda kullanılabilir." : "Görsel eklemek için doğrulanmış hesabınla giriş yap."}</p>}
         <div className="cost-summary">
           <span>
@@ -310,6 +323,7 @@ export function Composer() {
         >
           {busy ? "Yayımlanıyor…" : "Yayın önizlemesi"}
         </button>
+        </section>
       </form>
       <dialog
         ref={dialog}
@@ -323,6 +337,14 @@ export function Composer() {
         <div className="screen-stack">
           <h2 id="publish-title">Yayımlamaya hazır mısın?</h2>
           <p>{draft.title}</p>
+          {draft.description && <p className={styles.description}>{draft.description}</p>}
+          {draft.kind==="poll" && <ol className={styles.previewOptions} aria-label="Yayımlanacak seçenekler">{draft.options.map((option,index)=><li key={index}>{option}</li>)}</ol>}
+          <dl className={styles.summary}>
+            <div><dt>Kategori</dt><dd>{draft.category}</dd></div>
+            <div><dt>Yorumlar</dt><dd>{draft.commentsEnabled?"Açık":"Kapalı"}</dd></div>
+            {draft.kind==="poll" && <><div><dt>Süre</dt><dd>{draft.hours<24?`${draft.hours} saat`:`${draft.hours/24} gün`}</dd></div><div><dt>Sonuçlar</dt><dd>{draft.visibility==="always"?"Herkese açık":"Oy verdikten sonra"}</dd></div></>}
+            <div><dt>Eklenen görseller</dt><dd>{media.ids.length}</dd></div>
+          </dl>
           <p>
             Bu yayın <strong>{publishCost} puan</strong> kullanır. İşlemden sonra{" "}
             <strong>{Math.max(0, (user?.balance ?? 0) - publishCost)} puanın</strong> kalır.
