@@ -87,6 +87,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // #187: yetkisiz bölüme URL ile gelinirse panel açılıp backend 403'üne düşmez; menü kalır, içerikte erişim reddi
+  // ve ilk yetkili bölüme bağlantı gösterilir. Menü/bölüm gizleme kullanıcı deneyimidir; yetki backend RBAC'tedir.
+  const current = adminNav.find((item) => (item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href)));
+  const sectionAllowed = !current || canSeeAdminItem(roles, current);
+
   return (
     <div className={styles.shell}>
       <aside className={styles.nav} aria-label="Yönetim navigasyonu">
@@ -102,7 +107,18 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         })}
         <div className={styles.role}>Rol: {roles.join(", ")}</div>
       </aside>
-      <section className={styles.content}><AdminRolesContext.Provider value={roles}>{children}</AdminRolesContext.Provider></section>
+      <section className={styles.content}>
+        {sectionAllowed ? (
+          <AdminRolesContext.Provider value={roles}>{children}</AdminRolesContext.Provider>
+        ) : (
+          <div className={`kv-card ${styles.denied}`}>
+            <span className="eyebrow">YÖNETİM</span>
+            <h1>Bu bölüm için yetkin yok</h1>
+            <p className="kv-muted">{current?.label} bölümü rolüne açık değil. Erişebildiğin bölümler soldaki menüde.</p>
+            {visible[0] ? <Link className="kv-button" href={visible[0].href}>{visible[0].label} bölümüne git</Link> : null}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
