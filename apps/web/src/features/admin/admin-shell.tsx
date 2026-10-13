@@ -32,6 +32,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [roles, setRoles] = useState<AdminRole[]>(() => currentRoles(demo, user?.email));
   const [ready, setReady] = useState(demo || !user);
   const [error, setError] = useState("");
+  const [accessFailure, setAccessFailure] = useState<"expired" | "forbidden" | null>(null);
   const [attempt, retry] = useState(0);
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     const controller = new AbortController();
     setReady(false);
     setError("");
+    setAccessFailure(null);
     const base = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "").replace(/\/v1$/, "");
     fetch(`${base}/v1/me`, {
       credentials: "include",
@@ -55,6 +57,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       headers: { accept: "application/json" },
     })
       .then(async (response) => {
+        if (response.status === 401 || response.status === 403) {
+          setRoles([]);
+          setAccessFailure(response.status === 401 ? "expired" : "forbidden");
+          return;
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const parsed = dataOf(Me).parse(await response.json());
         setRoles(parsed.data.roles as AdminRole[]);
@@ -76,12 +83,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   if (error) return <section className="kv-card kv-state"><h1>Yönetim açılamadı.</h1><p role="alert">{error}</p><button className="kv-button" onClick={() => retry(n => n + 1)}>Yetkiyi tekrar kontrol et</button></section>;
 
-  if (!user || !canEnterAdmin(roles)) {
+  if (accessFailure === "expired") {
+    return <section className={`kv-card ${styles.denied}`}>
+      <span className="eyebrow">YÖNETİM</span>
+      <h1>Oturumun sona erdi.</h1>
+      <p role="status" className="kv-muted">Yönetim yetkini doğrulamak için yeniden giriş yapmalısın.</p>
+      <Link className="kv-button" href={`/giris?returnTo=${encodeURIComponent(pathname)}`}>Yeniden giriş yap</Link>
+    </section>;
+  }
+
+  if (!user || accessFailure === "forbidden" || !canEnterAdmin(roles)) {
     return (
       <section className={`kv-card ${styles.denied}`}>
         <span className="eyebrow">YÖNETİM</span>
         <h1>Yönetim erişimi gerekli</h1>
-        <p className="kv-muted">Bu alan yalnız yetkili moderatör ve yöneticiler içindir. Menü gizliliği kullanıcı deneyimidir; asıl yetki kontrolü backend RBAC tarafından yapılır.</p>
+        <p className="kv-muted">{accessFailure === "forbidden" ? "Sunucu bu oturumun yönetim alanına erişimini reddetti (403). Yetkin değiştiyse tekrar giriş yapabilirsin." : "Bu alan yalnız yetkili moderatör ve yöneticiler içindir. Menü gizliliği kullanıcı deneyimidir; asıl yetki kontrolü backend RBAC tarafından yapılır."}</p>
         <Link className="kv-button" href={user ? "/" : `/giris?returnTo=${encodeURIComponent(pathname)}`}>{user ? "Ana sayfaya dön" : "Giriş yap"}</Link>
       </section>
     );
