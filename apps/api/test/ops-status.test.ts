@@ -11,7 +11,8 @@ import { DEFAULT_RATE_LIMIT_SETTINGS } from "../src/modules/rate-limit/policy.ts
 import { ErrorBody, OpsStatus } from "@kararver/contracts";
 import { PgBoss } from "pg-boss";
 import { createPrismaOpsProbe } from "../src/modules/ops/probe.ts";
-import { buildOpsStatus, classifyQueues, classifyWorker, RESTORE_DRILL } from "../src/modules/ops/status.ts";
+import { buildOpsStatus, classifyBackup, classifyQueues, classifyWorker, RESTORE_DRILL } from "../src/modules/ops/status.ts";
+import { recordBackupRun, type Manifest } from "../../../packages/db/ops/backup.ts";
 import { createOpsTelemetry, percentile } from "../src/modules/ops/telemetry.ts";
 import { createHarness, memoryBackend, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 import { rbacSeeds } from "./support/rbac-probe.ts";
@@ -70,6 +71,11 @@ describe("operasyon telemetrisi (birim)", () => {
     assert.equal(classifyQueues([q]), "ok");
     assert.equal(classifyQueues([{ ...q, waiting: 3, oldestWaitingSeconds: 900 }]), "degraded");
     assert.equal(classifyQueues([{ ...q, failed24h: 1 }]), "degraded");
+    const h = (n: number) => ago(n * 3600);
+    assert.equal(classifyBackup(null, now), "unknown");
+    assert.equal(classifyBackup(h(25), now), "ok");
+    assert.equal(classifyBackup(h(30), now), "degraded");
+    assert.equal(classifyBackup(h(80), now), "down");
   });
 
   test("yoklama hata verirse bileşen down/unknown; yanıt yine sözleşmeye uyar", async () => {
@@ -77,7 +83,7 @@ describe("operasyon telemetrisi (birim)", () => {
       throw new Error("bağlantı yok: postgres://gizli@host/db");
     };
     const status = await buildOpsStatus({
-      probe: { database: fail, workerLastSeen: fail, queues: fail },
+      probe: { database: fail, workerLastSeen: fail, queues: fail, lastBackup: fail },
       telemetry: createOpsTelemetry(),
       env: "test",
       startedAt: new Date(),
@@ -86,6 +92,7 @@ describe("operasyon telemetrisi (birim)", () => {
     OpsStatus.parse(status);
     assert.equal(status.components.database.status, "down");
     assert.equal(status.components.queue.status, "unknown");
+    assert.deepEqual([status.backup.status, status.backup.lastBackupAt], ["unknown", null]);
     assert.ok(!JSON.stringify(status).includes("postgres://"), "hata ayrıntısı/bağlantı adresi sızmaz");
   });
 });
@@ -245,6 +252,32 @@ describe("operasyon yoklaması (postgres + gerçek pg-boss)", { skip: backend ? 
     const without = await createPrismaOpsProbe(h.prisma!, { schema, contentJobsTable: "public.yok_content_jobs" }).queues();
     assert.ok(!without.some((q) => q.name === "content.jobs"));
     assert.throws(() => createPrismaOpsProbe(h.prisma!, { contentJobsTable: "content_jobs; DROP TABLE users" }), /geçersiz tablo/);
+  });
+
+  test("son yedek: db:backup kaydı panelde; yanlış hedef etiketi ve sha reddedilir", async () => {
+    const url = resolveTestDatabaseUrl(path.resolve(import.meta.dirname, "../../.."))!;
+    const probe = createPrismaOpsProbe(h.prisma!, { schema });
+    const status = (at: Date) => buildOpsStatus({ probe, telemetry: createOpsTelemetry(), env: "test", startedAt: at, now: () => at });
+    const manifest = { sizeBytes: 4096, sha256: "a".repeat(64), dumpMs: 1200, serverVersion: "17.10 (EDB)" } as Manifest;
+    const finished = new Date(Date.now() + 365 * 86_400_000); // diğer testlerin kayıtlarından yeni olsun
+    await recordBackupRun(url, manifest, "local", finished);
+    try {
+      const fresh = await status(new Date(finished.getTime() + 3_600_000));
+      OpsStatus.parse(fresh);
+      assert.deepEqual([fresh.backup.status, fresh.backup.lastBackupAt], ["ok", finished.toISOString()]);
+      assert.equal((await status(new Date(finished.getTime() + 100 * 3_600_000))).backup.status, "down");
+      const row = await h.prisma!.opsBackupRun.findFirst({ where: { finishedAt: finished } });
+      assert.deepEqual([row?.destination, row?.sizeBytes, row?.serverVersion], ["local", 4096n, "17.10"]);
+      await assert.rejects(recordBackupRun(url, manifest, "s3://bucket/key", finished), /geçersiz yedek hedefi/);
+      // DB CHECK'i de korur (araç dışından yazılsa bile): adres ve geçersiz sha kabul edilmez.
+      const insert = (destination: string, sha: string) =>
+        h.prisma!.$executeRaw`INSERT INTO ops_backup_runs (finished_at, destination, size_bytes, sha256, duration_ms, server_version)
+          VALUES (now(), ${destination}, 1, ${sha}, 1, '17')`;
+      await assert.rejects(insert("https://x", "a".repeat(64)));
+      await assert.rejects(insert("local", "xyz"));
+    } finally {
+      await h.prisma!.opsBackupRun.deleteMany({ where: { finishedAt: finished } });
+    }
   });
 
   test("kuyruk sayıları, bekleyen iş ve worker izi gerçek pg-boss tablolarından", async () => {

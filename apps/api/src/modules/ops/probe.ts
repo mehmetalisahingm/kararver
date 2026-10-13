@@ -10,6 +10,8 @@ export type OpsProbe = {
   /** Worker'ın son iz zamanı; hiç iş almadıysa null. pg-boss şeması yoksa hata fırlatır. */
   workerLastSeen(): Promise<Date | null>;
   queues(): Promise<QueueRow[]>;
+  /** Son başarılı yedek (KV-48 `db:backup` kaydı); hiç yoksa null. Tablo yoksa hata fırlatır. */
+  lastBackup(): Promise<Date | null>;
 };
 
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -36,6 +38,10 @@ export function createPrismaOpsProbe(prisma: PrismaClient, options: { schema?: s
       const [row] = await prisma.$queryRawUnsafe<Array<{ at: Date | null }>>(
         `SELECT max(COALESCE(completed_on, started_on)) AS at FROM ${job} WHERE started_on > now() - interval '1 day'`,
       );
+      return row?.at ?? null;
+    },
+    async lastBackup() {
+      const [row] = await prisma.$queryRaw<Array<{ at: Date | null }>>`SELECT max(finished_at) AS at FROM ops_backup_runs`;
       return row?.at ?? null;
     },
     async queues() {
