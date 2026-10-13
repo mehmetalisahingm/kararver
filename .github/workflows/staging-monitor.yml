@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   issues: write
 
 concurrency:
@@ -63,10 +64,69 @@ jobs:
           printf '%s\n' "${problems[@]}" > problems.txt
           [ ${#problems[@]} -eq 0 ] && echo "ok=true" >> "$GITHUB_OUTPUT" || echo "ok=false" >> "$GITHUB_OUTPUT"
 
+      # Railway yalnız CI'ı yeşil main commit'ini deploy eder. 9–12 Ekim'de main 3 gün kırmızı kaldı ve staging API hiç
+      # güncellenmedi; Vercel ise her merge'ü aldı (yeni web + eski API). Bu adım iki durumu da alarma çevirir:
+      # (1) staging, CI'ı yeşil son main commit'inin DEPLOY_LAG_MAX_MIN dakikadan uzun süre gerisinde,
+      # (2) main CI'ı MAIN_RED_MAX_HOURS saattir kırmızı (staging bu sürede yeni sürüm alamaz).
+      - name: Deploy gecikmesi ve main CI
+        id: lag
+        if: steps.health.outputs.sha != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_SHA: ${{ steps.health.outputs.sha }}
+          DEPLOY_LAG_MAX_MIN: "60"
+          MAIN_RED_MAX_HOURS: "24"
+        shell: bash
+        run: |
+          set -u
+          problems=()
+          now=$(date -u +%s)
+          # Son 30 tamamlanmış main push çalıştırması (en yeni önce); iptal edilenler karar vermez.
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/foundation.yml/runs?branch=main&event=push&status=completed&per_page=30" \
+            --jq '.workflow_runs[] | select(.conclusion != "cancelled") | "\(.conclusion) \(.head_sha) \(.updated_at)"' 2>/dev/null || true)
+          green=$(printf '%s\n' "$runs" | awk '$1 == "success" { print; exit }')
+          latest=$(printf '%s\n' "$runs" | head -n1)
+          if [ -z "$runs" ]; then
+            echo "- Deploy gecikmesi: CI geçmişi okunamadı (atlandı)" >> "$GITHUB_STEP_SUMMARY"
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # (2) main uzun süredir kırmızı mı?
+          if [ "${latest%% *}" = "failure" ]; then
+            last_green_at=$(printf '%s' "$green" | awk '{ print $3 }')
+            red_hours=$(( (now - $(date -u -d "${last_green_at:-1970-01-01T00:00:00Z}" +%s)) / 3600 ))
+            if [ "$red_hours" -ge "$MAIN_RED_MAX_HOURS" ]; then
+              problems+=("main CI ${red_hours} saattir kırmızı: staging yeni sürüm alamıyor")
+            fi
+          fi
+
+          # (1) staging, CI'ı yeşil son main commit'inin gerisinde mi?
+          green_sha=$(printf '%s' "$green" | awk '{ print $2 }')
+          green_at=$(printf '%s' "$green" | awk '{ print $3 }')
+          if [[ "$STAGING_SHA" =~ ^[0-9a-f]{12}$ ]] && [[ "$green_sha" =~ ^[0-9a-f]{40}$ ]] && [ "${green_sha:0:12}" != "$STAGING_SHA" ]; then
+            # "ahead": yeşil commit staging'in ilerisinde. "behind"/"identical": staging daha yeni ya da aynı (alarm yok).
+            # Yalnız API/worker'ı etkileyen değişiklik sayılır: web (Vercel), doküman ve workflow değişikliği API deploy'u gerektirmez.
+            relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$STAGING_SHA...$green_sha" --jq '.status' 2>/dev/null || echo "bilinmiyor")
+            api_changes=$(gh api "repos/$GITHUB_REPOSITORY/compare/$STAGING_SHA...$green_sha" --jq '.files[].filename' 2>/dev/null \
+              | grep -Ev '^(apps/web/|docs/|\.github/)|\.md$' | wc -l || echo 0)
+            lag_min=$(( (now - $(date -u -d "$green_at" +%s)) / 60 ))
+            if [ "$relation" = "ahead" ] && [ "$api_changes" -gt 0 ] && [ "$lag_min" -ge "$DEPLOY_LAG_MAX_MIN" ]; then
+              problems+=("staging main'in gerisinde: çalışan ${STAGING_SHA}, CI'ı yeşil son main ${green_sha:0:12} (${lag_min} dk önce, API'yi etkileyen ${api_changes} dosya)")
+            fi
+          fi
+
+          {
+            echo "- Son yeşil main: \`${green_sha:0:12}\` · son main CI: ${latest%% *}"
+            if [ ${#problems[@]} -gt 0 ]; then printf -- '- ✖ %s\n' "${problems[@]}"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "${problems[@]}" >> problems.txt
+          [ ${#problems[@]} -eq 0 ] && echo "ok=true" >> "$GITHUB_OUTPUT" || echo "ok=false" >> "$GITHUB_OUTPUT"
+
       - name: Alarm issue'sunu aç / güncelle / kapat
         env:
           GH_TOKEN: ${{ github.token }}
-          OK: ${{ steps.health.outputs.ok }}
+          OK: ${{ steps.health.outputs.ok == 'true' && steps.lag.outputs.ok != 'false' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         shell: bash
         run: |
@@ -76,7 +136,7 @@ jobs:
             if [ -n "$open" ]; then gh issue close "$open" -R "$GITHUB_REPOSITORY" --comment "✅ Staging yeniden sağlıklı ($RUN_URL)."; fi
             exit 0
           fi
-          msg=$(printf '**Staging sağlık kontrolü başarısız** (%s)\n\n%s\n\nRunbook: docs/KV-49_OPERATIONS.md "Olay müdahalesi". Sorumlu: @farukkemree' "$RUN_URL" "$(sed 's/^/- /' problems.txt)")
+          msg=$(printf '**Staging sağlık kontrolü başarısız** (%s)\n\n%s\n\nRunbook: docs/KV-49_OPERATIONS.md "Olay müdahalesi". Sorumlu: @farukkemree' "$RUN_URL" "$(grep -v '^$' problems.txt | sed 's/^/- /')")
           if [ -n "$open" ]; then
             gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$msg"
           else
