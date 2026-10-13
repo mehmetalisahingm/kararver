@@ -65,7 +65,7 @@
 | `api` | Süreç | 15 dakikada ≥ 20 istek ve 5xx oranı > %5 ise `degraded` |
 | `database` | `SELECT current_setting('server_version')` süresi | > 500 ms `degraded`; sorgu hata verirse `down` |
 | `worker` | Dosya heartbeat'i (aynı serviste) ya da worker'ın son aldığı pg-boss işi (ayrı serviste). Dakikalık cron olduğu için iz sürekli tazelenir. | ≤ 3 dk `ok`, ≤ 10 dk `degraded`, daha eski `down`; iz yoksa `unknown` |
-| `queue` | `pgboss.queue` + `pgboss.job`: bekleyen, çalışan, son 24 saatte başarısız/tamamlanan, en eski bekleyen | 5 dakikadan eski bekleyen iş ya da 24 saatte başarısız iş varsa `degraded`; şema okunamazsa `unknown` |
+| `queue` | `pgboss.queue` + `pgboss.job`: bekleyen, çalışan, son 24 saatte başarısız/tamamlanan, en eski bekleyen. Ayrıca `content.jobs`: toplu içerik işleri (#181), kendi tablosundan (`content_jobs`); bekleme işin son durum değişikliğinden ölçülür, sahiplenmesi 5 dakikayı aşan çalışan iş de bekliyor sayılır; tablo yoksa satır görünmez | 5 dakikadan eski bekleyen iş ya da 24 saatte başarısız iş varsa `degraded`; şema okunamazsa `unknown` |
 | `http` | Süreç içi son 15 dk: istek, 5xx, oran, P50/P95/P99, en yavaş 5 route | Ölçüm yoksa oran ve gecikme `null` |
 | `security` | Süreç içi son 15 dk: hız sınırı retleri ve giriş kilitleri, kural adına göre | — |
 | `backup` | Zamanlanmış yedek henüz yok, bu yüzden `lastBackupAt: null` ve `unknown`. Son restore tatbikatı: staging 2026-10-05, RTO 315 sn (#50). | — |
