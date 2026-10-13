@@ -3,6 +3,8 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
+import { ApiClient } from "../../lib/api-client";
+import { EmailChangeSection } from "../../features/account/email-change-section";
 import type { Poll, PublicProfile } from "../../lib/model";
 
 export default function Page() {
@@ -140,6 +142,8 @@ export default function Page() {
           <Link href="/">Akışa dön</Link>
         </div>
       </section>
+
+      {client instanceof ApiClient && <EmailChangeSection client={client} currentEmail={user.email} />}
 
       {realProfile && (
         <section className="kv-card screen-stack" aria-labelledby="saved-title">

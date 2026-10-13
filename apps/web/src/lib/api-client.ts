@@ -1,4 +1,4 @@
-import { DataExportPackage, DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
+import { DataExportPackage, EmailChangeCancelled, EmailChangeConfirmed, EmailChangeStarted, EmailChangeView, DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
 import { AdminClient } from "../features/admin/admin-client.ts";
 import { CommunityClient, ReportClient } from "../features/community/community-client.ts";
@@ -69,6 +69,23 @@ export class ApiClient implements ProductClient {
   /** #181 KVKK: kendi veri paketini indirir (e-postadaki bağlantı token'ı + oturum). Paket sunucuda çözülüp JSON döner. */
   async downloadDataExport(token: string) {
     return dataOf(DataExportPackage).parse(await this.http.request("dataExports.download", { body: { token } })).data;
+  }
+  /** #181 e-posta değişimi: parola ile başlatır; bağlantılar yeni ve eski adrese gider. Ayar kapalıyken FEATURE_DISABLED. */
+  async requestEmailChange(newEmail: string, password: string) {
+    return dataOf(EmailChangeStarted).parse(await this.http.request("me.emailChange.request", { body: { newEmail, password } })).data;
+  }
+  async getEmailChange() {
+    return dataOf(EmailChangeView.nullable()).parse(await this.http.request("me.emailChange.get")).data;
+  }
+  async cancelEmailChange() {
+    return dataOf(EmailChangeCancelled).parse(await this.http.request("me.emailChange.cancel")).data;
+  }
+  /** E-postadaki bağlantının token'ı (oturum gerekmez). */
+  async confirmEmailChange(token: string) {
+    return dataOf(EmailChangeConfirmed).parse(await this.http.request("auth.emailChange.confirm", { body: { token } })).data;
+  }
+  async denyEmailChange(token: string) {
+    await this.http.request("auth.emailChange.deny", { body: { token } });
   }
   async getDecision(id: string, signal?: AbortSignal) {
     return dataOf(DecisionState).parse(await this.http.request("decisions.get", { params: { id }, signal })).data;

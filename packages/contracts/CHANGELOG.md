@@ -9,6 +9,16 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.28.0 — 2026-10-14 (Mert, #181 e-posta değişimi)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, şemalar, yetkiler ve varsayılan kapalı ayar.
+
+- **Eklendi (kullanıcı):** `me.emailChange.request` (parola + yeni adres), `me.emailChange.get`, `me.emailChange.cancel`; **(token, oturumsuz):** `auth.emailChange.confirm` (yeni adres doğrulaması / eski adres onayı) ve `auth.emailChange.deny` (eski adreste "bu ben değilim": talep reddedilir, oturumlar kapanır). **(SUPER_ADMIN, gerekçeli):** `admin.users.emailChange.start` (destek yolu; yeni adres doğrulaması yine zorunlu), `.list`, `.cancel`.
+- Yetkiler `account.emailChange.manage` (verified), `account.emailChange.confirm` (public, token), `user.emailChange.manage` (super_admin, sanctionTarget); audit işlemleri `request/cancel`, `verify/approve/apply/deny`, `start/cancel`.
+- **Ayar:** `account.emailChangeEnabled` (boolean, varsayılan **false**): posta altyapısı doğrulanmadan açılmaz. Kapalıyken 503 FEATURE_DISABLED; iptal/reddet/onay çalışır.
+- Şemalar: `EmailChangeView` (maskeli adres, yalnız açıkken), `EmailChangeStarted`, `EmailChangeConfirmed`, `EmailChangeStatus`.
+- **Davranış:** e-posta yalnız iki taraflı (veya destek yolunda yeni adres) bağlantı tıklamasıyla değişir; tamamlanınca yeni adres doğrulanmış sayılır ve bütün oturumlar kapanır.
+
 ## 1.27.0 — 2026-10-14 (Mert, #181 hesap anonimleştirme ve yasal saklama)
 
 Kırıcı değişiklik yok: yeni endpoint'ler, şemalar ve yetkiler (yalnız SUPER_ADMIN).

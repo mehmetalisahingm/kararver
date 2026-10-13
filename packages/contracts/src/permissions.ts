@@ -84,6 +84,7 @@ export const actions = Object.freeze({
   "account.resendVerification": rule("user", "Doğrulama e-postası"),
   "account.read": rule("user", "Kendi hesabını okuma"),
   "account.update": rule("user", "Kendi hesabını düzenleme"),
+  "account.emailChange.confirm": rule("public", "E-posta değişimi bağlantısını onaylama/reddetme (yetki token'dır)"),
   "reaction.set": rule("user", "Beğeni/dislike ekle/kaldır"),
   "bookmark.set": rule("user", "Kaydet/kaldır"),
   "bookmark.read": rule("user", "Kaydedilenler"),
@@ -100,6 +101,7 @@ export const actions = Object.freeze({
   "notification.update": rule("user", "Okundu, tercih ve sessize alma"),
 
   // ── verified: user + e-posta doğrulanmış ──
+  "account.emailChange.manage": rule("verified", "Kendi e-posta değişimini başlatma, görme ve iptal etme (#181)"),
   "poll.create": rule("verified", "Anket/tartışma yayımlama", { restrictedBy: "POSTING" }),
   "vote.cast": rule("verified", "Oy ver/değiştir; anket sahibi kendi anketine oy veremez", {
     guard: "selfVote",
@@ -189,6 +191,10 @@ export const actions = Object.freeze({
     guard: "sanctionTarget",
     requires: ["targetUserId", "targetRoles"],
   }),
+  "user.emailChange.manage": rule("super_admin", "Destek yoluyla e-posta değişimi başlatma/iptal; kendi hesabı için kullanılamaz (#181)", {
+    guard: "sanctionTarget",
+    requires: ["targetUserId", "targetRoles"],
+  }),
   "user.legalHold.manage": rule("super_admin", "Hesaba yasal saklama koyma/kaldırma; açıkken anonimleştirme engellenir (#181)"),
   "ops.read": rule("super_admin", "Operasyon merkezi: bileşen, kuyruk, hata ve yedek durumu"),
   "emergency.update": rule("super_admin", "Acil durum anahtarları"),
@@ -207,6 +213,11 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "auth.password.reset": "account.recoverPassword",
   "me.get": "account.read",
   "me.update": "account.update",
+  "me.emailChange.request": "account.emailChange.manage",
+  "me.emailChange.get": "account.emailChange.manage",
+  "me.emailChange.cancel": "account.emailChange.manage",
+  "auth.emailChange.confirm": "account.emailChange.confirm",
+  "auth.emailChange.deny": "account.emailChange.confirm",
 
   "polls.create": "poll.create",
   "polls.get": "content.read",
@@ -314,6 +325,9 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.sanctions.lift": "user.sanction.lift",
   "admin.roles.put": "user.role.assign",
   "admin.users.passwordReset.send": "user.password.reset",
+  "admin.users.emailChange.start": "user.emailChange.manage",
+  "admin.users.emailChange.list": "user.emailChange.manage",
+  "admin.users.emailChange.cancel": "user.emailChange.manage",
   "admin.users.erasure.preview": "user.anonymize",
   "admin.users.erasure.create": "user.anonymize",
   "admin.users.legalHold.put": "user.legalHold.manage",

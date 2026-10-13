@@ -18,6 +18,7 @@ import type { RateLimitStore } from "../../src/modules/rate-limit/store.ts";
 import { createMemoryRateLimitStore } from "./memory-rate-limit-store.ts";
 import { createPrismaAuditStore } from "../../src/modules/audit/prisma-store.ts";
 import { createPrismaAdminUserStore } from "../../src/modules/admin-users/prisma-store.ts";
+import { createPrismaEmailChangeStore } from "../../src/modules/email-change/prisma-store.ts";
 import { createPrismaAccountErasureStore } from "../../src/modules/account-erasure/prisma-store.ts";
 import { createPrismaDataExportStore } from "../../src/modules/data-exports/prisma-store.ts";
 import { createPrismaAuthStore } from "../../src/modules/auth/prisma-store.ts";
@@ -263,6 +264,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     adminUserStore: backend.prisma ? createPrismaAdminUserStore(backend.prisma) : undefined,
     dataExportStore: backend.prisma ? createPrismaDataExportStore(backend.prisma) : undefined,
     accountErasureStore: backend.prisma ? createPrismaAccountErasureStore(backend.prisma) : undefined,
+    emailChangeStore: backend.prisma ? createPrismaEmailChangeStore(backend.prisma) : undefined,
     metricsStore: backend.prisma ? createPrismaMetricsStore(backend.prisma, () => clock.now) : undefined,
     notificationStore: backend.prisma ? createPrismaNotificationStore(backend.prisma) : undefined,
     pollSettings: fixed ? async () => pollSettings : undefined,

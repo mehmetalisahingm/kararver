@@ -6,6 +6,7 @@ import { buildApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
 import { createMailer } from "./mail/mailer.ts";
 import { createPrismaAdminUserStore } from "./modules/admin-users/prisma-store.ts";
+import { createPrismaEmailChangeStore } from "./modules/email-change/prisma-store.ts";
 import { createPrismaAccountErasureStore } from "./modules/account-erasure/prisma-store.ts";
 import { createPrismaDataExportStore } from "./modules/data-exports/prisma-store.ts";
 import { createArgon2Hasher } from "./modules/auth/crypto.ts";
@@ -89,6 +90,7 @@ const app = buildApp({
   adminUserStore: createPrismaAdminUserStore(prisma),
   dataExportStore: createPrismaDataExportStore(prisma),
   accountErasureStore: createPrismaAccountErasureStore(prisma),
+  emailChangeStore: createPrismaEmailChangeStore(prisma),
   metricsStore: createPrismaMetricsStore(prisma),
   opsProbe: createPrismaOpsProbe(prisma),
   commentStore: createPrismaCommentStore(prisma),

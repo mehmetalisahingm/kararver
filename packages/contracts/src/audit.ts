@@ -56,6 +56,10 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   "privacy.export.download": ["download"],
   // #181 anonimleştirme: geri alınamaz; yasal saklama koyma/kaldırma ayrı işlemdir.
   "user.anonymize": ["anonymize"],
+  // #181 e-posta değişimi: adres hiçbir kayıtta yoktur; yalnız talep kimliği ve kaynak. Kullanıcı/token işlemlerinin aktörü hesabın sahibidir.
+  "account.emailChange.manage": ["request", "cancel"],
+  "account.emailChange.confirm": ["verify", "approve", "apply", "deny"],
+  "user.emailChange.manage": ["start", "cancel"],
   "user.legalHold.manage": ["place", "release"],
   "user.sanction.lift": ["lift"],
   // admin.roles.put: grant = USER'a rol verme, revoke = rolü kaldırıp USER'a düşürme, change = rolden role geçiş.
@@ -110,6 +114,7 @@ export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditActi
   "community.owner.assign",
   "privacy.export.manage",
   "user.anonymize",
+  "user.emailChange.manage",
   "user.legalHold.manage",
   "user.sanction",
   "user.sanction.lift",

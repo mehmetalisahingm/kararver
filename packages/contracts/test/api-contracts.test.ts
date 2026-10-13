@@ -75,6 +75,9 @@ describe("endpoint registry", () => {
     const publicMutations = endpoints.filter((e) => e.method !== "GET" && e.auth === "public").map((e) => e.id);
     assert.deepEqual(publicMutations.sort(), [
       "auth.email.verify",
+      // #181: token taşıyan e-posta değişimi bağlantıları (oturumsuz; yetki token'dır).
+      "auth.emailChange.confirm",
+      "auth.emailChange.deny",
       "auth.login",
       "auth.password.forgot",
       "auth.password.reset",

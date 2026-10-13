@@ -54,6 +54,11 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /auth/password/reset`<br>Token ile yeni şifre; bütün oturumlar iptal edilir · `auth.password.reset` | G | 204 | — | Faruk `auth` | Ümit (web, KV-13) | #11 #15 | hazır |
 | `GET /me`<br>Oturum sahibinin hesabı · `me.get` | U | 200 | — | Faruk `users` | Ümit (web, KV-13), Mehmet (profil, KV-22) | #11 #15 #24 | hazır |
 | `PATCH /me`<br>Görünen ad, biyografi, avatar · `me.update` | U | 200 | doğal | Faruk `users` | Ümit (web, KV-13), Mehmet (profil, KV-22) | #11 #24 | hazır |
+| `POST /me/email-change`<br>E-posta değişimi başlat (parola + yeni adres) · `me.emailChange.request` | V | 202 | — | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
+| `GET /me/email-change`<br>Son e-posta değişimi talebinin durumu · `me.emailChange.get` | V | 200 | — | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
+| `DELETE /me/email-change`<br>Açık e-posta değişimi talebini iptal et · `me.emailChange.cancel` | V | 200 | doğal | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
+| `POST /auth/email-change/confirm`<br>E-posta değişimi bağlantısını onayla (yeni adres doğrulaması veya eski adres onayı) · `auth.emailChange.confirm` | G | 200 | doğal | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
+| `POST /auth/email-change/deny`<br>Eski adresteki 'bu ben değilim' bağlantısı: talebi reddet ve oturumları kapat · `auth.emailChange.deny` | G | 200 | doğal | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
 
 ### Anket / tartışma, oy, tepki
 
@@ -201,6 +206,9 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /admin/users/:id/erasure`<br>Hesabı geri alınamaz biçimde anonimleştir · `admin.users.erasure.create` | SA | 200 | doğal | Mert `account-erasure` | Utku (admin UI) | #181 | hazır |
 | `PUT /admin/users/:id/legal-hold`<br>Hesaba yasal saklama koy (anonimleştirmeyi engeller) · `admin.users.legalHold.put` | SA | 200 | doğal | Mert `account-erasure` | Utku (admin UI) | #181 | hazır |
 | `POST /admin/users/:id/legal-hold/release`<br>Yasal saklamayı kaldır · `admin.users.legalHold.release` | SA | 200 | doğal | Mert `account-erasure` | Utku (admin UI) | #181 | hazır |
+| `POST /admin/users/:id/email-change`<br>Destek yoluyla e-posta değişimi başlat (yeni adres doğrulaması zorunlu) · `admin.users.emailChange.start` | SA | 202 | — | Mert `email-change` | Utku (admin UI) | #181 | hazır |
+| `GET /admin/users/:id/email-change`<br>Hesabın son e-posta değişimi talepleri (son 10, maskeli) · `admin.users.emailChange.list` | SA | 200 | — | Mert `email-change` | Utku (admin UI) | #181 | hazır |
+| `POST /admin/users/:id/email-change/cancel`<br>Açık e-posta değişimi talebini iptal et · `admin.users.emailChange.cancel` | SA | 200 | doğal | Mert `email-change` | Utku (admin UI) | #181 | hazır |
 | `GET /admin/users/:id/sanctions`<br>Kullanıcının bütün yaptırım geçmişi (kaldırılan ve süresi dolanlar dahil) · `admin.users.sanctions` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id/reports`<br>Kullanıcıya (hesap veya içerik) yapılan ya da kullanıcının yaptığı raporlar · `admin.users.reports` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id/activity`<br>Kullanıcının anket ve yorumları (gizli/kaldırılmış dahil) · `admin.users.activity` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
@@ -272,7 +280,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #66 | `POST /polls`, `PUT /polls/:id/reaction`, `DELETE /polls/:id/reaction`, `PUT /comments/:id/reaction`, `DELETE /comments/:id/reaction` |
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
 | #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
-| #181 | `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver`, `GET /admin/users/:id/erasure`, `POST /admin/users/:id/erasure`, `PUT /admin/users/:id/legal-hold`, `POST /admin/users/:id/legal-hold/release` |
+| #181 | `POST /me/email-change`, `GET /me/email-change`, `DELETE /me/email-change`, `POST /auth/email-change/confirm`, `POST /auth/email-change/deny`, `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver`, `GET /admin/users/:id/erasure`, `POST /admin/users/:id/erasure`, `PUT /admin/users/:id/legal-hold`, `POST /admin/users/:id/legal-hold/release`, `POST /admin/users/:id/email-change`, `GET /admin/users/:id/email-change`, `POST /admin/users/:id/email-change/cancel` |
 | #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
 | #186 | `GET /admin/ops` |
 <!-- END:unblocks -->

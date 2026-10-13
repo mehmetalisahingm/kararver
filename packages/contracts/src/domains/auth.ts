@@ -22,7 +22,34 @@ export const Me = z.strictObject({
   createdAt: Timestamp,
 });
 
+/**
+ * #181 e-posta değişimi (KV-33 §11). Hiçbir yanıtta ham adres, token veya parola yoktur; yeni adres yalnız maskeli ve yalnız
+ * talep açıkken görünür (d***@example.test).
+ */
+export const EmailChangeStatus = z.enum(["OPEN", "COMPLETED", "CANCELLED", "DENIED", "EXPIRED", "FAILED"]);
+export const EmailChangeView = z.strictObject({
+  id: Id,
+  origin: z.enum(["USER", "ADMIN"]),
+  status: EmailChangeStatus,
+  /** Yalnız OPEN iken; sonlanmış talepte yeni adres silinmiştir. */
+  newEmailMasked: z.string().nullable(),
+  /** Eski adres onayı gerekir mi (kullanıcı başlatması: evet; yönetici başlatması: hayır). */
+  requiresOld: z.boolean(),
+  newConfirmed: z.boolean(),
+  oldConfirmed: z.boolean(),
+  expiresAt: Timestamp,
+  createdAt: Timestamp,
+  finishedAt: Timestamp.nullable(),
+  /** FAILED/CANCELLED için kısa kod (ör. email_taken, mail_failed, replaced, account_erased). */
+  failure: z.string().nullable(),
+});
+/** SEND_FAILED: bağlantılar gönderilemedi, talep açılmadı (yeniden denenebilir). */
+export const EmailChangeStarted = z.strictObject({ status: z.enum(["VERIFICATION_SENT", "SEND_FAILED"]), expiresAt: Timestamp.nullable() });
+export const EmailChangeCancelled = z.strictObject({ cancelled: z.boolean() });
+export const EmailChangeConfirmed = z.strictObject({ status: z.enum(["waiting", "applied"]), step: z.enum(["new", "old"]) });
+
 const auth = { owner: "Faruk", module: "auth" } as const;
+const emailChange = { owner: "Mert", module: "email-change" } as const;
 const users = { owner: "Faruk", module: "users" } as const;
 const web = ["Ümit (web, KV-13)"];
 
@@ -207,5 +234,108 @@ export const authEndpoints = [
     idempotency: "natural",
     cache: "private",
     notes: ["avatarMediaId kullanıcının kendi AVATAR amaçlı, REJECTED olmayan görseli olmalı; APPROVED olana kadar avatarUrl null döner."],
+  }),
+  defineEndpoint({
+    id: "me.emailChange.request",
+    domain: "auth",
+    method: "POST",
+    path: "/me/email-change",
+    summary: "E-posta değişimi başlat (parola + yeni adres)",
+    auth: "verified",
+    provider: emailChange,
+    consumers: web,
+    unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: { body: z.strictObject({ newEmail: Email, password: z.string().min(1).max(128) }) },
+    responses: { 202: dataOf(EmailChangeStarted) },
+    errors: ["VALIDATION_ERROR", "INVALID_CREDENTIALS", "RATE_LIMITED", "FEATURE_DISABLED", "CONFLICT"],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "Sahiplik kanıtı mevcut parola (yanlış parola giriş başarısızlık sayacına eklenir, 401 INVALID_CREDENTIALS). Yeni adrese doğrulama, eski adrese onay/reddet bağlantısı gider; ikisi de tıklanmadan e-posta değişmez. Doğrulamayı atlayan yol yoktur.",
+      "Yeni adres başka hesapta kayıtlıysa yanıt aynıdır (202 VERIFICATION_SENT) ve o adrese bilgilendirme gider; hesap varlığı sızmaz. Hesapta açık talep varsa yenisi öncekini iptal eder (replaced).",
+      "409 CONFLICT details[0].code: same_email (yeni adres mevcutla aynı). Saatte en çok 3 talep ve 60 sn bekleme (429). Ayar account.emailChangeEnabled kapalıyken 503 FEATURE_DISABLED.",
+      "Bağlantılar 24 saat geçerli; ham token yalnız e-postada ve URL fragment'ında taşınır.",
+      "Tamamlanınca: e-posta değişir ve doğrulanmış sayılır (yeni adrese tıklandığı için), bütün oturumlar kapanır, bekleyen doğrulama/sıfırlama bağlantıları geçersiz olur, eski ve yeni adrese bildirim gider.",
+    ],
+  }),
+  defineEndpoint({
+    id: "me.emailChange.get",
+    domain: "auth",
+    method: "GET",
+    path: "/me/email-change",
+    summary: "Son e-posta değişimi talebinin durumu",
+    auth: "verified",
+    provider: emailChange,
+    consumers: web,
+    unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: {},
+    responses: { 200: dataOf(EmailChangeView.nullable()) },
+    errors: [],
+    idempotency: "none",
+    cache: "private",
+  }),
+  defineEndpoint({
+    id: "me.emailChange.cancel",
+    domain: "auth",
+    method: "DELETE",
+    path: "/me/email-change",
+    summary: "Açık e-posta değişimi talebini iptal et",
+    auth: "verified",
+    provider: emailChange,
+    consumers: web,
+    unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: {},
+    responses: { 200: dataOf(EmailChangeCancelled) },
+    errors: [],
+    idempotency: "natural",
+    cache: "private",
+    notes: ["Idempotent: açık talep yoksa cancelled=false, değişiklik ve audit yok. Özellik kapalıyken de çalışır (güvenli yön)."],
+  }),
+  defineEndpoint({
+    id: "auth.emailChange.confirm",
+    domain: "auth",
+    method: "POST",
+    path: "/auth/email-change/confirm",
+    summary: "E-posta değişimi bağlantısını onayla (yeni adres doğrulaması veya eski adres onayı)",
+    auth: "public",
+    provider: emailChange,
+    consumers: web,
+    unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: { body: z.strictObject({ token: Token }) },
+    responses: { 200: dataOf(EmailChangeConfirmed) },
+    errors: ["TOKEN_INVALID_OR_EXPIRED", "CONFLICT"],
+    idempotency: "natural",
+    cache: "private",
+    notes: [
+      "Oturum gerekmez (bağlantı başka cihazda açılabilir); yetki token'dır. step=new: yeni adres doğrulandı; step=old: eski adres onayladı. İki gerekli onay tamamlanınca applied döner; aksi halde waiting.",
+      "Tekrar tıklama idempotenttir (aynı sonuç, yeni audit yok). Süresi dolmuş, iptal edilmiş, reddedilmiş veya başarısız talebin token'ı 400 TOKEN_INVALID_OR_EXPIRED.",
+      "409 CONFLICT details[0].code: email_taken (yeni adres bu arada başka hesapta alındı; talep FAILED olur).",
+      "Özellik kapalıyken de çalışır (başlamış talepler sonlanabilir).",
+    ],
+  }),
+  defineEndpoint({
+    id: "auth.emailChange.deny",
+    domain: "auth",
+    method: "POST",
+    path: "/auth/email-change/deny",
+    summary: "Eski adresteki 'bu ben değilim' bağlantısı: talebi reddet ve oturumları kapat",
+    auth: "public",
+    provider: emailChange,
+    consumers: web,
+    unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: { body: z.strictObject({ token: Token }) },
+    responses: { 200: dataOf(z.strictObject({ denied: z.literal(true) })) },
+    errors: ["TOKEN_INVALID_OR_EXPIRED", "CONFLICT"],
+    idempotency: "natural",
+    cache: "private",
+    notes: [
+      "Yalnız ESKİ adrese giden token geçerlidir. Açık talep DENIED olur, hesabın bütün oturumları kapanır ve bekleyen doğrulama/sıfırlama bağlantıları geçersiz olur; eski adrese bilgilendirme gider. Tekrar tıklama 200 (idempotent).",
+      "409 CONFLICT details[0].code: already_applied (e-posta zaten değişmiş; geri alma destek/yönetici yoluyla).",
+    ],
   }),
 ];

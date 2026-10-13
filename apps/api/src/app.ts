@@ -11,6 +11,8 @@ import { createRouter } from "./http/route.ts";
 import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import { registerEmailChangeRoutes } from "./modules/email-change/routes.ts";
+import type { EmailChangeStore } from "./modules/email-change/store.ts";
 import { registerAccountErasureRoutes } from "./modules/account-erasure/routes.ts";
 import type { AccountErasureStore } from "./modules/account-erasure/store.ts";
 import { registerDataExportRoutes } from "./modules/data-exports/routes.ts";
@@ -156,6 +158,10 @@ export type AppDeps = {
   isCommentsEnabled?: () => Promise<boolean>;
   /** communities.ownershipEnabled (#184); verilmezse ayar servisinden, o da yoksa kapalı. */
   isOwnershipEnabled?: () => Promise<boolean>;
+  /** account.emailChangeEnabled (#181); verilmezse ayar servisinden, o da yoksa kapalı. */
+  isEmailChangeEnabled?: () => Promise<boolean>;
+  /** #181 e-posta değişimi; adminUserStore ile birlikte kaydedilir (destek yolunda hedef rolü okunur). */
+  emailChangeStore?: EmailChangeStore;
   /** #184 / KV-54 S1 topluluk sahibi atama/bırakma. */
   communityOwnerStore?: CommunityOwnerStore;
   /** Üçü birlikte verilirse medya route'ları kaydedilir (config.storage yoksa server vermez). */
@@ -232,6 +238,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const mediaSettings = deps.media?.settings ?? (settings ? () => settings.mediaSettings() : async () => DEFAULT_MEDIA_SETTINGS);
   const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
   const isOwnershipEnabled = deps.isOwnershipEnabled ?? (settings ? () => settings.isOwnershipEnabled() : async () => false);
+  const isEmailChangeEnabled = deps.isEmailChangeEnabled ?? (settings ? () => settings.isEmailChangeEnabled() : async () => false);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
   const limiter = deps.rateLimitStore
@@ -375,6 +382,19 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       store: deps.dataExportStore,
       storage: deps.media.storage,
       mailer: deps.mailer,
+      now,
+      tokenPepper: config.authTokenPepper,
+      webUrl: config.webUrl,
+    });
+  }
+  if (deps.emailChangeStore && deps.adminUserStore) {
+    registerEmailChangeRoutes(route, {
+      store: deps.emailChangeStore,
+      users: deps.adminUserStore,
+      hasher: deps.hasher,
+      mailer: deps.mailer,
+      loginGuard: limiter?.login,
+      isEnabled: isEmailChangeEnabled,
       now,
       tokenPepper: config.authTokenPepper,
       webUrl: config.webUrl,

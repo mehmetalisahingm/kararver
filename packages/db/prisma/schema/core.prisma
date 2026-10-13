@@ -87,29 +87,31 @@ model User {
   updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz(3)
 
-  avatarMedia          MediaAsset?       @relation("UserAvatar", fields: [avatarMediaId], references: [id], onDelete: SetNull)
-  sessions             Session[]
-  authTokens           AuthToken[]
+  avatarMedia           MediaAsset?          @relation("UserAvatar", fields: [avatarMediaId], references: [id], onDelete: SetNull)
+  sessions              Session[]
+  authTokens            AuthToken[]
   // #181 KVKK veri dışa aktarma (admin.prisma)
-  dataExports          DataExport[]      @relation("DataExportSubject")
-  dataExportsRequested DataExport[]      @relation("DataExportRequester")
+  dataExports           DataExport[]         @relation("DataExportSubject")
+  dataExportsRequested  DataExport[]         @relation("DataExportRequester")
   // #181 anonimleştirme kaydı ve yasal saklama (admin.prisma)
-  accountErasure       AccountErasure?   @relation("AccountErasureSubject")
-  erasuresRequested    AccountErasure[]  @relation("AccountErasureRequester")
-  legalHolds           UserLegalHold[]   @relation("LegalHoldSubject")
-  holdsPlaced          UserLegalHold[]   @relation("LegalHoldPlacer")
-  holdsReleased        UserLegalHold[]   @relation("LegalHoldReleaser")
-  idempotencyKeys      IdempotencyKey[]
-  polls                Poll[]
-  votes                Vote[]
-  voteEvents           VoteEvent[]       @relation("VoteEventUser")
+  accountErasure        AccountErasure?      @relation("AccountErasureSubject")
+  erasuresRequested     AccountErasure[]     @relation("AccountErasureRequester")
+  legalHolds            UserLegalHold[]      @relation("LegalHoldSubject")
+  holdsPlaced           UserLegalHold[]      @relation("LegalHoldPlacer")
+  holdsReleased         UserLegalHold[]      @relation("LegalHoldReleaser")
+  emailChanges          EmailChangeRequest[] @relation("EmailChangeSubject")
+  emailChangesRequested EmailChangeRequest[] @relation("EmailChangeRequester")
+  idempotencyKeys       IdempotencyKey[]
+  polls                 Poll[]
+  votes                 Vote[]
+  voteEvents            VoteEvent[]          @relation("VoteEventUser")
   // KV-43: yaptığı oy geçersiz sayma / geri alma işlemleri
-  voteCorrections      VoteEvent[]       @relation("VoteEventActor")
-  comments             Comment[]
-  commentReactions     CommentReaction[]
-  pollReactions        PollReaction[]
-  pollRevisions        PollRevision[]
-  commentRevisions     CommentRevision[]
+  voteCorrections       VoteEvent[]          @relation("VoteEventActor")
+  comments              Comment[]
+  commentReactions      CommentReaction[]
+  pollReactions         PollReaction[]
+  pollRevisions         PollRevision[]
+  commentRevisions      CommentRevision[]
 
   // Mert — media.prisma (KV-16)
   uploadedMedia            MediaAsset[]             @relation("MediaUploader")

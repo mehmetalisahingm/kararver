@@ -174,6 +174,12 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
           data: { status: "REJECTED", rejectionReason: "Başvuru sahibinin hesabı anonimleştirildi." },
         });
 
+        // Açık e-posta değişimi talebi kapanır ve yeni adres silinir (kişisel veri).
+        await tx.emailChangeRequest.updateMany({
+          where: { userId, status: "OPEN" },
+          data: { status: "CANCELLED", failure: "account_erased", newEmail: null, newEmailNormalized: null, finishedAt: now },
+        });
+
         // Hazır paketler geçersiz kılınır (anahtar ve token hemen silinir); şifreli nesneyi worker depodan siler.
         await tx.dataExport.updateMany({
           where: { userId, status: "READY" },
