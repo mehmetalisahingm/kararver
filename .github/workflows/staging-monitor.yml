@@ -139,6 +139,19 @@ jobs:
             fi
           fi
 
+          # (3) staging main dışı bir commit mi çalıştırıyor? (ör. elle deploy edilen PR dalı.) main...staging "ahead" ya da
+          # "diverged" ise staging'de main'de olmayan commit vardır. Bu commit'lerdeki migration'lar staging DB'sine uygulanmış
+          # olur; dal birleşmeden değişirse sonraki main deploy'u migration geçmişiyle çatışır. Staging main'i izler (KV-49).
+          if [[ "$STAGING_SHA" =~ ^[0-9a-f]{12}$ ]]; then
+            off_main=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$STAGING_SHA" --jq '"\(.status) \(.ahead_by)"' 2>/dev/null || echo "bilinmiyor 0")
+            off_status=${off_main%% *}
+            off_by=${off_main##* }
+            if [ "$off_status" = "ahead" ] || [ "$off_status" = "diverged" ]; then
+              migrations=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$STAGING_SHA" --jq '[.files[].filename | select(startswith("packages/db/prisma/migrations/"))] | length' 2>/dev/null || echo "?")
+              problems+=("staging main dışı commit çalıştırıyor: ${STAGING_SHA} main'de değil (${off_by} commit, ${migrations} migration dosyası); staging main'den deploy edilmeli")
+            fi
+          fi
+
           {
             echo "- Son yeşil main: \`${green_sha:0:12}\` · son main CI: ${latest%% *}"
             if [ ${#problems[@]} -gt 0 ]; then printf -- '- ✖ %s\n' "${problems[@]}"; fi
