@@ -462,7 +462,8 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
     for (const secret of [user.email, user.username, "KISISEL-BIYOGRAFI", "Kullanıcının"]) assert.equal(text.includes(secret), false, `${secret} audit/kayıtta olmamalı`);
     assert.equal((rows[0]!.after as any).erasureId, record.id);
     assert.equal((record.summary as any).removed.communityMemberships, 2);
-    assert.equal((record.summary as any).retained.polls, 1);
+    assert.equal((record.summary as any).retained.polls, 0);
+    assert.equal((record.summary as any).removed.polls, 1);
   });
 
   // ─── Idempotency ve yarışlar ────────────────────────────────
