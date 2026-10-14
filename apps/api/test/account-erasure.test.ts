@@ -273,6 +273,9 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
     const another=await signUp();
     assertError(await send("POST",`/admin/users/${another.id}/erasure`,{reason:REASON,confirmUsername:another.username},boss.cookie),409,"CONFLICT","mfa_required");
     assert.equal((await userRow(another.id)).deletedAt,null);
+    const role=await send("PUT",`/admin/users/${user.id}/role`,{role:"ADMIN",reason:REASON},boss.cookie);
+    assertError(role,409,"CONFLICT","user_deleted");
+    assert.equal(await db.userRole.findUnique({where:{userId:user.id}}),null);
   });
 
   test("önizleme salt okunur: sayılar doğru, hiçbir şey yazmaz; anonimleştirmeden sonra sıfırlanır", async () => {
