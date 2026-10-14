@@ -294,6 +294,9 @@ export const AccountErasurePreview = z.strictObject({
   legalHold: LegalHold.nullable(),
   /** Silinecek veya boşaltılacak kayıt adetleri. */
   willRemove: z.strictObject({
+    polls: Count,
+    comments: Count,
+    media: Count,
     sessions: Count,
     dataExports: Count,
     avatar: Count,
@@ -592,10 +595,10 @@ export const adminEndpoints = [
     responses: { 200: dataOf(AccountErasureResult) }, errors: ["CONFLICT", "NOT_FOUND"], idempotency: "natural", cache: "private",
     notes: [
       "GERİ ALINAMAZ. Gövdede gerekçe ve hesabın o anki kullanıcı adı (yazılı teyit) zorunludur; eşleşmezse 409 confirmation_mismatch ve hiçbir şey değişmez.",
-      "Tek transaction: kişisel alanlar tombstone değerleriyle değişir (e-posta, kullanıcı adı, görünen ad, biyografi, avatar, parola özeti), oturum ve token'lar silinir, tercihler/bildirim ayarları/kayıt listesi silinir, topluluk üyelikleri çıkarılır ve sahip olunan topluluklar yönetici yönetimine döner, bekleyen topluluk başvuruları reddedilir, hazır veri paketleri geçersiz kılınır. Anket, yorum, oy, rapor ve audit kayıtları korunur (yazar adı anonim görünür).",
+      "Tek transaction: kişisel alanlar tombstone değerleriyle değişir (e-posta, kullanıcı adı, görünen ad, biyografi, avatar, parola özeti), oturum ve token'lar silinir, tercihler/bildirim ayarları/kayıt listesi silinir, topluluk üyelikleri çıkarılır ve sahip olunan topluluklar yönetici yönetimine döner, bekleyen topluluk başvuruları reddedilir, hazır veri paketleri geçersiz kılınır. Paylaşım/yorum metinleri ve sürümleri kaldırılır; tüm görseller depo temizliğine alınır. Hesapla bağlı oy/olay satırları kimliksiz istatistiğe dönüştürülür; rapor ve audit saklama kapsamındadır. Mutation mevcut oturuma bağlı tek kullanımlık MFA gerektirir (mfa_required).",
       "Idempotent: hesap zaten anonimleştirilmişse 200 status=unchanged döner; değişiklik ve audit yoktur. Eşzamanlı iki istekten yalnız biri uygular (hedef satır kilidi + hesap başına tek kayıt).",
       "409 CONFLICT details[0].code: confirmation_mismatch, legal_hold, active_sanction, has_role, export_in_progress. Önizleme aynı engelleri listeler.",
-      "Avatar dosyaları depodan worker tarafından silinir (en geç ~1 dk); DB'de görsel hemen yayından kalkar.",
+      "Tüm yüklenen görseller hemen yayından kalkar; worker 20 kayıtlık gruplar ve 1-15 dakika gecikmeli tekrar denemeyle depodan temizler.",
     ],
   }),
   defineEndpoint({

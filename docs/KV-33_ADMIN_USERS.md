@@ -193,9 +193,9 @@ KVKK silme/unutulma talebinin **yönetici başlatmalı** karşılığıdır (#18
 | Sahip olunan topluluk | **Yönetici yönetimine döner** (audit `community.owner.assign` / `auto_release`, `trigger: anonymize`) | KV-54 §5: sahipsiz kalma hesap sonu kuralı; son sahip koruması bu yolda da korunur |
 | Bekleyen topluluk başvurusu | **REJECTED** ("hesap anonimleştirildi") | Karar bekleyen kayıt askıda kalmaz |
 | Hazır KVKK veri paketi | **EXPIRED**; anahtar ve bağlantı token'ı hemen silinir, şifreli nesneyi worker siler | Kişisel veri kopyası |
-| Avatar görseli | **REJECTED**, public anahtar boş; dosyaları (public + özel) worker siler (`account-erasure.cleanup`, `account_erasures.storage_cleaned_at`) | Yüz fotoğrafı kişisel veridir. Anket görselleri **içeriktir**, silinmez |
-| Anketler, yorumlar, sürümleri, tepkiler | **Korunur**; yazar adı anonim görünür | Ürün kararı (DATA_MODEL §7): tartışma bütünlüğü. İçerikte kişisel veri varsa [10.4](#104-içerikteki-kişisel-veri) |
-| Oylar ve `vote_events` | **Korunur** (kimliksiz) | Sonuç bütünlüğü; oy sahibi zaten herkese açık değil |
+| Tüm yüklenen görseller | **REJECTED**, public anahtar boş; avatar ve içerik görsellerinin public + özel kopyalarını worker siler | Depo temizliği başarılı olmadan `storage_cleaned_at` yazılmaz |
+| Paylaşımlar, yorumlar ve sürümleri | **Kaldırılır**; metinler sabit silinmiş içerik değerine döner, revizyon/ek açıklama/karar notu ve galeri ilişkileri silinir. Kendi tepkileri sayaçlarla kaldırılır | Mehmet'in bu oturumdaki açık kararı; yönetici veya toplu iş geri yükleyemez |
+| Oylar ve `vote_events` | Hesaba bağlı satırlar **silinir**; `anonymous_vote_groups` yalnız anket/seçenek, zaman, kimliksiz olay dizisi ve adet taşır. Kullanıcı, eski oy/olay ID'si, aktör veya gerekçe taşımaz | `statistical_votes` / `statistical_vote_events` salt okuma kaynakları sonuç, trend ve snapshot formüllerini korur; sentetik numaralar anketler arasında ortak hesap kimliği değildir |
 | Raporlar, moderasyon işlemleri, yaptırım geçmişi, puan defteri, `content_jobs` | **Korunur** | Güvenlik ve denetim (meşru menfaat); kullanıcı alanı içermez |
 | `audit_logs`, `domain_events` | **Korunur** (append-only) | Denetlenebilirlik; yalnız kimlik ve sayı taşır (ad/e-posta yazılmaz, testli). Aktör adı gösterilirken tombstone adı görünür |
 | Veritabanı yedekleri | Yedek saklama süresince kalır | Operasyon politikası; geri yüklemede anonimleştirme yeniden uygulanmalı |
@@ -214,7 +214,7 @@ KVKK silme/unutulma talebinin **yönetici başlatmalı** karşılığıdır (#18
 
 ### 10.4 İçerikteki kişisel veri
 
-Anonimleştirme yazıları silmez. Kullanıcı kendi yazısında kişisel veri verdiyse (veya talep içerik silmeyi de kapsıyorsa) önce toplu içerik işi (§9, gizle/kaldır, geri alınabilir) çalıştırılır, **sonra** anonimleştirilir; anonimleştirmeden sonra toplu iş 409 `user_deleted` döner. Önizleme `willRetain` ile korunacak yazı/yorum/oy/rapor sayısını gösterir.
+Hesap silme paylaşım ve yorum metinlerini de kaldırır. `willRemove` paylaşım, yorum ve tüm görselleri sayar; `willRetain.votes` hesapla bağı kaldırılacak oyların istatistik adedidir. Rapor, yaptırım, audit ve yedeklerin saklama kapsamı farklıdır; bunların tümünün anonim olduğu veya hukuki uygunluk kabulünün tamamlandığı söylenmez. Başkasının yorumları ve oyları silinmez. Referans bütünlüğü için kaldırılan içerikte ID ve sabit tombstone metni kalır.
 
 ### 10.5 Eşzamanlılık, idempotency ve bütünlük
 
@@ -230,12 +230,12 @@ Anonimleştirme yazıları silmez. Kullanıcı kendi yazısında kişisel veri v
 
 ### 10.7 Bilinen sınırlar ve açık kararlar (Mehmet / Faruk / Utku / hukuk)
 
-1. **Veri kapsamı** (§10.1) DATA_MODEL §11.4/3 için öneridir; özellikle "içerik ve oylar kalır" ve "yedekler saklama süresince kalır" teyit bekler.
+1. **Ürün kapsamı kararı alındı:** paylaşım/yorum metinleri, sürümleri ve içerik görselleri kaldırılır; oyların hesapla bağı kaldırılarak sonuç istatistiği korunur. Yedek ve güvenlik kayıtlarının saklama/yeniden silme kabulü ayrıca izlenir.
 2. **Kullanıcı adı ve e-posta serbest kalır** (yeni kayıt alabilir). Marka/taklit riski için ayrılmış ad listesi gerekirse ayrı iş.
 3. **Kullanıcıya kendi hesabını silme akışı yok**; yalnız yönetici başlatır. Self-servis (e-postayla onay bağlantısı) sonraki dilim.
 4. **Kullanıcıya bildirim yok**: anonimleştirme sonrası adres silindiği için e-posta gönderilmez. İşlemden önce onay e-postası istenirse #182 ikinci onay akışıyla birlikte.
-5. **İkinci onay/MFA bağlanmadı** (#182/#206): geri alınamaz işlem için önerilir.
-6. **Avatar dosyası silme eventual**: DB'de görsel hemen yayından kalkar, dosyaları worker en geç bir tur (~1 dk) sonra siler; depo erişilemezse kayıt işaretlenmez ve yeniden denenir.
+5. **MFA zorunlu:** işlemi yapan süper adminin mevcut, iptal edilmemiş oturumuna bağlı 5 dakikalık doğrulama mutation transaction'ında bir kez tüketilir. Yazılı kullanıcı adı ve gerekçe kontrolleri sürer. İki yönetici rol onayı bu farklı işlemi onaylamış sayılmaz; ikinci kişi politikası ayrıca ele alınabilir.
+6. **Depo temizliği asenkron:** avatar ve içerik görselleri DB'de hemen yayından kalkar. Worker 20'lik gruplar işler; hata sonrası 1–15 dakika gecikmeyle tekrar dener. Başarısız ilk grup sonraki hesapları sürekli tıkamaz. Bir dakikada bütün kuyruğun biteceği garanti edilmez.
 7. Anonimleştirmeden hemen önce giriş yapan bir isteğin açtığı oturum satırı (yarış) kalabilir; `deleted_at` doluyken oturum çözümlenmez ve satır süresi dolunca temizlenir.
 
 **Test:** `apps/api/test/account-erasure.test.ts` (yetki matrisi ve kendi hesabı, gövde doğrulaması, yazılı teyit, önizleme salt okunur, tombstone ve giriş/oturum kapanışı, e-posta ve kullanıcı adının yeniden alınabilmesi, içerik ve başkasının verisinin korunması, topluluk/sahiplik/sayaçlar, kayıt listesi ve tercihler, avatar ve paket, audit'te kişisel veri olmaması, idempotency ve çift tıklama, her engel, yasal saklama yaşam döngüsü ve eşzamanlı koyma, yaptırım/sahip atama/ayrılma yarışları) ve `apps/worker/test/account-erasure.test.ts` (avatar nesne silme, idempotency, depo hatasında yeniden deneme).

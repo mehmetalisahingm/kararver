@@ -9,7 +9,10 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
-## 1.29.0 — 2026-10-14 (Mert, #181 hesap anonimleştirme ve yasal saklama)
+## 1.29.0 — 2026-10-14 (#181 hesap silme ve yasal saklama)
+
+- Mehmet'in kapsam kararı: paylaşım/yorum metinleri ve sürümleri kaldırılır, bütün görseller temizlenir; hesapla ilişkili oy kayıtları kimliksiz istatistik gruplarına dönüştürülür. Sayım/snapshot/trend formülleri korunur.
+- `willRemove` artık paylaşım, yorum ve tüm görselleri de sayar. Silme transaction'ı mevcut oturumda tek kullanımlık MFA ister (`mfa_required`). Depo hataları gecikmeli tekrar denenir ve sonraki kayıtları tıkamaz.
 
 Kırıcı değişiklik yok: yeni endpoint'ler, şemalar ve yetkiler (yalnız SUPER_ADMIN).
 

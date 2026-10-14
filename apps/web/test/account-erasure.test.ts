@@ -34,7 +34,7 @@ test("yazılı teyit: büyük/küçük harf ve baştaki @ önemsiz, boş veya fa
 });
 
 test("etki özeti: yalnız sıfırdan büyük kalemler yazılır; korunan içerik anonim kalacağını söyler", () => {
-  const will = { sessions: 2, dataExports: 0, avatar: 1, communityMemberships: 3, ownedCommunities: 1, pendingCommunityRequests: 0, preferences: 7 };
+  const will = { polls: 0, comments: 0, media: 0, sessions: 2, dataExports: 0, avatar: 1, communityMemberships: 3, ownedCommunities: 1, pendingCommunityRequests: 0, preferences: 7 };
   assert.deepEqual(removalLines(will), [
     "2 açık oturum",
     "1 profil görseli",
@@ -43,7 +43,7 @@ test("etki özeti: yalnız sıfırdan büyük kalemler yazılır; korunan içeri
     "7 tercih, takip, kayıt ve ilgi alanı kaydı",
   ]);
   assert.deepEqual(removalLines({ ...will, sessions: 0, avatar: 0, communityMemberships: 0, ownedCommunities: 0, preferences: 0 }), []);
-  assert.match(retainedLine({ polls: 4, comments: 12, votes: 30, reportsFiled: 1 }), /4 anket, 12 yorum, 30 oy ve 1 rapor kimliksiz/);
+  assert.match(retainedLine({ polls: 0, comments: 0, votes: 30, reportsFiled: 1 }), /30 oyun hesapla bağı kaldırılarak/);
 });
 
 test("engel metinleri sözleşmedeki her engel için var ve yönlendirici", () => {

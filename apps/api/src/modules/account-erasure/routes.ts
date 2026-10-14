@@ -11,6 +11,7 @@ export type AccountErasureDeps = { store: AccountErasureStore; users: AdminUserS
 const conflict = (message: string, code: string) => new ApiError("CONFLICT", message, [{ code }]);
 
 const ANONYMIZE_CONFLICTS: Record<Exclude<AnonymizeRejection, "not_found" | "forbidden">, () => ApiError> = {
+  mfa_required: () => conflict("Hesap silmeden önce bu oturumda MFA ile yeniden doğrula.", "mfa_required"),
   confirmation_mismatch: () => conflict("Yazılı teyit hesabın kullanıcı adıyla eşleşmiyor; hiçbir şey değişmedi.", "confirmation_mismatch"),
   legal_hold: () => conflict("Hesapta yasal saklama var; kaldırılana kadar anonimleştirilemez.", "legal_hold"),
   active_sanction: () => conflict("Hesapta süresi dolmamış yaptırım var; yaptırım kalkana veya dolana kadar anonimleştirilemez.", "active_sanction"),
@@ -48,7 +49,7 @@ export function registerAccountErasureRoutes(route: Route, deps: AccountErasureD
   route("admin.users.erasure.create", async (ctx) => {
     const { params, body, viewer, request } = ctx;
     await authorizeTarget(users, ctx, params.id);
-    const result = await store.anonymize({ userId: params.id, reason: body.reason, confirmUsername: body.confirmUsername, actorId: viewer!.id, requestId: request.id, now: now() });
+    const result = await store.anonymize({ userId: params.id, reason: body.reason, confirmUsername: body.confirmUsername, actorId: viewer!.id, actorSessionId: viewer!.sessionId, requestId: request.id, now: now() });
     if (result.kind === "rejected") {
       if (result.reason === "not_found") throw userNotFound();
       if (result.reason === "forbidden") throw forbidden();

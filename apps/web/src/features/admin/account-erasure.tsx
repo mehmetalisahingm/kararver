@@ -2,6 +2,8 @@
 // Hesap anonimleştirme ve yasal saklama (#181, KV-33 §10). Yalnız SUPER_ADMIN görür; yetki sunucudadır.
 // Akış: önizleme (etki + engeller) → gerekçe + hesabın kullanıcı adının yazılı teyidi → geri alınamaz işlem.
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { HttpClient } from "../../lib/http-client";
 import type { AdminClient, ErasurePreviewView } from "./admin-client";
 import { ActionDialog, errorMessage, formatDate } from "./admin-ui";
 import { BLOCKER_TEXT, confirmationMatches, removalLines, retainedLine } from "./erasure-model.ts";
@@ -15,6 +17,7 @@ export function AccountErasure({ id, admin, onAnonymized }: Props) {
   const [dialog, setDialog] = useState<"erase" | "hold" | "release" | null>(null);
   const [typed, setTyped] = useState("");
   const [notice, setNotice] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -30,9 +33,9 @@ export function AccountErasure({ id, admin, onAnonymized }: Props) {
     {error ? <p role="alert">{error}</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
     {!preview && !error ? <p role="status">Etki özeti yükleniyor…</p> : null}
-    {preview?.anonymized ? <p>Bu hesap {formatDate(preview.anonymizedAt)} tarihinde anonimleştirildi. Kişisel alanlar silindi; içerik ve oylar kimliksiz kalır.</p> : null}
+    {preview?.anonymized ? <p>Bu hesap {formatDate(preview.anonymizedAt)} tarihinde silindi. Kişisel alanlar, paylaşım ve yorum metinleri kaldırıldı; görseller depo temizliğine alındı. Oy sonuçları hesapla ilişkisiz istatistik olarak korundu.</p> : null}
     {preview && !preview.anonymized ? <>
-      <p className="kv-muted">Geri alınamaz. Kişisel alanlar silinir, oturumlar kapanır, üyelikler çıkar; anket, yorum ve oylar yazar adı gizlenerek kalır. İçerikteki kişisel veri için önce toplu içerik işlemini kullan.</p>
+      <p className="kv-muted">Geri alınamaz. Kişisel alanlar, paylaşımlar, yorumlar ve bunların sürümleri kaldırılır. Oturumlar kapanır, üyelikler çıkar, tüm görseller depo temizliğine alınır. Oyların hesapla bağı kaldırılır ve sonuçlar korunur.</p>
       <ul>
         {removalLines(preview.willRemove).map(line => <li key={line}>{line}</li>)}
       </ul>
@@ -58,6 +61,8 @@ export function AccountErasure({ id, admin, onAnonymized }: Props) {
       onClose={() => setDialog(null)}
       onSubmit={async reason => {
         try {
+          if (mfaCode) await new HttpClient(process.env.NEXT_PUBLIC_API_URL || "/api").request("me.mfa.stepup", { body: { code: mfaCode } });
+          setMfaCode("");
           const result = await admin.anonymizeUser(id, reason, typed);
           setNotice(result.status === "unchanged" ? "Hesap zaten anonimleştirilmişti; değişiklik yapılmadı." : "Hesap anonimleştirildi; gerekçe yönetim geçmişine yazıldı.");
         } catch (cause) {
@@ -72,6 +77,8 @@ export function AccountErasure({ id, admin, onAnonymized }: Props) {
       <label>Onay için kullanıcı adını yaz{preview ? <> (<strong>{preview.username}</strong>)</> : null}
         <input className="kv-input" value={typed} onChange={event => setTyped(event.target.value)} autoComplete="off" spellCheck={false} />
       </label>
+      <label>Doğrulayıcı kodun<input className="kv-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={mfaCode} onChange={event => setMfaCode(event.target.value.replace(/\D/g,""))} /></label>
+      <p>Hesap silmek için MFA zorunludur. <Link href="/hesap/guvenlik">Hesap güvenliği</Link> ekranından kur veya kurtarma koduyla bu oturumu yeniden doğrula. Doğrulama bir kez kullanılabilir.</p>
     </ActionDialog>
 
     <ActionDialog

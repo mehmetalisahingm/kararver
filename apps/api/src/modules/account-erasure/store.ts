@@ -9,6 +9,9 @@ export type ErasureBlocker = "legal_hold" | "active_sanction" | "has_role" | "ex
 export type LegalHoldRow = { id: string; reason: string; createdAt: Date; placedById: string };
 
 export type RemovalCounts = {
+  polls: number;
+  comments: number;
+  media: number;
   sessions: number;
   dataExports: number;
   avatar: number;
@@ -30,8 +33,8 @@ export type ErasurePreviewRow = {
   willRetain: RetainedCounts;
 };
 
-export type AnonymizeInput = Mutation & { userId: string; reason: string; confirmUsername: string };
-export type AnonymizeRejection = "not_found" | "forbidden" | "confirmation_mismatch" | ErasureBlocker;
+export type AnonymizeInput = Mutation & { userId: string; reason: string; confirmUsername: string; actorSessionId?: string };
+export type AnonymizeRejection = "not_found" | "forbidden" | "confirmation_mismatch" | "mfa_required" | ErasureBlocker;
 export type AnonymizeResult =
   | { kind: "anonymized" | "unchanged"; at: Date }
   | { kind: "rejected"; reason: AnonymizeRejection };

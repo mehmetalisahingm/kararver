@@ -8,7 +8,9 @@
 // Neyin silindiği, neyin korunduğu ve nedeni: KV-33 §10 tablosu. Audit'te ad, e-posta veya içerik yoktur; yalnız sayılar
 // ve kayıt kimliği.
 import { Prisma, type PrismaClient } from "@kararver/db";
-import { decide, lockTarget } from "../admin-users/prisma-store.ts";
+import { decide, lockSuperAdmins, lockTarget } from "../admin-users/prisma-store.ts";
+import { consumeFreshStepup } from "../security/stepup-guard.ts";
+import { eraseAuthoredContent } from "./content.ts";
 import { writeAudit } from "../audit/write.ts";
 import { releaseOwnedCommunities } from "../communities/owner.ts";
 import {
@@ -64,6 +66,9 @@ async function removalCounts(db: Db, userId: string): Promise<RemovalCounts> {
       db.idempotencyKey.count({ where: { userId } }),
     ]);
   return {
+    polls: await db.poll.count({ where: { authorId: userId, deletedAt: null } }),
+    comments: await db.comment.count({ where: { authorId: userId, deletedAt: null } }),
+    media: await db.mediaAsset.count({ where: { uploaderId: userId } }),
     sessions,
     dataExports,
     avatar,
@@ -75,16 +80,14 @@ async function removalCounts(db: Db, userId: string): Promise<RemovalCounts> {
 }
 
 async function retainedCounts(db: Db, userId: string): Promise<RetainedCounts> {
-  const [polls, comments, votes, reportsFiled] = await Promise.all([
-    db.poll.count({ where: { authorId: userId } }),
-    db.comment.count({ where: { authorId: userId } }),
+  const [votes, reportsFiled] = await Promise.all([
     db.vote.count({ where: { userId } }),
     db.report.count({ where: { reporterId: userId } }),
   ]);
-  return { polls, comments, votes, reportsFiled };
+  return { polls: 0, comments: 0, votes, reportsFiled };
 }
 
-const ZERO_REMOVAL: RemovalCounts = { sessions: 0, dataExports: 0, avatar: 0, communityMemberships: 0, ownedCommunities: 0, pendingCommunityRequests: 0, preferences: 0 };
+const ZERO_REMOVAL: RemovalCounts = { polls: 0, comments: 0, media: 0, sessions: 0, dataExports: 0, avatar: 0, communityMemberships: 0, ownedCommunities: 0, pendingCommunityRequests: 0, preferences: 0 };
 
 export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountErasureStore {
   return {
@@ -114,6 +117,7 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
       return prisma.$transaction(async (tx) => {
         const target = await lockTarget(tx, userId);
         if (!target) return { kind: "rejected", reason: "not_found" } as const;
+        await lockSuperAdmins(tx);
         const role = (await tx.userRole.findUnique({ where: { userId }, select: { role: true } }))?.role ?? null;
         const decision = await decide(tx, actorId, "user.anonymize", { targetUserId: userId, targetRoles: role ? [role] : [] }, now);
         if (!decision.allowed) return { kind: "rejected", reason: "forbidden" } as const;
@@ -130,6 +134,8 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
         const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { username: true } });
         const typed = input.confirmUsername.trim().replace(/^@/, "").toLowerCase();
         if (typed !== user.username.toLowerCase()) return { kind: "rejected", reason: "confirmation_mismatch" } as const;
+        if (!input.actorSessionId || !(await consumeFreshStepup(tx, actorId, input.actorSessionId, now)))
+          return { kind: "rejected", reason: "mfa_required" } as const;
 
         const removed = await removalCounts(tx, userId);
         const retained = await retainedCounts(tx, userId);
@@ -153,14 +159,21 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
         // Kayıt listesi: sayaçla birlikte (polls.save_count), anket satırları id sırasıyla kilitlenir.
         const saved = await tx.$queryRaw<{ id: string }[]>`
           SELECT p.id::text AS id FROM polls p
-          WHERE p.id IN (SELECT poll_id FROM bookmarks WHERE user_id = ${userId}::uuid)
+          WHERE p.author_id=${userId}::uuid
+             OR p.id IN (SELECT poll_id FROM comments WHERE author_id=${userId}::uuid)
+             OR p.id IN (SELECT poll_id FROM votes WHERE user_id=${userId}::uuid)
+             OR p.id IN (SELECT poll_id FROM poll_reactions WHERE user_id=${userId}::uuid)
+             OR p.id IN (SELECT c.poll_id FROM comment_reactions r JOIN comments c ON c.id=r.comment_id WHERE r.user_id=${userId}::uuid)
+             OR p.id IN (SELECT poll_id FROM bookmarks WHERE user_id = ${userId}::uuid)
           ORDER BY p.id FOR UPDATE`;
         if (saved.length > 0) {
-          await tx.$executeRaw`UPDATE polls SET save_count = GREATEST(save_count - 1, 0) WHERE id = ANY(${saved.map((r) => r.id)}::uuid[])`;
+          await tx.$executeRaw`UPDATE polls SET save_count = GREATEST(save_count - 1, 0)
+            WHERE id IN (SELECT poll_id FROM bookmarks WHERE user_id=${userId}::uuid)`;
         }
         await tx.bookmark.deleteMany({ where: { userId } });
 
         await tx.session.deleteMany({ where: { userId } });
+        await tx.userMfaCredential.deleteMany({ where: { userId } });
         await tx.authToken.deleteMany({ where: { userId } });
         await tx.idempotencyKey.deleteMany({ where: { userId } });
         await tx.notification.deleteMany({ where: { recipientId: userId } });
@@ -183,7 +196,7 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
         // Avatar görselleri yayından kalkar; dosyaları worker siler (account_erasures.storage_cleaned_at). Bekleyen
         // işlem de REJECTED olur: worker yalnız PENDING'i sonuçlandırır, sonradan yayınlayamaz.
         await tx.mediaAsset.updateMany({
-          where: { uploaderId: userId, purpose: "AVATAR", NOT: { status: "REJECTED" } },
+          where: { uploaderId: userId },
           data: { status: "REJECTED", publicObjectKey: null, reviewedById: actorId, reviewedAt: now, reviewNote: "Hesap anonimleştirildi." },
         });
 
@@ -210,6 +223,13 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
           data: { userId, requestedById: actorId, reason: input.reason, summary: summary as unknown as Prisma.InputJsonObject, createdAt: now },
           select: { id: true },
         });
+        await tx.$queryRaw`SELECT id FROM comments WHERE author_id=${userId}::uuid
+          OR id IN (SELECT parent_id FROM comments WHERE author_id=${userId}::uuid)
+          OR id IN (SELECT comment_id FROM comment_reactions WHERE user_id=${userId}::uuid)
+          ORDER BY id FOR UPDATE`;
+        await eraseAuthoredContent(tx, userId, now);
+        await tx.contentJob.updateMany({ where: { userId, status: { in: ["QUEUED", "PROCESSING"] } },
+          data: { status: "CANCELLED", finishedAt: now } });
         await writeAudit(tx, {
           source: "API",
           actorId,
@@ -223,7 +243,7 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
           at: now,
         });
         return { kind: "anonymized", at: now } as const;
-      });
+      }, { maxWait: 10_000, timeout: 60_000 });
     },
 
     async placeHold(input) {
