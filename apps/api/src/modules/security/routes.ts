@@ -13,27 +13,35 @@ export function registerMfaRoutes(route: Route, deps: {
     return { status: 200, body: { data: { enabled: state.enabled,
       stepUpExpiresAt: state.stepUpExpiresAt?.toISOString() ?? null } } };
   });
-  route("me.mfa.setup", async ({ viewer, body }) => {
-    if (!viewer!.user.emailVerifiedAt) throw new ApiError("FORBIDDEN", "E-posta doğrulanmış olmalı.");
+  route("me.mfa.setup", async ({ viewer, body, request }) => {
+    if (!viewer!.emailVerified) throw new ApiError("FORBIDDEN", "E-posta doğrulanmış olmalı.");
     const ok = await deps.hasher.verify(viewer!.user.passwordHash, body.password);
     if (!ok) throw new ApiError("FORBIDDEN", "Kimlik yeniden doğrulanamadı.");
     const result = await deps.store.begin({ userId: viewer!.id, sessionId: viewer!.sessionId,
-      email: viewer!.user.email, now: deps.now() });
+      email: viewer!.user.email, now: deps.now(), requestId: request.id });
     if (result.kind === "session") throw new ApiError("UNAUTHENTICATED", "Oturum geçersiz.");
     if (result.kind === "conflict") throw new ApiError("CONFLICT", "MFA zaten etkin.");
     return { status: 200, body: { data: { secret: result.secret, uri: result.uri,
       expiresAt: result.expiresAt.toISOString() } } };
   });
-  route("me.mfa.confirm", async ({ viewer, body }) => {
-    const status = await deps.store.confirm({ userId: viewer!.id, sessionId: viewer!.sessionId,
-      code: body.code, now: deps.now() });
-    if (status !== "enabled") throw new ApiError("FORBIDDEN", "MFA doğrulaması başarısız veya süresi dolmuş.");
-    return { status: 200, body: { data: { enabled: true } } };
+  route("me.mfa.confirm", async ({ viewer, body, request }) => {
+    const result = await deps.store.confirm({ userId: viewer!.id, sessionId: viewer!.sessionId,
+      code: body.code, now: deps.now(), requestId: request.id });
+    if (result.kind !== "enabled") throw new ApiError("FORBIDDEN", "MFA doğrulaması başarısız veya süresi dolmuş.");
+    return { status: 200, body: { data: { enabled: true, recoveryCodes: result.recoveryCodes } } };
   });
-  route("me.mfa.stepup", async ({ viewer, body }) => {
+  route("me.mfa.stepup", async ({ viewer, body, request }) => {
     const result = await deps.store.stepUp({ userId: viewer!.id, sessionId: viewer!.sessionId,
-      code: body.code, now: deps.now() });
+      code: body.code, now: deps.now(), requestId: request.id });
     if (result.kind !== "verified") throw new ApiError("FORBIDDEN", "MFA doğrulaması başarısız veya süresi dolmuş.");
+    return { status: 200, body: { data: { stepUpExpiresAt: result.expiresAt.toISOString() } } };
+  });
+  route("me.mfa.recover", async ({ viewer, body, request }) => {
+    if (!(await deps.hasher.verify(viewer!.user.passwordHash, body.password)))
+      throw new ApiError("FORBIDDEN", "Kimlik yeniden doğrulanamadı.");
+    const result = await deps.store.recover({ userId: viewer!.id, sessionId: viewer!.sessionId,
+      code: body.code, now: deps.now(), requestId: request.id });
+    if (result.kind !== "verified") throw new ApiError("FORBIDDEN", "Kurtarma doğrulaması başarısız.");
     return { status: 200, body: { data: { stepUpExpiresAt: result.expiresAt.toISOString() } } };
   });
 }

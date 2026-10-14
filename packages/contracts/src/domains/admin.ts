@@ -685,6 +685,15 @@ export const adminEndpoints = [
     ],
   }),
   defineEndpoint({
+    id: "admin.roleApprovals.get", domain: "admin", method: "GET", path: "/admin/role-approvals/:id",
+    summary: "İkinci onay öncesi hedef, rol ve gerekçeyi göster", auth: "super_admin",
+    provider: { owner: "Utku", module: "rbac" }, consumers: utkuUi, unblocks: ["#182"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(z.strictObject({ id: Id, userId: Id, initiatorId: Id, role: Role, expectedRole: Role,
+      reason: Reason, status: z.enum(["PENDING", "APPROVED", "EXPIRED", "CONSUMED", "REJECTED"]), expiresAt: Timestamp })) },
+    errors: ["CONFLICT"], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
     id: "admin.roleApprovals.request", domain: "admin", method: "POST", path: "/admin/role-approvals",
     summary: "Kritik rol değişikliği için MFA doğrulanmış onay talebi", auth: "super_admin",
     provider: { owner: "Utku", module: "rbac" }, consumers: utkuUi, unblocks: ["#182"],

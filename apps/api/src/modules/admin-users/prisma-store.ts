@@ -116,7 +116,7 @@ export async function lockTarget(tx: Tx, userId: string): Promise<LockedTarget |
 }
 
 /** Son aktif SUPER_ADMIN kuralı için: eşzamanlı iki işlem (birbirini düşüren/banlayan iki SUPER_ADMIN) burada sıraya girer. */
-async function lockSuperAdmins(tx: Tx): Promise<void> {
+export async function lockSuperAdmins(tx: Tx): Promise<void> {
   await tx.$queryRaw`SELECT user_id FROM user_roles WHERE role = 'SUPER_ADMIN' ORDER BY user_id FOR UPDATE`;
 }
 

@@ -33,6 +33,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
   const [target, setTarget] = useState("");
   const [kind, setKind] = useState<"polls" | "comments">("comments");
   const [role, setRole] = useState<AdminRole>("USER");
+  const [approvalId, setApprovalId] = useState("");
   const [sanction, setSanction] = useState<StrongSanction | "WARNING">("WARNING");
   const [endsAt, setEndsAt] = useState("");
   useEffect(() => {
@@ -49,6 +50,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
     {!user && !error ? <p role="status">Hesap yükleniyor…</p> : null}
     {user ? <>
       <h2>{user.displayName} · {user.email}</h2>
+        {canAssign ? <p>Kullanıcı numarası: <code>{id}</code></p> : null}
       <p>{user.status} · Roller: {user.roles.join(", ")} · Son giriş: {formatDate(user.lastLoginAt)}</p>
       <p>{user.stats.pollCount} gönderi · {user.stats.commentCount} yorum · {user.stats.voteCount} oy</p>
       {canAssign ? <button className="kv-button" onClick={() => setAction("role")}>Yetkilendir / rolü değiştir</button> : null}
@@ -63,13 +65,16 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       <ListState remote={activity} empty="Gönderi veya yorum yok." />
     </> : null}
     <ActionDialog open={action !== null} title="Kullanıcıya işlem uygula" submitLabel="Uygula" onClose={() => setAction(null)} validate={() => sanction === "SUSPEND" && action === "sanction" && (!endsAt || Date.parse(endsAt) <= Date.now()) ? "Gelecekte bir bitiş zamanı seç." : null} onSubmit={async reason => {
-      if (action === "role") await admin.setUserRole(id, role, reason);
+      if (action === "role") await admin.setUserRole(id, role, reason, approvalId.trim() || undefined);
       else if (action === "sanction") await admin.sanctionUser(id, sanction, reason, sanction === "SUSPEND" ? new Date(endsAt).toISOString() : null);
       else if (action === "lift") await admin.liftSanction(id, target, reason);
       else await admin.moderate(kind, target, action === "restore" ? "RESTORE" : "REMOVE", reason);
       refresh();
     }}>
-      {action === "role" ? <label>Rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value as AdminRole)}>{["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"].map(r => <option key={r}>{r}</option>)}</select></label> : null}
+      {action === "role" ? <><label>Rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value as AdminRole)}>{["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"].map(r => <option key={r}>{r}</option>)}</select></label>
+        <label>İkinci yönetici onay numarası<input className="kv-input" value={approvalId} onChange={e => setApprovalId(e.target.value)} /></label>
+        <p>SUPER_ADMIN değişimi için <a href="/hesap/guvenlik">hesap güvenliği ekranından</a> onay talebi oluştur. Onaylanan hedef, rol ve gerekçe burada aynı olmalı; uygulamadan önce yeniden MFA doğrulaması gerekir.</p>
+      </> : null}
       {action === "sanction" ? <><label>Yaptırım<select className="kv-input" value={sanction} onChange={e => setSanction(e.target.value as typeof sanction)}>{["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING", "SUSPEND", "BAN"].map(s => <option key={s}>{s}</option>)}</select></label>{sanction === "SUSPEND" ? <label>Bitiş<input className="kv-input" type="datetime-local" value={endsAt} onChange={e => setEndsAt(e.target.value)} /></label> : null}</> : null}
     </ActionDialog>
   </section>;

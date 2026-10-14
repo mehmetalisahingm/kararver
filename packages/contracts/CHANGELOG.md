@@ -9,6 +9,13 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.27.0 — 2026-10-14 (SA #180/#182 MFA ve bağımsız rol onayı)
+
+- TOTP kurulumu, oturuma bağlı tek kullanımlık yeniden doğrulama ve iki yönetici rol onayı endpoint'leri.
+- Kurulum onayında bir kez gösterilen 10 kurtarma kodu; parola ile tek kullanımlık kurtarma. Kod ve TOTP secret'ı audit'e yazılmaz.
+- `admin.roleApprovals.get`: onay vermeden önce hedef, rol ve gerekçeyi inceleme. `account.mfa` güvenlik olayları.
+- Rol koruması `ROLE_APPROVALS_REQUIRED` ile etkinleşir; varsayılan kapalıdır, tek yöneticili hesapları kilitlemez. #180/#182 yayın kabulü ayrıca izlenir.
+
 ## 1.26.0 — 2026-10-13 (Mert, #184 topluluk yönetim görünümü)
 
 Kırıcı değişiklik yok: yeni salt okuma endpoint'leri ve yetki.

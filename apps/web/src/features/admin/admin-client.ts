@@ -175,8 +175,8 @@ export class AdminClient {
   async userActivity(id: string, cursor?: string, signal?: AbortSignal) {
     return page<UserActivity>(await this.http.request("admin.users.activity", { params: { id }, query: { cursor, limit: "20" }, signal }));
   }
-  async setUserRole(id: string, role: "USER" | "MODERATOR" | "ADMIN" | "SUPER_ADMIN", reason: string) {
-    return this.http.request("admin.roles.put", { params: { id }, body: { role, reason } });
+  async setUserRole(id: string, role: "USER" | "MODERATOR" | "ADMIN" | "SUPER_ADMIN", reason: string, approvalId?: string) {
+    return this.http.request("admin.roles.put", { params: { id }, body: { role, reason, ...(approvalId ? { approvalId } : {}) } });
   }
   async sanctionUser(id: string, type: "WARNING" | StrongSanction, reason: string, endsAt: string | null) {
     return data<UserSanction>(await this.http.request("admin.sanctions.create", { params: { id }, body: { type, reason, endsAt } }));

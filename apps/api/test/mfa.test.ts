@@ -11,6 +11,7 @@ const suite = backend ? describe : describe.skip;
 
 suite("SA #180 MFA PostgreSQL enrollment, replay and step-up", () => {
   let h: Harness, cookie: string;
+  let userId: string, recoveryCodes: string[];
   const password = "ornek-guclu-parola-1234";
 
   async function request(method: "GET" | "POST", path: string, body?: unknown, session?: string) {
@@ -37,6 +38,7 @@ suite("SA #180 MFA PostgreSQL enrollment, replay and step-up", () => {
     assert.equal((await request("POST", "/auth/email/verify", { token: verification })).statusCode, 200);
     const login = await request("POST", "/auth/login", { email, password });
     assert.equal(login.statusCode, 200, login.body);
+    userId = login.json().data.id;
     cookie = sessionCookie(login.headers["set-cookie"] as string);
   });
   after(async () => { await h?.close(); });
@@ -58,6 +60,16 @@ suite("SA #180 MFA PostgreSQL enrollment, replay and step-up", () => {
     const confirmed = await request("POST", "/me/mfa/confirm", { code: valid }, cookie);
     assert.equal(confirmed.statusCode, 200, confirmed.body);
     assert.equal(confirmed.json().data.enabled, true);
+    recoveryCodes = confirmed.json().data.recoveryCodes;
+    assert.equal(recoveryCodes.length, 10);
+    assert.equal(new Set(recoveryCodes).size, 10);
+    const persisted = await h.prisma!.mfaRecoveryCode.findMany({ where: { userId } });
+    assert.equal(persisted.length, 10);
+    assert.equal(JSON.stringify(persisted).includes(recoveryCodes[0]!), false);
+    const audit = await h.prisma!.auditLog.findMany({ where: { actorId: userId, action: "account.mfa" } });
+    assert.ok(audit.some(entry => entry.operation === "enable"));
+    assert.equal(JSON.stringify(audit).includes(secret), false);
+    assert.equal(JSON.stringify(audit).includes(recoveryCodes[0]!), false);
 
     // The OTP which enabled MFA cannot also grant step-up (same time window).
     assert.equal((await request("POST", "/me/mfa/step-up", { code: valid }, cookie)).statusCode, 403);
@@ -78,6 +90,32 @@ suite("SA #180 MFA PostgreSQL enrollment, replay and step-up", () => {
 
     h.clock.advance(301000);
     assert.equal((await request("GET", "/me/mfa", undefined, cookie)).json().data.stepUpExpiresAt, null);
+  });
+
+  test("recovery requires password, is one-use under concurrency, shares lockout and never exposes stored codes", async () => {
+    const input = { password, code: recoveryCodes[0]! };
+    assert.equal((await request("POST", "/me/mfa/recover", { ...input, password: "wrong-password-1234" }, cookie)).statusCode, 403);
+    const concurrent = await Promise.all([
+      request("POST", "/me/mfa/recover", input, cookie),
+      request("POST", "/me/mfa/recover", input, cookie),
+    ]);
+    assert.deepEqual(concurrent.map(r => r.statusCode).sort(), [200, 403]);
+    assert.equal((await request("POST", "/me/mfa/recover", input, cookie)).statusCode, 403);
+    // Two failures above plus three invalid codes trigger the account-bound lock.
+    for (let i = 0; i < 3; i++)
+      assert.equal((await request("POST", "/me/mfa/recover", { password, code: "0".repeat(32) }, cookie)).statusCode, 403);
+    assert.equal((await request("POST", "/me/mfa/recover", { password, code: recoveryCodes[1]! }, cookie)).statusCode, 403);
+    h.clock.advance(15 * 60_000 + 1);
+    assert.equal((await request("POST", "/me/mfa/recover", { password, code: recoveryCodes[1]! }, cookie)).statusCode, 200);
+    const state = (await request("GET", "/me/mfa", undefined, cookie)).json().data;
+    assert.ok(state.stepUpExpiresAt);
+    assert.equal("recoveryCodes" in state, false);
+    const audit = await h.prisma!.auditLog.findMany({ where: { actorId: userId, action: "account.mfa" } });
+    assert.ok(audit.some(entry => entry.operation === "recover"));
+    assert.ok(audit.some(entry => entry.operation === "lock"));
+    assert.equal(recoveryCodes.some(code => JSON.stringify(audit).includes(code)), false);
+    await h.prisma!.session.updateMany({ where: { userId }, data: { revokedAt: h.clock.now } });
+    assert.equal((await request("POST", "/me/mfa/recover", { password, code: recoveryCodes[2]! }, cookie)).statusCode, 401);
   });
 
   test("encrypted keys are account-bound and never contain plaintext", () => {

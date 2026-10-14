@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient, Role } from "@kararver/db";
 import { writeAudit } from "../audit/write.ts";
-import { decide, lockTarget } from "../admin-users/prisma-store.ts";
+import { decide, lockTarget, lockSuperAdmins } from "../admin-users/prisma-store.ts";
 import { superAdminCountForRoleRule } from "../admin-users/store.ts";
 import { consumeFreshStepup } from "./stepup-guard.ts";
 
@@ -11,6 +11,7 @@ export type RoleApprovalView = {
 };
 type Outcome = { kind: "ok"; data: RoleApprovalView } | { kind: "rejected"; reason: "forbidden" | "invalid" | "stale" };
 export interface RoleApprovalStore {
+  get(approvalId: string): Promise<{ id: string; userId: string; initiatorId: string; role: Role; expectedRole: Role; reason: string; status: string; expiresAt: Date } | null>;
   target(approvalId: string): Promise<{ targetUserId: string; requestedRole: Role } | null>;
   request(input: { actorId: string; sessionId: string; targetUserId: string; role: Role; reason: string; requestId: string; now: Date }): Promise<Outcome>;
   approve(input: { actorId: string; sessionId: string; approvalId: string; reason: string; requestId: string; now: Date }): Promise<Outcome>;
@@ -25,6 +26,12 @@ type ApprovalRow = {
 
 export function createPrismaRoleApprovalStore(prisma: PrismaClient): RoleApprovalStore {
   return {
+    async get(approvalId) {
+      const row = await prisma.roleChangeApproval.findUnique({ where: { id: approvalId } });
+      return row ? { id: row.id, userId: row.targetUserId, initiatorId: row.initiatorId,
+        role: row.requestedRole as Role, expectedRole: row.expectedRole as Role, reason: row.reason,
+        status: row.status, expiresAt: row.expiresAt } : null;
+    },
     async target(approvalId) {
       const row = await prisma.roleChangeApproval.findUnique({
         where: { id: approvalId }, select: { targetUserId: true, requestedRole: true },
@@ -42,6 +49,10 @@ export function createPrismaRoleApprovalStore(prisma: PrismaClient): RoleApprova
           SELECT id FROM users WHERE id = ${input.targetUserId}::uuid
             AND deleted_at IS NULL FOR NO KEY UPDATE`;
         if (!subjects.length) return { kind: "rejected" as const, reason: "invalid" as const };
+        await lockSuperAdmins(tx);
+        const freshActor = await tx.user.findUnique({ where: { id: input.actorId }, select: { status: true, deletedAt: true, role: { select: { role: true } } } });
+        if (!freshActor || freshActor.deletedAt || freshActor.status !== "ACTIVE" || freshActor.role?.role !== "SUPER_ADMIN")
+          return { kind: "rejected" as const, reason: "forbidden" as const };
         const existing = await tx.userRole.findUnique({ where: { userId: input.targetUserId }, select: { role: true, updatedAt: true } });
         const oldRole = existing?.role ?? "USER";
         if (oldRole === input.role || (oldRole !== "SUPER_ADMIN" && input.role !== "SUPER_ADMIN"))
@@ -70,6 +81,7 @@ export function createPrismaRoleApprovalStore(prisma: PrismaClient): RoleApprova
         if (!ref) return { kind: "rejected" as const, reason: "stale" as const };
         const target = await lockTarget(tx, ref.targetUserId);
         if (!target || target.deleted) return { kind: "rejected" as const, reason: "stale" as const };
+        await lockSuperAdmins(tx);
         const rows = await tx.$queryRaw<ApprovalRow[]>`
           SELECT * FROM role_change_approvals WHERE id = ${input.approvalId}::uuid FOR UPDATE`;
         const approval = rows[0];

@@ -166,9 +166,21 @@ model UserMfaCredential {
   lockedUntil        DateTime? @map("locked_until") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recoveryCodes MfaRecoveryCode[]
 
   @@index([enabledAt], map: "user_mfa_credentials_enabled_idx")
   @@map("user_mfa_credentials")
+}
+
+model MfaRecoveryCode {
+  userId String @map("user_id") @db.Uuid
+  codeHash String @map("code_hash") @db.Char(64)
+  createdAt DateTime @map("created_at") @db.Timestamptz(6)
+  usedAt DateTime? @map("used_at") @db.Timestamptz(6)
+  credential UserMfaCredential @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@id([userId, codeHash])
+  @@map("mfa_recovery_codes")
 }
 
 // SA #182: explicit second-superadmin approval, no reuse after execution.
