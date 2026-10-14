@@ -56,7 +56,7 @@ export const AdminCommunityRow = z.strictObject({
   moderators: Count,
   polls: Count,
   createdAt: Timestamp,
-  owner: CommunityOwnerRef.nullable(),
+  owner: CommunityOwnerRef.nullable().default(null),
   threshold: CommunityThreshold,
 });
 

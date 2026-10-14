@@ -10,7 +10,7 @@
 // topluluğa gider, böylece döngü yoktur. DB tetikleyicileri (migration) sahibin üye kalmasını ve üyeliğinin silinmemesini
 // ayrıca korur.
 import { Prisma, type PrismaClient } from "@kararver/db";
-import { lockTarget } from "../admin-users/prisma-store.ts";
+import { decide, lockSuperAdmins, lockTarget } from "../admin-users/prisma-store.ts";
 import { writeAudit } from "../audit/write.ts";
 import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
@@ -84,6 +84,9 @@ export function createPrismaCommunityOwnerStore(prisma: PrismaClient): Community
     async assign(communityId, userId, trail) {
       return prisma.$transaction(async (tx) => {
         if (!(await lockTarget(tx, userId))) return { kind: "rejected", reason: "user_not_found" } as const;
+        await lockSuperAdmins(tx);
+        if (!(await decide(tx, trail.actorId, "community.owner.assign", {}, trail.now)).allowed)
+          throw new ApiError("FORBIDDEN", "Sahip atama için güncel süper admin yetkisi gerekli.");
         const community = await lockCommunity(tx, communityId);
         if (!community) return { kind: "rejected", reason: "not_found" } as const;
         if (!(await isEligibleOwner(tx, userId))) return { kind: "rejected", reason: "user_not_eligible" } as const;
@@ -117,6 +120,9 @@ export function createPrismaCommunityOwnerStore(prisma: PrismaClient): Community
 
     async release(communityId, trail) {
       return prisma.$transaction(async (tx) => {
+        await lockSuperAdmins(tx);
+        if (!(await decide(tx, trail.actorId, "community.owner.assign", {}, trail.now)).allowed)
+          throw new ApiError("FORBIDDEN", "Sahipliği kaldırmak için güncel süper admin yetkisi gerekli.");
         const community = await lockCommunity(tx, communityId);
         if (!community) return { kind: "not_found" } as const;
         if (community.owner_id === null) return { kind: "unchanged" } as const;
@@ -139,9 +145,13 @@ export function createPrismaCommunityOwnerStore(prisma: PrismaClient): Community
 
     async releaseOwn(communityId, userId, trail) {
       return prisma.$transaction(async (tx) => {
+        const user = await lockTarget(tx, userId);
+        if (!user || user.deleted) return { kind: "not_owner" } as const;
         const community = await lockCommunity(tx, communityId);
         if (!community) return { kind: "not_found" } as const;
         if (community.owner_id !== userId) return { kind: "not_owner" } as const;
+        if (!(await decide(tx, userId, "community.owner.release", { ownerId: community.owner_id }, trail.now)).allowed)
+          throw new ApiError("FORBIDDEN", "Sahipliği bırakmak için aktif hesap gerekli.");
         await tx.community.update({ where: { id: communityId }, data: { ownerId: null } });
         await writeAudit(tx, {
           source: "API",

@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import surfaces from "../../components/content-surfaces.module.css";
 import { FormEvent, useEffect, useState } from "react";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
@@ -97,8 +98,8 @@ export default function Page() {
 
   const realProfile = Boolean(client.updateProfile && client.getBookmarks);
   return (
-    <div className="screen-stack">
-      <section className="kv-card screen-stack">
+    <div className={`screen-stack ${surfaces.screen}`}>
+      <section className={`kv-card screen-stack ${surfaces.profileHeader}`}>
         <div className="kv-row kv-between">
           <div>
             <span className="eyebrow">HESABIM</span>
@@ -109,7 +110,7 @@ export default function Page() {
         </div>
 
         {profile && (
-          <div className="kv-row" aria-label="Profil istatistikleri">
+          <div className={surfaces.stats} aria-label="Profil istatistikleri">
             <span className="kv-badge">{profile.stats.pollCount} gönderi</span>
             <span className="kv-badge">{profile.stats.votesReceived} alınan oy</span>
             <span className="kv-badge">{profile.stats.commentCount} yorum</span>
@@ -120,11 +121,11 @@ export default function Page() {
           <form className="screen-stack" onSubmit={saveProfile}>
             <label>
               Görünen ad
-              <input value={displayName} maxLength={60} required onChange={(e) => setDisplayName(e.target.value)} />
+              <input className="kv-input" value={displayName} maxLength={60} required onChange={(e) => setDisplayName(e.target.value)} />
             </label>
             <label>
               Biyografi
-              <textarea value={bio ?? ""} maxLength={300} rows={4} onChange={(e) => setBio(e.target.value)} />
+              <textarea className="kv-input" value={bio ?? ""} maxLength={300} rows={4} onChange={(e) => setBio(e.target.value)} />
             </label>
             <ErrorMessage message={error} />
             <button className="kv-button" disabled={busy || !displayName.trim()} aria-busy={busy}>
@@ -137,6 +138,7 @@ export default function Page() {
 
         <div className="kv-row">
           <Link className="kv-button kv-button--secondary" href="/ilgi-alanlari">İlgi alanlarını düzenle</Link>
+          <Link className="kv-button kv-button--secondary" href="/hesap/guvenlik">Hesap güvenliği</Link>
           <Link href="/">Akışa dön</Link>
         </div>
       </section>

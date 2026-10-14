@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { AdminCommunityOverview, AdminCommunityRow, defaultSettings, ErrorBody } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
-import { MAX_OWNED_COMMUNITIES } from "../src/modules/communities/owner.ts";
+import { createPrismaCommunityOwnerStore, MAX_OWNED_COMMUNITIES } from "../src/modules/communities/owner.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
 const backend = prismaBackend();
@@ -366,6 +366,25 @@ describe("topluluk sahibi (postgres)", { skip: backend ? false : "TEST_DATABASE_
   });
 
   // ─── BAN ────────────────────────────────────────────────────
+
+  test("transaction rechecks revoked super admin before assigning or releasing an owner", async () => {
+    await setFlag(true);
+    const communityId = await community();
+    const candidate = await signUp();
+    assert.equal((await put(communityId, candidate.id)).statusCode, 200);
+    const stale = await signUp();
+    await db.userRole.create({ data: { userId: stale.id, role: "SUPER_ADMIN", grantedById: boss.id } });
+    await db.userRole.delete({ where: { userId: stale.id } });
+    const store = createPrismaCommunityOwnerStore(db);
+    const replacement = await signUp();
+    const trail = { actorId: stale.id, requestId: randomUUID(), now: h.clock.now, reason: REASON };
+    const before = await audits(communityId, "community.owner.assign");
+    await assert.rejects(() => store.assign(communityId, replacement.id, trail), { code: "FORBIDDEN" });
+    await assert.rejects(() => store.release(communityId, trail), { code: "FORBIDDEN" });
+    assert.equal(await ownerOf(communityId), candidate.id);
+    assert.equal(await membership(communityId, replacement.id), null);
+    assert.equal((await audits(communityId, "community.owner.assign")).length, before.length);
+  });
 
   test("BAN: hesabın sahip olduğu topluluklar aynı transaction'da yönetici yönetimine döner (audit auto_release, yaptırım gerekçesi); üyelik ve içerik kalır; SUSPEND ve sahip olmayan hesap etkilemez", async () => {
     await setFlag(true);

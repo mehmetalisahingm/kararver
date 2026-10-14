@@ -47,7 +47,21 @@
   --kv-shadow: 0 18px 54px rgba(0,0,0,.28);
 }
 .product {
-  font-size: 15px;
+  --kv-space-1: 4px;
+  --kv-space-2: 8px;
+  --kv-space-3: 12px;
+  --kv-space-4: 16px;
+  --kv-space-5: 24px;
+  --kv-space-6: 32px;
+  --kv-control-height: 48px;
+  --kv-target-min: 44px;
+  --kv-type-body: 15px;
+  --kv-type-caption: 13px;
+  --kv-type-title: clamp(30px, 3.4vw, 44px);
+  --kv-radius-sm: 12px;
+  --kv-radius-md: 16px;
+  --kv-radius-lg: 22px;
+  font-size: var(--kv-type-body);
   line-height: 1.65;
   letter-spacing: -.005em;
 }
@@ -69,7 +83,7 @@
 .product[data-theme="dark"] .kv-card { box-shadow: 0 8px 30px rgba(0,0,0,.11); }
 .product .kv-button {
   border-radius: 12px;
-  min-height: 46px;
+  min-height: var(--kv-control-height);
   padding: 11px 19px;
   font-weight: 700;
   letter-spacing: -.015em;
@@ -81,7 +95,7 @@
 .product .kv-button--ghost { background: transparent; color: var(--kv-muted); }
 .product .kv-button--ghost:hover:not(:disabled) { background: var(--kv-surface-2); color: var(--kv-text); }
 .product .kv-input {
-  min-height: 48px;
+  min-height: var(--kv-control-height);
   border-radius: 12px;
   background: var(--kv-surface);
   border-color: var(--kv-control-border);
@@ -162,8 +176,8 @@
 .app-aside h2 { font-size: 22px; letter-spacing: -.045em; }
 .app-aside .eyebrow { margin-bottom: 6px; }
 .announcement:not(:empty) { padding: 13px 16px; border: 1px solid var(--kv-border); border-radius: 13px; }
-.screen-stack { gap: 22px; }
-.screen-stack h1 { font-size: clamp(30px, 3.4vw, 44px); line-height: 1.13; letter-spacing: -.055em; }
+.screen-stack { gap: var(--kv-space-5); }
+.screen-stack h1 { font-size: var(--kv-type-title); line-height: 1.13; letter-spacing: -.055em; }
 .screen-stack .kv-card { border-radius: var(--kv-radius-lg); }
 
 /* Premium decision experience */

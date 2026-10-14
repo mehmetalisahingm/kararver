@@ -107,7 +107,7 @@ describe("işlem türü (operation)", () => {
   });
 
   test("ayrım gereken işlemler birden çok türlü", () => {
-    assert.deepEqual(allowedAuditOperations("user.role.assign"), ["grant", "revoke", "change"]);
+    assert.deepEqual(allowedAuditOperations("user.role.assign"), ["grant", "revoke", "change", "request", "approve"]);
     assert.deepEqual(allowedAuditOperations("vote.invalidate"), ["invalidate", "restore"]);
     assert.deepEqual(allowedAuditOperations("community.moderator.assign"), ["assign", "remove"]);
     assert.deepEqual(allowedAuditOperations("user.sanction"), ["apply"]);
@@ -151,7 +151,7 @@ describe("assertAuditEntry", () => {
     assert.throws(() => assertAuditEntry(api({ source: "CLI" })), /CLI kaydında actorId null/);
     assert.throws(() => assertAuditEntry(api({ source: "ROOT" as never })), /geçersiz kaynak/);
     const role = { source: "CLI", actorId: null, requestId: null, action: "user.role.assign" } as const;
-    assert.throws(() => assertAuditEntry(api(role)), /operation zorunlu \(grant \| revoke \| change\)/);
+    assert.throws(() => assertAuditEntry(api(role)), /operation zorunlu \(grant \| revoke \| change \| request \| approve\)/);
     const cli = assertAuditEntry(api({ ...role, operation: "grant" }));
     assert.deepEqual([cli.source, cli.actorId, cli.requestId, cli.operation], ["CLI", null, null, "grant"]);
     const sync = { source: "WORKER", actorId: null, action: "user.status.sync", target: { type: "USER", id: TARGET } } as const;
