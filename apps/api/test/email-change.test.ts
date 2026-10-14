@@ -11,6 +11,7 @@ import type { PrismaClient } from "@kararver/db";
 import { COOLDOWN_MS, HOURLY_LIMIT, LINK_TTL_MS } from "../src/modules/email-change/routes.ts";
 import { maskEmail } from "../src/modules/email-change/store.ts";
 import { hashToken } from "../src/modules/auth/crypto.ts";
+import { decodeBase32, hotp } from "../src/modules/security/totp.ts";
 import { createHarness, PEPPER, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
 const backend = prismaBackend();
@@ -25,6 +26,7 @@ describe("e-posta değişimi (postgres)", { skip: backend ? false : "TEST_DATABA
   let db: PrismaClient;
   let boss: User;
   let admin: User;
+  let bossSecret: string | null = null;
 
   before(async () => {
     h = await createHarness(backend!, { realSettings: true });
@@ -96,6 +98,19 @@ describe("e-posta değişimi (postgres)", { skip: backend ? false : "TEST_DATABA
   const adminList = (userId: string, cookie = boss.cookie) => send("GET", `/admin/users/${userId}/email-change`, undefined, cookie);
   const adminCancel = (userId: string, cookie = boss.cookie) => send("POST", `/admin/users/${userId}/email-change/cancel`, { reason: "Destek talebi vazgeçildi" }, cookie);
   const me = (user: User) => send("GET", "/me", undefined, user.cookie);
+
+  async function eraseWithMfa(user: User) {
+    if (!bossSecret) {
+      const setup=await send("POST","/me/mfa/setup",{password:PASSWORD},boss.cookie);
+      assert.equal(setup.statusCode,200,setup.body);bossSecret=setup.json().data.secret;
+      const confirm=await send("POST","/me/mfa/confirm",{code:hotp(decodeBase32(bossSecret!),Math.floor(h.clock.now.getTime()/30000))},boss.cookie);
+      assert.equal(confirm.statusCode,200,confirm.body);
+    }
+    h.clock.advance(30000);
+    const fresh=await send("POST","/me/mfa/step-up",{code:hotp(decodeBase32(bossSecret!),Math.floor(h.clock.now.getTime()/30000))},boss.cookie);
+    assert.equal(fresh.statusCode,200,fresh.body);
+    return send("POST",`/admin/users/${user.id}/erasure`,{reason:REASON,confirmUsername:user.username},boss.cookie);
+  }
 
   const mailsTo = (email: string) => h.mails.filter((m) => m.to === email);
   const newAddress = () => `${fresh()}@example.test`;
@@ -430,14 +445,14 @@ describe("e-posta değişimi (postgres)", { skip: backend ? false : "TEST_DATABA
     await open(user);
     assertError(await adminStart(user.id, newAddress()), 409, "CONFLICT", "request_open");
     const gone = await signUp();
-    assert.equal((await send("POST", `/admin/users/${gone.id}/erasure`, { reason: REASON, confirmUsername: gone.username }, boss.cookie)).statusCode, 200);
+    const removed=await eraseWithMfa(gone);assert.equal(removed.statusCode,200,removed.body);
     assertError(await adminStart(gone.id, newAddress()), 409, "CONFLICT", "user_deleted");
   });
 
   test("anonimleştirme açık talebi kapatır ve yeni adresi siler; token'lar artık geçersiz", async () => {
     const user = await signUp();
     const flow = await open(user);
-    assert.equal((await send("POST", `/admin/users/${user.id}/erasure`, { reason: REASON, confirmUsername: user.username }, boss.cookie)).statusCode, 200);
+    const removed=await eraseWithMfa(user);assert.equal(removed.statusCode,200,removed.body);
     const row = (await rows(user.id)).at(-1)!;
     assert.equal(row.status, "CANCELLED");
     assert.equal(row.failure, "account_erased");
