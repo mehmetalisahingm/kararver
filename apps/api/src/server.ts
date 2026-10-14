@@ -8,6 +8,8 @@ import { createMailer } from "./mail/mailer.ts";
 import { createPrismaAdminUserStore } from "./modules/admin-users/prisma-store.ts";
 import { createPrismaEmailChangeStore } from "./modules/email-change/prisma-store.ts";
 import { createPrismaAccountErasureStore } from "./modules/account-erasure/prisma-store.ts";
+import { createPrismaContentJobStore } from "./modules/content-jobs/prisma-store.ts";
+import { startContentJobRunner } from "./modules/content-jobs/runner.ts";
 import { createPrismaDataExportStore } from "./modules/data-exports/prisma-store.ts";
 import { createArgon2Hasher } from "./modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "./modules/auth/prisma-store.ts";
@@ -27,6 +29,8 @@ import { createPrismaPointAdminStore } from "./modules/points/admin-store.ts";
 import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
 import { createPrismaProfileStore } from "./modules/profiles/prisma-store.ts";
 import { createPrismaRbacStore } from "./modules/rbac/prisma-store.ts";
+import { createPrismaMfaStore } from "./modules/security/prisma-store.ts";
+import { createPrismaRoleApprovalStore } from "./modules/security/approval-store.ts";
 import { createPrismaModerationStore } from "./modules/moderation/prisma-store.ts";
 import { createPrismaNotificationStore } from "./modules/notifications/prisma-store.ts";
 import { createPrismaReportStore } from "./modules/reports/prisma-store.ts";
@@ -64,6 +68,8 @@ const app = buildApp({
   config,
   settingsService,
   authStore: createPrismaAuthStore(prisma),
+  mfaStore: createPrismaMfaStore(prisma, config.authTokenPepper),
+  roleApprovalStore: createPrismaRoleApprovalStore(prisma),
   rbacStore: createPrismaRbacStore(prisma),
   pollStore: createPrismaPollStore(prisma),
   profileStore: createPrismaProfileStore(prisma),
@@ -87,10 +93,11 @@ const app = buildApp({
   reportStore: createPrismaReportStore(prisma),
   moderationStore: createPrismaModerationStore(prisma),
   notificationStore: createPrismaNotificationStore(prisma),
-  adminUserStore: createPrismaAdminUserStore(prisma),
+  adminUserStore: createPrismaAdminUserStore(prisma, { enforceCriticalApprovals: config.roleApprovalsRequired }),
   dataExportStore: createPrismaDataExportStore(prisma),
   accountErasureStore: createPrismaAccountErasureStore(prisma),
   emailChangeStore: createPrismaEmailChangeStore(prisma),
+  contentJobStore: createPrismaContentJobStore(prisma),
   metricsStore: createPrismaMetricsStore(prisma),
   opsProbe: createPrismaOpsProbe(prisma),
   commentStore: createPrismaCommentStore(prisma),
@@ -103,8 +110,17 @@ const app = buildApp({
 });
 if (!config.storage) app.log.warn("S3_* tanımlı değil: medya endpoint'leri kapalı");
 
+// #181 toplu içerik işleri: DB kuyruğunu işleyen çalıştırıcı (FOR UPDATE SKIP LOCKED; çok süreçte güvenli).
+const contentJobRunner = startContentJobRunner({
+  prisma,
+  moderation: createPrismaModerationStore(prisma),
+  now: () => new Date(),
+  log: (level, message, fields) => app.log[level](fields, message),
+});
+
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, "kapanıyor");
+  contentJobRunner.stop();
   await app.close();
   await mediaQueue?.stop();
   await prisma.$disconnect();

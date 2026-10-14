@@ -12,6 +12,9 @@ export const BLOCKER_TEXT: Record<ErasurePreviewView["blockers"][number], string
 /** Silinecek/boşaltılacak kayıtların okunur özeti; sıfır olanlar yazılmaz. */
 export function removalLines(will: ErasurePreviewView["willRemove"]): string[] {
   const lines: Array<[number, string]> = [
+    [will.polls, "paylaşım (metin ve sürümleri kaldırılır)"],
+    [will.comments, "yorum (metin ve sürümleri kaldırılır)"],
+    [will.media, "görsel (depo temizliğine alınır)"],
     [will.sessions, "açık oturum"],
     [will.dataExports, "hazır veri paketi"],
     [will.avatar, "profil görseli"],
@@ -25,7 +28,7 @@ export function removalLines(will: ErasurePreviewView["willRemove"]): string[] {
 
 /** Korunan içerik özeti: yazar adı anonim görünür. */
 export function retainedLine(keep: ErasurePreviewView["willRetain"]): string {
-  return `${keep.polls} anket, ${keep.comments} yorum, ${keep.votes} oy ve ${keep.reportsFiled} rapor kimliksiz olarak kalır.`;
+  return `${keep.votes} oyun hesapla bağı kaldırılarak sonuç istatistiği korunur. ${keep.reportsFiled} rapor denetim kapsamında saklanır. Paylaşım ve yorum metinleri kaldırılır.`;
 }
 
 /** Yazılı teyit: sunucudaki kuralla aynı (büyük/küçük harf ve baştaki @ önemsiz). Boş teyit asla geçmez. */

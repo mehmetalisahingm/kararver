@@ -4,6 +4,7 @@
 // görünürlüğü sunucuda uygulanır; yetkisiz izleyici 404 alır ve bölüm açıklayıcı bir durumla gösterilir.
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import surfaces from "../../components/content-surfaces.module.css";
 import { ErrorMessage, Loading } from "../../components/fields";
 import { useProduct } from "../../components/product-provider";
 import { PollCard } from "../polls/poll-card";
@@ -81,7 +82,7 @@ function usePaged<T>(load: ((cursor: string | undefined, signal: AbortSignal) =>
 
 function CommunityCardView({ community }: { community: CommunitySummary }) {
   return (
-    <article className="kv-card kv-stack">
+    <article className={`kv-card kv-stack ${surfaces.community}`}>
       <div className="kv-row kv-between">
         <h2>
           <Link href={`/topluluk/${community.slug}`}>{community.name}</Link>
@@ -89,6 +90,7 @@ function CommunityCardView({ community }: { community: CommunitySummary }) {
         <span className="kv-badge kv-badge--neutral">{community.memberCount} üye</span>
       </div>
       {community.description ? <p className="kv-muted">{community.description}</p> : null}
+      <Link className="kv-button kv-button--secondary" href={`/topluluk/${community.slug}`}>Topluluğu keşfet</Link>
     </article>
   );
 }

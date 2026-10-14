@@ -20,10 +20,11 @@ export class MediaClient {
     try {
       // Presigned storage is a different origin: never send API cookies or authorization.
       const response = await this.uploadFetch(ticket.upload.url,{method:"PUT",headers:ticket.upload.headers,body:file,credentials:"omit",signal});
-      if (!response.ok) throw new Error("upload failed");
+      if (!response.ok) throw new UiError("UPLOAD_FAILED",`Dosya yüklenemedi. Yükleme servisi isteği reddetti (HTTP ${response.status}). Seçimin korundu; tekrar deneyebilirsin.`);
     } catch (error) {
       if (signal?.aborted) throw error;
-      throw new UiError("UPLOAD_FAILED","Dosya yüklenemedi. Seçimin korundu; tekrar deneyebilirsin.");
+      if (error instanceof UiError) throw error;
+      throw new UiError("UPLOAD_FAILED","Dosya yüklenemedi. Yükleme servisine ulaşılamadı. Bağlantını kontrol edip tekrar dene; sorun sürerse destek iste. Seçimin korundu.");
     }
   }
   async complete(id: string, signal?: AbortSignal) { return dataOf(MediaView).parse(await this.http.request("media.complete",{params:{id},signal})).data; }

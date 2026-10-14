@@ -1,0 +1,17 @@
+// Sahip: Faruk (@farukkemree) — KV-186 (#186) operasyon merkezi.
+
+// Başarılı veritabanı yedeklerinin kaydı (KV-48 `db:backup` yazar, /admin/ops okur). Dosya yolu, bucket adresi ve
+// bağlantı bilgisi tutulmaz; `destination` yalnız etikettir ("local", "r2"…). Biçim CHECK'leri migration'dadır.
+model OpsBackupRun {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  finishedAt    DateTime @map("finished_at") @db.Timestamptz(3)
+  destination   String   @db.VarChar(40)
+  sizeBytes     BigInt   @map("size_bytes")
+  sha256        String   @db.Char(64)
+  durationMs    Int      @map("duration_ms")
+  serverVersion String   @map("server_version") @db.VarChar(40)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([finishedAt(sort: Desc)])
+  @@map("ops_backup_runs")
+}

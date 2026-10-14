@@ -402,12 +402,15 @@ model AccountErasure {
   reason           String    @db.VarChar(500)
   summary          Json
   storageCleanedAt DateTime? @map("storage_cleaned_at") @db.Timestamptz(3)
+  storageCleanupAttempts Int @default(0) @map("storage_cleanup_attempts")
+  storageNextAttemptAt DateTime? @map("storage_next_attempt_at") @db.Timestamptz(3)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user        User @relation("AccountErasureSubject", fields: [userId], references: [id], onDelete: Restrict)
   requestedBy User @relation("AccountErasureRequester", fields: [requestedById], references: [id], onDelete: Restrict)
 
   @@index([storageCleanedAt, createdAt])
+  @@index([storageCleanedAt, storageNextAttemptAt, createdAt], map: "account_erasures_retry_idx")
   @@map("account_erasures")
 }
 

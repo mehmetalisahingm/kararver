@@ -9,7 +9,7 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
-## 1.28.0 — 2026-10-14 (Mert, #181 e-posta değişimi)
+## 1.30.0 — 2026-10-14 (Mert, #181 e-posta değişimi)
 
 Kırıcı değişiklik yok: yeni endpoint'ler, şemalar, yetkiler ve varsayılan kapalı ayar.
 
@@ -19,7 +19,10 @@ Kırıcı değişiklik yok: yeni endpoint'ler, şemalar, yetkiler ve varsayılan
 - Şemalar: `EmailChangeView` (maskeli adres, yalnız açıkken), `EmailChangeStarted`, `EmailChangeConfirmed`, `EmailChangeStatus`.
 - **Davranış:** e-posta yalnız iki taraflı (veya destek yolunda yeni adres) bağlantı tıklamasıyla değişir; tamamlanınca yeni adres doğrulanmış sayılır ve bütün oturumlar kapanır.
 
-## 1.27.0 — 2026-10-14 (Mert, #181 hesap anonimleştirme ve yasal saklama)
+## 1.29.0 — 2026-10-14 (#181 hesap silme ve yasal saklama)
+
+- Mehmet'in kapsam kararı: paylaşım/yorum metinleri ve sürümleri kaldırılır, bütün görseller temizlenir; hesapla ilişkili oy kayıtları kimliksiz istatistik gruplarına dönüştürülür. Sayım/snapshot/trend formülleri korunur.
+- `willRemove` artık paylaşım, yorum ve tüm görselleri de sayar. Silme transaction'ı mevcut oturumda tek kullanımlık MFA ister (`mfa_required`). Depo hataları gecikmeli tekrar denenir ve sonraki kayıtları tıkamaz.
 
 Kırıcı değişiklik yok: yeni endpoint'ler, şemalar ve yetkiler (yalnız SUPER_ADMIN).
 
@@ -27,7 +30,7 @@ Kırıcı değişiklik yok: yeni endpoint'ler, şemalar ve yetkiler (yalnız SUP
 - Şemalar: `AccountErasurePreview`, `AccountErasureResult`, `ErasureBlocker`, `LegalHold`.
 - **Davranış:** anonimleştirilmiş hesabın kullanıcı adı `silinmis_<12 hane>`, görünen adı "Silinmiş hesap" olur; içerik ve oylar korunur. 409 kodları: `confirmation_mismatch`, `legal_hold`, `active_sanction`, `has_role`, `export_in_progress`, `user_deleted`.
 
-## 1.26.0 — 2026-10-13 (Mert, #184 topluluk sahibi atama, KV-54 S1)
+## 1.28.0 — 2026-10-13 (Mert, #184 topluluk sahibi atama, KV-54 S1)
 
 Kırıcı değişiklik yok: yeni endpoint'ler, yeni (boş olabilen) alan ve ayar; varsayılan kapalı bayrak arkasında.
 
@@ -36,12 +39,34 @@ Kırıcı değişiklik yok: yeni endpoint'ler, yeni (boş olabilen) alan ve ayar
 - **Ayar:** `communities.ownershipEnabled` (boolean, varsayılan **false**). Kapalıyken #172 başvuru onayı sahip atamaz; mevcut sahiplik korunur.
 - **Davranış:** sahip topluluktan ayrılamaz (`communities.leave` 409 `owner_must_release`); BAN uygulanan hesabın sahip olduğu topluluklar otomatik yönetici yönetimine döner. Yeni `community_role` değeri yok.
 
-## 1.25.0 — 2026-10-13 (Mert, #184 topluluk yönetim görünümü)
+## 1.27.0 — 2026-10-14 (SA #180/#182 MFA ve bağımsız rol onayı)
+
+- TOTP kurulumu, oturuma bağlı tek kullanımlık yeniden doğrulama ve iki yönetici rol onayı endpoint'leri.
+- Kurulum onayında bir kez gösterilen 10 kurtarma kodu; parola ile tek kullanımlık kurtarma. Kod ve TOTP secret'ı audit'e yazılmaz.
+- `admin.roleApprovals.get`: onay vermeden önce hedef, rol ve gerekçeyi inceleme. `account.mfa` güvenlik olayları.
+- Rol koruması `ROLE_APPROVALS_REQUIRED` ile etkinleşir; varsayılan kapalıdır, tek yöneticili hesapları kilitlemez. #180/#182 yayın kabulü ayrıca izlenir.
+
+## 1.26.0 — 2026-10-13 (Mert, #184 topluluk yönetim görünümü)
 
 Kırıcı değişiklik yok: yeni salt okuma endpoint'leri ve yetki.
 
 - **Eklendi:** `admin.communities.listAll` (kapalı topluluklar dahil, durum ve ad/slug süzgeci), `admin.communities.overview` (etki sayıları, 7 gün / 10 üye eşiğinin durumu, son 10 yönetim izi) ve `admin.communities.members` (arama ve rol süzgeçli yönetici üye listesi). ADMIN+, `community.admin.read`. Hepsi salt okuma; hassas alan yok.
 - Şemalar: `AdminCommunityRow`, `AdminCommunityOverview`, `CommunityThreshold`, `CommunityThresholdState`, `AdminCommunityStatus`.
+
+## 1.25.0 — 2026-10-13 (Faruk, operasyon merkezi güvenlik sinyalleri, #186)
+
+Kırıcı değişiklik yok: yanıta alan eklendi (minör). Sağlayıcı ve tüketici aynı PR'da güncellendi.
+
+- **Eklendi:** `OpsStatus.security.lockedLogins` (`{ emails, ips }` | null): bütün API süreçlerinde şu an giriş kilidindeki e-posta ve IP anahtarı sayısı (KV-19 sayaçlarından). Ham e-posta/IP dönmez.
+- **Eklendi:** `OpsStatus.security.adminActions24h` (`[{ action, operation, count }]` | null): son 24 saatteki kritik yönetici işlemleri (rol, yaptırım, oturum iptali, parola sıfırlama, toplu içerik, anonimleştirme, yasal saklama, topluluk sahibi, KVKK dışa aktarma, ayar, acil durum, puan), audit kayıtlarından. Okunamazsa `null`, 0 değil.
+- **Uyumluluk:** yeni güvenlik alanlarını henüz göndermeyen API yanıtları `null` olarak okunur; mevcut operasyon ölçümleri kullanılabilir kalır. Yeni alanlar gönderildiğinde sıkı doğrulama korunur.
+
+## 1.24.0 — 2026-10-12 (Mert, #181 kullanıcı içeriğinin toplu gizlenmesi/kaldırılması)
+
+Kırıcı değişiklik yok: yeni endpoint ve yetki.
+
+- **Eklendi:** `admin.users.contentJobs.preview` (GET, etki sayacı), `.create` (ayrı onay, kuyruğa alır), `.list`, `.undo` ve `.cancel` (ADMIN+, `user.content.bulk`, kural `sanctionTarget`; gerekçeli, audit `user.content.bulk` `request`/`undo`/`cancel`). İçerik başına işlem mevcut moderasyon uygulamasından geçer (audit `moderation.*.apply`, olay, rapor kapanması). Tek işte en çok 500 içerik; hesapta tek açık iş; geri alma yalnız önceki durumu ACTIVE olan ve değişmemiş içeriği geri yükler.
+- Şemalar: `ContentJob`, `ContentJobPreview`, `ContentJobKind`, `ContentJobStatus`, `ContentJobScope`.
 
 ## 1.23.0 — 2026-10-12 (Faruk, operasyon merkezi, #186)
 

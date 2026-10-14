@@ -61,6 +61,30 @@ pnpm --filter @kararver/worker media:check
 - **Veri kaybı (RPO):** Restore, yedeğin alındığı anın görüntüsüdür. Sonrasındaki yazımlar kaybolur; test bunu ölçer: yedek sürerken yazılan oylar restore'da yoktur, sayaçlar o ana göre tutarlıdır. Bağımsız günlük yedekte RPO ≤ 24 saattir. Sağlayıcı PITR'ı varsa dakikalar mertebesindedir (hosting kararında doğrulanacak).
 - **Medya sızıntısı:** `media:check` public bucket'ta hiçbir kaydın göstermediği nesneyi **hata** sayar. Restore sonrası ya da kaldırma yarıda kaldığında reddedilmiş bir görsel hâlâ herkese açık olabilir. Bu nesneler silinir.
 
+### Yedek kaydı ve operasyon paneli (#186)
+
+`db:backup` başarılı her yedeği yedeklenen veritabanındaki `ops_backup_runs` tablosuna yazar: bitiş zamanı, hedef etiketi, boyut, sha256, süre ve sunucu sürümü. Dosya yolu, bucket adresi ve bağlantı bilgisi **tutulmaz**; hedef yalnız bir etikettir (`local`, `r2`…). Bunu hem araç hem DB CHECK'i zorlar.
+
+- **Kullanım:** `pnpm --filter @kararver/db db:backup --out <klasör> [--destination r2] [--no-record]`. Zamanlanmış iş dosyayı yükledikten **sonra** kendi hedefini verir. Kayıt yazılamazsa yedek yine geçerlidir; uyarı verilir.
+- **Kayıt dökümün içinde değildir:** Snapshot'tan sonra yazılır. Restore edilen veritabanında o yedeğin kaydı görünmez; manifest doğrulaması etkilenmez.
+- **Panel durumu:** `/admin/ops` → `backup.lastBackupAt` en yeni kayıttır. Durum: ≤ 26 saat `ok`, ≤ 72 saat `degraded`, daha eski `down`, hiç kayıt yoksa `unknown`.
+
+### Zamanlanmış yedek: seçenekler (karar: Mehmet, hosting/production kararıyla)
+
+| Seçenek | Nasıl | Artı | Eksi |
+|---|---|---|---|
+| **A. Railway cron servisi** (önerilen) | Ayrı bir Railway servisi (`cronSchedule: "30 0 * * *"`, İstanbul 03:30). Çalışınca `db:backup --destination r2` → şifreli (age) dosya yedek bucket'ına → `media:check` → çıkar. | DB'ye iç ağdan bağlanır (TCP proxy açılmaz). Kayıt ve panel hemen çalışır. Hata Railway deploy kaydında görünür. | Servis imajında PG 18 istemci araçları gerekir (staging PG 18.6). |
+| B. GitHub Actions gecelik iş | Secret'taki `DATABASE_PUBLIC_URL` ile `db:backup` → bucket. | Kurulumu basit; geçmiş Actions'ta görünür. | DB'nin public proxy'si sürekli açık kalmalı (KV-48'de iş bitince kapatıldı). Kişisel veri GitHub runner'ından geçer (KVKK). Önerilmez. |
+| C. Sağlayıcı yedeği / PITR | Railway'in volume yedeği ya da yönetilen PostgreSQL PITR'ı. | Bakım yok; RPO dakikalar. | Plan/sağlayıcıya bağlı; bağımsız kopya değildir (sağlayıcı ya da hesap sorunu yedeği de etkiler). `ops_backup_runs`'a yazmaz, panelde görünmesi için ayrı kontrol gerekir. |
+
+**Öneri:** C (varsa) + A birlikte. Sağlayıcı PITR'ı kısa RPO için, A sağlayıcıdan bağımsız günlük kopya ve panel kanıtı için.
+
+A için gerekenler:
+1. Yedek bucket'ı ve **yalnız yazma** yetkili anahtar (uygulamanın anahtarı yedekleri silemez).
+2. `age` açık anahtarı (özel anahtar ekip dışında, çevrimdışı saklanır).
+3. Saklama kuralı (7 günlük + 4 haftalık + 3 aylık) bucket yaşam döngüsüyle.
+4. `staging-monitor` gibi bir izleme: panel `degraded` olunca alarm.
+
 ## Restore runbook'u
 
 1. **Karar ve kapsam:** Hangi ana dönülecek (en son yedek / deploy öncesi yedek / PITR)? Bu andan sonraki yazımlar kaybolur.

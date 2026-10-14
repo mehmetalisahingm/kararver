@@ -52,6 +52,11 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /auth/email/resend`<br>Doğrulama e-postasını yeniden gönderir · `auth.email.resend` | U | 202 | — | Faruk `auth` | Ümit (web, KV-13) | #11 #15 | hazır |
 | `POST /auth/password/forgot`<br>Şifre sıfırlama e-postası · `auth.password.forgot` | G | 202 | — | Faruk `auth` | Ümit (web, KV-13) | #11 #15 | hazır |
 | `POST /auth/password/reset`<br>Token ile yeni şifre; bütün oturumlar iptal edilir · `auth.password.reset` | G | 204 | — | Faruk `auth` | Ümit (web, KV-13) | #11 #15 | hazır |
+| `GET /me/mfa`<br>Kendi MFA durumu ve oturum step-up bitişi · `me.mfa.status` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 #182 | hazır |
+| `POST /me/mfa/setup`<br>Parola tekrar doğrulamasıyla TOTP kurulumu · `me.mfa.setup` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 | hazır |
+| `POST /me/mfa/confirm`<br>TOTP kurulumunu doğrula ve etkinleştir · `me.mfa.confirm` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 | hazır |
+| `POST /me/mfa/recover`<br>Parola ve tek kullanımlık kurtarma koduyla mevcut oturumda yeniden doğrulama · `me.mfa.recover` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 #182 | hazır |
+| `POST /me/mfa/step-up`<br>Mevcut oturum için 5 dakikalık MFA yeniden doğrulama · `me.mfa.stepup` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 #182 | hazır |
 | `GET /me`<br>Oturum sahibinin hesabı · `me.get` | U | 200 | — | Faruk `users` | Ümit (web, KV-13), Mehmet (profil, KV-22) | #11 #15 #24 | hazır |
 | `PATCH /me`<br>Görünen ad, biyografi, avatar · `me.update` | U | 200 | doğal | Faruk `users` | Ümit (web, KV-13), Mehmet (profil, KV-22) | #11 #24 | hazır |
 | `POST /me/email-change`<br>E-posta değişimi başlat (parola + yeni adres) · `me.emailChange.request` | V | 202 | — | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
@@ -209,11 +214,19 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /admin/users/:id/email-change`<br>Destek yoluyla e-posta değişimi başlat (yeni adres doğrulaması zorunlu) · `admin.users.emailChange.start` | SA | 202 | — | Mert `email-change` | Utku (admin UI) | #181 | hazır |
 | `GET /admin/users/:id/email-change`<br>Hesabın son e-posta değişimi talepleri (son 10, maskeli) · `admin.users.emailChange.list` | SA | 200 | — | Mert `email-change` | Utku (admin UI) | #181 | hazır |
 | `POST /admin/users/:id/email-change/cancel`<br>Açık e-posta değişimi talebini iptal et · `admin.users.emailChange.cancel` | SA | 200 | doğal | Mert `email-change` | Utku (admin UI) | #181 | hazır |
+| `GET /admin/users/:id/content-jobs/preview`<br>Toplu içerik işlemi önizlemesi (etki sayacı) · `admin.users.contentJobs.preview` | A | 200 | — | Mert `content-jobs` | Utku (admin UI) | #181 | hazır |
+| `POST /admin/users/:id/content-jobs`<br>Önizlenen toplu içerik işlemini onayla ve kuyruğa al · `admin.users.contentJobs.create` | A | 202 | doğal | Mert `content-jobs` | Utku (admin UI) | #181 | hazır |
+| `GET /admin/users/:id/content-jobs`<br>Hesabın toplu içerik işleri (son 20) · `admin.users.contentJobs.list` | A | 200 | — | Mert `content-jobs` | Utku (admin UI) | #181 | hazır |
+| `POST /admin/users/:id/content-jobs/:jobId/undo`<br>Bitmiş toplu içerik işlemini geri al · `admin.users.contentJobs.undo` | A | 202 | doğal | Mert `content-jobs` | Utku (admin UI) | #181 | hazır |
+| `POST /admin/users/:id/content-jobs/:jobId/cancel`<br>Kuyruktaki veya işlenmekte olan toplu içerik işini durdur · `admin.users.contentJobs.cancel` | A | 200 | doğal | Mert `content-jobs` | Utku (admin UI) | #181 | hazır |
 | `GET /admin/users/:id/sanctions`<br>Kullanıcının bütün yaptırım geçmişi (kaldırılan ve süresi dolanlar dahil) · `admin.users.sanctions` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id/reports`<br>Kullanıcıya (hesap veya içerik) yapılan ya da kullanıcının yaptığı raporlar · `admin.users.reports` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id/activity`<br>Kullanıcının anket ve yorumları (gizli/kaldırılmış dahil) · `admin.users.activity` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `POST /admin/users/:id/sanctions`<br>Uyarı / kısıt / suspend / ban · `admin.sanctions.create` | A | 201 | key (ops.) | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `POST /admin/users/:id/sanctions/:sanctionId/lift`<br>Yaptırımı kaldır · `admin.sanctions.lift` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
+| `GET /admin/role-approvals/:id`<br>İkinci onay öncesi hedef, rol ve gerekçeyi göster · `admin.roleApprovals.get` | SA | 200 | — | Utku `rbac` | Utku (admin UI) | #182 | hazır |
+| `POST /admin/role-approvals`<br>Kritik rol değişikliği için MFA doğrulanmış onay talebi · `admin.roleApprovals.request` | SA | 201 | — | Utku `rbac` | Utku (admin UI) | #182 | hazır |
+| `POST /admin/role-approvals/:id/approve`<br>Farklı SUPER_ADMIN tarafından MFA doğrulanmış ikinci onay · `admin.roleApprovals.approve` | SA | 200 | — | Utku `rbac` | Utku (admin UI) | #182 | hazır |
 | `PUT /admin/users/:id/role`<br>Rol ata · `admin.roles.put` | SA | 200 | doğal | Utku `rbac` | Utku (admin UI) | #14 #35 | hazır |
 | `GET /admin/settings`<br>Bütün sistem ayarları (sürümlü) · `admin.settings.list` | A | 200 | — | Utku `settings` | Utku (admin UI) | #42 | hazır |
 | `PATCH /admin/settings/:key`<br>Tek ayarı değiştir (iyimser kilit) · `admin.settings.update` | SA | 200 | doğal | Utku `settings` | Utku (admin UI) | #42 | hazır |
@@ -280,7 +293,9 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #66 | `POST /polls`, `PUT /polls/:id/reaction`, `DELETE /polls/:id/reaction`, `PUT /comments/:id/reaction`, `DELETE /comments/:id/reaction` |
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
 | #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
-| #181 | `POST /me/email-change`, `GET /me/email-change`, `DELETE /me/email-change`, `POST /auth/email-change/confirm`, `POST /auth/email-change/deny`, `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver`, `GET /admin/users/:id/erasure`, `POST /admin/users/:id/erasure`, `PUT /admin/users/:id/legal-hold`, `POST /admin/users/:id/legal-hold/release`, `POST /admin/users/:id/email-change`, `GET /admin/users/:id/email-change`, `POST /admin/users/:id/email-change/cancel` |
+| #180 | `GET /me/mfa`, `POST /me/mfa/setup`, `POST /me/mfa/confirm`, `POST /me/mfa/recover`, `POST /me/mfa/step-up` |
+| #181 | `POST /me/email-change`, `GET /me/email-change`, `DELETE /me/email-change`, `POST /auth/email-change/confirm`, `POST /auth/email-change/deny`, `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver`, `GET /admin/users/:id/erasure`, `POST /admin/users/:id/erasure`, `PUT /admin/users/:id/legal-hold`, `POST /admin/users/:id/legal-hold/release`, `POST /admin/users/:id/email-change`, `GET /admin/users/:id/email-change`, `POST /admin/users/:id/email-change/cancel`, `GET /admin/users/:id/content-jobs/preview`, `POST /admin/users/:id/content-jobs`, `GET /admin/users/:id/content-jobs`, `POST /admin/users/:id/content-jobs/:jobId/undo`, `POST /admin/users/:id/content-jobs/:jobId/cancel` |
+| #182 | `GET /me/mfa`, `POST /me/mfa/recover`, `POST /me/mfa/step-up`, `GET /admin/role-approvals/:id`, `POST /admin/role-approvals`, `POST /admin/role-approvals/:id/approve` |
 | #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
 | #186 | `GET /admin/ops` |
 <!-- END:unblocks -->

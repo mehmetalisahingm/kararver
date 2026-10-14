@@ -15,6 +15,8 @@ import { registerEmailChangeRoutes } from "./modules/email-change/routes.ts";
 import type { EmailChangeStore } from "./modules/email-change/store.ts";
 import { registerAccountErasureRoutes } from "./modules/account-erasure/routes.ts";
 import type { AccountErasureStore } from "./modules/account-erasure/store.ts";
+import { registerContentJobRoutes } from "./modules/content-jobs/routes.ts";
+import type { ContentJobStore } from "./modules/content-jobs/store.ts";
 import { registerDataExportRoutes } from "./modules/data-exports/routes.ts";
 import type { DataExportStore } from "./modules/data-exports/store.ts";
 import type { AdminUserStore } from "./modules/admin-users/store.ts";
@@ -58,6 +60,10 @@ import { registerSettingsRoutes } from "./modules/settings/routes.ts";
 import type { SettingsService } from "./modules/settings/service.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
 import { registerRoleRoutes } from "./modules/rbac/roles-routes.ts";
+import { registerMfaRoutes } from "./modules/security/routes.ts";
+import { registerRoleApprovalRoutes } from "./modules/security/approval-routes.ts";
+import type { RoleApprovalStore } from "./modules/security/approval-store.ts";
+import type { MfaStore } from "./modules/security/store.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
 import { registerRevisionRoutes } from "./modules/revisions/routes.ts";
 import { registerAuditRoutes } from "./modules/audit/routes.ts";
@@ -88,6 +94,9 @@ export type AppDeps = {
  decisionStore?: DecisionStore;
   config: Config;
   authStore: AuthStore;
+  /** MFA endpoints only when a persistent store is available. */
+  mfaStore?: MfaStore;
+  roleApprovalStore?: RoleApprovalStore;
   /** Rol, yaptırım ve topluluk moderatörlüğü (KV-12); her istekte okunur. */
   rbacStore: RbacStore;
   hasher: PasswordHasher;
@@ -143,6 +152,8 @@ export type AppDeps = {
   dataExportStore?: DataExportStore;
   /** #181 hesap anonimleştirme ve yasal saklama; adminUserStore ile birlikte kaydedilir (hedef rolü okunur). */
   accountErasureStore?: AccountErasureStore;
+  /** #181 kullanıcı içeriğinin toplu gizlenmesi; adminUserStore ile birlikte verilirse route'lar kaydedilir (işi runner.ts işler). */
+  contentJobStore?: ContentJobStore;
   metricsStore?: MetricsStore;
   /** KV-186 operasyon yoklaması (DB, worker izi, pg-boss kuyrukları); verilmezse bu bileşenler `unknown`. */
   opsProbe?: OpsProbe;
@@ -241,10 +252,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const isEmailChangeEnabled = deps.isEmailChangeEnabled ?? (settings ? () => settings.isEmailChangeEnabled() : async () => false);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
+  const rateLimitSettings =
+    deps.rateLimitSettings ?? (deps.settingsService ? () => deps.settingsService!.rateLimitSettings() : async () => DEFAULT_RATE_LIMIT_SETTINGS);
   const limiter = deps.rateLimitStore
     ? createRateLimiter({
         store: deps.rateLimitStore,
-        settings: deps.rateLimitSettings ?? (deps.settingsService ? () => deps.settingsService!.rateLimitSettings() : async () => DEFAULT_RATE_LIMIT_SETTINGS),
+        settings: rateLimitSettings,
         newAccountDays: async () => (await pollSettings()).newAccountPeriodDays,
         pepper: config.authTokenPepper,
         now,
@@ -266,6 +279,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return roles.length > 0 ? roles : ["USER" as const];
   };
 
+  if (deps.mfaStore) registerMfaRoutes(route, { store: deps.mfaStore, hasher: deps.hasher, now });
   registerAuthRoutes(route, {
     rolesOf,
     store: deps.authStore,
@@ -376,6 +390,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       webUrl: config.webUrl,
     });
     registerRoleRoutes(route, { store: deps.adminUserStore, now });
+    if (deps.roleApprovalStore) registerRoleApprovalRoutes(route, { store: deps.roleApprovalStore, users: deps.adminUserStore, now });
+    if (deps.contentJobStore) registerContentJobRoutes(route, { store: deps.contentJobStore, users: deps.adminUserStore, now });
   }
   if (deps.dataExportStore && deps.media) {
     registerDataExportRoutes(route, {
@@ -404,7 +420,17 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerAccountErasureRoutes(route, { store: deps.accountErasureStore, users: deps.adminUserStore, now });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
-  registerOpsRoutes(route, { probe: deps.opsProbe, telemetry, env: config.appEnv, startedAt, now });
+  registerOpsRoutes(route, {
+    probe: deps.opsProbe,
+    telemetry,
+    env: config.appEnv,
+    startedAt,
+    now,
+    loginLimits: async () => {
+      const s = await rateLimitSettings();
+      return { email: s.loginFailuresPerEmail, ip: s.loginFailuresPerIp };
+    },
+  });
   if (deps.commentStore) {
     registerCommentRoutes(route, {
       store: deps.commentStore,

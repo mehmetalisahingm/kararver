@@ -146,6 +146,7 @@ export function safeReturnTo(value: string | null): string {
     (/^\/$/.test(value) ||
       /^\/olustur$/.test(value) ||
       /^\/hesap$/.test(value) ||
+        /^\/hesap\/guvenlik$/.test(value) ||
       /^\/bildirimler$/.test(value) ||
       /^\/ilgi-alanlari$/.test(value) ||
       /^\/veri-indir$/.test(value) ||

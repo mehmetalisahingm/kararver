@@ -243,6 +243,10 @@ export const OpsStatus = z.strictObject({
     rateLimited: Count,
     loginLockouts: Count,
     byRule: z.array(z.strictObject({ rule: z.string().max(80), count: Count })),
+    /** Bütün süreçler (DB): şu an giriş kilidindeki e-posta ve IP anahtarı sayısı (KV-19). Okunamazsa null. */
+    lockedLogins: z.strictObject({ emails: Count, ips: Count }).nullable().default(null),
+    /** Bütün süreçler (DB): son 24 saatteki kritik yönetici işlemleri (audit). Okunamazsa null. */
+    adminActions24h: z.array(z.strictObject({ action: z.string().max(80), operation: z.string().max(40), count: Count })).nullable().default(null),
   }),
   backup: z.strictObject({
     status: OpsHealth,
@@ -291,6 +295,9 @@ export const AccountErasurePreview = z.strictObject({
   legalHold: LegalHold.nullable(),
   /** Silinecek veya boşaltılacak kayıt adetleri. */
   willRemove: z.strictObject({
+    polls: Count,
+    comments: Count,
+    media: Count,
     sessions: Count,
     dataExports: Count,
     avatar: Count,
@@ -303,6 +310,45 @@ export const AccountErasurePreview = z.strictObject({
   willRetain: z.strictObject({ polls: Count, comments: Count, votes: Count, reportsFiled: Count }),
 });
 export const AccountErasureResult = z.strictObject({ status: z.enum(["anonymized", "unchanged"]), anonymizedAt: Timestamp });
+/** #181 kullanıcıya ait içeriğin toplu gizlenmesi/kaldırılması: önizleme → gerekçe → ayrı onay → kuyruk; geri alınabilir. */
+export const ContentJobKind = z.enum(["HIDE", "REMOVE", "UNDO"]);
+export const ContentJobStatus = z.enum(["QUEUED", "PROCESSING", "DONE", "FAILED", "CANCELLED"]);
+export const ContentJobScope = z.enum(["all", "polls", "comments"]);
+const ContentJobCounts = z.strictObject({ polls: Count, comments: Count });
+export const ContentJobPreview = z.strictObject({
+  action: z.enum(["HIDE", "REMOVE"]),
+  scope: ContentJobScope,
+  /** İşlemden etkilenecek anket ve yorum sayıları (şu an uygun olanlar; zaten bu durumda olanlar sayılmaz). */
+  affected: ContentJobCounts,
+  total: Count,
+  /** Önizleme anı: onayda aynen gönderilir; yalnız bu andan önce yazılan içerik işlenir. */
+  cutoffAt: Timestamp,
+  /** Tek işte işlenebilecek en çok içerik; aşılırsa onay 409 too_many. */
+  maxItems: Count,
+});
+export const ContentJob = z.strictObject({
+  id: Id,
+  kind: ContentJobKind,
+  status: ContentJobStatus,
+  scope: ContentJobScope,
+  reason: z.string(),
+  expected: ContentJobCounts,
+  applied: Count,
+  unchanged: Count,
+  failed: Count,
+  skipped: Count,
+  /** FAILED iken kısa kod (ör. actor_not_authorized); ham hata metni yok. */
+  failure: z.string().nullable(),
+  /** UNDO işinin geri aldığı iş. */
+  undoOfId: Id.nullable(),
+  /** Bu iş şu an geri alınabilir mi (bitmiş, uygulanan öğesi var, açık iş ve önceki geri alma yok). */
+  canUndo: z.boolean(),
+  createdAt: Timestamp,
+  startedAt: Timestamp.nullable(),
+  finishedAt: Timestamp.nullable(),
+});
+const ContentJobParams = z.strictObject({ id: Id, jobId: Id });
+const contentJobs = { owner: "Mert", module: "content-jobs" } as const;
 
 /** Kullanıcının indirdiği paket: sürümlü, koleksiyonlar serbest biçimli satırlar (sözleşme alan alan sabitlenmez). */
 export const DataExportPackage = z.strictObject({
@@ -551,10 +597,10 @@ export const adminEndpoints = [
     responses: { 200: dataOf(AccountErasureResult) }, errors: ["CONFLICT", "NOT_FOUND"], idempotency: "natural", cache: "private",
     notes: [
       "GERİ ALINAMAZ. Gövdede gerekçe ve hesabın o anki kullanıcı adı (yazılı teyit) zorunludur; eşleşmezse 409 confirmation_mismatch ve hiçbir şey değişmez.",
-      "Tek transaction: kişisel alanlar tombstone değerleriyle değişir (e-posta, kullanıcı adı, görünen ad, biyografi, avatar, parola özeti), oturum ve token'lar silinir, tercihler/bildirim ayarları/kayıt listesi silinir, topluluk üyelikleri çıkarılır ve sahip olunan topluluklar yönetici yönetimine döner, bekleyen topluluk başvuruları reddedilir, hazır veri paketleri geçersiz kılınır. Anket, yorum, oy, rapor ve audit kayıtları korunur (yazar adı anonim görünür).",
+      "Tek transaction: kişisel alanlar tombstone değerleriyle değişir (e-posta, kullanıcı adı, görünen ad, biyografi, avatar, parola özeti), oturum ve token'lar silinir, tercihler/bildirim ayarları/kayıt listesi silinir, topluluk üyelikleri çıkarılır ve sahip olunan topluluklar yönetici yönetimine döner, bekleyen topluluk başvuruları reddedilir, hazır veri paketleri geçersiz kılınır. Paylaşım/yorum metinleri ve sürümleri kaldırılır; tüm görseller depo temizliğine alınır. Hesapla bağlı oy/olay satırları kimliksiz istatistiğe dönüştürülür; rapor ve audit saklama kapsamındadır. Mutation mevcut oturuma bağlı tek kullanımlık MFA gerektirir (mfa_required).",
       "Idempotent: hesap zaten anonimleştirilmişse 200 status=unchanged döner; değişiklik ve audit yoktur. Eşzamanlı iki istekten yalnız biri uygular (hedef satır kilidi + hesap başına tek kayıt).",
       "409 CONFLICT details[0].code: confirmation_mismatch, legal_hold, active_sanction, has_role, export_in_progress. Önizleme aynı engelleri listeler.",
-      "Avatar dosyaları depodan worker tarafından silinir (en geç ~1 dk); DB'de görsel hemen yayından kalkar.",
+      "Tüm yüklenen görseller hemen yayından kalkar; worker 20 kayıtlık gruplar ve 1-15 dakika gecikmeli tekrar denemeyle depodan temizler.",
     ],
   }),
   defineEndpoint({
@@ -598,6 +644,62 @@ export const adminEndpoints = [
     availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
     responses: { 200: dataOf(z.strictObject({ cancelled: z.boolean() })) }, errors: ["NOT_FOUND"], idempotency: "natural", cache: "private",
     notes: ["Idempotent: açık talep yoksa cancelled=false, değişiklik ve audit yok. Özellik kapalıyken de çalışır."],
+  }),
+  defineEndpoint({
+    id: "admin.users.contentJobs.preview", domain: "admin", method: "GET", path: "/admin/users/:id/content-jobs/preview",
+    summary: "Toplu içerik işlemi önizlemesi (etki sayacı)", auth: "admin", provider: contentJobs, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: { params: IdParams, query: z.strictObject({ action: z.enum(["HIDE", "REMOVE"]), scope: ContentJobScope.default("all") }) },
+    responses: { 200: dataOf(ContentJobPreview) }, errors: [], idempotency: "none", cache: "private",
+    notes: [
+      "Salt okuma: hiçbir şey yazmaz. Sayılar mevcut moderasyon geçiş kurallarına göre uygun içeriktir (HIDE: yalnız ACTIVE; REMOVE: ACTIVE, UNDER_REVIEW, HIDDEN, LOCKED; zaten REMOVED olanlar sayılmaz).",
+      "Yetki user.content.bulk: ADMIN+; admin hedef SUPER_ADMIN ister, kendi hesabına uygulanamaz (sanctionTarget).",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.contentJobs.create", domain: "admin", method: "POST", path: "/admin/users/:id/content-jobs",
+    summary: "Önizlenen toplu içerik işlemini onayla ve kuyruğa al", auth: "admin", provider: contentJobs, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: {
+      params: IdParams,
+      body: z.strictObject({
+        action: z.enum(["HIDE", "REMOVE"]),
+        scope: ContentJobScope,
+        cutoffAt: Timestamp,
+        expected: ContentJobCounts,
+        reason: Reason,
+      }),
+    },
+    responses: { 202: dataOf(ContentJob) }, errors: ["CONFLICT"], idempotency: "natural", cache: "private",
+    notes: [
+      "Ayrı onay adımıdır: sunucu sayıları cutoffAt ile yeniden hesaplar; önizlemedekinden farklıysa 409 preview_stale (önizleme tekrarlanır). cutoffAt 15 dakikadan eskiyse 409 preview_expired.",
+      "409 CONFLICT details[0].code: preview_stale, preview_expired, nothing_to_do (uygun içerik yok), too_many (tek işte en çok maxItems), job_open (hesapta açık iş var; DB'de kısmi unique index), user_deleted.",
+      "İş DB kuyruğunda işlenir (API sürecindeki çalıştırıcı, en geç birkaç sn); her içerik mevcut moderasyon uygulamasından geçer: durum geçişi, sayaçlar, moderation_actions, audit (moderation.*.apply), olay ve açık raporların kapanması aynı öğe transaction'ında. İş düzeyinde audit user.content.bulk / request.",
+      "Çalıştırıcı her turda aktörün yetkisini ve hedefin rolünü yeniden doğrular; aktör yetkisini kaybettiyse iş FAILED (actor_not_authorized) olur ve kalan içeriğe dokunmaz.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.contentJobs.list", domain: "admin", method: "GET", path: "/admin/users/:id/content-jobs",
+    summary: "Hesabın toplu içerik işleri (son 20)", auth: "admin", provider: contentJobs, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(z.array(ContentJob)) }, errors: [], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
+    id: "admin.users.contentJobs.undo", domain: "admin", method: "POST", path: "/admin/users/:id/content-jobs/:jobId/undo",
+    summary: "Bitmiş toplu içerik işlemini geri al", auth: "admin", provider: contentJobs, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: ContentJobParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 202: dataOf(ContentJob) }, errors: ["CONFLICT", "NOT_FOUND"], idempotency: "natural", cache: "private",
+    notes: [
+      "Güvenli geri alma: yalnız işin uyguladığı ve önceki durumu ACTIVE olan içerik geri yüklenir (RESTORE); işten sonra durumu başka biri değiştirdiyse (ör. yeniden kaldırma, taşıma sonrası kilit) atlanır (SKIPPED). Önceki durumu ACTIVE olmayanlar (HIDDEN, LOCKED, UNDER_REVIEW) geri yüklenince daha görünür olacağı için geri alınmaz.",
+      "409 CONFLICT details[0].code: not_undoable (iş bitmemiş, uygulanan öğe yok veya zaten geri alınmış), job_open, user_deleted. İş başka hesaba aitse 404.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.contentJobs.cancel", domain: "admin", method: "POST", path: "/admin/users/:id/content-jobs/:jobId/cancel",
+    summary: "Kuyruktaki veya işlenmekte olan toplu içerik işini durdur", auth: "admin", provider: contentJobs, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: ContentJobParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(ContentJob) }, errors: ["CONFLICT", "NOT_FOUND"], idempotency: "natural", cache: "private",
+    notes: ["İşlenmiş içerik olduğu gibi kalır (geri almak için undo); kalan içeriğe dokunulmaz. 409 not_cancellable: iş zaten bitmiş."],
   }),
   ...(["sanctions", "reports", "activity"] as const).map((sub) =>
     defineEndpoint({
@@ -684,6 +786,33 @@ export const adminEndpoints = [
     ],
   }),
   defineEndpoint({
+    id: "admin.roleApprovals.get", domain: "admin", method: "GET", path: "/admin/role-approvals/:id",
+    summary: "İkinci onay öncesi hedef, rol ve gerekçeyi göster", auth: "super_admin",
+    provider: { owner: "Utku", module: "rbac" }, consumers: utkuUi, unblocks: ["#182"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(z.strictObject({ id: Id, userId: Id, initiatorId: Id, role: Role, expectedRole: Role,
+      reason: Reason, status: z.enum(["PENDING", "APPROVED", "EXPIRED", "CONSUMED", "REJECTED"]), expiresAt: Timestamp })) },
+    errors: ["CONFLICT"], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
+    id: "admin.roleApprovals.request", domain: "admin", method: "POST", path: "/admin/role-approvals",
+    summary: "Kritik rol değişikliği için MFA doğrulanmış onay talebi", auth: "super_admin",
+    provider: { owner: "Utku", module: "rbac" }, consumers: utkuUi, unblocks: ["#182"],
+    availability: { status: "ready" },
+    request: { body: z.strictObject({ userId: Id, role: Role, reason: Reason }) },
+    responses: { 201: dataOf(z.strictObject({ id: Id, userId: Id, role: Role, status: z.literal("PENDING"), expiresAt: Timestamp })) },
+    errors: ["FORBIDDEN", "CONFLICT"], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
+    id: "admin.roleApprovals.approve", domain: "admin", method: "POST", path: "/admin/role-approvals/:id/approve",
+    summary: "Farklı SUPER_ADMIN tarafından MFA doğrulanmış ikinci onay", auth: "super_admin",
+    provider: { owner: "Utku", module: "rbac" }, consumers: utkuUi, unblocks: ["#182"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(z.strictObject({ id: Id, userId: Id, role: Role, status: z.literal("APPROVED"), expiresAt: Timestamp })) },
+    errors: ["FORBIDDEN", "CONFLICT"], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
     id: "admin.roles.put",
     domain: "admin",
     method: "PUT",
@@ -694,7 +823,7 @@ export const adminEndpoints = [
     consumers: utkuUi,
     unblocks: ["#14", "#35"],
     availability: { status: "ready" },
-    request: { params: IdParams, body: z.strictObject({ role: Role, reason: Reason }) },
+    request: { params: IdParams, body: z.strictObject({ role: Role, reason: Reason, approvalId: Id.optional() }) },
     responses: { 200: dataOf(z.strictObject({ userId: Id, roles: z.array(Role) })) },
     errors: ["CONFLICT"],
     idempotency: "natural",

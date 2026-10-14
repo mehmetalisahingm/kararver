@@ -9,6 +9,8 @@ import { after, before, describe, test } from "node:test";
 import { AccountErasurePreview, AccountErasureResult, ErrorBody } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
 import { tombstoneOf } from "../src/modules/account-erasure/store.ts";
+import { decodeBase32, hotp } from "../src/modules/security/totp.ts";
+import { snapshotDay } from "../../worker/src/jobs/snapshots/job.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
 const backend = prismaBackend();
@@ -24,6 +26,8 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
   let boss: User;
   let admin: User;
   let categoryId: string;
+  let bossSecret: string;
+  let gateQueue: Promise<void> = Promise.resolve();
   /** Bu dosyanın açtığı topluluklar ve veri paketi talepleri: paylaşılan test DB'sinde diğer dosyaların listelerini ve worker sırasını bozmasın. */
   const communityIds: string[] = [];
   const exportIds: string[] = [];
@@ -36,6 +40,11 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
     await db.userRole.create({ data: { userId: boss.id, role: "SUPER_ADMIN" } });
     admin = await signUp();
     await db.userRole.create({ data: { userId: admin.id, role: "ADMIN", grantedById: boss.id } });
+    const setup = await send("POST","/me/mfa/setup",{ password: boss.password },boss.cookie);
+    assert.equal(setup.statusCode,200,setup.body);
+    bossSecret=setup.json().data.secret;
+    const confirm=await send("POST","/me/mfa/confirm",{code:hotp(decodeBase32(bossSecret),Math.floor(h.clock.now.getTime()/30000))},boss.cookie);
+    assert.equal(confirm.statusCode,200,confirm.body);
   });
   after(async () => {
     if (db) {
@@ -82,8 +91,21 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
   }
 
   const preview = (userId: string, cookie = boss.cookie) => send("GET", `/admin/users/${userId}/erasure`, undefined, cookie);
-  const erase = (user: { id: string; username: string }, cookie = boss.cookie, over: Record<string, unknown> = {}) =>
-    send("POST", `/admin/users/${user.id}/erasure`, { reason: REASON, confirmUsername: user.username, ...over }, cookie);
+  const erase = async (user: { id: string; username: string }, cookie = boss.cookie, over: Record<string, unknown> = {}) => {
+    if (cookie===boss.cookie) {
+      gateQueue=gateQueue.then(async()=>{
+        if ((await db.user.findUnique({where:{id:user.id},select:{deletedAt:true}}))?.deletedAt) return;
+        const status=await send("GET","/me/mfa",undefined,boss.cookie);
+        if (!status.json().data.stepUpExpiresAt) {
+          h.clock.advance(30000);
+          const gate=await send("POST","/me/mfa/step-up",{code:hotp(decodeBase32(bossSecret),Math.floor(h.clock.now.getTime()/30000))},boss.cookie);
+          assert.equal(gate.statusCode,200,gate.body);
+        }
+      });
+      await gateQueue;
+    }
+    return send("POST", `/admin/users/${user.id}/erasure`, { reason: REASON, confirmUsername: user.username, ...over }, cookie);
+  };
   const putHold = (userId: string, cookie = boss.cookie, reason: unknown = HOLD_REASON) => send("PUT", `/admin/users/${userId}/legal-hold`, { reason }, cookie);
   const releaseHold = (userId: string, cookie = boss.cookie) => send("POST", `/admin/users/${userId}/legal-hold/release`, { reason: "Hukuki süreç sona erdi" }, cookie);
   const audits = (userId: string, action: string, operation?: string) =>
@@ -129,7 +151,11 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
     const othersPoll = await poll(other.id, "Başkasının anketi");
     const comment = await db.comment.create({ data: { pollId: own.id, authorId: user.id, body: "Kullanıcının yorumu" } });
     await db.comment.create({ data: { pollId: own.id, authorId: other.id, body: "BASKASININ-YORUMU" } });
-    await db.vote.create({ data: { pollId: othersPoll.id, optionId: othersPoll.options[0]!.id, userId: user.id } });
+    const vote=await db.vote.create({ data: { pollId: othersPoll.id, optionId: othersPoll.options[0]!.id, userId: user.id } });
+    await db.voteEvent.create({data:{voteId:vote.id,pollId:othersPoll.id,userId:user.id,type:"CAST",toOptionId:vote.optionId,occurredAt:vote.createdAt}});
+    await db.poll.update({where:{id:own.id},data:{commentCount:2}});
+    await db.poll.update({where:{id:othersPoll.id},data:{voteCount:1}});
+    await db.pollOption.update({where:{id:vote.optionId},data:{voteCount:1}});
     await db.report.create({ data: { reporterId: user.id, pollId: othersPoll.id, reason: "OTHER", details: "kendi raporum" } });
     // Kayıt listesi (sayaçla), takip, sessize alma, ilgi alanı, bildirim tercihi, bildirim, idempotency anahtarı.
     await db.bookmark.create({ data: { userId: user.id, pollId: othersPoll.id } });
@@ -237,6 +263,18 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
 
   // ─── Önizleme ───────────────────────────────────────────────
 
+  test("erasure needs fresh MFA from the executing session and consumes it once", async () => {
+    const user=await signUp();
+    await db.sessionMfaStepup.updateMany({where:{session:{userId:boss.id}},data:{consumedAt:h.clock.now}});
+    const body={reason:REASON,confirmUsername:user.username};
+    assertError(await send("POST",`/admin/users/${user.id}/erasure`,body,boss.cookie),409,"CONFLICT","mfa_required");
+    assert.equal((await userRow(user.id)).deletedAt,null);
+    const result=await erase(user);assert.equal(result.statusCode,200,result.body);
+    const another=await signUp();
+    assertError(await send("POST",`/admin/users/${another.id}/erasure`,{reason:REASON,confirmUsername:another.username},boss.cookie),409,"CONFLICT","mfa_required");
+    assert.equal((await userRow(another.id)).deletedAt,null);
+  });
+
   test("önizleme salt okunur: sayılar doğru, hiçbir şey yazmaz; anonimleştirmeden sonra sıfırlanır", async () => {
     const { user } = await rich();
     const auditCount = await db.auditLog.count();
@@ -247,8 +285,8 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
     assert.equal(pv.canAnonymize, true);
     assert.deepEqual(pv.blockers, []);
     assert.equal(pv.anonymized, false);
-    assert.deepEqual(pv.willRemove, { sessions: 1, dataExports: 1, avatar: 1, communityMemberships: 2, ownedCommunities: 1, pendingCommunityRequests: 1, preferences: 6 });
-    assert.deepEqual(pv.willRetain, { polls: 1, comments: 1, votes: 1, reportsFiled: 1 });
+    assert.deepEqual(pv.willRemove, { polls: 1, comments: 1, media: 1, sessions: 1, dataExports: 1, avatar: 1, communityMemberships: 2, ownedCommunities: 1, pendingCommunityRequests: 1, preferences: 6 });
+    assert.deepEqual(pv.willRetain, { polls: 0, comments: 0, votes: 1, reportsFiled: 1 });
     assert.equal(await db.auditLog.count(), auditCount, "önizleme audit yazmaz");
     assert.equal((await userRow(user.id)).deletedAt, null);
 
@@ -257,9 +295,9 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
     assert.equal(after.anonymized, true);
     assert.equal(after.canAnonymize, false);
     assert.notEqual(after.anonymizedAt, null);
-    assert.deepEqual(after.willRemove, { sessions: 0, dataExports: 0, avatar: 0, communityMemberships: 0, ownedCommunities: 0, pendingCommunityRequests: 0, preferences: 0 });
+    assert.deepEqual(after.willRemove, { polls: 0, comments: 0, media: 0, sessions: 0, dataExports: 0, avatar: 0, communityMemberships: 0, ownedCommunities: 0, pendingCommunityRequests: 0, preferences: 0 });
     assert.equal(after.username, tombstoneOf(user.id).username);
-    assert.deepEqual(after.willRetain, { polls: 1, comments: 1, votes: 1, reportsFiled: 1 });
+    assert.deepEqual(after.willRetain, { polls: 0, comments: 0, votes: 0, reportsFiled: 1 });
   });
 
   // ─── Anonimleştirme ─────────────────────────────────────────
@@ -312,20 +350,46 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
     assertError(await send("POST", `/admin/users/${user.id}/data-exports`, { reason: REASON }, boss.cookie), 409, "CONFLICT", "user_deleted");
   });
 
-  test("içerik korunur ve yazar anonim görünür: anket, yorum, oy, rapor aynen kalır; başkasının verisine dokunulmaz", async () => {
+  test("authored content is scrubbed and cannot be restored; anonymous voting totals and snapshots stay equal", async () => {
     const { user, other, own, othersPoll, comment } = await rich();
+    const othersVote=await db.vote.create({data:{pollId:own.id,optionId:own.options[0]!.id,userId:other.id}});
+    await db.voteEvent.create({data:{voteId:othersVote.id,pollId:own.id,userId:other.id,type:"CAST",toOptionId:othersVote.optionId,occurredAt:othersVote.createdAt}});
+    await db.poll.update({where:{id:own.id},data:{voteCount:1}});
+    await db.pollOption.update({where:{id:othersVote.optionId},data:{voteCount:1}});
     const votes = await db.vote.count({ where: { userId: user.id } });
-    assert.equal((await erase(user)).statusCode, 200);
-    assert.equal(await db.poll.count({ where: { id: own.id, authorId: user.id, status: "ACTIVE" } }), 1);
-    assert.equal((await db.comment.findUniqueOrThrow({ where: { id: comment.id } })).status, "ACTIVE");
-    assert.equal(await db.vote.count({ where: { userId: user.id } }), votes);
+    const originalVote=await db.vote.findFirstOrThrow({where:{userId:user.id}});
+    await db.pollRevision.create({data:{id:randomUUID(),pollId:own.id,version:1,editorId:user.id,editedAt:new Date(),snapshot:{title:"PERSONAL-TEXT"}}});
+    await db.commentRevision.create({data:{id:randomUUID(),commentId:comment.id,version:1,editorId:user.id,editedAt:new Date(),snapshot:{body:"PERSONAL-TEXT"}}});
+    const localDate=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(originalVote.createdAt);
+    const snapshotDeps={prisma:db,now:()=>new Date(originalVote.createdAt.getTime()+48*3600000),log:()=>{}};
+    await snapshotDay(snapshotDeps,localDate,[othersPoll.id]);
+    const beforeSnapshot=await db.pollDailySnapshot.findUniqueOrThrow({where:{pollId_localDate:{pollId:othersPoll.id,localDate:new Date(localDate)}}});
+    const beforeOptions=await db.pollOptionDailySnapshot.findMany({where:{pollId:othersPoll.id,localDate:new Date(localDate)},orderBy:{optionId:"asc"}});
+    const gone=await erase(user); assert.equal(gone.statusCode,200,gone.body);
+    assert.equal(await db.poll.count({ where: { id: own.id, authorId: user.id, status: "REMOVED" } }), 1);
+    assert.equal((await db.poll.findUniqueOrThrow({where:{id:own.id}})).title,"Silinmiş içerik");
+    const scrubbed=await db.comment.findUniqueOrThrow({where:{id:comment.id}});
+    assert.equal(scrubbed.status,"REMOVED"); assert.equal(scrubbed.body,"[Silinmiş yorum]");
+    assert.equal(await db.pollRevision.count({where:{pollId:own.id}}),0);
+    assert.equal(await db.commentRevision.count({where:{commentId:comment.id}}),0);
+    assert.equal(await db.vote.count({ where: { userId: user.id } }), 0);
+    assert.equal(await db.voteEvent.count({where:{userId:user.id}}),0);
+    assert.equal(await db.vote.count({where:{id:othersVote.id,userId:other.id}}),1);
+    const aggregate=await db.anonymousVoteGroup.findMany({where:{pollId:othersPoll.id}});
+    assert.equal(aggregate.reduce((n,g)=>n+g.multiplicity,0),votes);
+    assert.equal(JSON.stringify(aggregate).includes(user.id),false);
+    assert.equal(JSON.stringify(aggregate).includes(originalVote.id),false);
+    await snapshotDay(snapshotDeps,localDate,[othersPoll.id]);
+    const afterSnapshot=await db.pollDailySnapshot.findUniqueOrThrow({where:{pollId_localDate:{pollId:othersPoll.id,localDate:new Date(localDate)}}});
+    assert.equal(afterSnapshot.totalValidVotes,beforeSnapshot.totalValidVotes);
+    assert.deepEqual(await db.pollOptionDailySnapshot.findMany({where:{pollId:othersPoll.id,localDate:new Date(localDate)},orderBy:{optionId:"asc"}}),beforeOptions);
+    assert.equal((await db.poll.findUniqueOrThrow({where:{id:othersPoll.id}})).voteCount,1);
+    await assert.rejects(db.poll.update({where:{id:own.id},data:{status:"ACTIVE",deletedAt:null}}),/KV_ERASED_CONTENT/);
     assert.equal(await db.report.count({ where: { reporterId: user.id } }), 1);
     assert.equal(await db.comment.count({ where: { pollId: own.id, body: "BASKASININ-YORUMU" } }), 1);
     assert.equal((await userRow(other.id)).email, other.email);
     const shown = await send("GET", `/polls/${own.id}`);
-    assert.equal(shown.statusCode, 200, shown.body);
-    assert.equal(shown.json().data.author.displayName, "Silinmiş hesap");
-    assert.equal(shown.json().data.author.username, tombstoneOf(user.id).username);
+    assert.equal(shown.statusCode, 404, shown.body);
     assert.equal(JSON.stringify(shown.json()).includes(user.username), false, "eski kullanıcı adı yanıtta yok");
     void othersPoll;
   });

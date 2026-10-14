@@ -2,6 +2,7 @@
 // poll_media, poll_addenda, votes, poll_reactions, idempotency_keys (DATA_MODEL.md, API_CONTRACTS.md §6).
 import { createEvent, newEventId } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
+import { ApiError } from "../../http/errors.ts";
 import { assertNoCommittedKey, findIdempotentResult, runIdempotent } from "../../http/idempotency.ts";
 import { writeEvent } from "../events/write.ts";
 import { spendPublishPoints } from "../points/store.ts";
@@ -278,8 +279,9 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
 
     createPoll: (poll, scope, limits) =>
       idempotent(scope, async (tx) => {
-        const [author] = await tx.$queryRaw<{ created_at: Date }[]>`
-          SELECT created_at FROM users WHERE id = ${poll.authorId}::uuid FOR UPDATE`;
+        const [author] = await tx.$queryRaw<{ created_at: Date; deleted_at: Date | null }[]>`
+          SELECT created_at,deleted_at FROM users WHERE id = ${poll.authorId}::uuid FOR UPDATE`;
+        if (!author || author.deleted_at) throw new ApiError("FORBIDDEN", "Silinmiş hesap paylaşım yapamaz.");
         // Kilidi beklerken aynı anahtarlı istek tamamlandıysa limit değil kayıtlı sonuç döner.
         await assertNoCommittedKey(tx, scope);
         await enforcePublishLimits(tx, poll, author!.created_at, limits);
