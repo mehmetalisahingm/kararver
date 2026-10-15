@@ -40,7 +40,7 @@ pnpm security:test
 node scripts/security-acceptance.mjs --api https://api-staging-45cb.up.railway.app
 ```
 
-GitHub Actions: **[Staging security read-only gate](../.github/workflows/security-staging.yml)**. `workflow_dispatch` ile elle, **3 saatte bir UTC :17** zamanlanmış olarak da çalışır (GitHub schedule gecikebilir). Her çalıştırma, maskeli READ_ONLY sonucu 14 gün artifact olarak saklar; başarısız kontroller Actions işini kırar. Bu otomasyon #46'nın kimlikli staging kabulünü veya beta GO kararını vermez. Bu testlerin kapsamı public health/config, misafir kullanıcı ve admin rotalarında 401, HSTS, sunucu bilgisi sızıntısı, public config'de secret anahtarı ve kötü niyetli origin'in CORS üzerinden yetki alamamasıdır.
+GitHub Actions: **[Staging security read-only gate](../.github/workflows/security-staging.yml)**. `workflow_dispatch` ile elle, **3 saatte bir UTC :17** zamanlanmış olarak ve güvenlik kapısı dosyalarında `main`e push olduğunda çalışır (GitHub schedule gecikebilir). Her çalıştırma, maskeli READ_ONLY sonucu 14 gün artifact olarak saklar; başarısız kontroller Actions işini kırar. Bu otomasyon #46'nın kimlikli staging kabulünü veya beta GO kararını vermez. Bu testlerin kapsamı public health/config, misafir kullanıcı ve admin rotalarında 401, HSTS, sunucu bilgisi sızıntısı, public config'de secret anahtarı ve kötü niyetli origin'in CORS üzerinden yetki alamamasıdır.
 
 - HTTP veya DNS erişilemiyorsa **FAIL** (başarıya çevrilmez).
 - Başarılı olsa bile beta statüsü **NO-GO** kalır; oturum, CSRF ve 20 paralel oy gibi yazma senaryoları burada test edilmez.
