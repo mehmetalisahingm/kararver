@@ -10,6 +10,7 @@ import { mediaEndpoints } from "./domains/media.ts";
 import { moderationEndpoints } from "./domains/moderation.ts";
 import { notificationEndpoints } from "./domains/notifications.ts";
 import { pollEndpoints } from "./domains/polls.ts";
+import { privacyEndpoints } from "./domains/privacy.ts";
 import type { EndpointContract } from "./endpoint.ts";
 
 // #64 yardımcıları (aynı adlar ve davranış)
@@ -37,6 +38,7 @@ export * from "./events.ts";
 export * from "./permissions.ts";
 export * from "./settings.ts";
 export * from "./domains/admin.ts";
+export * from "./domains/privacy.ts";
 export * from "./domains/auth.ts";
 export * from "./domains/comments.ts";
 export * from "./domains/communities.ts";
@@ -50,6 +52,7 @@ export * from "./domains/polls.ts";
 /** Bütün v1 endpointleri. Sıra docs/API_CONTRACTS.md envanter sırasıdır. */
 export const endpoints: readonly EndpointContract[] = Object.freeze([
   ...authEndpoints,
+  ...privacyEndpoints,
   ...pollEndpoints,
   ...commentEndpoints,
   ...discoveryEndpoints,

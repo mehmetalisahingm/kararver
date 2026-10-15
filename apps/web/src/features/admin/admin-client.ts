@@ -2,6 +2,7 @@
 // cevap sözleşme şemasıyla doğrulanır (HttpClient). Yetki sunucudadır: istemci rol kontrolü yalnız menü/düğme
 // gizlemedir, ret 403 olarak gelir ve ekranda gösterilir.
 import type {
+  EmailChangeView,
   AccountErasurePreview,
   AccountErasureResult,
   LegalHold,
@@ -53,6 +54,7 @@ export type CommunityThresholdView = ReturnType<typeof CommunityThreshold.parse>
 export type CommunityMemberView = ReturnType<typeof CommunityMember.parse>;
 export type CommunityOwnerView = ReturnType<typeof CommunityOwnerRef.parse>;
 export type DataExportView = ReturnType<typeof DataExport.parse>;
+export type EmailChangeAdminView = ReturnType<typeof EmailChangeView.parse>;
 export type ErasurePreviewView = ReturnType<typeof AccountErasurePreview.parse>;
 export type ErasureResultView = ReturnType<typeof AccountErasureResult.parse>;
 export type LegalHoldView = ReturnType<typeof LegalHold.parse>;
@@ -172,6 +174,16 @@ export class AdminClient {
   /** Hazır paketin indirme bağlantısını kullanıcının e-postasına gönderir; yanıtta bağlantı/token yoktur. */
   async deliverDataExport(id: string, exportId: string, reason: string) {
     return data<{ sent: boolean; linkExpiresAt: string }>(await this.http.request("admin.users.dataExports.deliver", { params: { id, exportId }, body: { reason } }));
+  }
+  /** #181 e-posta değişimi (destek yolu, yalnız SUPER_ADMIN): yeni adres doğrulaması yine zorunludur; adresler maskeli döner. */
+  async emailChanges(id: string, signal?: AbortSignal) {
+    return data<EmailChangeAdminView[]>(await this.http.request("admin.users.emailChange.list", { params: { id }, signal }));
+  }
+  async startEmailChange(id: string, newEmail: string, reason: string) {
+    return data<{ status: "VERIFICATION_SENT" | "SEND_FAILED"; expiresAt: string | null }>(await this.http.request("admin.users.emailChange.start", { params: { id }, body: { newEmail, reason } }));
+  }
+  async cancelEmailChange(id: string, reason: string) {
+    return data<{ cancelled: boolean }>(await this.http.request("admin.users.emailChange.cancel", { params: { id }, body: { reason } }));
   }
   /** #181 KVKK anonimleştirme önizlemesi (salt okuma): etki sayıları ve engeller. Yalnız SUPER_ADMIN. */
   async erasurePreview(id: string, signal?: AbortSignal) {

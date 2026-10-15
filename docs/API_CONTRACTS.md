@@ -59,6 +59,16 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /me/mfa/step-up`<br>Mevcut oturum için 5 dakikalık MFA yeniden doğrulama · `me.mfa.stepup` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 #182 | hazır |
 | `GET /me`<br>Oturum sahibinin hesabı · `me.get` | U | 200 | — | Faruk `users` | Ümit (web, KV-13), Mehmet (profil, KV-22) | #11 #15 #24 | hazır |
 | `PATCH /me`<br>Görünen ad, biyografi, avatar · `me.update` | U | 200 | doğal | Faruk `users` | Ümit (web, KV-13), Mehmet (profil, KV-22) | #11 #24 | hazır |
+| `POST /me/email-change`<br>E-posta değişimi başlat (parola + yeni adres) · `me.emailChange.request` | V | 202 | — | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
+| `GET /me/email-change`<br>Son e-posta değişimi talebinin durumu · `me.emailChange.get` | V | 200 | — | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
+| `DELETE /me/email-change`<br>Açık e-posta değişimi talebini iptal et · `me.emailChange.cancel` | V | 200 | doğal | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
+| `POST /auth/email-change/confirm`<br>E-posta değişimi bağlantısını onayla (yeni adres doğrulaması veya eski adres onayı) · `auth.emailChange.confirm` | G | 200 | doğal | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
+| `POST /auth/email-change/deny`<br>Eski adresteki 'bu ben değilim' bağlantısı: talebi reddet ve oturumları kapat · `auth.emailChange.deny` | G | 200 | doğal | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
+| `GET /me/deletion`<br>Hesabımı silme önizlemesi (silinecek/korunacak kayıtlar, engeller, açık talep) · `me.deletion.preview` | U | 200 | — | Mert `account-deletion` | Ümit (web) | #181 | hazır |
+| `POST /me/deletion`<br>Hesap silme talebi aç (parola + yazılı teyit); onay bağlantısı e-postaya gider · `me.deletion.request` | U | 202 | — | Mert `account-deletion` | Ümit (web) | #181 | hazır |
+| `DELETE /me/deletion`<br>Açık hesap silme talebini iptal et · `me.deletion.cancel` | U | 200 | doğal | Mert `account-deletion` | Ümit (web) | #181 | hazır |
+| `POST /auth/deletion/confirm`<br>E-postadaki bağlantıyla hesabı kalıcı olarak sil (açık onay) · `auth.deletion.confirm` | G | 200 | doğal | Mert `account-deletion` | Ümit (web) | #181 | hazır |
+| `POST /auth/deletion/cancel`<br>E-postadaki 'bu ben değilim' bağlantısı: talebi iptal et ve oturumları kapat · `auth.deletion.cancel` | G | 200 | doğal | Mert `account-deletion` | Ümit (web) | #181 | hazır |
 
 ### Anket / tartışma, oy, tepki
 
@@ -206,6 +216,9 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /admin/users/:id/erasure`<br>Hesabı geri alınamaz biçimde anonimleştir · `admin.users.erasure.create` | SA | 200 | doğal | Mert `account-erasure` | Utku (admin UI) | #181 | hazır |
 | `PUT /admin/users/:id/legal-hold`<br>Hesaba yasal saklama koy (anonimleştirmeyi engeller) · `admin.users.legalHold.put` | SA | 200 | doğal | Mert `account-erasure` | Utku (admin UI) | #181 | hazır |
 | `POST /admin/users/:id/legal-hold/release`<br>Yasal saklamayı kaldır · `admin.users.legalHold.release` | SA | 200 | doğal | Mert `account-erasure` | Utku (admin UI) | #181 | hazır |
+| `POST /admin/users/:id/email-change`<br>Destek yoluyla e-posta değişimi başlat (yeni adres doğrulaması zorunlu) · `admin.users.emailChange.start` | SA | 202 | — | Mert `email-change` | Utku (admin UI) | #181 | hazır |
+| `GET /admin/users/:id/email-change`<br>Hesabın son e-posta değişimi talepleri (son 10, maskeli) · `admin.users.emailChange.list` | SA | 200 | — | Mert `email-change` | Utku (admin UI) | #181 | hazır |
+| `POST /admin/users/:id/email-change/cancel`<br>Açık e-posta değişimi talebini iptal et · `admin.users.emailChange.cancel` | SA | 200 | doğal | Mert `email-change` | Utku (admin UI) | #181 | hazır |
 | `GET /admin/users/:id/content-jobs/preview`<br>Toplu içerik işlemi önizlemesi (etki sayacı) · `admin.users.contentJobs.preview` | A | 200 | — | Mert `content-jobs` | Utku (admin UI) | #181 | hazır |
 | `POST /admin/users/:id/content-jobs`<br>Önizlenen toplu içerik işlemini onayla ve kuyruğa al · `admin.users.contentJobs.create` | A | 202 | doğal | Mert `content-jobs` | Utku (admin UI) | #181 | hazır |
 | `GET /admin/users/:id/content-jobs`<br>Hesabın toplu içerik işleri (son 20) · `admin.users.contentJobs.list` | A | 200 | — | Mert `content-jobs` | Utku (admin UI) | #181 | hazır |
@@ -286,7 +299,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
 | #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
 | #180 | `GET /me/mfa`, `POST /me/mfa/setup`, `POST /me/mfa/confirm`, `POST /me/mfa/recover`, `POST /me/mfa/step-up` |
-| #181 | `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver`, `GET /admin/users/:id/erasure`, `POST /admin/users/:id/erasure`, `PUT /admin/users/:id/legal-hold`, `POST /admin/users/:id/legal-hold/release`, `GET /admin/users/:id/content-jobs/preview`, `POST /admin/users/:id/content-jobs`, `GET /admin/users/:id/content-jobs`, `POST /admin/users/:id/content-jobs/:jobId/undo`, `POST /admin/users/:id/content-jobs/:jobId/cancel` |
+| #181 | `POST /me/email-change`, `GET /me/email-change`, `DELETE /me/email-change`, `POST /auth/email-change/confirm`, `POST /auth/email-change/deny`, `GET /me/deletion`, `POST /me/deletion`, `DELETE /me/deletion`, `POST /auth/deletion/confirm`, `POST /auth/deletion/cancel`, `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver`, `GET /admin/users/:id/erasure`, `POST /admin/users/:id/erasure`, `PUT /admin/users/:id/legal-hold`, `POST /admin/users/:id/legal-hold/release`, `POST /admin/users/:id/email-change`, `GET /admin/users/:id/email-change`, `POST /admin/users/:id/email-change/cancel`, `GET /admin/users/:id/content-jobs/preview`, `POST /admin/users/:id/content-jobs`, `GET /admin/users/:id/content-jobs`, `POST /admin/users/:id/content-jobs/:jobId/undo`, `POST /admin/users/:id/content-jobs/:jobId/cancel` |
 | #182 | `GET /me/mfa`, `POST /me/mfa/recover`, `POST /me/mfa/step-up`, `GET /admin/role-approvals/:id`, `POST /admin/role-approvals`, `POST /admin/role-approvals/:id/approve` |
 | #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
 | #186 | `GET /admin/ops` |

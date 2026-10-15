@@ -2,6 +2,7 @@
 // duyuru, puan düzeltmesi), Faruk (kategori yönetimi, KV-26)
 // KV-12 (#14), KV-33 (#35), KV-36 (#38), KV-39 (#41), KV-40 (#42), KV-41 (#43), KV-42 (#44), #67
 import { z } from "zod";
+import { EmailChangeView } from "./auth.ts";
 import { Category } from "./discovery.ts";
 import { Announcement, AnnouncementAudience, FeaturedSurface, LedgerEntry } from "./growth.ts";
 import { AllowedMimeType } from "./media.ts";
@@ -362,6 +363,7 @@ const adminUsers = { owner: "Utku", module: "admin-users" } as const;
 const mehmet = (module: string) => ({ owner: "Mehmet", module }) as const;
 const categories = { owner: "Faruk", module: "categories" } as const;
 const accountErasure = { owner: "Mert", module: "account-erasure" } as const;
+const emailChange = { owner: "Mert", module: "email-change" } as const;
 const utkuUi = ["Utku (admin UI)"];
 const mehmetUi = ["Mehmet (admin UI)"];
 
@@ -616,6 +618,32 @@ export const adminEndpoints = [
     availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
     responses: { 200: dataOf(z.strictObject({ legalHold: z.null() })) }, errors: ["NOT_FOUND"], idempotency: "natural", cache: "private",
     notes: ["Idempotent: açık kayıt yoksa 200 döner; değişiklik ve audit yoktur. Kayıt silinmez, bırakma alanları dolar."],
+  }),
+  defineEndpoint({
+    id: "admin.users.emailChange.start", domain: "admin", method: "POST", path: "/admin/users/:id/email-change",
+    summary: "Destek yoluyla e-posta değişimi başlat (yeni adres doğrulaması zorunlu)", auth: "super_admin", provider: emailChange, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ newEmail: z.email().max(254), reason: Reason }) },
+    responses: { 202: dataOf(z.strictObject({ status: z.enum(["VERIFICATION_SENT", "SEND_FAILED"]), expiresAt: Timestamp.nullable() })) },
+    errors: ["CONFLICT", "NOT_FOUND", "FEATURE_DISABLED"], idempotency: "none", cache: "private",
+    notes: [
+      "Eski adrese erişimini kaybeden kullanıcı içindir; destek kanalında kimlik doğrulandığı gerekçede beyan edilir. DOĞRULAMA ATLANMAZ: e-posta yalnız kullanıcı YENİ adresteki bağlantıyı tıklayınca değişir ve o zaman doğrulanmış sayılır. Yönetici adresi doğrulanmış işaretleyemez, parola veya token görmez.",
+      "Eski adrese hemen bilgilendirme ve 'bu ben değilim' bağlantısı gider (gerçek sahip talebi durdurabilir; oturumlar kapanır). Kendi hesabı için kullanılamaz (sanctionTarget); kendi adresini değiştirmek için me.emailChange.request vardır.",
+      "409 CONFLICT details[0].code: email_taken, same_email, user_deleted, request_open (açık talep var; önce iptal edilir). Ayar account.emailChangeEnabled kapalıyken 503.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.emailChange.list", domain: "admin", method: "GET", path: "/admin/users/:id/email-change",
+    summary: "Hesabın son e-posta değişimi talepleri (son 10, maskeli)", auth: "super_admin", provider: emailChange, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(z.array(EmailChangeView)) }, errors: ["NOT_FOUND"], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
+    id: "admin.users.emailChange.cancel", domain: "admin", method: "POST", path: "/admin/users/:id/email-change/cancel",
+    summary: "Açık e-posta değişimi talebini iptal et", auth: "super_admin", provider: emailChange, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(z.strictObject({ cancelled: z.boolean() })) }, errors: ["NOT_FOUND"], idempotency: "natural", cache: "private",
+    notes: ["Idempotent: açık talep yoksa cancelled=false, değişiklik ve audit yok. Özellik kapalıyken de çalışır."],
   }),
   defineEndpoint({
     id: "admin.users.contentJobs.preview", domain: "admin", method: "GET", path: "/admin/users/:id/content-jobs/preview",

@@ -71,6 +71,10 @@ export type SettingsService = {
   isCommentsEnabled(): Promise<boolean>;
   /** communities.ownershipEnabled (#184, KV-54 S1): varsayılan kapalı. */
   isOwnershipEnabled(): Promise<boolean>;
+  /** account.emailChangeEnabled (#181): varsayılan kapalı. */
+  isEmailChangeEnabled(): Promise<boolean>;
+  /** account.selfDeletionEnabled (#181): varsayılan kapalı. */
+  isSelfDeletionEnabled(): Promise<boolean>;
   isMaintenance(): Promise<boolean>;
   /** Yorum üst sınırı (comments.bodyMaxLength); sözleşme şeması 2000 karakterle üst sınırdır, ayar yalnız daraltır. */
   commentMaxLength(): Promise<number>;
@@ -205,6 +209,12 @@ export function createSettingsService(store: SettingsStore, options: SettingsSer
     },
     async isOwnershipEnabled() {
       return bool(await service.values(), "communities.ownershipEnabled");
+    },
+    async isEmailChangeEnabled() {
+      return bool(await service.values(), "account.emailChangeEnabled");
+    },
+    async isSelfDeletionEnabled() {
+      return bool(await service.values(), "account.selfDeletionEnabled");
     },
     async isMaintenance() {
       return bool(await service.values(), "maintenance.enabled");

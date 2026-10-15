@@ -109,13 +109,16 @@ model User {
   legalHolds           UserLegalHold[]   @relation("LegalHoldSubject")
   holdsPlaced          UserLegalHold[]   @relation("LegalHoldPlacer")
   holdsReleased        UserLegalHold[]   @relation("LegalHoldReleaser")
+  emailChanges          EmailChangeRequest[] @relation("EmailChangeSubject")
+  emailChangesRequested EmailChangeRequest[] @relation("EmailChangeRequester")
+  deletionRequests      AccountDeletionRequest[] @relation("AccountDeletionSubject")
   // KV-43: yaptığı oy geçersiz sayma / geri alma işlemleri
-  voteCorrections      VoteEvent[]       @relation("VoteEventActor")
-  comments             Comment[]
-  commentReactions     CommentReaction[]
-  pollReactions        PollReaction[]
-  pollRevisions        PollRevision[]
-  commentRevisions     CommentRevision[]
+  voteCorrections       VoteEvent[]          @relation("VoteEventActor")
+  comments              Comment[]
+  commentReactions      CommentReaction[]
+  pollReactions         PollReaction[]
+  pollRevisions         PollRevision[]
+  commentRevisions      CommentRevision[]
 
   // Mert — media.prisma (KV-16)
   uploadedMedia            MediaAsset[]             @relation("MediaUploader")

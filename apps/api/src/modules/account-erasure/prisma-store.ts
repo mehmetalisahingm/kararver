@@ -114,28 +114,38 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
 
     async anonymize(input) {
       const { userId, actorId, now } = input;
+      const self = input.self === true;
       return prisma.$transaction(async (tx) => {
         const target = await lockTarget(tx, userId);
         if (!target) return { kind: "rejected", reason: "not_found" } as const;
         await lockSuperAdmins(tx);
         const role = (await tx.userRole.findUnique({ where: { userId }, select: { role: true } }))?.role ?? null;
-        const decision = await decide(tx, actorId, "user.anonymize", { targetUserId: userId, targetRoles: role ? [role] : [] }, now);
-        if (!decision.allowed) return { kind: "rejected", reason: "forbidden" } as const;
+        if (self) {
+          if (actorId !== userId) return { kind: "rejected", reason: "forbidden" } as const;
+        } else {
+          const decision = await decide(tx, actorId, "user.anonymize", { targetUserId: userId, targetRoles: role ? [role] : [] }, now);
+          if (!decision.allowed) return { kind: "rejected", reason: "forbidden" } as const;
+        }
+
+        if (self && input.onLocked && !(await input.onLocked(tx))) return { kind: "rejected", reason: "stale" } as const;
 
         // Idempotency: kilit altında okunur; ikinci istek ilkinin kaydını bulur ve hiçbir şey yazmaz.
         if (target.deleted) {
           const done = await tx.accountErasure.findUnique({ where: { userId }, select: { createdAt: true } });
           const at = done?.createdAt ?? (await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { deletedAt: true } })).deletedAt!;
+          if (self) await input.onDone?.(tx);
           return { kind: "unchanged", at } as const;
         }
 
         const gates = await blockersOf(tx, userId, now);
         if (gates.blockers.length > 0) return { kind: "rejected", reason: gates.blockers[0]! } as const;
-        const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { username: true } });
-        const typed = input.confirmUsername.trim().replace(/^@/, "").toLowerCase();
-        if (typed !== user.username.toLowerCase()) return { kind: "rejected", reason: "confirmation_mismatch" } as const;
-        if (!input.actorSessionId || !(await consumeFreshStepup(tx, actorId, input.actorSessionId, now)))
-          return { kind: "rejected", reason: "mfa_required" } as const;
+        if (!self) {
+          const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { username: true } });
+          const typed = input.confirmUsername.trim().replace(/^@/, "").toLowerCase();
+          if (typed !== user.username.toLowerCase()) return { kind: "rejected", reason: "confirmation_mismatch" } as const;
+          if (!input.actorSessionId || !(await consumeFreshStepup(tx, actorId, input.actorSessionId, now)))
+            return { kind: "rejected", reason: "mfa_required" } as const;
+        }
 
         const removed = await removalCounts(tx, userId);
         const retained = await retainedCounts(tx, userId);
@@ -187,6 +197,12 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
           data: { status: "REJECTED", rejectionReason: "Başvuru sahibinin hesabı anonimleştirildi." },
         });
 
+        // Açık e-posta değişimi talebi kapanır ve yeni adres silinir (kişisel veri).
+        await tx.emailChangeRequest.updateMany({
+          where: { userId, status: "OPEN" },
+          data: { status: "CANCELLED", failure: "account_erased", newEmail: null, newEmailNormalized: null, finishedAt: now },
+        });
+
         // Hazır paketler geçersiz kılınır (anahtar ve token hemen silinir); şifreli nesneyi worker depodan siler.
         await tx.dataExport.updateMany({
           where: { userId, status: "READY" },
@@ -233,8 +249,8 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
         await writeAudit(tx, {
           source: "API",
           actorId,
-          action: "user.anonymize",
-          operation: "anonymize",
+          action: self ? "account.deletion.confirm" : "user.anonymize",
+          operation: self ? "apply" : "anonymize",
           target: { type: "USER", id: userId },
           reason: input.reason,
           before: { anonymized: false },
@@ -242,6 +258,7 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
           requestId: input.requestId,
           at: now,
         });
+        if (self) await input.onDone?.(tx);
         return { kind: "anonymized", at: now } as const;
       }, { maxWait: 10_000, timeout: 60_000 });
     },
