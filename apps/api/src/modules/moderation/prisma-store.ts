@@ -16,6 +16,7 @@ import {
   statusTransition,
   type ApplyInput,
   type ApplyResult,
+  type ApplyTrail,
   type ContentStatus,
   type ModerationStore,
   type StatusAction,
@@ -31,7 +32,7 @@ const COMMENT_ACTIONS: readonly string[] = ["CLOSE_COMMENTS", "OPEN_COMMENTS"];
  * Geçmiş (moderation_actions), kapanan raporlar (report.resolved), audit ve moderation.applied olayı: hepsi çağıranın
  * transaction'ında. Audit gerekçeyi ve önce/sonra özetini taşır; olay bildirim ve analitik tüketicileri içindir.
  */
-async function recordTrail(tx: Tx, input: ApplyInput, from: ContentStatus, to: ContentStatus, before: Snapshot, after: Snapshot): Promise<void> {
+async function recordTrail(tx: Tx, input: ApplyInput, from: ContentStatus, to: ContentStatus, before: Snapshot, after: Snapshot): Promise<ApplyTrail> {
   const column = input.kind === "polls" ? { pollId: input.id } : { commentId: input.id };
   const type = input.kind === "polls" ? "POLL" : "COMMENT";
   const recorded = await tx.moderationAction.create({
@@ -62,6 +63,23 @@ async function recordTrail(tx: Tx, input: ApplyInput, from: ContentStatus, to: C
       reportId: null,
     }),
   );
+  return { actionId: recorded.id, from, to };
+}
+
+/** Telafi koşulu (ApplyInput.expect): kilit altında çağrılır; null = koşul sağlandı. */
+async function expectationFails(tx: Tx, input: ApplyInput, currentStatus: ContentStatus): Promise<"superseded" | "author_erased" | null> {
+  if (!input.expect) return null;
+  const owner =
+    input.kind === "polls"
+      ? await tx.poll.findUnique({ where: { id: input.id }, select: { author: { select: { deletedAt: true } } } })
+      : await tx.comment.findUnique({ where: { id: input.id }, select: { author: { select: { deletedAt: true } } } });
+  if (owner?.author.deletedAt) return "author_erased";
+  const latest = await tx.moderationAction.findFirst({
+    where: input.kind === "polls" ? { pollId: input.id } : { commentId: input.id },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true },
+  });
+  return currentStatus === input.expect.status && latest?.id === input.expect.actionId ? null : "superseded";
 }
 
 async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
@@ -73,6 +91,8 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
     return { kind: "conflict", reason: "removed" };
   // Yetki, anketin okunan topluluğuna göre verildi; bu arada taşındıysa karar geçersizdir.
   if (row.community_id !== input.communityId) return { kind: "conflict", reason: "community_changed" };
+  const stale = await expectationFails(tx, input, row.status);
+  if (stale) return { kind: "conflict", reason: stale };
   const excluded = row.trend_excluded_at !== null;
   const closed = row.comments_closed_at !== null;
   const outcome = (status: ContentStatus, trendExcluded: boolean, commentsClosed = closed) => ({ id: input.id, status, trendExcluded, commentsClosed });
@@ -83,8 +103,8 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
     const want = input.action === "EXCLUDE_FROM_TRENDS";
     if (want === excluded) return { kind: "unchanged", outcome: outcome(row.status, excluded) };
     await tx.poll.update({ where: { id: input.id }, data: { trendExcludedAt: want ? input.now : null } });
-    await recordTrail(tx, input, row.status, row.status, snap(row.status, excluded, closed), snap(row.status, want, closed));
-    return { kind: "applied", outcome: outcome(row.status, want) };
+    const trail = await recordTrail(tx, input, row.status, row.status, snap(row.status, excluded, closed), snap(row.status, want, closed));
+    return { kind: "applied", outcome: outcome(row.status, want), trail };
   }
 
   // Yalnız yorumları kapat/aç: oy ve anket görünürlüğü değişmez; LOCK'tan farkı budur.
@@ -93,8 +113,8 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
     const want = input.action === "CLOSE_COMMENTS";
     if (want === closed) return { kind: "unchanged", outcome: outcome(row.status, excluded) };
     await tx.poll.update({ where: { id: input.id }, data: { commentsClosedAt: want ? input.now : null } });
-    await recordTrail(tx, input, row.status, row.status, snap(row.status, excluded, closed), snap(row.status, excluded, want));
-    return { kind: "applied", outcome: outcome(row.status, excluded, want) };
+    const trail = await recordTrail(tx, input, row.status, row.status, snap(row.status, excluded, closed), snap(row.status, excluded, want));
+    return { kind: "applied", outcome: outcome(row.status, excluded, want), trail };
   }
 
   const next = statusTransition(row.status, input.action as StatusAction);
@@ -107,8 +127,8 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
     // REMOVED ⇔ deleted_at dolu; geri yüklemede boşalır.
     data: { status: next, deletedAt: next === "REMOVED" ? input.now : row.status === "REMOVED" ? null : undefined },
   });
-  await recordTrail(tx, input, row.status, next, snap(row.status, excluded, closed), snap(next, excluded, closed));
-  return { kind: "applied", outcome: outcome(next, excluded) };
+  const trail = await recordTrail(tx, input, row.status, next, snap(row.status, excluded, closed), snap(next, excluded, closed));
+  return { kind: "applied", outcome: outcome(next, excluded), trail };
 }
 
 async function applyToComment(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
@@ -123,6 +143,8 @@ async function applyToComment(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   const [row] = await tx.$queryRaw<{ status: ContentStatus }[]>`
     SELECT status::text AS status FROM comments WHERE id = ${input.id}::uuid FOR UPDATE`;
   if (!row) return { kind: "not_found" };
+  const stale = await expectationFails(tx, input, row.status);
+  if (stale) return { kind: "conflict", reason: stale };
   const outcome = (status: ContentStatus) => ({ id: input.id, status, trendExcluded: null, commentsClosed: null });
 
   // Yorumda "kilitli" durumu yok: LOCKED yorum listelenmez (KV-17 yalnız ACTIVE gösterir); kilit anket düzeyindedir.
@@ -144,8 +166,8 @@ async function applyToComment(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
     await tx.poll.update({ where: { id: meta.pollId }, data: { commentCount: { increment: delta } } });
     if (meta.parentId) await tx.comment.update({ where: { id: meta.parentId }, data: { replyCount: { increment: delta } } });
   }
-  await recordTrail(tx, input, row.status, next, { status: row.status }, { status: next });
-  return { kind: "applied", outcome: outcome(next) };
+  const trail = await recordTrail(tx, input, row.status, next, { status: row.status }, { status: next });
+  return { kind: "applied", outcome: outcome(next), trail };
 }
 
 export function createPrismaModerationStore(prisma: PrismaClient): ModerationStore {

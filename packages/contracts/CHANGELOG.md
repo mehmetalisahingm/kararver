@@ -9,6 +9,22 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.33.0 — 2026-10-15 (Mert, #183 güvenli geri alma)
+
+Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; `ModerationBatchView` ek alanlar (`undoOfId`, `undone`, `undoable`). Yeni yetki veya audit işlemi yok (telafi kararları mevcut `moderation.poll.apply` / `moderation.comment.apply` yolundan geçer, her biri kendi audit kaydını yazar).
+
+- **Eklendi:** `admin.moderation.batches.undoPreview` (GET, salt okuma) ve `admin.moderation.batches.undo` (POST: gerekçe + digest). Telafi: HIDE/REMOVE (önceki durum ACTIVE) → RESTORE, RESTORE (önceki HIDDEN) → HIDE, RESTORE (önceki REMOVED) → REMOVE. Sürüm koşulu (durum + hedefin son kararı), silinmiş içerik sahibinin içeriği asla geri gelmez, geri almanın geri alması yok.
+- Şemalar: `UndoPreview`, `UndoPreviewItem`, `UndoResult`, `UndoResultItem`, `UndoBlockedCode`.
+- **Sözleşme notu (#185/#194):** "her undo yeni audit oluşturur, append-only audit değişmez, yalnız önceden tanımlı reversible çiftler, sürüm koşulu" bu uçlarla uygulanmıştır; genel audit undo'su aynı ilkeleri kullanabilir.
+
+## 1.32.0 — 2026-10-15 (Mert, #183 toplu moderasyon)
+
+Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; yeni yetki veya audit işlemi yok (mevcut `moderation.poll.apply` / `moderation.comment.apply` / `moderation.content.search`).
+
+- **Eklendi:** `admin.moderation.polls.bulkPreview` / `.bulk` ve `admin.moderation.comments.bulkPreview` / `.bulk` (seçilen en çok 50 anket/yorum için HIDE/REMOVE/RESTORE; önizleme → gerekçe + digest ile onay → kayıt başına bağımsız işlem, kısmi başarısızlık raporu) ve `admin.moderation.batches.list` (parti geçmişi).
+- Şemalar: `BulkPreview`, `BulkPreviewItem`, `BulkResult`, `BulkResultItem`, `BulkBlockedCode`, `BulkModerationAction`, `ModerationBatchView`, `BULK_MAX_ITEMS`.
+- **Davranış:** kapsam kayıt başınadır (moderatör yalnız atandığı topluluk); önizleme sonrası durum değişirse 409 `preview_stale`; aktör başına saatte 20 parti.
+
 ## 1.31.0 — 2026-10-15 (Mert, #181 kullanıcının kendi hesabını silmesi)
 
 Kırıcı değişiklik yok: yeni endpoint'ler, şemalar, yetkiler ve varsayılan kapalı ayar.

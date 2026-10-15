@@ -7,6 +7,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { AdminClient } from "./admin-client.ts";
 import type { AdminComment, AdminPoll, Community, ContentKind, ContentStatus, ModerationAction, PollCategory } from "./admin-client.ts";
+import { BulkDialog } from "./bulk-dialog";
+import { BulkHistory } from "./bulk-history";
+import { BULK_MAX, toggleSelection } from "./bulk-model.ts";
 import { HistoryDialog } from "./content-history";
 import { actionLabels, availableActions, placementDiff, statusLabels } from "./content-model.ts";
 import { ActionDialog, ListState, formatDate, isAdminRole, useAdminRoles, useNotice, useRemoteList } from "./admin-ui";
@@ -29,6 +32,15 @@ export function ContentPanel({ admin, kind }: { admin: AdminClient; kind: Conten
   const [dialog, setDialog] = useState<Dialog>(null);
   const [action, setAction] = useState<ModerationAction>("HIDE");
   const { setNotice, element } = useNotice();
+  // #183 toplu moderasyon: seçim sayfalar arasında korunur (en çok BULK_MAX); yetki sunucuda kayıt başınadır.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkRevision, setBulkRevision] = useState(0);
+  const toggle = (id: string) => {
+    const result = toggleSelection(selected, id);
+    setSelected(result.next);
+    if (result.full) setNotice(`Tek seferde en çok ${BULK_MAX} kayıt seçilebilir.`);
+  };
   const noun = kind === "polls" ? "anket" : "yorum";
 
   // Topluluk süzgeci ve taşıma seçenekleri (ilk sayfa); alınamazsa süzgeç gizli kalır, liste etkilenmez.
@@ -51,6 +63,8 @@ export function ContentPanel({ admin, kind }: { admin: AdminClient; kind: Conten
   const close = () => setDialog(null);
   const done = (message: string) => {
     setNotice(message);
+    setSelected(new Set());
+    setBulkRevision((n) => n + 1);
     remote.reload();
   };
 
@@ -100,12 +114,20 @@ export function ContentPanel({ admin, kind }: { admin: AdminClient; kind: Conten
       </form>
       {element}
 
+      {selected.size > 0 ? (
+        <div className={styles.toolbar} role="group" aria-label="Toplu işlem">
+          <span role="status">{selected.size} {noun} seçili</span>
+          <button className="kv-button" onClick={() => setBulkOpen(true)}>Seçilenlere toplu işlem…</button>
+          <button className="kv-button kv-button--ghost" onClick={() => setSelected(new Set())}>Seçimi temizle</button>
+        </div>
+      ) : null}
       {remote.items.length > 0 ? (
         <div className={styles.tableWrap}>
           <table className={styles.table}>
             <caption className="sr-only">{kind === "polls" ? "Anketler" : "Yorumlar"}</caption>
             <thead>
               <tr>
+                <th scope="col"><span className="sr-only">Seç</span></th>
                 <th scope="col">{kind === "polls" ? "Anket" : "Yorum"}</th>
                 <th scope="col">Durum</th>
                 <th scope="col">{kind === "polls" ? "Oy / yorum" : "Anket"}</th>
@@ -115,12 +137,15 @@ export function ContentPanel({ admin, kind }: { admin: AdminClient; kind: Conten
               </tr>
             </thead>
             <tbody>
-              {remote.items.map((item) => (kind === "polls" ? <PollRow key={item.id} item={item as AdminPoll} onOpen={(type) => { setAction(availableActions("polls", item as AdminPoll, isAdmin)[0] ?? "HIDE"); setDialog({ type, row: item }); }} isAdmin={isAdmin} /> : <CommentRow key={item.id} item={item as AdminComment} onOpen={(type) => { setAction(availableActions("comments", item as AdminComment, isAdmin)[0] ?? "HIDE"); setDialog({ type, row: item }); }} isAdmin={isAdmin} />))}
+              {remote.items.map((item) => (kind === "polls" ? <PollRow key={item.id} selected={selected.has(item.id)} onToggle={() => toggle(item.id)} item={item as AdminPoll} onOpen={(type) => { setAction(availableActions("polls", item as AdminPoll, isAdmin)[0] ?? "HIDE"); setDialog({ type, row: item }); }} isAdmin={isAdmin} /> : <CommentRow key={item.id} selected={selected.has(item.id)} onToggle={() => toggle(item.id)} item={item as AdminComment} onOpen={(type) => { setAction(availableActions("comments", item as AdminComment, isAdmin)[0] ?? "HIDE"); setDialog({ type, row: item }); }} isAdmin={isAdmin} />))}
             </tbody>
           </table>
         </div>
       ) : null}
       <ListState remote={remote} empty={`Süzgeçe uyan ${noun} yok.`} />
+
+      <BulkDialog admin={admin} kind={kind} ids={[...selected]} open={bulkOpen} onClose={() => setBulkOpen(false)} onDone={done} />
+      <BulkHistory admin={admin} revision={bulkRevision} onChanged={done} />
 
       <ActionDialog
         open={dialog?.type === "action"}
@@ -165,9 +190,10 @@ function RowActions({ canAct, canMove, onOpen, label = "İşlem" }: { canAct: bo
   );
 }
 
-function PollRow({ item, onOpen, isAdmin }: { item: AdminPoll; onOpen: (type: "action" | "move" | "history") => void; isAdmin: boolean }) {
+function PollRow({ item, onOpen, isAdmin, selected, onToggle }: { item: AdminPoll; onOpen: (type: "action" | "move" | "history") => void; isAdmin: boolean; selected: boolean; onToggle: () => void }) {
   return (
     <tr>
+      <td><input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Seç: ${item.title}`} /></td>
       <td>
         <strong>{item.title}</strong>
         <br />
@@ -190,9 +216,10 @@ function PollRow({ item, onOpen, isAdmin }: { item: AdminPoll; onOpen: (type: "a
   );
 }
 
-function CommentRow({ item, onOpen, isAdmin }: { item: AdminComment; onOpen: (type: "action" | "move" | "history") => void; isAdmin: boolean }) {
+function CommentRow({ item, onOpen, isAdmin, selected, onToggle }: { item: AdminComment; onOpen: (type: "action" | "move" | "history") => void; isAdmin: boolean; selected: boolean; onToggle: () => void }) {
   return (
     <tr>
+      <td><input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Seç: ${item.body.slice(0, 60)}`} /></td>
       <td>
         {item.body.length > 160 ? `${item.body.slice(0, 159)}…` : item.body}
         <br />
