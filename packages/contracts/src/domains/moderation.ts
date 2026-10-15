@@ -172,6 +172,68 @@ export const Revision = z.strictObject({
   snapshot: z.record(z.string(), z.unknown()),
 });
 
+/**
+ * #183 toplu moderasyon (KV-37 §bulk): seçilen anket/yorumlara tek gerekçeyle HIDE/REMOVE/RESTORE. Önizleme → gerekçe + özet
+ * (digest) ile onay → içerik başına bağımsız işlem (kısmi başarısızlık raporlanır). En çok 50 kayıt.
+ */
+export const BULK_MAX_ITEMS = 50;
+export const BulkModerationAction = z.enum(["HIDE", "REMOVE", "RESTORE"]);
+export const BulkBlockedCode = z.enum(["not_found", "forbidden", "invalid_transition", "admin_required"]);
+const BulkIds = z
+  .array(Id)
+  .min(1)
+  .max(BULK_MAX_ITEMS)
+  .refine((ids) => new Set(ids).size === ids.length, "Aynı kayıt iki kez seçilemez");
+/** Önizleme GET'tir (salt okuma): kimlikler virgülle ayrılmış tek parametre, en çok ${BULK_MAX_ITEMS} adet, yinelenen yok. */
+export const BulkIdsQuery = z
+  .string()
+  .regex(/^[0-9a-f-]{36}(,[0-9a-f-]{36})*$/i, "Virgülle ayrılmış kimlik listesi")
+  .refine((v) => v.split(",").length <= BULK_MAX_ITEMS, `En çok ${BULK_MAX_ITEMS} kayıt`)
+  .refine((v) => new Set(v.split(",")).size === v.split(",").length, "Aynı kayıt iki kez seçilemez");
+export const BulkPreviewItem = z.strictObject({
+  id: Id,
+  /** Anket başlığı veya yorumun ilk 80 karakteri; yetkisiz veya bulunamayan kayıtta null (içerik sızmaz). */
+  label: z.string().nullable(),
+  status: ContentStatus.nullable(),
+  communityId: Id.nullable(),
+  outcome: z.enum(["WILL_CHANGE", "NO_CHANGE", "BLOCKED"]),
+  blocked: BulkBlockedCode.nullable(),
+});
+export const BulkPreview = z.strictObject({
+  kind: z.enum(["polls", "comments"]),
+  action: BulkModerationAction,
+  maxItems: z.number().int(),
+  /** Onayda aynen geri gönderilir: önizlemeden sonra herhangi bir kaydın durumu/topluluğu değiştiyse 409 preview_stale. */
+  digest: z.string().length(64),
+  summary: z.strictObject({ willChange: Count, noChange: Count, blocked: Count }),
+  items: z.array(BulkPreviewItem),
+});
+export const BulkResultItem = z.strictObject({
+  id: Id,
+  result: z.enum(["APPLIED", "UNCHANGED", "FAILED"]),
+  code: z.union([BulkBlockedCode, z.literal("community_changed")]).nullable(),
+  fromStatus: z.string().nullable(),
+  toStatus: z.string().nullable(),
+});
+export const BulkResult = z.strictObject({
+  batchId: Id,
+  summary: z.strictObject({ total: Count, applied: Count, unchanged: Count, failed: Count }),
+  items: z.array(BulkResultItem),
+});
+export const ModerationBatchView = z.strictObject({
+  id: Id,
+  kind: z.enum(["polls", "comments"]),
+  action: BulkModerationAction,
+  reason: z.string(),
+  actor: PublicUser,
+  total: Count,
+  applied: Count,
+  unchanged: Count,
+  failed: Count,
+  createdAt: Timestamp,
+  finishedAt: Timestamp.nullable(),
+});
+
 const moderation = { owner: "Mert", module: "moderation" } as const;
 const reports = { owner: "Mert", module: "reports" } as const;
 const media = { owner: "Mert", module: "media" } as const;
@@ -589,5 +651,68 @@ export const moderationEndpoints = [
     idempotency: "natural",
     cache: "private",
     notes: ["Olmayan kayıt 204 (idempotent). Kaldırılan yasak daha önce reddedilmiş yüklemeleri geri getirmez."],
+  }),
+  ...(["polls", "comments"] as const).flatMap((target) => [
+    defineEndpoint({
+      id: `admin.moderation.${target}.bulkPreview`,
+      domain: "moderation",
+      method: "GET",
+      path: `/admin/moderation/${target}/bulk/preview`,
+      summary: `Toplu ${target === "polls" ? "anket" : "yorum"} moderasyonu önizlemesi (salt okuma)`,
+      auth: "moderator",
+      provider: moderation,
+      consumers: adminUi,
+      unblocks: ["#183"],
+      availability: { status: "ready" },
+      request: { query: z.strictObject({ ids: BulkIdsQuery, action: BulkModerationAction }) },
+      responses: { 200: dataOf(BulkPreview) },
+      errors: [],
+      idempotency: "none",
+      cache: "private",
+      notes: [
+        "Hiçbir şey yazmaz. Her kayıt için sonuç: WILL_CHANGE, NO_CHANGE (zaten o durumda) veya BLOCKED (not_found, forbidden = kapsam dışı topluluk, invalid_transition, admin_required = kaldırılmış içeriği yalnız ADMIN+ geri yükler). Yetki yalnız backend RBAC'tadır: moderatör atandığı topluluğun içeriğine, ADMIN+ hepsine işlem yapar.",
+        "digest: (id, durum, topluluk) listesinin özeti; onay isteğinde aynen gönderilir.",
+      ],
+    }),
+    defineEndpoint({
+      id: `admin.moderation.${target}.bulk`,
+      domain: "moderation",
+      method: "POST",
+      path: `/admin/moderation/${target}/bulk`,
+      summary: `Seçilen ${target === "polls" ? "anketlere" : "yorumlara"} toplu gerekçeli moderasyon (HIDE/REMOVE/RESTORE)`,
+      auth: "moderator",
+      provider: moderation,
+      consumers: adminUi,
+      unblocks: ["#183"],
+      availability: { status: "ready" },
+      request: { body: z.strictObject({ ids: BulkIds, action: BulkModerationAction, reason: Reason, digest: z.string().length(64) }) },
+      responses: { 200: dataOf(BulkResult) },
+      errors: ["CONFLICT", "RATE_LIMITED"],
+      idempotency: "natural",
+      cache: "private",
+      notes: [
+        "Önizlenen durumda uygulanır: kayıtların durumu/topluluğu önizlemeden sonra değiştiyse 409 CONFLICT details[0].code=preview_stale ve hiçbir şey yazılmaz (önizlemeyi yenile).",
+        "Her kayıt kendi transaction'ında ve mevcut tekil moderasyon yolundan geçer (satır kilidi, geçiş tablosu, sayaçlar, moderation_actions, audit, olay outbox'ı); biri başarısız olursa diğerleri etkilenmez. Sonuç kayıt başınadır (APPLIED / UNCHANGED / FAILED + neden). Kapsam dışı kayıt FAILED forbidden olur ve dokunulmaz.",
+        "Aynı istek tekrarında kayıtlar UNCHANGED döner (idempotent). Aktör başına saatte en çok 20 parti (429 RATE_LIMITED). Kaldırılmış içeriği yalnız ADMIN+ geri yükler.",
+      ],
+    }),
+  ]),
+  defineEndpoint({
+    id: "admin.moderation.batches.list",
+    domain: "moderation",
+    method: "GET",
+    path: "/admin/moderation/batches",
+    summary: "Toplu moderasyon geçmişi (en yeni önce)",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183"],
+    availability: { status: "ready" },
+    request: { query: CursorQuery },
+    responses: { 200: pageOf(ModerationBatchView) },
+    errors: ["INVALID_CURSOR"],
+    idempotency: "none",
+    cache: "private",
+    notes: ["Moderatör yalnız kendi partilerini, ADMIN+ hepsini görür."],
   }),
 ];

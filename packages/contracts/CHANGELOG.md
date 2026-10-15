@@ -9,6 +9,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.27.0 — 2026-10-15 (Mert, #183 toplu moderasyon)
+
+Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; yeni yetki veya audit işlemi yok (mevcut `moderation.poll.apply` / `moderation.comment.apply` / `moderation.content.search`).
+
+- **Eklendi:** `admin.moderation.polls.bulkPreview` / `.bulk` ve `admin.moderation.comments.bulkPreview` / `.bulk` (seçilen en çok 50 anket/yorum için HIDE/REMOVE/RESTORE; önizleme → gerekçe + digest ile onay → kayıt başına bağımsız işlem, kısmi başarısızlık raporu) ve `admin.moderation.batches.list` (parti geçmişi).
+- Şemalar: `BulkPreview`, `BulkPreviewItem`, `BulkResult`, `BulkResultItem`, `BulkBlockedCode`, `BulkModerationAction`, `ModerationBatchView`, `BULK_MAX_ITEMS`.
+- **Davranış:** kapsam kayıt başınadır (moderatör yalnız atandığı topluluk); önizleme sonrası durum değişirse 409 `preview_stale`; aktör başına saatte 20 parti.
+
 ## 1.26.0 — 2026-10-13 (Mert, #184 topluluk yönetim görünümü)
 
 Kırıcı değişiklik yok: yeni salt okuma endpoint'leri ve yetki.
