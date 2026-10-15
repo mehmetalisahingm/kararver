@@ -1,4 +1,4 @@
-import { DataExportPackage, EmailChangeCancelled, EmailChangeConfirmed, EmailChangeStarted, EmailChangeView, DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
+import { DataExportPackage, SelfDeletionDone, SelfDeletionPreview, SelfDeletionStarted, EmailChangeCancelled, EmailChangeConfirmed, EmailChangeStarted, EmailChangeView, DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
 import { AdminClient } from "../features/admin/admin-client.ts";
 import { CommunityClient, ReportClient } from "../features/community/community-client.ts";
@@ -86,6 +86,29 @@ export class ApiClient implements ProductClient {
   }
   async denyEmailChange(token: string) {
     await this.http.request("auth.emailChange.deny", { body: { token } });
+  }
+  /** #181 hesabımı sil: önizleme (silinecek/korunacak, engeller, açık talep). */
+  async getDeletionPreview() {
+    return dataOf(SelfDeletionPreview).parse(await this.http.request("me.deletion.preview")).data;
+  }
+  /** Parola (+ MFA açıksa önce mfaStepUp) ve yazılı teyit; hesabı SİLMEZ, e-postaya onay bağlantısı gönderir. */
+  async requestDeletion(password: string, confirmUsername: string) {
+    return dataOf(SelfDeletionStarted).parse(await this.http.request("me.deletion.request", { body: { password, confirmUsername } })).data;
+  }
+  async cancelDeletion() {
+    return dataOf(EmailChangeCancelled).parse(await this.http.request("me.deletion.cancel")).data;
+  }
+  /** E-postadaki onay bağlantısının token'ı (oturum gerekmez): geri alınamaz silme. */
+  async confirmDeletion(token: string) {
+    return dataOf(SelfDeletionDone).parse(await this.http.request("auth.deletion.confirm", { body: { token } })).data;
+  }
+  /** E-postadaki "bu ben değilim" bağlantısı: talep iptal, oturumlar kapanır. */
+  async cancelDeletionByLink(token: string) {
+    await this.http.request("auth.deletion.cancel", { body: { token } });
+  }
+  /** Taze MFA doğrulaması (5 dk, tek kullanımlık): hesap silme talebinden önce. */
+  async mfaStepUp(code: string) {
+    await this.http.request("me.mfa.stepup", { body: { code } });
   }
   async getDecision(id: string, signal?: AbortSignal) {
     return dataOf(DecisionState).parse(await this.http.request("decisions.get", { params: { id }, signal })).data;

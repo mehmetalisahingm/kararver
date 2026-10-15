@@ -484,3 +484,34 @@ model EmailChangeRequest {
   @@index([status, expiresAt])
   @@map("email_change_requests")
 }
+
+enum AccountDeletionStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  FAILED
+
+  @@map("account_deletion_status")
+}
+
+// #181 kullanıcının kendi hesap silme talebi (KV-33 §12): parola (+MFA) ve yazılı teyitle açılır, e-postadaki bağlantıyla onaylanır.
+// Kişisel veri taşımaz (adres yok: bildirimler hesabın e-postasına gider); token yalnız özet olarak saklanır.
+model AccountDeletionRequest {
+  id         String                @id @default(uuid(7)) @db.Uuid
+  userId     String                @map("user_id") @db.Uuid
+  status     AccountDeletionStatus @default(OPEN)
+  tokenHash  String                @unique @map("token_hash") @db.Char(64)
+  expiresAt  DateTime              @map("expires_at") @db.Timestamptz(3)
+  finishedAt DateTime?             @map("finished_at") @db.Timestamptz(3)
+  // CANCELLED/FAILED için kısa kod (replaced, user, link, blocked:<kod>, ...).
+  failure    String?               @db.VarChar(60)
+  createdAt  DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation("AccountDeletionSubject", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, expiresAt])
+  @@map("account_deletion_requests")
+}

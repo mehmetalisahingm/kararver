@@ -111,6 +111,7 @@ model User {
   holdsReleased        UserLegalHold[]   @relation("LegalHoldReleaser")
   emailChanges          EmailChangeRequest[] @relation("EmailChangeSubject")
   emailChangesRequested EmailChangeRequest[] @relation("EmailChangeRequester")
+  deletionRequests      AccountDeletionRequest[] @relation("AccountDeletionSubject")
   // KV-43: yaptığı oy geçersiz sayma / geri alma işlemleri
   voteCorrections       VoteEvent[]          @relation("VoteEventActor")
   comments              Comment[]

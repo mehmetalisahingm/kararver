@@ -61,6 +61,9 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   "user.anonymize": ["anonymize"],
   // #181 e-posta değişimi: adres hiçbir kayıtta yoktur; yalnız talep kimliği ve kaynak. Kullanıcı/token işlemlerinin aktörü hesabın sahibidir.
   "account.emailChange.manage": ["request", "cancel"],
+  // #181 kendi hesabını silme: talep ve iptal kullanıcının işlemidir; apply = e-posta bağlantısıyla onaylanan anonimleştirme.
+  "account.deletion.manage": ["request", "cancel"],
+  "account.deletion.confirm": ["apply", "deny"],
   "account.emailChange.confirm": ["verify", "approve", "apply", "deny"],
   "user.emailChange.manage": ["start", "cancel"],
   "user.legalHold.manage": ["place", "release"],

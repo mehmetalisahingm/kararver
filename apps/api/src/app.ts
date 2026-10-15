@@ -11,6 +11,8 @@ import { createRouter } from "./http/route.ts";
 import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import { registerAccountDeletionRoutes } from "./modules/account-deletion/routes.ts";
+import type { AccountDeletionStore } from "./modules/account-deletion/store.ts";
 import { registerEmailChangeRoutes } from "./modules/email-change/routes.ts";
 import type { EmailChangeStore } from "./modules/email-change/store.ts";
 import { registerAccountErasureRoutes } from "./modules/account-erasure/routes.ts";
@@ -171,6 +173,10 @@ export type AppDeps = {
   isOwnershipEnabled?: () => Promise<boolean>;
   /** account.emailChangeEnabled (#181); verilmezse ayar servisinden, o da yoksa kapalı. */
   isEmailChangeEnabled?: () => Promise<boolean>;
+  /** account.selfDeletionEnabled (#181); verilmezse ayar servisinden, o da yoksa kapalı. */
+  isSelfDeletionEnabled?: () => Promise<boolean>;
+  /** #181 kullanıcının kendi hesabını silme talebi; accountErasureStore ile birlikte kaydedilir (silmeyi o yapar). */
+  accountDeletionStore?: AccountDeletionStore;
   /** #181 e-posta değişimi; adminUserStore ile birlikte kaydedilir (destek yolunda hedef rolü okunur). */
   emailChangeStore?: EmailChangeStore;
   /** #184 / KV-54 S1 topluluk sahibi atama/bırakma. */
@@ -250,6 +256,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
   const isOwnershipEnabled = deps.isOwnershipEnabled ?? (settings ? () => settings.isOwnershipEnabled() : async () => false);
   const isEmailChangeEnabled = deps.isEmailChangeEnabled ?? (settings ? () => settings.isEmailChangeEnabled() : async () => false);
+  const isSelfDeletionEnabled = deps.isSelfDeletionEnabled ?? (settings ? () => settings.isSelfDeletionEnabled() : async () => false);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
   const rateLimitSettings =
@@ -411,6 +418,20 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       mailer: deps.mailer,
       loginGuard: limiter?.login,
       isEnabled: isEmailChangeEnabled,
+      now,
+      tokenPepper: config.authTokenPepper,
+      webUrl: config.webUrl,
+    });
+  }
+  if (deps.accountDeletionStore && deps.accountErasureStore) {
+    registerAccountDeletionRoutes(route, {
+      store: deps.accountDeletionStore,
+      erasure: deps.accountErasureStore,
+      mfa: deps.mfaStore,
+      hasher: deps.hasher,
+      mailer: deps.mailer,
+      loginGuard: limiter?.login,
+      isEnabled: isSelfDeletionEnabled,
       now,
       tokenPepper: config.authTokenPepper,
       webUrl: config.webUrl,

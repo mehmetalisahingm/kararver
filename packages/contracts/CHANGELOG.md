@@ -9,6 +9,16 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.31.0 — 2026-10-15 (Mert, #181 kullanıcının kendi hesabını silmesi)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, şemalar, yetkiler ve varsayılan kapalı ayar.
+
+- **Eklendi:** `me.deletion.preview` (silinecek/korunacak kayıtlar, engeller, açık talep), `me.deletion.request` (parola + yazılı teyit, MFA açıksa taze step-up; hesabı SİLMEZ, e-postaya onay bağlantısı gönderir), `me.deletion.cancel`; **(token, oturumsuz):** `auth.deletion.confirm` (açık onayla kalıcı silme, idempotent) ve `auth.deletion.cancel` ("bu ben değilim": talep iptal, oturumlar kapanır).
+- Yetkiler `account.deletion.manage` (user) ve `account.deletion.confirm` (public, token); audit `request/cancel` ve `apply/deny`.
+- **Ayar:** `account.selfDeletionEnabled` (boolean, varsayılan **false**). Kapalıyken talep 503; iptal ve bağlantı onayı/iptali çalışır.
+- Şemalar: `SelfDeletionPreview`, `SelfDeletionRequestView`, `SelfDeletionStarted`, `SelfDeletionDone`, `SelfDeletionStatus`.
+- **Davranış:** silme yönetici başlatmalı anonimleştirmeyle aynı kapsamdadır (KV-33 §10); tamamlanınca eski e-posta adresine bildirim gider.
+
 ## 1.30.0 — 2026-10-14 (Mert, #181 e-posta değişimi)
 
 Kırıcı değişiklik yok: yeni endpoint'ler, şemalar, yetkiler ve varsayılan kapalı ayar.
