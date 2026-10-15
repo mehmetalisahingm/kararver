@@ -10,6 +10,8 @@ Güvenlik için **göstermelik test hesabı, sahte mock, demo fixture veya yaln�
 
 **Mevcut durum:** Kod seviyesinde birçok kapsamlı test var. 9 Ekim Railway ortam incelemesinde staging API deployment'ı `53cebc1fd23d3b0f0d2ce05c81464c12bb3b7a1a` ve `SUCCESS` görünüyor; son merge `b1c0c07a398ce4dbd14a9a5a8f291af1f2c6ff29` olduğundan **kod sürümleri aynı değil**. Bu bilgi daha yeni deployment doğrulaması gelince güncellenecek. Bu çalışma ortamından API'ye doğrudan DNS/HTTP erişimi doğrulanamadığı için canlı güvenlik taraması PASS sayılamaz. Buradaki bütün HTTP kontrolleri yeniden çalıştırılmalı.
 
+**15 Ekim 2026 güncellemesi:** Railway staging API `GET /health` → `status=ok`, `worker=ready`, `release.sha=ae3ff8f38467`; `main` birleşme commit'i `ae3ff8f384673c54fb763f98ba3cadaf27d8416a`, Railway deployment SUCCESS. Salt-okuma gerçek HTTP: `/v1/categories` 200, anonim `/v1/admin/audit` 401, Vercel staging web ana sayfası erişilebilir. GitHub Actions Foundation checks (run `38713249727`) database, integration, storage, web, UI ve Chromium/Firefox/WebKit başarı; `staging-smoke` adımı skipped. **S01–S10 kimlikli/proxy/medya/oy/SMTP kapsamları hâlâ BLOCKED; NO-GO değişmedi.** Aşağıdaki 9 Ekim sürüm uyuşmazlığı paragrafı tarihsel bulgudur, artık geçerli deploy durumu değildir.
+
 ## B. Otomatik test ve staging kabul matrisi
 
 Durumlar: **AUTOMATED** = gerçek Postgres destekli CI test kodu mevcut; güncel SHA'lı yeşil iş varsa yalnız kod seviyesi kanıt. **BLOCKED** = aynı staging sürümünde gerçek HTTP kanıtı eksik. **FAIL** = doğrulanmış zafiyet/hata. Hiçbiri tek başına beta GO değildir.
@@ -38,7 +40,7 @@ pnpm security:test
 node scripts/security-acceptance.mjs --api https://api-staging-45cb.up.railway.app
 ```
 
-Manual GitHub Actions: **[Staging security read-only gate](../.github/workflows/security-staging.yml)**. Yalnız workflow_dispatch ile çalışır. Bu testlerin kapsamı public health/config, misafir kullanıcı ve admin rotalarında 401, HSTS, sunucu bilgisi sızıntısı, public config'de secret anahtarı ve kötü niyetli origin'in CORS üzerinden yetki alamamasıdır.
+GitHub Actions: **[Staging security read-only gate](../.github/workflows/security-staging.yml)**. `workflow_dispatch` ile elle, **3 saatte bir UTC :17** zamanlanmış olarak da çalışır (GitHub schedule gecikebilir). Her çalıştırma, maskeli READ_ONLY sonucu 14 gün artifact olarak saklar; başarısız kontroller Actions işini kırar. Bu otomasyon #46'nın kimlikli staging kabulünü veya beta GO kararını vermez. Bu testlerin kapsamı public health/config, misafir kullanıcı ve admin rotalarında 401, HSTS, sunucu bilgisi sızıntısı, public config'de secret anahtarı ve kötü niyetli origin'in CORS üzerinden yetki alamamasıdır.
 
 - HTTP veya DNS erişilemiyorsa **FAIL** (başarıya çevrilmez).
 - Başarılı olsa bile beta statüsü **NO-GO** kalır; oturum, CSRF ve 20 paralel oy gibi yazma senaryoları burada test edilmez.
