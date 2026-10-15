@@ -334,6 +334,12 @@ export function AuthScreen({
         try { await client.resendVerification(); notify("Doğrulama bağlantısı gönderildi."); } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
       }}>Doğrulama bağlantısını yeniden gönder</button>}
       <div className="auth-links">
+        {mode === "reset" && !demo && !done && (
+          <Link href={`/sifremi-unuttum${emailSuffix}`}>Yeni şifre sıfırlama bağlantısı iste</Link>
+        )}
+        {mode === "verify" && !demo && !done && (
+          <Link href={`/giris${emailSuffix}`}>Hesabımla giriş yap ve yeni doğrulama bağlantısı iste</Link>
+        )}
         {mode === "register" && !demo && <>
           <Link href={`/giris${emailSuffix}`}>Mevcut hesabımla giriş yap</Link>
           <Link href={`/sifremi-unuttum${emailSuffix}`}>Şifremi unuttum</Link>

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { webBaseUrl } from "../lib/server-public-polls";
+import { privatePaths } from "../lib/seo";
 
 export default function robots(): MetadataRoute.Robots {
   const production = process.env.APP_ENV === "production";
@@ -11,7 +12,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/admin", "/hesap", "/bildirimler", "/giris", "/kayit", "/dogrula", "/sifre-sifirla", "/olustur"],
+      disallow: privatePaths,
     },
     sitemap: new URL("/sitemap.xml", base).toString(),
   };

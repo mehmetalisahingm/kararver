@@ -5,6 +5,7 @@ import type { AdminRole } from "./admin-model";
 import { AccountErasure } from "./account-erasure";
 import { AdminEmailChange } from "./admin-email-change";
 import { ActionDialog, errorMessage, formatDate, ListState, useAdminRoles, useRemoteList } from "./admin-ui";
+import { HttpClient } from "../../lib/http-client";
 
 export function UsersPanel({ admin }: { admin: AdminClient }) {
   const roles = useAdminRoles();
@@ -36,6 +37,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
   const [kind, setKind] = useState<"polls" | "comments">("comments");
   const [role, setRole] = useState<AdminRole>("USER");
   const [approvalId, setApprovalId] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
   const [sanction, setSanction] = useState<StrongSanction | "WARNING">("WARNING");
   const [endsAt, setEndsAt] = useState("");
   useEffect(() => {
@@ -55,7 +57,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
         {canAssign ? <p>Kullanıcı numarası: <code>{id}</code></p> : null}
       <p>{user.status} · Roller: {user.roles.join(", ")} · Son giriş: {formatDate(user.lastLoginAt)}</p>
       <p>{user.stats.pollCount} gönderi · {user.stats.commentCount} yorum · {user.stats.voteCount} oy</p>
-      {canAssign ? <button className="kv-button" onClick={() => setAction("role")}>Yetkilendir / rolü değiştir</button> : null}
+      {canAssign ? <button className="kv-button" onClick={() => { setApprovalId(""); setMfaCode(""); setAction("role"); }}>Yetkilendir / rolü değiştir</button> : null}
       <PasswordReset id={id} admin={admin} />
       <ContentJobs id={id} admin={admin} />
       {canAssign ? <DataExports id={id} admin={admin} /> : null}
@@ -68,15 +70,23 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       {activity.items.map(item => <article key={`${item.kind}:${item.id}`}><p>{item.kind} · {item.excerpt} · {item.status}</p><button className="kv-button" onClick={() => { setTarget(item.id); setKind(item.kind === "COMMENT" ? "comments" : "polls"); setAction(item.status === "REMOVED" ? "restore" : "remove"); }}>{item.status === "REMOVED" ? "Geri yükle" : "Kaldır"}</button></article>)}
       <ListState remote={activity} empty="Gönderi veya yorum yok." />
     </> : null}
-    <ActionDialog open={action !== null} title="Kullanıcıya işlem uygula" submitLabel="Uygula" onClose={() => setAction(null)} validate={() => sanction === "SUSPEND" && action === "sanction" && (!endsAt || Date.parse(endsAt) <= Date.now()) ? "Gelecekte bir bitiş zamanı seç." : null} onSubmit={async reason => {
-      if (action === "role") await admin.setUserRole(id, role, reason, approvalId.trim() || undefined);
+    <ActionDialog open={action !== null} title={action === "role" ? "Kullanıcının rolünü değiştir" : "Kullanıcıya işlem uygula"} description={user ? `Hedef: @${user.username} (${user.displayName}) · ${id}` : undefined} submitLabel="Uygula" onClose={() => { setMfaCode(""); setAction(null); }} validate={() => sanction === "SUSPEND" && action === "sanction" && (!endsAt || Date.parse(endsAt) <= Date.now()) ? "Gelecekte bir bitiş zamanı seç." : null} onSubmit={async reason => {
+      if (action === "role") {
+        const code = mfaCode;
+        setMfaCode("");
+        if (code) await new HttpClient(process.env.NEXT_PUBLIC_API_URL || "/api").request("me.mfa.stepup", { body: { code } });
+        await admin.setUserRole(id, role, reason, approvalId.trim() || undefined);
+      }
       else if (action === "sanction") await admin.sanctionUser(id, sanction, reason, sanction === "SUSPEND" ? new Date(endsAt).toISOString() : null);
       else if (action === "lift") await admin.liftSanction(id, target, reason);
       else await admin.moderate(kind, target, action === "restore" ? "RESTORE" : "REMOVE", reason);
       refresh();
     }}>
       {action === "role" ? <><label>Rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value as AdminRole)}>{["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"].map(r => <option key={r}>{r}</option>)}</select></label>
+        <p role="status">Mevcut roller: {user?.roles.join(", ")} → Yeni rol: {role}</p>
+        {(role === "SUPER_ADMIN" || user?.roles.includes("SUPER_ADMIN")) ? <p>Bu işlem en yüksek yönetim yetkisini değiştirir. İkinci yönetici onayı sunucuda etkinse onay numarası ve tek kullanımlık, güncel MFA doğrulaması gerekir.</p> : null}
         <label>İkinci yönetici onay numarası<input className="kv-input" value={approvalId} onChange={e => setApprovalId(e.target.value)} /></label>
+        <label>Doğrulayıcı kodun<input className="kv-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={mfaCode} onChange={e => setMfaCode(e.target.value.replace(/\D/g, ""))} /></label>
         <p>SUPER_ADMIN değişimi için <a href="/hesap/guvenlik">hesap güvenliği ekranından</a> onay talebi oluştur. Onaylanan hedef, rol ve gerekçe burada aynı olmalı; uygulamadan önce yeniden MFA doğrulaması gerekir.</p>
       </> : null}
       {action === "sanction" ? <><label>Yaptırım<select className="kv-input" value={sanction} onChange={e => setSanction(e.target.value as typeof sanction)}>{["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING", "SUSPEND", "BAN"].map(s => <option key={s}>{s}</option>)}</select></label>{sanction === "SUSPEND" ? <label>Bitiş<input className="kv-input" type="datetime-local" value={endsAt} onChange={e => setEndsAt(e.target.value)} /></label> : null}</> : null}

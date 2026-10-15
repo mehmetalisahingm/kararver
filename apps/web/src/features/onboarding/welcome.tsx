@@ -27,6 +27,7 @@ export function Welcome({
   onComplete,
   onRegister,
   onSkip,
+  onExplore,
 }: {
   categories: Category[];
   categoriesLoading?: boolean;
@@ -35,6 +36,7 @@ export function Welcome({
   onComplete: (payload: CompletePayload) => void;
   onRegister?: (payload: CompletePayload) => void;
   onSkip: () => void;
+  onExplore: (payload: CompletePayload) => void;
 }) {
   const [step, setStep] = useState(0);
   const [ready, setReady] = useState(false);
@@ -138,6 +140,7 @@ export function Welcome({
           Yeni hesap oluştur
         </Link>
       </>}
+      <button className={styles.secondary} disabled={!ready} onClick={() => onExplore(payload())}>Üye olmadan akışı keşfet</button>
     </section>
     <footer className={styles.footer}>
       <span>Herkesin fikri var. Karar senin.</span>

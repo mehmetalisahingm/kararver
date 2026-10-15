@@ -166,6 +166,8 @@ export function ActionDialog({ open, title, description, submitLabel, reasonLabe
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const submitting = useRef(false);
+
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -179,10 +181,12 @@ export function ActionDialog({ open, title, description, submitLabel, reasonLabe
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (submitting.current) return;
     const text = reason.trim();
     if (reasonLabel !== null && text.length < 3) return setError("Gerekçe en az 3 karakter olmalı.");
     const invalid = validate?.() ?? null;
     if (invalid) return setError(invalid);
+    submitting.current = true;
     setBusy(true);
     setError("");
     try {
@@ -191,22 +195,25 @@ export function ActionDialog({ open, title, description, submitLabel, reasonLabe
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
 
   return (
     <dialog ref={ref} className={styles.dialog} aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}>
-      <form className={styles.dialogBody} onSubmit={submit}>
+      <form className={styles.dialogBody} onSubmit={submit} aria-busy={busy}>
         <h2 id={titleId}>{title}</h2>
         {description ? <p className="kv-muted">{description}</p> : null}
-        {children}
-        {reasonLabel !== null ? (
-          <label>
-            {reasonLabel}
-            <textarea className="kv-input" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} required />
-          </label>
-        ) : null}
+        <fieldset className={styles.dialogFields} disabled={busy}>
+          {children}
+          {reasonLabel !== null ? (
+            <label>
+              {reasonLabel}
+              <textarea className="kv-input" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} required />
+            </label>
+          ) : null}
+        </fieldset>
         {error ? <p role="alert" className={styles.formError}>{error}</p> : null}
         <div className={styles.dialogActions}>
           <button type="button" className="kv-button kv-button--secondary" onClick={onClose} disabled={busy}>Vazgeç</button>

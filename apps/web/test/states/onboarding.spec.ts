@@ -1,15 +1,16 @@
 import {test,expect} from "@playwright/test";
 import {api,failure,sample} from "./api";
 
-test("first guest visit shows onboarding; returning guest gets login continuation, not the intro again",async({page})=>{
+test("first guest can leave onboarding and returning guests browse the feed without a login wall",async({page})=>{
   const mock=await api(page);
   mock.handlers.set("me.get",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
   await page.goto("/");
   await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toBeVisible();
-  await page.getByRole("link",{name:/Zaten üye misin/}).click();
-  await expect(page).toHaveURL(/\/giris\?onboarding=1/);
+  await page.getByRole("button",{name:"Üye olmadan akışı keşfet"}).click();
+  await expect(page.getByRole("heading",{name:"Senin için"})).toBeVisible();
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:"Kararlarını kişiselleştirmek için hesabınla devam et."})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Senin için"})).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toHaveCount(0);
   expect(mock.unexpected).toEqual([]);
 });
