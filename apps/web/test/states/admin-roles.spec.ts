@@ -61,7 +61,8 @@ test("operasyon paneli yalnız SUPER_ADMIN dashboard'unda", async ({ page }) => 
   const root = await as(page, "SUPER_ADMIN");
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Operasyon durumu" })).toBeVisible();
-  expect(root.requested.some((r) => r.endsWith("/v1/admin/ops"))).toBe(true);
+  // İstek başlık çizildikten sonra useEffect içinde gider; yavaş tarayıcıda kayıt birkaç ms gecikebilir.
+  await expect.poll(() => root.requested.some((r) => r.endsWith("/v1/admin/ops"))).toBe(true);
 });
 
 test("MODERATOR yetkisiz bölüme URL ile gelirse erişim reddi görür; bölüm verisi istenmez", async ({ page }) => {

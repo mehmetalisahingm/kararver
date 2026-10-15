@@ -9,12 +9,28 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
-## 1.27.0 — 2026-10-14 (SA #180/#182 MFA ve bağımsız rol onayı)
+## 1.29.0 — 2026-10-14 (SA #180/#182 MFA ve bağımsız rol onayı)
 
 - TOTP kurulumu, oturuma bağlı tek kullanımlık yeniden doğrulama ve iki yönetici rol onayı endpoint'leri.
 - Kurulum onayında bir kez gösterilen 10 kurtarma kodu; parola ile tek kullanımlık kurtarma. Kod ve TOTP secret'ı audit'e yazılmaz.
 - `admin.roleApprovals.get`: onay vermeden önce hedef, rol ve gerekçeyi inceleme. `account.mfa` güvenlik olayları.
 - Rol koruması `ROLE_APPROVALS_REQUIRED` ile etkinleşir; varsayılan kapalıdır, tek yöneticili hesapları kilitlemez. #180/#182 yayın kabulü ayrıca izlenir.
+
+## 1.28.0 — 2026-10-15 (Mert, #183 güvenli geri alma)
+
+Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; `ModerationBatchView` ek alanlar (`undoOfId`, `undone`, `undoable`). Yeni yetki veya audit işlemi yok (telafi kararları mevcut `moderation.poll.apply` / `moderation.comment.apply` yolundan geçer, her biri kendi audit kaydını yazar).
+
+- **Eklendi:** `admin.moderation.batches.undoPreview` (GET, salt okuma) ve `admin.moderation.batches.undo` (POST: gerekçe + digest). Telafi: HIDE/REMOVE (önceki durum ACTIVE) → RESTORE, RESTORE (önceki HIDDEN) → HIDE, RESTORE (önceki REMOVED) → REMOVE. Sürüm koşulu (durum + hedefin son kararı), silinmiş içerik sahibinin içeriği asla geri gelmez, geri almanın geri alması yok.
+- Şemalar: `UndoPreview`, `UndoPreviewItem`, `UndoResult`, `UndoResultItem`, `UndoBlockedCode`.
+- **Sözleşme notu (#185/#194):** "her undo yeni audit oluşturur, append-only audit değişmez, yalnız önceden tanımlı reversible çiftler, sürüm koşulu" bu uçlarla uygulanmıştır; genel audit undo'su aynı ilkeleri kullanabilir.
+
+## 1.27.0 — 2026-10-15 (Mert, #183 toplu moderasyon)
+
+Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; yeni yetki veya audit işlemi yok (mevcut `moderation.poll.apply` / `moderation.comment.apply` / `moderation.content.search`).
+
+- **Eklendi:** `admin.moderation.polls.bulkPreview` / `.bulk` ve `admin.moderation.comments.bulkPreview` / `.bulk` (seçilen en çok 50 anket/yorum için HIDE/REMOVE/RESTORE; önizleme → gerekçe + digest ile onay → kayıt başına bağımsız işlem, kısmi başarısızlık raporu) ve `admin.moderation.batches.list` (parti geçmişi).
+- Şemalar: `BulkPreview`, `BulkPreviewItem`, `BulkResult`, `BulkResultItem`, `BulkBlockedCode`, `BulkModerationAction`, `ModerationBatchView`, `BULK_MAX_ITEMS`.
+- **Davranış:** kapsam kayıt başınadır (moderatör yalnız atandığı topluluk); önizleme sonrası durum değişirse 409 `preview_stale`; aktör başına saatte 20 parti.
 
 ## 1.26.0 — 2026-10-13 (Mert, #184 topluluk yönetim görünümü)
 

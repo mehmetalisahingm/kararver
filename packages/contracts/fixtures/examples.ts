@@ -244,6 +244,45 @@ const pollParams = { id: POLL };
 const reason = "Topluluk kurallarına aykırı";
 
 export const examples: Example[] = [
+  { endpoint: "admin.moderation.polls.bulkPreview", name: "ok", request: { query: { ids: [id(940), id(941), id(942), id(943)].join(","), action: "HIDE" } }, status: 200, body: { data: { kind: "polls", action: "HIDE", maxItems: 50, digest: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90", summary: { willChange: 1, noChange: 1, blocked: 2 }, items: [
+    { id: id(940), label: "Bu karar doğru mu?", status: "ACTIVE", communityId: id(940), outcome: "WILL_CHANGE", blocked: null },
+    { id: id(941), label: "Zaten gizli içerik", status: "HIDDEN", communityId: id(940), outcome: "NO_CHANGE", blocked: null },
+    { id: id(942), label: null, status: "ACTIVE", communityId: id(941), outcome: "BLOCKED", blocked: "forbidden" },
+    { id: id(943), label: null, status: null, communityId: null, outcome: "BLOCKED", blocked: "not_found" },
+  ] } } },
+  { endpoint: "admin.moderation.polls.bulk", name: "ok", request: { body: { ids: [id(940), id(941), id(942)], action: "HIDE", reason: "Toplu moderasyon incelemesi", digest: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90" } }, status: 200, body: { data: { batchId: id(950), summary: { total: 3, applied: 1, unchanged: 1, failed: 1 }, items: [
+    { id: id(940), result: "APPLIED", code: null, fromStatus: "ACTIVE", toStatus: "HIDDEN" },
+    { id: id(941), result: "UNCHANGED", code: null, fromStatus: "HIDDEN", toStatus: "HIDDEN" },
+    { id: id(942), result: "FAILED", code: "forbidden", fromStatus: "ACTIVE", toStatus: null },
+  ] } } },
+  { endpoint: "admin.moderation.polls.bulk", name: "stale", request: { body: { ids: [id(940), id(941), id(942)], action: "HIDE", reason: "Toplu moderasyon incelemesi", digest: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90" } }, status: 409, body: error("CONFLICT", "Seçilen kayıtlar önizlemeden sonra değişti; önizlemeyi yenile.", [{ code: "preview_stale" }]) },
+  { endpoint: "admin.moderation.comments.bulkPreview", name: "ok", request: { query: { ids: [id(940), id(941), id(942), id(943)].join(","), action: "HIDE" } }, status: 200, body: { data: { kind: "comments", action: "HIDE", maxItems: 50, digest: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90", summary: { willChange: 1, noChange: 1, blocked: 2 }, items: [
+    { id: id(940), label: "Bu karar doğru mu?", status: "ACTIVE", communityId: id(940), outcome: "WILL_CHANGE", blocked: null },
+    { id: id(941), label: "Zaten gizli içerik", status: "HIDDEN", communityId: id(940), outcome: "NO_CHANGE", blocked: null },
+    { id: id(942), label: null, status: "ACTIVE", communityId: id(941), outcome: "BLOCKED", blocked: "forbidden" },
+    { id: id(943), label: null, status: null, communityId: null, outcome: "BLOCKED", blocked: "not_found" },
+  ] } } },
+  { endpoint: "admin.moderation.comments.bulk", name: "ok", request: { body: { ids: [id(940), id(941), id(942)], action: "HIDE", reason: "Toplu moderasyon incelemesi", digest: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90" } }, status: 200, body: { data: { batchId: id(950), summary: { total: 3, applied: 1, unchanged: 1, failed: 1 }, items: [
+    { id: id(940), result: "APPLIED", code: null, fromStatus: "ACTIVE", toStatus: "HIDDEN" },
+    { id: id(941), result: "UNCHANGED", code: null, fromStatus: "HIDDEN", toStatus: "HIDDEN" },
+    { id: id(942), result: "FAILED", code: "forbidden", fromStatus: "ACTIVE", toStatus: null },
+  ] } } },
+  { endpoint: "admin.moderation.comments.bulk", name: "stale", request: { body: { ids: [id(940), id(941), id(942)], action: "HIDE", reason: "Toplu moderasyon incelemesi", digest: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90" } }, status: 409, body: error("CONFLICT", "Seçilen kayıtlar önizlemeden sonra değişti; önizlemeyi yenile.", [{ code: "preview_stale" }]) },
+  { endpoint: "admin.moderation.polls.bulk", name: "rate-limited", request: { body: { ids: [id(940), id(941), id(942)], action: "HIDE", reason: "Toplu moderasyon incelemesi", digest: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90" } }, status: 429, body: error("RATE_LIMITED", "Çok fazla istek gönderdiniz. Lütfen biraz sonra tekrar deneyin.", [{ code: "retry_after_seconds", message: "900" }]) },
+  { endpoint: "admin.moderation.batches.undoPreview", name: "ok", request: { params: { id: id(950) } }, status: 200, body: { data: { batchId: id(950), kind: "polls", originalAction: "HIDE", digest: "b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1", summary: { willUndo: 1, blocked: 2, alreadyUndone: 1 }, items: [
+    { id: id(940), label: "Bu karar doğru mu?", status: "HIDDEN", undoAction: "RESTORE", outcome: "WILL_UNDO", blocked: null },
+    { id: id(941), label: "Başka bir karar", status: "ACTIVE", undoAction: "RESTORE", outcome: "BLOCKED", blocked: "status_changed" },
+    { id: id(942), label: null, status: "HIDDEN", undoAction: "RESTORE", outcome: "BLOCKED", blocked: "forbidden" },
+    { id: id(943), label: null, status: null, undoAction: null, outcome: "ALREADY_UNDONE", blocked: null },
+  ] } } },
+  { endpoint: "admin.moderation.batches.undoPreview", name: "nothing", request: { params: { id: id(950) } }, status: 409, body: error("CONFLICT", "Geri alınacak karar kalmadı.", [{ code: "nothing_to_undo" }]) },
+  { endpoint: "admin.moderation.batches.undo", name: "ok", request: { params: { id: id(950) }, body: { reason: "Yanlış pozitif: kararlar geri alınıyor", digest: "b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1" } }, status: 200, body: { data: { batchId: id(951), undoOfId: id(950), summary: { total: 2, applied: 1, unchanged: 0, failed: 1 }, items: [
+    { id: id(940), result: "APPLIED", code: null, undoAction: "RESTORE", fromStatus: "HIDDEN", toStatus: "ACTIVE" },
+    { id: id(941), result: "FAILED", code: "superseded", undoAction: "RESTORE", fromStatus: "HIDDEN", toStatus: null },
+  ] } } },
+  { endpoint: "admin.moderation.batches.undo", name: "stale", request: { params: { id: id(950) }, body: { reason: "Yanlış pozitif: kararlar geri alınıyor", digest: "b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1" } }, status: 409, body: error("CONFLICT", "Kayıtlar önizlemeden sonra değişti; önizlemeyi yenile.", [{ code: "preview_stale" }]) },
+  { endpoint: "admin.moderation.batches.undo", name: "not-undoable", request: { params: { id: id(951) }, body: { reason: "Yanlış pozitif: kararlar geri alınıyor", digest: "b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1" } }, status: 409, body: error("CONFLICT", "Geri alma partisi tekrar geri alınamaz; gerekirse yeni bir toplu işlem yapın.", [{ code: "not_undoable" }]) },
+  { endpoint: "admin.moderation.batches.list", name: "ok", request: {}, status: 200, body: { data: [{ id: id(950), kind: "polls", action: "HIDE", reason: "Toplu moderasyon incelemesi", actor: { id: U1, username: "deniz", displayName: "Deniz", avatarUrl: null }, total: 3, applied: 1, unchanged: 1, failed: 1, createdAt: T0, finishedAt: T0, undoOfId: null, undone: 0, undoable: true }], page: { nextCursor: null, hasMore: false } } },
   { endpoint: "admin.communities.listAll", name: "ok", request: { query: { status: "ACTIVE" } }, status: 200, body: { data: [{ id: id(940), slug: "samsun-universitesi", name: "Samsun Üniversitesi", status: "ACTIVE", membersVisibility: "MEMBERS", members: 4, moderators: 1, polls: 6, createdAt: T0, threshold: { state: "IN_PROGRESS", requestId: id(950), requiredMembers: 10, members: 4, approvedAt: T0, approvalDeadline: "2026-10-04T09:00:00.000Z", closedAt: null, daysLeft: 3 } }], page: { nextCursor: null, hasMore: false } } },
   { endpoint: "admin.communities.overview", name: "ok", request: { params: { id: id(940) } }, status: 200, body: { data: { ...{ id: id(940), slug: "samsun-universitesi", name: "Samsun Üniversitesi", status: "ACTIVE", membersVisibility: "MEMBERS", members: 4, moderators: 1, polls: 6, createdAt: T0, threshold: { state: "IN_PROGRESS", requestId: id(950), requiredMembers: 10, members: 4, approvedAt: T0, approvalDeadline: "2026-10-04T09:00:00.000Z", closedAt: null, daysLeft: 3 } }, description: "Kampüs kararları", createdBy: { id: U1, username: "deniz", displayName: "Deniz" }, impact: { members: 4, moderators: 1, polls: 6, activePolls: 5, openPolls: 3, comments: 12, openReports: 1 }, recentChanges: [{ at: T0, action: "community.update", operation: "update", reason: "Kurallar güncellendi", actor: { id: U1, username: "deniz", displayName: "Deniz" } }] } } },
   { endpoint: "admin.communities.members", name: "ok", request: { params: { id: id(940) }, query: { q: "den" } }, status: 200, body: { data: [{ user: { id: U1, username: "deniz", displayName: "Deniz", avatarUrl: null }, role: "MEMBER", joinedAt: T0 }], page: { nextCursor: null, hasMore: false } } },

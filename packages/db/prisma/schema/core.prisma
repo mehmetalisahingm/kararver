@@ -100,6 +100,8 @@ model User {
   // #181 toplu içerik işleri (moderation.prisma)
   contentJobs          ContentJob[] @relation("ContentJobSubject")
   contentJobsRequested ContentJob[] @relation("ContentJobRequester")
+  // #183 toplu moderasyon (moderation.prisma)
+  moderationBatches    ModerationBatch[] @relation("ModerationBatchActor")
   idempotencyKeys  IdempotencyKey[]
   polls            Poll[]
   votes            Vote[]
