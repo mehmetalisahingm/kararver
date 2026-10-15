@@ -9,6 +9,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.28.0 — 2026-10-15 (Mert, #183 güvenli geri alma)
+
+Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; `ModerationBatchView` ek alanlar (`undoOfId`, `undone`, `undoable`). Yeni yetki veya audit işlemi yok (telafi kararları mevcut `moderation.poll.apply` / `moderation.comment.apply` yolundan geçer, her biri kendi audit kaydını yazar).
+
+- **Eklendi:** `admin.moderation.batches.undoPreview` (GET, salt okuma) ve `admin.moderation.batches.undo` (POST: gerekçe + digest). Telafi: HIDE/REMOVE (önceki durum ACTIVE) → RESTORE, RESTORE (önceki HIDDEN) → HIDE, RESTORE (önceki REMOVED) → REMOVE. Sürüm koşulu (durum + hedefin son kararı), silinmiş içerik sahibinin içeriği asla geri gelmez, geri almanın geri alması yok.
+- Şemalar: `UndoPreview`, `UndoPreviewItem`, `UndoResult`, `UndoResultItem`, `UndoBlockedCode`.
+- **Sözleşme notu (#185/#194):** "her undo yeni audit oluşturur, append-only audit değişmez, yalnız önceden tanımlı reversible çiftler, sürüm koşulu" bu uçlarla uygulanmıştır; genel audit undo'su aynı ilkeleri kullanabilir.
+
 ## 1.27.0 — 2026-10-15 (Mert, #183 toplu moderasyon)
 
 Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; yeni yetki veya audit işlemi yok (mevcut `moderation.poll.apply` / `moderation.comment.apply` / `moderation.content.search`).

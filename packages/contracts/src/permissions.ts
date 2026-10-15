@@ -262,6 +262,8 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.moderation.comments.bulkPreview": "moderation.comment.apply",
   "admin.moderation.comments.bulk": "moderation.comment.apply",
   "admin.moderation.batches.list": "moderation.content.search",
+  "admin.moderation.batches.undoPreview": "moderation.poll.apply",
+  "admin.moderation.batches.undo": "moderation.poll.apply",
   "admin.content.polls": "moderation.content.search",
   "admin.content.comments": "moderation.content.search",
   "admin.moderation.history.polls": "moderation.content.history",

@@ -150,6 +150,8 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /admin/moderation/polls/bulk`<br>Seçilen anketlere toplu gerekçeli moderasyon (HIDE/REMOVE/RESTORE) · `admin.moderation.polls.bulk` | M | 200 | doğal | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #183 | hazır |
 | `GET /admin/moderation/comments/bulk/preview`<br>Toplu yorum moderasyonu önizlemesi (salt okuma) · `admin.moderation.comments.bulkPreview` | M | 200 | — | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #183 | hazır |
 | `POST /admin/moderation/comments/bulk`<br>Seçilen yorumlara toplu gerekçeli moderasyon (HIDE/REMOVE/RESTORE) · `admin.moderation.comments.bulk` | M | 200 | doğal | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #183 | hazır |
+| `GET /admin/moderation/batches/:id/undo/preview`<br>Toplu işlemin güvenli geri alma önizlemesi (salt okuma) · `admin.moderation.batches.undoPreview` | M | 200 | — | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #183 #185 | hazır |
+| `POST /admin/moderation/batches/:id/undo`<br>Toplu işlemi güvenli geri al (telafi kararları, sürüm kontrollü) · `admin.moderation.batches.undo` | M | 200 | doğal | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #183 #185 | hazır |
 | `GET /admin/moderation/batches`<br>Toplu moderasyon geçmişi (en yeni önce) · `admin.moderation.batches.list` | M | 200 | — | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #183 | hazır |
 
 ### Topluluklar
@@ -276,8 +278,9 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
 | #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
 | #181 | `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver`, `GET /admin/users/:id/content-jobs/preview`, `POST /admin/users/:id/content-jobs`, `GET /admin/users/:id/content-jobs`, `POST /admin/users/:id/content-jobs/:jobId/undo`, `POST /admin/users/:id/content-jobs/:jobId/cancel` |
-| #183 | `GET /admin/moderation/polls/bulk/preview`, `POST /admin/moderation/polls/bulk`, `GET /admin/moderation/comments/bulk/preview`, `POST /admin/moderation/comments/bulk`, `GET /admin/moderation/batches` |
+| #183 | `GET /admin/moderation/polls/bulk/preview`, `POST /admin/moderation/polls/bulk`, `GET /admin/moderation/comments/bulk/preview`, `POST /admin/moderation/comments/bulk`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `GET /admin/moderation/batches` |
 | #184 | `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
+| #185 | `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo` |
 | #186 | `GET /admin/ops` |
 <!-- END:unblocks -->
 

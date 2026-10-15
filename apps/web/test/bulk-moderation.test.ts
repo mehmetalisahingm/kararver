@@ -79,3 +79,39 @@ test("parti geçmişi doğru endpoint'ten gelir ve sözleşmeyle doğrulanır", 
   assert.equal(list.items[0]!.applied, 1);
   assert.equal(list.next, null);
 });
+
+// ── Güvenli geri alma (#183) ──
+import { canUndo, undoBlockedLabels, undoPreviewSummary, undoResultSummary } from "../src/features/admin/bulk-model.ts";
+
+test("geri alma önizlemesi: yalnız geri alınacak karar varsa onay açılır; her engel kodunun metni var, silinmiş sahip açıkça yazılır", async () => {
+  const a = admin(() => reply("admin.moderation.batches.undoPreview", "ok"));
+  const preview = await a.client.undoPreview("01998b9a-0000-7000-8000-000000000950");
+  assert.equal(a.calls[0]!.method, "GET");
+  assert.ok(a.calls[0]!.url.endsWith("/admin/moderation/batches/01998b9a-0000-7000-8000-000000000950/undo/preview"));
+  assert.match(undoPreviewSummary(preview), /1 karar geri alınacak, 2 geri alınamayacak, 1 zaten geri alınmış/);
+  assert.equal(canUndo(preview), true);
+  assert.equal(canUndo({ ...preview, summary: { willUndo: 0, blocked: 2, alreadyUndone: 1 } }), false);
+  assert.equal(canUndo(null), false);
+  for (const item of preview.items) assert.ok(item.blocked === null || undoBlockedLabels[item.blocked], item.blocked ?? "");
+  assert.match(undoBlockedLabels.author_erased!, /geri getirilmez/);
+  assert.ok(preview.items.filter((i) => i.outcome !== "WILL_UNDO").every((i) => i.label === null || i.blocked !== "forbidden"), "yetkisiz kayıtta içerik yok");
+});
+
+test("geri alma uygulaması: gövde gerekçe+digest taşır, sonuç özeti nedenleri yazar; eskimiş önizleme ve geri alma partisi 409 olarak yüzeye çıkar", async () => {
+  const ok = admin(() => reply("admin.moderation.batches.undo", "ok"));
+  const result = await ok.client.undoBatch("01998b9a-0000-7000-8000-000000000950", "Yanlış pozitif: kararlar geri alınıyor", "b".repeat(64));
+  assert.equal(ok.calls[0]!.method, "POST");
+  assert.ok(ok.calls[0]!.url.endsWith("/undo"));
+  assert.deepEqual(Object.keys(ok.calls[0]!.body as object).sort(), ["digest", "reason"]);
+  assert.equal(result.undoOfId, "01998b9a-0000-7000-8000-000000000950");
+  assert.equal(undoResultSummary(result), "1 karar geri alındı, 0 değişmedi, 1 geri alınamadı (1 × Araya daha yeni bir karar girdi).");
+  for (const name of ["stale", "not-undoable"]) {
+    await assert.rejects(admin(() => reply("admin.moderation.batches.undo", name)).client.undoBatch("x", "Yanlış pozitif", "b".repeat(64)), (e) => e instanceof UiError && e.code === "CONFLICT", name);
+  }
+  await assert.rejects(admin(() => reply("admin.moderation.batches.undoPreview", "nothing")).client.undoPreview("x"), (e) => e instanceof UiError && e.code === "CONFLICT");
+});
+
+test("geri alınabilir parti listede işaretli gelir (undoable, undone, undoOfId)", async () => {
+  const list = await admin(() => reply("admin.moderation.batches.list", "ok")).client.moderationBatches();
+  assert.deepEqual([list.items[0]!.undoable, list.items[0]!.undone, list.items[0]!.undoOfId], [true, 0, null]);
+});

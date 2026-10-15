@@ -28,6 +28,8 @@ const CONFLICTS = {
   unsupported_action: "Bu işlem bu içerik türünde desteklenmiyor.",
   removed: "Kaldırılmış içerik üzerinde bu işlem yapılamaz; önce geri yükleyin.",
   community_changed: "İçerik bu sırada başka bir topluluğa taşındı; sayfayı yenileyip tekrar deneyin.",
+  superseded: "İçerik bu arada başka bir kararla değişti; telafi uygulanamaz.",
+  author_erased: "İçerik sahibinin hesabı silinmiş; içerik geri getirilemez.",
 } as const;
 
 const pollView = (p: AdminPollRow, base: string) => ({

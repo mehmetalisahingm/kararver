@@ -2,6 +2,8 @@
 // cevap sözleşme şemasıyla doğrulanır (HttpClient). Yetki sunucudadır: istemci rol kontrolü yalnız menü/düğme
 // gizlemedir, ret 403 olarak gelir ve ekranda gösterilir.
 import type {
+  UndoPreview,
+  UndoResult,
   BulkPreview,
   BulkResult,
   ModerationBatchView as WireBatch,
@@ -41,6 +43,8 @@ export type Category = ReturnType<typeof AdminCategory.parse>;
 export type PollCategory = ReturnType<typeof PublicCategory.parse>;
 export type BulkPreviewView = ReturnType<typeof BulkPreview.parse>;
 export type BulkResultView = ReturnType<typeof BulkResult.parse>;
+export type UndoPreviewView = ReturnType<typeof UndoPreview.parse>;
+export type UndoResultView = ReturnType<typeof UndoResult.parse>;
 export type ModerationBatch = ReturnType<typeof WireBatch.parse>;
 export type AdminPoll = ReturnType<typeof AdminPollItem.parse>;
 export type AdminComment = ReturnType<typeof AdminCommentItem.parse>;
@@ -235,6 +239,14 @@ export class AdminClient {
   /** Önizlenen durumda uygular; durum değiştiyse 409 preview_stale. Kayıt başına sonuç (kısmi başarısızlık dahil) döner. */
   async bulkApply(kind: ContentKind, input: { ids: string[]; action: "HIDE" | "REMOVE" | "RESTORE"; reason: string; digest: string }) {
     return data<BulkResultView>(await this.http.request(`admin.moderation.${kind}.bulk`, { body: input }));
+  }
+  /** #183 güvenli geri alma önizlemesi (salt okuma): kayıt başına WILL_UNDO / BLOCKED / ALREADY_UNDONE + digest. */
+  async undoPreview(batchId: string, signal?: AbortSignal) {
+    return data<UndoPreviewView>(await this.http.request("admin.moderation.batches.undoPreview", { params: { id: batchId }, signal }));
+  }
+  /** Telafi kararlarını uygular (sürüm koşullu); durum değiştiyse 409 preview_stale. Yeni geri alma partisi döner. */
+  async undoBatch(batchId: string, reason: string, digest: string) {
+    return data<UndoResultView>(await this.http.request("admin.moderation.batches.undo", { params: { id: batchId }, body: { reason, digest } }));
   }
   async moderationBatches(cursor?: string, signal?: AbortSignal) {
     return page<ModerationBatch>(await this.http.request("admin.moderation.batches.list", { query: { cursor, limit: "20" }, signal }));

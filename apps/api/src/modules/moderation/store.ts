@@ -28,6 +28,12 @@ export type ApplyInput = {
   actorIsAdmin: boolean;
   /** Yetkilendirmede kullanılan topluluk; satır kilidi altında yeniden okunur, taşınmışsa 409 (kategori/topluluk taşıma yarışı). */
   communityId: string | null;
+  /**
+   * Telafi (geri alma) için sürüm koşulu, satır kilidi altında doğrulanır: içeriğin şimdiki durumu `status` ve hedefin SON
+   * moderasyon kararı `actionId` olmalı (araya daha yeni karar girdiyse `superseded`); içerik sahibi silinmiş/anonimleştirilmişse
+   * `author_erased` (silinmiş veri geri üretilmez). Koşul ile yazma aynı transaction'dadır: kontrol ile uygulama arası boşluk yok.
+   */
+  expect?: { actionId: string; status: ContentStatus };
 };
 
 /** Uygulanan kararın kaydı: toplu işlem (ve geri alma) bunu hedef alır. */
@@ -36,7 +42,7 @@ export type ApplyTrail = { actionId: string; from: ContentStatus; to: ContentSta
 export type ApplyResult =
   | { kind: "applied"; outcome: ModerationOutcome; trail: ApplyTrail }
   | { kind: "unchanged"; outcome: ModerationOutcome }
-  | { kind: "conflict"; reason: "invalid_transition" | "unsupported_action" | "removed" | "community_changed" }
+  | { kind: "conflict"; reason: "invalid_transition" | "unsupported_action" | "removed" | "community_changed" | "superseded" | "author_erased" }
   | { kind: "forbidden"; reason: "admin_required" }
   | { kind: "not_found" };
 

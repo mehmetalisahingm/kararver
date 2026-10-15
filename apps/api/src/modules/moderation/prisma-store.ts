@@ -66,6 +66,22 @@ async function recordTrail(tx: Tx, input: ApplyInput, from: ContentStatus, to: C
   return { actionId: recorded.id, from, to };
 }
 
+/** Telafi koşulu (ApplyInput.expect): kilit altında çağrılır; null = koşul sağlandı. */
+async function expectationFails(tx: Tx, input: ApplyInput, currentStatus: ContentStatus): Promise<"superseded" | "author_erased" | null> {
+  if (!input.expect) return null;
+  const owner =
+    input.kind === "polls"
+      ? await tx.poll.findUnique({ where: { id: input.id }, select: { author: { select: { deletedAt: true } } } })
+      : await tx.comment.findUnique({ where: { id: input.id }, select: { author: { select: { deletedAt: true } } } });
+  if (owner?.author.deletedAt) return "author_erased";
+  const latest = await tx.moderationAction.findFirst({
+    where: input.kind === "polls" ? { pollId: input.id } : { commentId: input.id },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true },
+  });
+  return currentStatus === input.expect.status && latest?.id === input.expect.actionId ? null : "superseded";
+}
+
 async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   const [row] = await tx.$queryRaw<{ status: ContentStatus; trend_excluded_at: Date | null; comments_closed_at: Date | null; community_id: string | null }[]>`
     SELECT status::text AS status, trend_excluded_at, comments_closed_at, community_id::text AS community_id
@@ -73,6 +89,8 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   if (!row) return { kind: "not_found" };
   // Yetki, anketin okunan topluluğuna göre verildi; bu arada taşındıysa karar geçersizdir.
   if (row.community_id !== input.communityId) return { kind: "conflict", reason: "community_changed" };
+  const stale = await expectationFails(tx, input, row.status);
+  if (stale) return { kind: "conflict", reason: stale };
   const excluded = row.trend_excluded_at !== null;
   const closed = row.comments_closed_at !== null;
   const outcome = (status: ContentStatus, trendExcluded: boolean, commentsClosed = closed) => ({ id: input.id, status, trendExcluded, commentsClosed });
@@ -121,6 +139,8 @@ async function applyToComment(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   const [row] = await tx.$queryRaw<{ status: ContentStatus }[]>`
     SELECT status::text AS status FROM comments WHERE id = ${input.id}::uuid FOR UPDATE`;
   if (!row) return { kind: "not_found" };
+  const stale = await expectationFails(tx, input, row.status);
+  if (stale) return { kind: "conflict", reason: stale };
   const outcome = (status: ContentStatus) => ({ id: input.id, status, trendExcluded: null, commentsClosed: null });
 
   // Yorumda "kilitli" durumu yok: LOCKED yorum listelenmez (KV-17 yalnız ACTIVE gösterir); kilit anket düzeyindedir.
