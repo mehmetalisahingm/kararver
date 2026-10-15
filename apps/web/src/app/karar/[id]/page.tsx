@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PollDetail } from "../../../features/polls/screens";
 import { ShareActions } from "../../../features/polls/share-actions";
 import { loadPublicPoll, webBaseUrl } from "../../../lib/server-public-polls";
+import { publicRobots } from "../../../lib/seo";
 
 function descriptionOf(value: string | null): string {
   const text = (value ?? "Kararver topluluğunda bu karar hakkında fikirleri keşfet.").replace(/\s+/g, " ").trim();
@@ -35,7 +36,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       description,
       ...(poll.media[0] ? { images: [{ url: poll.media[0].url, alt: poll.title }] } : {}),
     },
-    robots: { index: true, follow: true },
+    robots: publicRobots(),
   };
 }
 

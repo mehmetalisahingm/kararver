@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
@@ -8,15 +7,14 @@ import { safeReturnTo } from "../../lib/model";
 import {
   makeWelcomeDraft,
   markWelcomeSeen,
-  readWelcomeDraft,
   writeWelcomeDraft,
   type WelcomeDemoChoice,
 } from "../../lib/welcome-draft";
-import { Welcome, WelcomeAuthContext } from "./welcome";
+import { Welcome } from "./welcome";
 
 type Category = { id: string; name: string };
 
-export function WelcomeEntry({ returnTo = "/" }: { returnTo?: string }) {
+export function WelcomeEntry({ returnTo = "/", onExplore }: { returnTo?: string; onExplore?: () => void }) {
   const { client } = useProduct();
   const router = useRouter();
   const destination = safeReturnTo(returnTo);
@@ -62,27 +60,13 @@ export function WelcomeEntry({ returnTo = "/" }: { returnTo?: string }) {
       onComplete={(payload) => continueTo("giris", payload)}
       onRegister={(payload) => continueTo("kayit", payload)}
       onSkip={() => continueTo("giris", { categoryIds: [], demoChoice: null })}
+      onExplore={(payload) => {
+        if (payload.categoryIds.length || payload.demoChoice) writeWelcomeDraft(makeWelcomeDraft({ ...payload, returnTo: destination }));
+        markWelcomeSeen();
+        if (onExplore) onExplore();
+        else router.push(destination);
+      }}
     />
   );
 }
 
-export function WelcomeResume({ fallbackReturnTo = "/" }: { fallbackReturnTo?: string }) {
-  const draft = readWelcomeDraft();
-  const destination = safeReturnTo(draft?.returnTo ?? fallbackReturnTo);
-  const suffix = `?onboarding=1&returnTo=${encodeURIComponent(destination)}`;
-  return (
-    <main id="main" className="welcome-resume">
-      <section className="auth-card kv-card screen-stack">
-        <WelcomeAuthContext />
-        <span className="eyebrow">KALDIĞIN YERDEN DEVAM ET</span>
-        <h1>Kararlarını kişiselleştirmek için hesabınla devam et.</h1>
-        <p className="kv-muted">
-          Tanıtımı tekrar oynatmıyoruz. Varsa seçtiğin ilgi alanları girişten sonra güvenli biçimde hesabına bağlanacak.
-        </p>
-        <Link className="kv-button" href={`/giris${suffix}`}>Giriş yap</Link>
-        <Link className="kv-button kv-button--secondary" href={`/kayit${suffix}`}>Yeni hesap oluştur</Link>
-        <Link href="/basla">Tanıtımı tekrar izle</Link>
-      </section>
-    </main>
-  );
-}

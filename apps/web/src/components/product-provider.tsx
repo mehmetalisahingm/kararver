@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiClient } from "../lib/api-client";
 import type { DemoClient } from "../lib/demo-client";
-import { WelcomeEntry, WelcomeResume } from "../features/onboarding/welcome-entry";
+import { WelcomeEntry } from "../features/onboarding/welcome-entry";
 import { hasWelcomeSeen } from "../lib/welcome-draft";
 import { emptyDraft, safeReturnTo } from "../lib/model";
 import type { Draft, ProductClient, User } from "../lib/model";
@@ -194,9 +194,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   if (!demo && sessionReady && !user && pathname === "/" && welcomeSeen === null)
     return <ProductContext.Provider value={context}><main id="main" aria-busy="true" /></ProductContext.Provider>;
   if (!demo && sessionReady && !user && pathname === "/" && welcomeSeen === false)
-    return <ProductContext.Provider value={context}><WelcomeEntry returnTo="/" /></ProductContext.Provider>;
-  if (!demo && sessionReady && !user && pathname === "/" && welcomeSeen === true)
-    return <ProductContext.Provider value={context}><WelcomeResume fallbackReturnTo="/" /></ProductContext.Provider>;
+    return <ProductContext.Provider value={context}><WelcomeEntry returnTo="/" onExplore={() => setWelcomeSeen(true)} /></ProductContext.Provider>;
   // Giriş sonrası interests kaydı hata verirse AuthScreen retry UI'sı kalmalı.
   // Oturum geçişi sırasında giriş sayfasını remount etmek hata/taslak durumunu kaybettirir.
   return (
