@@ -8,6 +8,9 @@ import type { Prisma, PrismaClient } from "@kararver/db";
 import { communityOfTarget } from "./community-of.ts";
 import type { ContentKind, ContentStatus, ListAfter } from "./store.ts";
 
+/** Aktör başına saatlik parti sınırı (toplu işlem ve geri alma partileri birlikte sayılır). */
+export const BATCH_HOURLY_LIMIT = 20;
+
 export type BulkAction = "HIDE" | "REMOVE" | "RESTORE";
 
 /** Önizleme/özet için okunan durum. `label` yalnız yetkili kayıtta kullanılır (içerik sızmaz). */
@@ -25,6 +28,22 @@ export type BatchRow = {
   failed: number;
   createdAt: Date;
   finishedAt: Date | null;
+  undoOfId: string | null;
+  /** Bu partinin kararlarından geri alınmış olanların sayısı. */
+  undone: number;
+  /** Bitmiş, geri alma olmayan ve geri alınmamış uygulanmış kararı kalan parti. */
+  undoable: boolean;
+};
+
+/** Geri alma için okunan parti: yalnız UYGULANMIŞ kararlar (APPLIED) ve onları geri alan partinin kimliği. */
+export type UndoBatch = {
+  id: string;
+  actorId: string;
+  kind: ContentKind;
+  action: BulkAction;
+  undoOfId: string | null;
+  finishedAt: Date | null;
+  items: Array<{ targetId: string; communityId: string | null; fromStatus: string | null; toStatus: string | null; moderationActionId: string; undoneByBatchId: string | null }>;
 };
 
 export type BatchItemRecord = {
@@ -41,7 +60,15 @@ export interface BulkModerationStore {
   /** Bulunan kayıtların durumu; olmayan kimlik haritada yoktur. */
   inspect(kind: ContentKind, ids: string[]): Promise<Map<string, BulkItemState>>;
   /** Parti kaydını açar (sayılar 0); öğeler işlendikçe yazılır, sonunda `finishBatch`. */
-  startBatch(input: { actorId: string; kind: ContentKind; action: BulkAction; reason: string; digest: string; requestId: string | null; total: number; now: Date }): Promise<string>;
+  startBatch(input: { actorId: string; kind: ContentKind; action: BulkAction; reason: string; digest: string; requestId: string | null; total: number; now: Date; undoOfId?: string | null }): Promise<string>;
+  /** Geri alma önizlemesi/uygulaması için parti ve uygulanmış öğeleri; yoksa null. */
+  loadBatch(id: string): Promise<UndoBatch | null>;
+  /** Hedef başına SON moderasyon kararının kimliği (sürüm koşulu önizlemesi; kesin karar apply içinde kilit altındadır). */
+  latestActions(kind: ContentKind, ids: string[]): Promise<Map<string, string>>;
+  /** İçerik sahibi silinmiş/anonimleştirilmiş hedefler: bunların içeriği asla geri getirilmez. */
+  erasedAuthors(kind: ContentKind, ids: string[]): Promise<Set<string>>;
+  /** Öğeyi geri alındı olarak işaretler; zaten işaretliyse false (öğe başına en çok bir geri alma). */
+  markUndone(batchId: string, targetId: string, undoBatchId: string): Promise<boolean>;
   recordItem(batchId: string, item: BatchItemRecord, now: Date): Promise<void>;
   finishBatch(batchId: string, counts: { applied: number; unchanged: number; failed: number }, now: Date): Promise<void>;
   /** Aktörün `since` sonrası açtığı parti sayısı (saatlik sınır). */
@@ -59,6 +86,24 @@ export function batchDigest(kind: ContentKind, action: BulkAction, ids: string[]
     return `${id}|${s ? s.status : "-"}|${s ? (s.communityId ?? "-") : "-"}`;
   });
   return createHash("sha256").update(`${kind}\n${action}\n${lines.join("\n")}`).digest("hex");
+}
+
+/**
+ * Önceden tanımlı telafi çiftleri (yalnız bunlar geri alınır): kararın ÖNCEKİ durumuna tam dönüş sağlayanlar.
+ * HIDE/REMOVE (önceki ACTIVE) → RESTORE; RESTORE (önceki HIDDEN) → HIDE; RESTORE (önceki REMOVED) → REMOVE.
+ * Diğerleri (ör. REMOVE öncesi HIDDEN, RESTORE öncesi LOCKED) tek kararla aynı duruma döndürülemez: geri alınamaz.
+ */
+export function inverseOf(action: BulkAction, from: string | null): BulkAction | null {
+  if ((action === "HIDE" || action === "REMOVE") && from === "ACTIVE") return "RESTORE";
+  if (action === "RESTORE" && from === "HIDDEN") return "HIDE";
+  if (action === "RESTORE" && from === "REMOVED") return "REMOVE";
+  return null;
+}
+
+/** Geri alma özeti: parti ve her öğenin (hedef, şimdiki durum, topluluk, son karar, geri alındı mı) sıralı listesi. */
+export function undoDigest(batchId: string, rows: Array<{ id: string; status: string | null; communityId: string | null; latestActionId: string | null; undone: boolean }>): string {
+  const lines = [...rows].sort((a, b) => a.id.localeCompare(b.id)).map((r) => `${r.id}|${r.status ?? "-"}|${r.communityId ?? "-"}|${r.latestActionId ?? "-"}|${r.undone ? 1 : 0}`);
+  return createHash("sha256").update(`undo\n${batchId}\n${lines.join("\n")}`).digest("hex");
 }
 
 type Db = Prisma.TransactionClient | PrismaClient;
@@ -97,10 +142,67 @@ export function createPrismaBulkModerationStore(prisma: PrismaClient): BulkModer
           requestId: input.requestId,
           total: input.total,
           createdAt: input.now,
+          undoOfId: input.undoOfId ?? null,
         },
         select: { id: true },
       });
       return row.id;
+    },
+
+    async loadBatch(id) {
+      const b = await prisma.moderationBatch.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          actorId: true,
+          kind: true,
+          action: true,
+          undoOfId: true,
+          finishedAt: true,
+          items: {
+            where: { result: "APPLIED" },
+            orderBy: { targetId: "asc" },
+            select: { targetId: true, communityId: true, fromStatus: true, toStatus: true, moderationActionId: true, undoneByBatchId: true },
+          },
+        },
+      });
+      if (!b) return null;
+      return {
+        id: b.id,
+        actorId: b.actorId,
+        kind: b.kind === "POLLS" ? "polls" : "comments",
+        action: b.action as BulkAction,
+        undoOfId: b.undoOfId,
+        finishedAt: b.finishedAt,
+        items: b.items.map((i) => ({ ...i, moderationActionId: i.moderationActionId! })),
+      };
+    },
+
+    async latestActions(kind, ids) {
+      const out = new Map<string, string>();
+      const rows = await prisma.moderationAction.findMany({
+        where: kind === "polls" ? { pollId: { in: ids } } : { commentId: { in: ids } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { id: true, pollId: true, commentId: true },
+      });
+      for (const r of rows) {
+        const target = (kind === "polls" ? r.pollId : r.commentId) as string;
+        if (!out.has(target)) out.set(target, r.id);
+      }
+      return out;
+    },
+
+    async erasedAuthors(kind, ids) {
+      const rows =
+        kind === "polls"
+          ? await prisma.poll.findMany({ where: { id: { in: ids }, author: { deletedAt: { not: null } } }, select: { id: true } })
+          : await prisma.comment.findMany({ where: { id: { in: ids }, author: { deletedAt: { not: null } } }, select: { id: true } });
+      return new Set(rows.map((r) => r.id));
+    },
+
+    async markUndone(batchId, targetId, undoBatchId) {
+      const done = await prisma.moderationBatchItem.updateMany({ where: { batchId, targetId, undoneByBatchId: null, result: "APPLIED" }, data: { undoneByBatchId: undoBatchId } });
+      return done.count === 1;
     },
 
     async recordItem(batchId, item, now) {
@@ -145,6 +247,8 @@ export function createPrismaBulkModerationStore(prisma: PrismaClient): BulkModer
           failed: true,
           createdAt: true,
           finishedAt: true,
+          undoOfId: true,
+          _count: { select: { items: { where: { undoneByBatchId: { not: null } } } } },
           actor: { select: { id: true, username: true, displayName: true, avatarMedia: { select: { status: true, publicObjectKey: true } } } },
         },
       });
@@ -160,6 +264,9 @@ export function createPrismaBulkModerationStore(prisma: PrismaClient): BulkModer
         failed: r.failed,
         createdAt: r.createdAt,
         finishedAt: r.finishedAt,
+        undoOfId: r.undoOfId,
+        undone: r._count.items,
+        undoable: r.undoOfId === null && r.finishedAt !== null && r.applied > r._count.items,
       }));
     },
   };

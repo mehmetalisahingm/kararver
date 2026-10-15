@@ -145,7 +145,7 @@ export function ContentPanel({ admin, kind }: { admin: AdminClient; kind: Conten
       <ListState remote={remote} empty={`Süzgeçe uyan ${noun} yok.`} />
 
       <BulkDialog admin={admin} kind={kind} ids={[...selected]} open={bulkOpen} onClose={() => setBulkOpen(false)} onDone={done} />
-      <BulkHistory admin={admin} revision={bulkRevision} />
+      <BulkHistory admin={admin} revision={bulkRevision} onChanged={done} />
 
       <ActionDialog
         open={dialog?.type === "action"}

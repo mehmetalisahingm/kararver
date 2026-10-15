@@ -11,7 +11,8 @@ import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
 import { toPublicUser } from "../admin-users/view.ts";
 import { rateLimitError } from "../rate-limit/limiter.ts";
-import { batchDigest, type BatchItemRecord, type BulkAction, type BulkItemState, type BulkModerationStore } from "./bulk.ts";
+import { BATCH_HOURLY_LIMIT, batchDigest, type BatchItemRecord, type BulkAction, type BulkItemState, type BulkModerationStore } from "./bulk.ts";
+import { registerUndoRoutes } from "./undo-routes.ts";
 import { statusTransition, type ContentKind, type ModerationStore } from "./store.ts";
 
 export type BulkModerationDeps = {
@@ -21,8 +22,7 @@ export type BulkModerationDeps = {
   mediaPublicBaseUrl: string;
 };
 
-/** Aktör başına saatlik parti sınırı. */
-export const BATCH_HOURLY_LIMIT = 20;
+export { BATCH_HOURLY_LIMIT };
 const HOUR_MS = 60 * 60 * 1000;
 
 type Blocked = "not_found" | "forbidden" | "invalid_transition" | "admin_required";
@@ -36,6 +36,7 @@ type Plan = {
 };
 
 export function registerBulkModerationRoutes(route: Route, deps: BulkModerationDeps): void {
+  registerUndoRoutes(route, deps);
   const { store, batches, now } = deps;
   const base = deps.mediaPublicBaseUrl;
 
@@ -182,6 +183,9 @@ export function registerBulkModerationRoutes(route: Route, deps: BulkModerationD
           failed: b.failed,
           createdAt: b.createdAt.toISOString(),
           finishedAt: b.finishedAt?.toISOString() ?? null,
+          undoOfId: b.undoOfId,
+          undone: b.undone,
+          undoable: b.undoable,
         })),
         page: { nextCursor, hasMore: nextCursor !== null },
       },

@@ -220,6 +220,57 @@ export const BulkResult = z.strictObject({
   summary: z.strictObject({ total: Count, applied: Count, unchanged: Count, failed: Count }),
   items: z.array(BulkResultItem),
 });
+/**
+ * #183 güvenli geri alma (telafi kararı). Yalnız önceden tanımlı çiftler geri alınır: HIDE/REMOVE (önceki durum ACTIVE) → RESTORE,
+ * RESTORE (önceki HIDDEN) → HIDE, RESTORE (önceki REMOVED) → REMOVE. Sürüm koşulu: içeriğin şimdiki durumu kararın bıraktığı durum
+ * VE hedefin son kararı bu karar olmalı (araya daha yeni karar girdiyse geri alınmaz). Silinmiş/anonimleştirilmiş içerik sahibinin
+ * içeriği asla geri getirilmez. Geri alma yeni bir partidir; her telafi kararı normal moderasyon yolundan geçer ve kendi audit
+ * kaydını yazar (append-only audit değişmez). Geri almanın geri alması yoktur.
+ */
+export const UndoBlockedCode = z.enum([
+  "not_found",
+  "forbidden",
+  "admin_required",
+  "not_reversible",
+  "status_changed",
+  "superseded",
+  "author_erased",
+  "community_changed",
+]);
+export const UndoPreviewItem = z.strictObject({
+  id: Id,
+  /** Yetkisiz veya bulunamayan kayıtta null (içerik sızmaz). */
+  label: z.string().nullable(),
+  status: ContentStatus.nullable(),
+  /** Uygulanacak telafi kararı; geri alınamayan kararda null. */
+  undoAction: BulkModerationAction.nullable(),
+  outcome: z.enum(["WILL_UNDO", "BLOCKED", "ALREADY_UNDONE"]),
+  blocked: UndoBlockedCode.nullable(),
+});
+export const UndoPreview = z.strictObject({
+  batchId: Id,
+  kind: z.enum(["polls", "comments"]),
+  originalAction: BulkModerationAction,
+  digest: z.string().length(64),
+  summary: z.strictObject({ willUndo: Count, blocked: Count, alreadyUndone: Count }),
+  items: z.array(UndoPreviewItem),
+});
+export const UndoResultItem = z.strictObject({
+  id: Id,
+  result: z.enum(["APPLIED", "UNCHANGED", "FAILED"]),
+  code: UndoBlockedCode.nullable(),
+  undoAction: BulkModerationAction.nullable(),
+  fromStatus: z.string().nullable(),
+  toStatus: z.string().nullable(),
+});
+export const UndoResult = z.strictObject({
+  /** Yeni geri alma partisi. */
+  batchId: Id,
+  undoOfId: Id,
+  summary: z.strictObject({ total: Count, applied: Count, unchanged: Count, failed: Count }),
+  items: z.array(UndoResultItem),
+});
+
 export const ModerationBatchView = z.strictObject({
   id: Id,
   kind: z.enum(["polls", "comments"]),
@@ -232,6 +283,12 @@ export const ModerationBatchView = z.strictObject({
   failed: Count,
   createdAt: Timestamp,
   finishedAt: Timestamp.nullable(),
+  /** Dolu ise bu parti başka bir partinin geri almasıdır (işlem alanı geri alınan partinin işlemidir). */
+  undoOfId: Id.nullable(),
+  /** Bu partinin kararlarından geri alınmış olanların sayısı. */
+  undone: Count,
+  /** Bitmiş, geri alma olmayan ve geri alınmamış uygulanmış kararı kalan parti. */
+  undoable: z.boolean(),
 });
 
 const moderation = { owner: "Mert", module: "moderation" } as const;
@@ -697,6 +754,49 @@ export const moderationEndpoints = [
       ],
     }),
   ]),
+  defineEndpoint({
+    id: "admin.moderation.batches.undoPreview",
+    domain: "moderation",
+    method: "GET",
+    path: "/admin/moderation/batches/:id/undo/preview",
+    summary: "Toplu işlemin güvenli geri alma önizlemesi (salt okuma)",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183", "#185"],
+    availability: { status: "ready" },
+    request: { params: IdParams },
+    responses: { 200: dataOf(UndoPreview) },
+    errors: ["CONFLICT", "NOT_FOUND"],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "Hiçbir şey yazmaz. Kayıt başına: WILL_UNDO, ALREADY_UNDONE veya BLOCKED (not_reversible, status_changed, superseded, author_erased, forbidden, admin_required, not_found). Moderatör yalnız kendi partisini, ADMIN+ herhangi birini geri alır (başkasının partisi moderatöre 404).",
+      "409 CONFLICT details[0].code: not_undoable (geri alma partisi, bitmemiş parti), nothing_to_undo (geri alınacak karar kalmadı).",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.moderation.batches.undo",
+    domain: "moderation",
+    method: "POST",
+    path: "/admin/moderation/batches/:id/undo",
+    summary: "Toplu işlemi güvenli geri al (telafi kararları, sürüm kontrollü)",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183", "#185"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: Reason, digest: z.string().length(64) }) },
+    responses: { 200: dataOf(UndoResult) },
+    errors: ["CONFLICT", "NOT_FOUND", "RATE_LIMITED"],
+    idempotency: "natural",
+    cache: "private",
+    notes: [
+      "Önizlenen durumda uygulanır (digest); fark varsa 409 preview_stale ve hiçbir şey yazılmaz. Her telafi kararı kendi transaction'ında, tekil moderasyon yolundan ve kilit altında sürüm koşuluyla uygulanır: durum kararın bıraktığı durumdan farklıysa veya hedefte daha yeni karar varsa superseded, içerik sahibi silinmişse author_erased ve içerik dokunulmaz.",
+      "Yeni bir geri alma partisi oluşur (undoOfId); öğe başına en çok bir geri alma: tekrar çağrı yalnız henüz geri alınmamış ve şimdi uygun kararları ele alır. Geri alınamayan karar partide FAILED + neden olarak kalır. Aynı saatlik parti sınırı geçerlidir (429).",
+      "409 CONFLICT details[0].code: preview_stale, not_undoable, nothing_to_undo.",
+    ],
+  }),
   defineEndpoint({
     id: "admin.moderation.batches.list",
     domain: "moderation",
