@@ -87,6 +87,8 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
     SELECT status::text AS status, trend_excluded_at, comments_closed_at, community_id::text AS community_id
       FROM polls WHERE id = ${input.id}::uuid FOR UPDATE`;
   if (!row) return { kind: "not_found" };
+  if (await tx.accountErasure.count({ where: { user: { polls: { some: { id: input.id } } } } }))
+    return { kind: "conflict", reason: "removed" };
   // Yetki, anketin okunan topluluğuna göre verildi; bu arada taşındıysa karar geçersizdir.
   if (row.community_id !== input.communityId) return { kind: "conflict", reason: "community_changed" };
   const stale = await expectationFails(tx, input, row.status);
@@ -132,6 +134,8 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
 async function applyToComment(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   const meta = await tx.comment.findUnique({ where: { id: input.id }, select: { pollId: true, parentId: true } });
   if (!meta) return { kind: "not_found" };
+  if (await tx.accountErasure.count({ where: { user: { comments: { some: { id: input.id } } } } }))
+    return { kind: "conflict", reason: "removed" };
   const [poll] = await tx.$queryRaw<{ community_id: string | null }[]>`
     SELECT community_id::text AS community_id FROM polls WHERE id = ${meta.pollId}::uuid FOR UPDATE`;
   if (!poll) return { kind: "not_found" };

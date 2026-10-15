@@ -1,6 +1,7 @@
 // VoteStore'un PostgreSQL/Prisma uygulaması. Tablolar: polls, poll_options, votes, vote_events.
 import { createEvent, newEventId, POLL_MILESTONES } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
+import { ApiError } from "../../http/errors.ts";
 import { writeAudit } from "../audit/write.ts";
 import { writeEvent } from "../events/write.ts";
 import type { CastVoteResult, PollTally, VoteCorrection, VoteStore } from "./store.ts";
@@ -32,6 +33,9 @@ export function createPrismaVoteStore(prisma: PrismaClient): VoteStore {
   return {
     castVote: ({ pollId, userId, optionId, now, voteChangeAllowed }) =>
       prisma.$transaction(async (tx): Promise<CastVoteResult> => {
+        const [voter] = await tx.$queryRaw<{ deleted_at: Date | null }[]>`
+          SELECT deleted_at FROM users WHERE id=${userId}::uuid FOR NO KEY UPDATE`;
+        if (!voter || voter.deleted_at) throw new ApiError("FORBIDDEN", "Silinmiş hesap oy veremez.");
         // Anket satırı kilitlenir: aynı anketteki oylar ve kapatma sıraya girer. Böylece
         // (1) aynı hesaptan eşzamanlı istekler tek oy üretir, (2) kapanıştan sonra commit edilen oy
         // olmaz, (3) sayaç güncellemeleri kilit yükseltmesiyle deadlock'a girmez.

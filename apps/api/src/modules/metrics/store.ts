@@ -25,7 +25,7 @@ export function createPrismaMetricsStore(prisma: PrismaClient, now: () => Date =
           Promise.all([
             tx.user.count({ where: { deletedAt: null } }),
             tx.poll.count({ where: { deletedAt: null } }),
-            tx.vote.count(),
+            tx.$queryRaw<Array<{ count: bigint }>>`SELECT count(*)::bigint AS count FROM statistical_votes`.then(rows=>Number(rows[0]!.count)),
             tx.comment.count({ where: { deletedAt: null } }),
             tx.report.count({ where: { status: "OPEN" } }),
             tx.user.count({ where: { deletedAt: null, createdAt: { gte: since24h, lte: at } } }),
@@ -43,7 +43,7 @@ export function createPrismaMetricsStore(prisma: PrismaClient, now: () => Date =
               (SELECT count(DISTINCT s.user_id) FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.created_at >= d AND s.created_at < d + interval '1 day' AND s.created_at <= ${at} AND u.deleted_at IS NULL) AS "activeUsers",
               (SELECT count(*) FROM users u WHERE u.created_at >= d AND u.created_at < d + interval '1 day' AND u.created_at <= ${at} AND u.deleted_at IS NULL) AS registrations,
               (SELECT count(*) FROM polls p WHERE p.created_at >= d AND p.created_at < d + interval '1 day' AND p.created_at <= ${at} AND p.deleted_at IS NULL) AS polls,
-              (SELECT count(*) FROM votes v WHERE v.created_at >= d AND v.created_at < d + interval '1 day' AND v.created_at <= ${at}) AS votes,
+              (SELECT count(*) FROM statistical_votes v WHERE v.created_at >= d AND v.created_at < d + interval '1 day' AND v.created_at <= ${at}) AS votes,
               (SELECT count(*) FROM comments c WHERE c.created_at >= d AND c.created_at < d + interval '1 day' AND c.created_at <= ${at} AND c.deleted_at IS NULL) AS comments
             FROM generate_series(
               (date_trunc('day', ${at}::timestamptz AT TIME ZONE 'Europe/Istanbul') - (${days}::int - 1) * interval '1 day') AT TIME ZONE 'Europe/Istanbul',

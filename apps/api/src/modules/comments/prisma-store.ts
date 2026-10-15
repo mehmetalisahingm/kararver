@@ -3,6 +3,7 @@
 // silme ve tepki işlemleri birbirini kilitlemeden (deadlock) sıraya girer.
 import { createEvent, newEventId } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
+import { ApiError } from "../../http/errors.ts";
 import { runIdempotent } from "../../http/idempotency.ts";
 import { writeEvent } from "../events/write.ts";
 import { writeRevision } from "../revisions/write.ts";
@@ -150,6 +151,9 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
 
     createComment: async ({ pollId, authorId, body, kind, parentId }, scope): Promise<Outcome<string>> => {
       const result = await runIdempotent(prisma, scope, 201, async (tx): Promise<Outcome<string>> => {
+          const [author] = await tx.$queryRaw<{ deleted_at: Date | null }[]>`
+            SELECT deleted_at FROM users WHERE id=${authorId}::uuid FOR NO KEY UPDATE`;
+          if (!author || author.deleted_at) throw new ApiError("FORBIDDEN", "Silinmiş hesap yorum yazamaz.");
         const [poll] = await tx.$queryRaw<{ status: string; allow_comments: boolean; comments_closed_at: Date | null }[]>`
           SELECT status::text, allow_comments, comments_closed_at FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
         if (!poll || !VISIBLE_POLL.includes(poll.status as never)) return notFound("POLL_NOT_FOUND");

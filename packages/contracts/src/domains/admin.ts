@@ -2,6 +2,7 @@
 // duyuru, puan düzeltmesi), Faruk (kategori yönetimi, KV-26)
 // KV-12 (#14), KV-33 (#35), KV-36 (#38), KV-39 (#41), KV-40 (#42), KV-41 (#43), KV-42 (#44), #67
 import { z } from "zod";
+import { EmailChangeView } from "./auth.ts";
 import { Category } from "./discovery.ts";
 import { Announcement, AnnouncementAudience, FeaturedSurface, LedgerEntry } from "./growth.ts";
 import { AllowedMimeType } from "./media.ts";
@@ -278,6 +279,37 @@ export const DataExport = z.strictObject({
 });
 const ExportParams = z.strictObject({ id: Id, exportId: Id });
 
+/** #181 hesap anonimleştirme (KV-33 §10): anonimleştirmeyi engelleyen durumlar. */
+export const ErasureBlocker = z.enum(["legal_hold", "active_sanction", "has_role", "export_in_progress"]);
+/** Yasal saklama kaydı: açıkken hesap anonimleştirilemez. Gerekçe yöneticiler içindir; kullanıcıya gösterilmez. */
+export const LegalHold = z.strictObject({ id: Id, reason: z.string(), placedAt: Timestamp, placedById: Id });
+/** Salt okunur etki özeti. Anonimleştirilmiş hesapta `willRemove` sayıları 0, `anonymized` true'dur. */
+export const AccountErasurePreview = z.strictObject({
+  userId: Id,
+  /** Yazılı teyit için: yönetici bu kullanıcı adını yazar. Anonimleştirmeden sonra tombstone adıdır. */
+  username: z.string(),
+  anonymized: z.boolean(),
+  anonymizedAt: Timestamp.nullable(),
+  canAnonymize: z.boolean(),
+  blockers: z.array(ErasureBlocker),
+  legalHold: LegalHold.nullable(),
+  /** Silinecek veya boşaltılacak kayıt adetleri. */
+  willRemove: z.strictObject({
+    polls: Count,
+    comments: Count,
+    media: Count,
+    sessions: Count,
+    dataExports: Count,
+    avatar: Count,
+    communityMemberships: Count,
+    ownedCommunities: Count,
+    pendingCommunityRequests: Count,
+    preferences: Count,
+  }),
+  /** Korunan (kimliksiz) kayıt adetleri: yazar adı anonim kalır. */
+  willRetain: z.strictObject({ polls: Count, comments: Count, votes: Count, reportsFiled: Count }),
+});
+export const AccountErasureResult = z.strictObject({ status: z.enum(["anonymized", "unchanged"]), anonymizedAt: Timestamp });
 /** #181 kullanıcıya ait içeriğin toplu gizlenmesi/kaldırılması: önizleme → gerekçe → ayrı onay → kuyruk; geri alınabilir. */
 export const ContentJobKind = z.enum(["HIDE", "REMOVE", "UNDO"]);
 export const ContentJobStatus = z.enum(["QUEUED", "PROCESSING", "DONE", "FAILED", "CANCELLED"]);
@@ -330,6 +362,8 @@ const settings = { owner: "Utku", module: "settings" } as const;
 const adminUsers = { owner: "Utku", module: "admin-users" } as const;
 const mehmet = (module: string) => ({ owner: "Mehmet", module }) as const;
 const categories = { owner: "Faruk", module: "categories" } as const;
+const accountErasure = { owner: "Mert", module: "account-erasure" } as const;
+const emailChange = { owner: "Mert", module: "email-change" } as const;
 const utkuUi = ["Utku (admin UI)"];
 const mehmetUi = ["Mehmet (admin UI)"];
 
@@ -543,6 +577,73 @@ export const adminEndpoints = [
       "409 CONFLICT details[0].code: not_ready (PENDING/PROCESSING/FAILED), expired (paket silinmiş). Talep başka hesaba aitse 404.",
       "sent=false: e-posta servisi cevap vermedi; token oluşmuştur, bekleme süresi sonrası tekrar denenir.",
     ],
+  }),
+  defineEndpoint({
+    id: "admin.users.erasure.preview", domain: "admin", method: "GET", path: "/admin/users/:id/erasure",
+    summary: "Hesap anonimleştirme önizlemesi (etki özeti, engeller)", auth: "super_admin", provider: accountErasure, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(AccountErasurePreview) }, errors: ["NOT_FOUND"], idempotency: "none", cache: "private",
+    notes: [
+      "Salt okuma: hiçbir şey yazmaz. Yetki user.anonymize (SUPER_ADMIN, sanctionTarget: kendi hesabı için kullanılamaz).",
+      "blockers: legal_hold (açık yasal saklama), active_sanction (süresi dolmamış, WARNING dışı yaptırım: ban/askı kaçırma riski, meşru menfaat saklaması), has_role (önce rol kaldırılır), export_in_progress (kullanıcının erişim hakkı için bekleyen/işlenen veri paketi talebi). Engel varken canAnonymize=false.",
+      "Kapsam, saklama ve silme tablosu: docs/KV-33_ADMIN_USERS.md §10.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.erasure.create", domain: "admin", method: "POST", path: "/admin/users/:id/erasure",
+    summary: "Hesabı geri alınamaz biçimde anonimleştir", auth: "super_admin", provider: accountErasure, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: Reason, confirmUsername: z.string().trim().min(1).max(60) }) },
+    responses: { 200: dataOf(AccountErasureResult) }, errors: ["CONFLICT", "NOT_FOUND"], idempotency: "natural", cache: "private",
+    notes: [
+      "GERİ ALINAMAZ. Gövdede gerekçe ve hesabın o anki kullanıcı adı (yazılı teyit) zorunludur; eşleşmezse 409 confirmation_mismatch ve hiçbir şey değişmez.",
+      "Tek transaction: kişisel alanlar tombstone değerleriyle değişir (e-posta, kullanıcı adı, görünen ad, biyografi, avatar, parola özeti), oturum ve token'lar silinir, tercihler/bildirim ayarları/kayıt listesi silinir, topluluk üyelikleri çıkarılır ve sahip olunan topluluklar yönetici yönetimine döner, bekleyen topluluk başvuruları reddedilir, hazır veri paketleri geçersiz kılınır. Paylaşım/yorum metinleri ve sürümleri kaldırılır; tüm görseller depo temizliğine alınır. Hesapla bağlı oy/olay satırları kimliksiz istatistiğe dönüştürülür; rapor ve audit saklama kapsamındadır. Mutation mevcut oturuma bağlı tek kullanımlık MFA gerektirir (mfa_required).",
+      "Idempotent: hesap zaten anonimleştirilmişse 200 status=unchanged döner; değişiklik ve audit yoktur. Eşzamanlı iki istekten yalnız biri uygular (hedef satır kilidi + hesap başına tek kayıt).",
+      "409 CONFLICT details[0].code: confirmation_mismatch, legal_hold, active_sanction, has_role, export_in_progress. Önizleme aynı engelleri listeler.",
+      "Tüm yüklenen görseller hemen yayından kalkar; worker 20 kayıtlık gruplar ve 1-15 dakika gecikmeli tekrar denemeyle depodan temizler.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.legalHold.put", domain: "admin", method: "PUT", path: "/admin/users/:id/legal-hold",
+    summary: "Hesaba yasal saklama koy (anonimleştirmeyi engeller)", auth: "super_admin", provider: accountErasure, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(z.strictObject({ legalHold: LegalHold })) }, errors: ["CONFLICT", "NOT_FOUND"], idempotency: "natural", cache: "private",
+    notes: [
+      "Idempotent: açık kayıt varsa o döner; değişiklik ve audit yoktur (gerekçe değiştirilmez). 409 user_deleted: anonimleştirilmiş hesaba kayıt konmaz.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.legalHold.release", domain: "admin", method: "POST", path: "/admin/users/:id/legal-hold/release",
+    summary: "Yasal saklamayı kaldır", auth: "super_admin", provider: accountErasure, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(z.strictObject({ legalHold: z.null() })) }, errors: ["NOT_FOUND"], idempotency: "natural", cache: "private",
+    notes: ["Idempotent: açık kayıt yoksa 200 döner; değişiklik ve audit yoktur. Kayıt silinmez, bırakma alanları dolar."],
+  }),
+  defineEndpoint({
+    id: "admin.users.emailChange.start", domain: "admin", method: "POST", path: "/admin/users/:id/email-change",
+    summary: "Destek yoluyla e-posta değişimi başlat (yeni adres doğrulaması zorunlu)", auth: "super_admin", provider: emailChange, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ newEmail: z.email().max(254), reason: Reason }) },
+    responses: { 202: dataOf(z.strictObject({ status: z.enum(["VERIFICATION_SENT", "SEND_FAILED"]), expiresAt: Timestamp.nullable() })) },
+    errors: ["CONFLICT", "NOT_FOUND", "FEATURE_DISABLED"], idempotency: "none", cache: "private",
+    notes: [
+      "Eski adrese erişimini kaybeden kullanıcı içindir; destek kanalında kimlik doğrulandığı gerekçede beyan edilir. DOĞRULAMA ATLANMAZ: e-posta yalnız kullanıcı YENİ adresteki bağlantıyı tıklayınca değişir ve o zaman doğrulanmış sayılır. Yönetici adresi doğrulanmış işaretleyemez, parola veya token görmez.",
+      "Eski adrese hemen bilgilendirme ve 'bu ben değilim' bağlantısı gider (gerçek sahip talebi durdurabilir; oturumlar kapanır). Kendi hesabı için kullanılamaz (sanctionTarget); kendi adresini değiştirmek için me.emailChange.request vardır.",
+      "409 CONFLICT details[0].code: email_taken, same_email, user_deleted, request_open (açık talep var; önce iptal edilir). Ayar account.emailChangeEnabled kapalıyken 503.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.emailChange.list", domain: "admin", method: "GET", path: "/admin/users/:id/email-change",
+    summary: "Hesabın son e-posta değişimi talepleri (son 10, maskeli)", auth: "super_admin", provider: emailChange, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(z.array(EmailChangeView)) }, errors: ["NOT_FOUND"], idempotency: "none", cache: "private",
+  }),
+  defineEndpoint({
+    id: "admin.users.emailChange.cancel", domain: "admin", method: "POST", path: "/admin/users/:id/email-change/cancel",
+    summary: "Açık e-posta değişimi talebini iptal et", auth: "super_admin", provider: emailChange, consumers: utkuUi, unblocks: ["#181"],
+    availability: { status: "ready" }, request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(z.strictObject({ cancelled: z.boolean() })) }, errors: ["NOT_FOUND"], idempotency: "natural", cache: "private",
+    notes: ["Idempotent: açık talep yoksa cancelled=false, değişiklik ve audit yok. Özellik kapalıyken de çalışır."],
   }),
   defineEndpoint({
     id: "admin.users.contentJobs.preview", domain: "admin", method: "GET", path: "/admin/users/:id/content-jobs/preview",

@@ -27,6 +27,7 @@ import {
   type TrustedActor,
 } from "@kararver/contracts";
 import { Prisma, type PrismaClient, type Role, type SanctionType, type UserStatus } from "@kararver/db";
+import { releaseOwnedCommunities } from "../communities/owner.ts";
 import { linkSanctionToReport, ownerOfTarget, targetOfReport } from "../moderation/trail.ts";
 import { assertNoCommittedKey, runIdempotent } from "../../http/idempotency.ts";
 import { writeAudit } from "../audit/write.ts";
@@ -342,6 +343,8 @@ export function createPrismaAdminUserStore(prisma: PrismaClient, options: { enfo
         const sessionsRevoked = REVOKES_SESSIONS.has(type)
           ? (await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } })).count
           : 0;
+        // KV-54 §5: BAN'lı hesabın sahip olduğu topluluklar aynı transaction'da yönetici yönetimine döner (üyelik/içerik etkilenmez).
+        const communitiesReleased = type === "BAN" ? await releaseOwnedCommunities(tx, userId, { actorId, requestId: input.requestId, now, reason: input.reason }) : 0;
 
         await writeAudit(tx, {
           source: "API",
@@ -357,6 +360,7 @@ export function createPrismaAdminUserStore(prisma: PrismaClient, options: { enfo
             type,
             endsAt: input.endsAt?.toISOString() ?? null,
             sessionsRevoked,
+            ...(communitiesReleased > 0 ? { communitiesReleased } : {}),
             ...(input.reportId ? { reportId: input.reportId, closedReports } : {}),
           },
           requestId: input.requestId,
@@ -467,6 +471,7 @@ export function createPrismaAdminUserStore(prisma: PrismaClient, options: { enfo
       return prisma.$transaction(async (tx) => {
         const target = await lockTarget(tx, userId);
         if (!target) return { kind: "rejected", reason: "not_found" } as const;
+        if (target.deleted) return { kind: "rejected", reason: "user_deleted" } as const;
         await lockSuperAdmins(tx);
         const current = await roleOf(tx, userId);
         const decision = await decide(tx, actorId, "user.role.assign", {

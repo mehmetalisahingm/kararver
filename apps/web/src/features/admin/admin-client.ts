@@ -2,6 +2,10 @@
 // cevap sözleşme şemasıyla doğrulanır (HttpClient). Yetki sunucudadır: istemci rol kontrolü yalnız menü/düğme
 // gizlemedir, ret 403 olarak gelir ve ekranda gösterilir.
 import type {
+  EmailChangeView,
+  AccountErasurePreview,
+  AccountErasureResult,
+  LegalHold,
   UndoPreview,
   UndoResult,
   BulkPreview,
@@ -13,6 +17,7 @@ import type {
   AdminCommunityOverview,
   AdminCommunityRow,
   CommunityMember,
+  CommunityOwnerRef,
   CommunityThreshold,
   AdminPollItem,
   AuditEntry,
@@ -57,7 +62,12 @@ export type CommunityRowView = ReturnType<typeof AdminCommunityRow.parse>;
 export type CommunityOverviewView = ReturnType<typeof AdminCommunityOverview.parse>;
 export type CommunityThresholdView = ReturnType<typeof CommunityThreshold.parse>;
 export type CommunityMemberView = ReturnType<typeof CommunityMember.parse>;
+export type CommunityOwnerView = ReturnType<typeof CommunityOwnerRef.parse>;
 export type DataExportView = ReturnType<typeof DataExport.parse>;
+export type EmailChangeAdminView = ReturnType<typeof EmailChangeView.parse>;
+export type ErasurePreviewView = ReturnType<typeof AccountErasurePreview.parse>;
+export type ErasureResultView = ReturnType<typeof AccountErasureResult.parse>;
+export type LegalHoldView = ReturnType<typeof LegalHold.parse>;
 export type ContentJobView = ReturnType<typeof ContentJob.parse>;
 export type ContentJobPreviewView = ReturnType<typeof ContentJobPreview.parse>;
 export type ContentJobAction = "HIDE" | "REMOVE";
@@ -174,6 +184,31 @@ export class AdminClient {
   /** Hazır paketin indirme bağlantısını kullanıcının e-postasına gönderir; yanıtta bağlantı/token yoktur. */
   async deliverDataExport(id: string, exportId: string, reason: string) {
     return data<{ sent: boolean; linkExpiresAt: string }>(await this.http.request("admin.users.dataExports.deliver", { params: { id, exportId }, body: { reason } }));
+  }
+  /** #181 e-posta değişimi (destek yolu, yalnız SUPER_ADMIN): yeni adres doğrulaması yine zorunludur; adresler maskeli döner. */
+  async emailChanges(id: string, signal?: AbortSignal) {
+    return data<EmailChangeAdminView[]>(await this.http.request("admin.users.emailChange.list", { params: { id }, signal }));
+  }
+  async startEmailChange(id: string, newEmail: string, reason: string) {
+    return data<{ status: "VERIFICATION_SENT" | "SEND_FAILED"; expiresAt: string | null }>(await this.http.request("admin.users.emailChange.start", { params: { id }, body: { newEmail, reason } }));
+  }
+  async cancelEmailChange(id: string, reason: string) {
+    return data<{ cancelled: boolean }>(await this.http.request("admin.users.emailChange.cancel", { params: { id }, body: { reason } }));
+  }
+  /** #181 KVKK anonimleştirme önizlemesi (salt okuma): etki sayıları ve engeller. Yalnız SUPER_ADMIN. */
+  async erasurePreview(id: string, signal?: AbortSignal) {
+    return data<ErasurePreviewView>(await this.http.request("admin.users.erasure.preview", { params: { id }, signal }));
+  }
+  /** GERİ ALINAMAZ. Gerekçe ve hesabın kullanıcı adı (yazılı teyit) gerekir; zaten anonimleştirilmişse status=unchanged. */
+  async anonymizeUser(id: string, reason: string, confirmUsername: string) {
+    return data<ErasureResultView>(await this.http.request("admin.users.erasure.create", { params: { id }, body: { reason, confirmUsername } }));
+  }
+  /** Yasal saklama koyar (idempotent); açıkken anonimleştirme engellenir. */
+  async putLegalHold(id: string, reason: string) {
+    return data<{ legalHold: LegalHoldView }>(await this.http.request("admin.users.legalHold.put", { params: { id }, body: { reason } }));
+  }
+  async releaseLegalHold(id: string, reason: string) {
+    return data<{ legalHold: null }>(await this.http.request("admin.users.legalHold.release", { params: { id }, body: { reason } }));
   }
   /** #181: kullanıcıya sıfırlama bağlantısı e-postası; yanıtta token yoktur. sent=false: e-posta servisi cevap vermedi. */
   async sendPasswordReset(id: string, reason: string) {
@@ -306,6 +341,14 @@ export class AdminClient {
   }
   async communityMembers(id: string, filter: { q?: string; role?: "MEMBER" | "MODERATOR"; cursor?: string }, signal?: AbortSignal) {
     return page<CommunityMemberView>(await this.http.request("admin.communities.members", { params: { id }, query: { q: filter.q, role: filter.role, cursor: filter.cursor, limit: "20" }, signal }));
+  }
+  /** #184 / KV-54 S1: yönetici zorunlu sahip atama (yalnız SUPER_ADMIN; communities.ownershipEnabled kapalıyken 503). */
+  async putCommunityOwner(id: string, userId: string, reason: string) {
+    return data<{ owner: CommunityOwnerView | null }>(await this.http.request("admin.communities.owner.put", { params: { id }, body: { userId, reason } }));
+  }
+  /** Sahibi kaldırır; topluluk yönetici yönetimine döner (bayrak kapalıyken de çalışır). */
+  async releaseCommunityOwner(id: string, reason: string) {
+    return data<{ owner: null }>(await this.http.request("admin.communities.owner.release", { params: { id }, body: { reason } }));
   }
   async createCommunity(input: CommunityInput, key: string) {
     return data<CommunityDetailView>(await this.http.request("admin.communities.create", { body: input, key }));

@@ -158,7 +158,7 @@ Bu senaryolar **implementasyon PR'larının kabul koşuludur**; her biri gerçek
 
 | Dilim | İçerik | Bağımlılık |
 |---|---|---|
-| S1 | `owner_id`, admin atama/bırakma, son sahip koruması, #172 onayında sahip atama (bayrak arkasında); I1–I5, I10 | #184 ile birlikte planlanır |
+| S1 | `owner_id`, admin atama/bırakma, son sahip koruması, #172 onayında sahip atama (bayrak arkasında); I1–I5, I10 | **Uygulandı** ([KV-32 §7](./KV-32_COMMUNITY_ADMIN.md#7-topluluk-sahibi--atama-ve-koruma-kv-54-s1)); hesap silme kancası ve ikinci onay hariç |
 | S2 | Sahiplik talebi, onay/ret, itiraz, bildirimler; I8 | S1 |
 | S3 | İki taraflı devir ve soğuma süresi; I9 | S1, kritik teyit için #182 |
 | S4 | `institutions`, aidiyet doğrulama akışı, rozet ve görünürlük onayı; I11–I16 | KVKK kapsamı kararı (§12) |
