@@ -117,6 +117,7 @@ model ModerationAction {
   media      MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: Restrict)
   targetUser User?       @relation("ModerationTargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
   report     Report?     @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  batchItems ModerationBatchItem[]
 
   @@index([pollId, createdAt])
   @@index([commentId, createdAt])
@@ -206,4 +207,67 @@ model ContentJobItem {
 
   @@id([jobId, targetType, targetId])
   @@map("content_job_items")
+}
+
+// #183 toplu moderasyon (KV-37 §bulk): seçilen anket/yorumlara tek gerekçeyle HIDE/REMOVE/RESTORE. Parti kaydı, işlemin
+// özeti ve geri alma (sonraki dilim) için tek kaynaktır; içerik başına gerçek karar `moderation_actions` + audit + olayda kalır.
+enum ModerationBatchKind {
+  POLLS
+  COMMENTS
+
+  @@map("moderation_batch_kind")
+}
+
+enum ModerationBatchItemResult {
+  APPLIED
+  UNCHANGED
+  FAILED
+
+  @@map("moderation_batch_item_result")
+}
+
+model ModerationBatch {
+  id         String              @id @default(uuid(7)) @db.Uuid
+  actorId    String              @map("actor_id") @db.Uuid
+  kind       ModerationBatchKind
+  action     ModerationActionType
+  reason     String              @db.VarChar(500)
+  // Önizlemedeki (id, durum, topluluk) listesinin özeti: onay anında yeniden hesaplanır, farklıysa parti açılmaz.
+  digest     String              @db.Char(64)
+  // X-Request-Id: bu partinin bütün audit kayıtlarını bağlar.
+  requestId  String?             @map("request_id") @db.Uuid
+  total      Int
+  applied    Int                 @default(0)
+  unchanged  Int                 @default(0)
+  failed     Int                 @default(0)
+  createdAt  DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  finishedAt DateTime?           @map("finished_at") @db.Timestamptz(3)
+
+  actor User                 @relation("ModerationBatchActor", fields: [actorId], references: [id], onDelete: Restrict)
+  items ModerationBatchItem[]
+
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("moderation_batches")
+}
+
+model ModerationBatchItem {
+  batchId           String                    @map("batch_id") @db.Uuid
+  targetId          String                    @map("target_id") @db.Uuid
+  communityId       String?                   @map("community_id") @db.Uuid
+  result            ModerationBatchItemResult
+  // Başarısızlık nedeni (not_found, forbidden, invalid_transition, removed, ...); başarıda boş.
+  detail            String?                   @db.VarChar(40)
+  fromStatus        String?                   @map("from_status") @db.VarChar(20)
+  toStatus          String?                   @map("to_status") @db.VarChar(20)
+  // Uygulanan kararın kaydı (geri alma bunu hedef alır); uygulanmadıysa boş.
+  moderationActionId String?                  @map("moderation_action_id") @db.Uuid
+  createdAt         DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  batch            ModerationBatch   @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  moderationAction ModerationAction? @relation(fields: [moderationActionId], references: [id], onDelete: Restrict)
+
+  @@id([batchId, targetId])
+  @@index([targetId, createdAt])
+  @@map("moderation_batch_items")
 }

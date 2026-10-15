@@ -30,8 +30,12 @@ export type ApplyInput = {
   communityId: string | null;
 };
 
+/** Uygulanan kararın kaydı: toplu işlem (ve geri alma) bunu hedef alır. */
+export type ApplyTrail = { actionId: string; from: ContentStatus; to: ContentStatus };
+
 export type ApplyResult =
-  | { kind: "applied" | "unchanged"; outcome: ModerationOutcome }
+  | { kind: "applied"; outcome: ModerationOutcome; trail: ApplyTrail }
+  | { kind: "unchanged"; outcome: ModerationOutcome }
   | { kind: "conflict"; reason: "invalid_transition" | "unsupported_action" | "removed" | "community_changed" }
   | { kind: "forbidden"; reason: "admin_required" }
   | { kind: "not_found" };
