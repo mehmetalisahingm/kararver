@@ -11,6 +11,12 @@ import { createRouter } from "./http/route.ts";
 import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import { registerAccountDeletionRoutes } from "./modules/account-deletion/routes.ts";
+import type { AccountDeletionStore } from "./modules/account-deletion/store.ts";
+import { registerEmailChangeRoutes } from "./modules/email-change/routes.ts";
+import type { EmailChangeStore } from "./modules/email-change/store.ts";
+import { registerAccountErasureRoutes } from "./modules/account-erasure/routes.ts";
+import type { AccountErasureStore } from "./modules/account-erasure/store.ts";
 import { registerContentJobRoutes } from "./modules/content-jobs/routes.ts";
 import type { ContentJobStore } from "./modules/content-jobs/store.ts";
 import { registerDataExportRoutes } from "./modules/data-exports/routes.ts";
@@ -146,6 +152,8 @@ export type AppDeps = {
   adminUserStore?: AdminUserStore;
   /** #181 KVKK veri dışa aktarma; paket okuma için media.storage da gerekir. */
   dataExportStore?: DataExportStore;
+  /** #181 hesap anonimleştirme ve yasal saklama; adminUserStore ile birlikte kaydedilir (hedef rolü okunur). */
+  accountErasureStore?: AccountErasureStore;
   /** #181 kullanıcı içeriğinin toplu gizlenmesi; adminUserStore ile birlikte verilirse route'lar kaydedilir (işi runner.ts işler). */
   contentJobStore?: ContentJobStore;
   metricsStore?: MetricsStore;
@@ -163,6 +171,14 @@ export type AppDeps = {
   isCommentsEnabled?: () => Promise<boolean>;
   /** communities.ownershipEnabled (#184); verilmezse ayar servisinden, o da yoksa kapalı. */
   isOwnershipEnabled?: () => Promise<boolean>;
+  /** account.emailChangeEnabled (#181); verilmezse ayar servisinden, o da yoksa kapalı. */
+  isEmailChangeEnabled?: () => Promise<boolean>;
+  /** account.selfDeletionEnabled (#181); verilmezse ayar servisinden, o da yoksa kapalı. */
+  isSelfDeletionEnabled?: () => Promise<boolean>;
+  /** #181 kullanıcının kendi hesabını silme talebi; accountErasureStore ile birlikte kaydedilir (silmeyi o yapar). */
+  accountDeletionStore?: AccountDeletionStore;
+  /** #181 e-posta değişimi; adminUserStore ile birlikte kaydedilir (destek yolunda hedef rolü okunur). */
+  emailChangeStore?: EmailChangeStore;
   /** #184 / KV-54 S1 topluluk sahibi atama/bırakma. */
   communityOwnerStore?: CommunityOwnerStore;
   /** Üçü birlikte verilirse medya route'ları kaydedilir (config.storage yoksa server vermez). */
@@ -239,6 +255,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const mediaSettings = deps.media?.settings ?? (settings ? () => settings.mediaSettings() : async () => DEFAULT_MEDIA_SETTINGS);
   const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
   const isOwnershipEnabled = deps.isOwnershipEnabled ?? (settings ? () => settings.isOwnershipEnabled() : async () => false);
+  const isEmailChangeEnabled = deps.isEmailChangeEnabled ?? (settings ? () => settings.isEmailChangeEnabled() : async () => false);
+  const isSelfDeletionEnabled = deps.isSelfDeletionEnabled ?? (settings ? () => settings.isSelfDeletionEnabled() : async () => false);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
   const rateLimitSettings =
@@ -391,6 +409,36 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       tokenPepper: config.authTokenPepper,
       webUrl: config.webUrl,
     });
+  }
+  if (deps.emailChangeStore && deps.adminUserStore) {
+    registerEmailChangeRoutes(route, {
+      store: deps.emailChangeStore,
+      users: deps.adminUserStore,
+      hasher: deps.hasher,
+      mailer: deps.mailer,
+      loginGuard: limiter?.login,
+      isEnabled: isEmailChangeEnabled,
+      now,
+      tokenPepper: config.authTokenPepper,
+      webUrl: config.webUrl,
+    });
+  }
+  if (deps.accountDeletionStore && deps.accountErasureStore) {
+    registerAccountDeletionRoutes(route, {
+      store: deps.accountDeletionStore,
+      erasure: deps.accountErasureStore,
+      mfa: deps.mfaStore,
+      hasher: deps.hasher,
+      mailer: deps.mailer,
+      loginGuard: limiter?.login,
+      isEnabled: isSelfDeletionEnabled,
+      now,
+      tokenPepper: config.authTokenPepper,
+      webUrl: config.webUrl,
+    });
+  }
+  if (deps.accountErasureStore && deps.adminUserStore) {
+    registerAccountErasureRoutes(route, { store: deps.accountErasureStore, users: deps.adminUserStore, now });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
   registerOpsRoutes(route, {

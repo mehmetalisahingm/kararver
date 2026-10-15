@@ -22,6 +22,8 @@ import {
 import { MEDIA_PROCESS_QUEUE, MEDIA_QUEUE_OPTIONS, processMedia } from "./jobs/media/job.ts";
 import { createSubprocessModerator } from "./jobs/media/moderator.ts";
 import { thresholdsFromPercent } from "./jobs/media/policy.ts";
+import { EMAIL_CHANGE_EXPIRE_CRON, EMAIL_CHANGE_EXPIRE_QUEUE, expireEmailChanges } from "./jobs/email-change/expire.ts";
+import { ACCOUNT_ERASURE_CRON, ACCOUNT_ERASURE_QUEUE, cleanupAccountErasures } from "./jobs/account-erasure/cleanup.ts";
 import { DATA_EXPORTS_CRON, DATA_EXPORTS_QUEUE, runDataExports } from "./jobs/data-exports/job.ts";
 import { createS3WorkerStorage } from "./jobs/media/storage.ts";
 import { createPrismaMediaJobStore } from "./jobs/media/store.ts";
@@ -163,8 +165,22 @@ await boss.work(DATA_EXPORTS_QUEUE, { batchSize: 1 }, async () => {
   const result = await runDataExports({ prisma, storage: exportStorage, now: () => new Date(), log });
   if (result.built || result.failed || result.lost || result.expired) log(result.failed ? "warn" : "info", "data-exports.build", result);
 });
+// account-erasure.cleanup: dakikada bir; anonimleştirilen hesapların avatar nesnelerini depodan siler (jobs/account-erasure/cleanup.ts).
+await boss.createQueue(ACCOUNT_ERASURE_QUEUE, { policy: "singleton", retryLimit: 0 });
+await boss.schedule(ACCOUNT_ERASURE_QUEUE, ACCOUNT_ERASURE_CRON, null, { tz: "Europe/Istanbul" });
+await boss.work(ACCOUNT_ERASURE_QUEUE, { batchSize: 1 }, async () => {
+  const result = await cleanupAccountErasures({ prisma, storage: exportStorage, now: () => new Date(), log });
+  if (result.cleaned || result.failed) log(result.failed ? "warn" : "info", "account-erasure.cleanup", result);
+});
+// email-change.expire: 10 dakikada bir; süresi geçen açık e-posta değişimi taleplerini kapatır ve yeni adresi siler (jobs/email-change/expire.ts).
+await boss.createQueue(EMAIL_CHANGE_EXPIRE_QUEUE, { policy: "singleton", retryLimit: 0 });
+await boss.schedule(EMAIL_CHANGE_EXPIRE_QUEUE, EMAIL_CHANGE_EXPIRE_CRON, null, { tz: "Europe/Istanbul" });
+await boss.work(EMAIL_CHANGE_EXPIRE_QUEUE, { batchSize: 1 }, async () => {
+  const result = await expireEmailChanges({ prisma, now: () => new Date() });
+  if (result.expired) log("info", "email-change.expire", result);
+});
 log("info", "worker hazır", {
-  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_QUEUE, DATA_EXPORTS_QUEUE],
+  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_QUEUE, DATA_EXPORTS_QUEUE, ACCOUNT_ERASURE_QUEUE, EMAIL_CHANGE_EXPIRE_QUEUE],
   concurrency: config.mediaConcurrency,
 });
 const heartbeatPath = process.env.WORKER_HEARTBEAT_PATH ?? "/tmp/kararver-worker-heartbeat.json";

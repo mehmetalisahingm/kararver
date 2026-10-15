@@ -340,7 +340,7 @@ ACTIVE | RESTRICTED | SUSPENDED ──► BANNED ──► ACTIVE   (sadece admi
 
 - Kullanıcı `SUSPENDED` veya `BANNED` durumuna geçtiğinde aynı transaction'da açık oturumları iptal edilir (`sessions.revoked_at`) (TECH_DECISIONS §3.4).
 - `users.status` hızlı kontrol için bir özettir. Yaptırımın kaynağı, süresi ve gerekçesi Utku'nun `sanctions` tablosundadır.
-- Hesap silme (`deleted_at`): Kişisel alanlar anonimleştirilir, içerik ve oylar korunur. KVKK ayrıntısı açık konudur (§11).
+- Hesap silme (`deleted_at`): kişisel alanlar temizlenir; paylaşım/yorum metinleri ve sürümleri kaldırılır, bütün yüklenen görseller depo temizliğine alınır. Hesaba bağlı oylar kimliksiz istatistiğe dönüştürülür; mevcut sonuç, trend ve snapshot hesapları korunur. Kapsam: [KV-33 §10](./KV-33_ADMIN_USERS.md#10-hesap-anonimleştirme-ve-yasal-saklama).
 
 ---
 
@@ -610,7 +610,7 @@ pnpm db:test
 |---|---|---|
 | 1 | Snapshot pencere tanımı PR #63 incelemesinde onaylandı; §8 güncellendi | Tamamlandı |
 | 2 | `LOCKED` durumundaki anket oy alabilir mi? | KV-11 |
-| 3 | Hesap silmede KVKK kapsamı: hangi alanlar anonimleşir, oylar ne olur | Faruk + Utku |
+| 3 | Hesap silmede içerik ve oy kapsamı | **Mehmet kararı:** paylaşım/yorumlar ve görseller kaldırılır; oyların hesapla bağı silinir, sonuç istatistiği korunur ([KV-33 §10](./KV-33_ADMIN_USERS.md#10-hesap-anonimleştirme-ve-yasal-saklama), #181). Güvenlik kayıtları/yedek saklama ve yayın kabulü ayrıca açık |
 | 4 | Kullanıcı adında izinli karakterler (Türkçe harf olacak mı?) | KV-09 |
 | 5 | Mert, Utku ve Mehmet tablolarının §9'daki FK yönleriyle uyumu | İlgili sahipler, PR review'unda |
 | 6 | **İlk SUPER_ADMIN nasıl oluşur?** **Çözüldü (KV-12):** tek seferlik CLI `pnpm --filter @kararver/api admin:bootstrap --email … [--apply]` (varsayılan dry-run; mantık `apps/api/src/modules/rbac/bootstrap.ts`). Transaction + sabit anahtarlı advisory lock; herhangi bir SUPER_ADMIN satırı varsa reddeder; hedef var olan, silinmemiş, e-postası doğrulanmış, `ACTIVE` kullanıcı olmalı; mevcut rol satırını (ör. MODERATOR) yükseltir, yoksa ekler; `granted_by_id = NULL` ile yazar (`user_roles_bootstrap_check` bunu sadece SUPER_ADMIN'e izin verir); rol satırıyla aynı transaction'da `audit_logs`'a da yazar (KV-39, §9.2; stdout'a tek satır ayrıca). Reddedilenler: `SUPER_ADMIN_EMAIL` env ile açılışta yükseltme (kalıcı yükseltme yolu), seed migration (ortama özel veri). Kullanım, çıkış kodları ve kurtarma: [`KV-12_ADMIN_BOOTSTRAP.md`](./KV-12_ADMIN_BOOTSTRAP.md) | Tamamlandı |

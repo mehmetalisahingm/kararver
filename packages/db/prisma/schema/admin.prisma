@@ -390,3 +390,128 @@ model DataExport {
   @@index([status, createdAt])
   @@map("data_exports")
 }
+
+// #181 hesap anonimleştirme (KV-33 §10): kişisel veri temizliğinin kalıcı, kişisel veri içermeyen kaydı. Hesap başına
+// en çok bir satır: aynı hesabı ikinci kez anonimleştirme isteği bu satırı bulur ve değişiklik yapmaz (idempotency).
+// `summary` yalnız sayıları taşır; ad, e-posta veya içerik yok. `storage_cleaned_at`: avatar nesnelerinin depodan
+// silindiği an (worker); boşken temizlik bekliyor demektir.
+model AccountErasure {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  userId           String    @unique @map("user_id") @db.Uuid
+  requestedById    String    @map("requested_by_id") @db.Uuid
+  reason           String    @db.VarChar(500)
+  summary          Json
+  storageCleanedAt DateTime? @map("storage_cleaned_at") @db.Timestamptz(3)
+  storageCleanupAttempts Int @default(0) @map("storage_cleanup_attempts")
+  storageNextAttemptAt DateTime? @map("storage_next_attempt_at") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user        User @relation("AccountErasureSubject", fields: [userId], references: [id], onDelete: Restrict)
+  requestedBy User @relation("AccountErasureRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+
+  @@index([storageCleanedAt, createdAt])
+  @@index([storageCleanedAt, storageNextAttemptAt, createdAt], map: "account_erasures_retry_idx")
+  @@map("account_erasures")
+}
+
+// #181 yasal saklama (legal hold): açık kayıt varken hesap anonimleştirilemez. Hesap başına en çok bir açık kayıt
+// (kısmi unique index, migration). Kayıtlar silinmez; bırakma `released_*` alanlarını doldurur.
+model UserLegalHold {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  reason         String    @db.VarChar(500)
+  placedById     String    @map("placed_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  releasedById   String?   @map("released_by_id") @db.Uuid
+  releasedReason String?   @map("released_reason") @db.VarChar(500)
+  releasedAt     DateTime? @map("released_at") @db.Timestamptz(3)
+
+  user       User  @relation("LegalHoldSubject", fields: [userId], references: [id], onDelete: Restrict)
+  placedBy   User  @relation("LegalHoldPlacer", fields: [placedById], references: [id], onDelete: Restrict)
+  releasedBy User? @relation("LegalHoldReleaser", fields: [releasedById], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("user_legal_holds")
+}
+
+enum EmailChangeStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+  DENIED
+  EXPIRED
+  FAILED
+
+  @@map("email_change_status")
+}
+
+enum EmailChangeOrigin {
+  USER
+  ADMIN
+
+  @@map("email_change_origin")
+}
+
+// #181 e-posta değişimi (KV-33 §11): hesap sahipliği kanıtı (parola) + yeni adresin doğrulanması + (kullanıcı başlatmalıysa)
+// eski adresin onayı. `new_email` yalnız AÇIKKEN tutulur; sonlanınca silinir (veri en aza indirme). Token'lar yalnız
+// özet olarak saklanır (sha256 + pepper); özetler sonlanma sonrası da kalır ki tekrar tıklama idempotent yanıtlansın.
+model EmailChangeRequest {
+  id                 String            @id @default(uuid(7)) @db.Uuid
+  userId             String            @map("user_id") @db.Uuid
+  origin             EmailChangeOrigin
+  requestedById      String            @map("requested_by_id") @db.Uuid
+  // Yönetici başlatmasında zorunlu gerekçe.
+  reason             String?           @db.VarChar(500)
+  status             EmailChangeStatus @default(OPEN)
+  newEmail           String?           @map("new_email") @db.VarChar(254)
+  newEmailNormalized String?           @map("new_email_normalized") @db.VarChar(254)
+  newTokenHash       String            @unique @map("new_token_hash") @db.Char(64)
+  oldTokenHash       String            @unique @map("old_token_hash") @db.Char(64)
+  // Eski adres onayı gerekir mi (kullanıcı başlatması: evet; yönetici başlatması: eski adrese erişim kaybı olabilir, hayır).
+  requiresOld        Boolean           @map("requires_old")
+  newConfirmedAt     DateTime?         @map("new_confirmed_at") @db.Timestamptz(3)
+  oldConfirmedAt     DateTime?         @map("old_confirmed_at") @db.Timestamptz(3)
+  expiresAt          DateTime          @map("expires_at") @db.Timestamptz(3)
+  finishedAt         DateTime?         @map("finished_at") @db.Timestamptz(3)
+  failure            String?           @db.VarChar(60)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user        User @relation("EmailChangeSubject", fields: [userId], references: [id], onDelete: Restrict)
+  requestedBy User @relation("EmailChangeRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, expiresAt])
+  @@map("email_change_requests")
+}
+
+enum AccountDeletionStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  FAILED
+
+  @@map("account_deletion_status")
+}
+
+// #181 kullanıcının kendi hesap silme talebi (KV-33 §12): parola (+MFA) ve yazılı teyitle açılır, e-postadaki bağlantıyla onaylanır.
+// Kişisel veri taşımaz (adres yok: bildirimler hesabın e-postasına gider); token yalnız özet olarak saklanır.
+model AccountDeletionRequest {
+  id         String                @id @default(uuid(7)) @db.Uuid
+  userId     String                @map("user_id") @db.Uuid
+  status     AccountDeletionStatus @default(OPEN)
+  tokenHash  String                @unique @map("token_hash") @db.Char(64)
+  expiresAt  DateTime              @map("expires_at") @db.Timestamptz(3)
+  finishedAt DateTime?             @map("finished_at") @db.Timestamptz(3)
+  // CANCELLED/FAILED için kısa kod (replaced, user, link, blocked:<kod>, ...).
+  failure    String?               @db.VarChar(60)
+  createdAt  DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation("AccountDeletionSubject", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, expiresAt])
+  @@map("account_deletion_requests")
+}

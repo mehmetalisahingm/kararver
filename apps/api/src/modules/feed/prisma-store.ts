@@ -42,7 +42,7 @@ export function createPrismaFeedStore(prisma: PrismaClient): FeedStore {
         FROM c
         CROSS JOIN LATERAL (
           SELECT count(*) AS total, count(*) FILTER (WHERE x.created_at > ${at} - interval '24 hours') AS recent
-          FROM votes x
+          FROM statistical_votes x
           WHERE x.poll_id = c.id AND x.created_at <= ${at}
             AND (x.invalidated_at IS NULL OR x.invalidated_at > ${at})
         ) v

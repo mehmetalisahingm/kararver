@@ -230,6 +230,19 @@ export const settingsRegistry = Object.freeze({
     false,
     "docs/KV-54_COMMUNITY_OWNERSHIP_VERIFICATION.md §2 madde 1: bayraklar varsayılan kapalıdır",
   ),
+  // #181 e-posta değişimi: varsayılan kapalı. Posta altyapısı (SMTP) doğrulanmadan açılmaz; kapalıyken talep başlatılamaz,
+  // başlamış talepler sonlanabilir ve iptal/reddet çalışır.
+  "account.emailChangeEnabled": boolSetting(
+    "E-posta değişimi açık (kullanıcı ve destek yoluyla); posta altyapısı doğrulanmadan açılmaz",
+    false,
+    "docs/KV-33_ADMIN_USERS.md §11 (#181 teslim koşulu): e-posta değişimi posta altyapısı hazır olmadan, doğrulama atlanarak açılmaz",
+  ),
+  // #181 kullanıcının kendi hesabını silmesi: varsayılan kapalı (geri alınamaz; posta altyapısı ve hukuki kabul doğrulanmadan açılmaz).
+  "account.selfDeletionEnabled": boolSetting(
+    "Kullanıcı kendi hesabını silebilir (parola + yazılı teyit + e-posta onayı); geri alınamaz",
+    false,
+    "docs/KV-33_ADMIN_USERS.md §12 (#181 teslim koşulu): kendi silme akışı posta altyapısı ve silme kapsamı onayı olmadan açılmaz",
+  ),
   "features.registration": flag("Yeni kayıt açık", ["features", "registration"], NO_SWITCH_DEFAULT),
   "features.pollCreation": flag("Anket oluşturma açık", ["features", "pollCreation"], NO_SWITCH_DEFAULT),
   "features.comments": flag("Yorumlar açık", ["features", "comments"], NO_SWITCH_DEFAULT),

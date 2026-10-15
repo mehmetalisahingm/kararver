@@ -122,20 +122,20 @@ const INVARIANTS: { name: string; needs: string[]; sql: string }[] = [
     name: "polls.vote_count = geçerli oy sayısı",
     needs: ["polls", "votes"],
     sql: `SELECT count(*)::int AS n FROM polls p
-           LEFT JOIN (SELECT poll_id, count(*) AS c FROM votes WHERE invalidated_at IS NULL GROUP BY poll_id) v ON v.poll_id = p.id
+           LEFT JOIN (SELECT poll_id, count(*) AS c FROM statistical_votes WHERE invalidated_at IS NULL GROUP BY poll_id) v ON v.poll_id = p.id
            WHERE p.vote_count <> coalesce(v.c, 0)`,
   },
   {
     name: "poll_options.vote_count = seçeneğin geçerli oy sayısı",
     needs: ["poll_options", "votes"],
     sql: `SELECT count(*)::int AS n FROM poll_options o
-           LEFT JOIN (SELECT option_id, count(*) AS c FROM votes WHERE invalidated_at IS NULL GROUP BY option_id) v ON v.option_id = o.id
+           LEFT JOIN (SELECT option_id, count(*) AS c FROM statistical_votes WHERE invalidated_at IS NULL GROUP BY option_id) v ON v.option_id = o.id
            WHERE o.vote_count <> coalesce(v.c, 0)`,
   },
   {
     name: "oy, anketin kendi seçeneğinde",
     needs: ["votes", "poll_options"],
-    sql: `SELECT count(*)::int AS n FROM votes v JOIN poll_options o ON o.id = v.option_id WHERE o.poll_id <> v.poll_id`,
+    sql: `SELECT count(*)::int AS n FROM statistical_votes v JOIN poll_options o ON o.id = v.option_id WHERE o.poll_id <> v.poll_id`,
   },
   {
     name: "polls.like_count/dislike_count = tepki sayısı",

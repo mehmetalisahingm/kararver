@@ -471,6 +471,7 @@ export function createPrismaAdminUserStore(prisma: PrismaClient, options: { enfo
       return prisma.$transaction(async (tx) => {
         const target = await lockTarget(tx, userId);
         if (!target) return { kind: "rejected", reason: "not_found" } as const;
+        if (target.deleted) return { kind: "rejected", reason: "user_deleted" } as const;
         await lockSuperAdmins(tx);
         const current = await roleOf(tx, userId);
         const decision = await decide(tx, actorId, "user.role.assign", {

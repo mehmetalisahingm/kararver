@@ -9,6 +9,37 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.31.0 — 2026-10-15 (Mert, #181 kullanıcının kendi hesabını silmesi)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, şemalar, yetkiler ve varsayılan kapalı ayar.
+
+- **Eklendi:** `me.deletion.preview` (silinecek/korunacak kayıtlar, engeller, açık talep), `me.deletion.request` (parola + yazılı teyit, MFA açıksa taze step-up; hesabı SİLMEZ, e-postaya onay bağlantısı gönderir), `me.deletion.cancel`; **(token, oturumsuz):** `auth.deletion.confirm` (açık onayla kalıcı silme, idempotent) ve `auth.deletion.cancel` ("bu ben değilim": talep iptal, oturumlar kapanır).
+- Yetkiler `account.deletion.manage` (user) ve `account.deletion.confirm` (public, token); audit `request/cancel` ve `apply/deny`.
+- **Ayar:** `account.selfDeletionEnabled` (boolean, varsayılan **false**). Kapalıyken talep 503; iptal ve bağlantı onayı/iptali çalışır.
+- Şemalar: `SelfDeletionPreview`, `SelfDeletionRequestView`, `SelfDeletionStarted`, `SelfDeletionDone`, `SelfDeletionStatus`.
+- **Davranış:** silme yönetici başlatmalı anonimleştirmeyle aynı kapsamdadır (KV-33 §10); tamamlanınca eski e-posta adresine bildirim gider.
+
+## 1.30.0 — 2026-10-14 (Mert, #181 e-posta değişimi)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, şemalar, yetkiler ve varsayılan kapalı ayar.
+
+- **Eklendi (kullanıcı):** `me.emailChange.request` (parola + yeni adres), `me.emailChange.get`, `me.emailChange.cancel`; **(token, oturumsuz):** `auth.emailChange.confirm` (yeni adres doğrulaması / eski adres onayı) ve `auth.emailChange.deny` (eski adreste "bu ben değilim": talep reddedilir, oturumlar kapanır). **(SUPER_ADMIN, gerekçeli):** `admin.users.emailChange.start` (destek yolu; yeni adres doğrulaması yine zorunlu), `.list`, `.cancel`.
+- Yetkiler `account.emailChange.manage` (verified), `account.emailChange.confirm` (public, token), `user.emailChange.manage` (super_admin, sanctionTarget); audit işlemleri `request/cancel`, `verify/approve/apply/deny`, `start/cancel`.
+- **Ayar:** `account.emailChangeEnabled` (boolean, varsayılan **false**): posta altyapısı doğrulanmadan açılmaz. Kapalıyken 503 FEATURE_DISABLED; iptal/reddet/onay çalışır.
+- Şemalar: `EmailChangeView` (maskeli adres, yalnız açıkken), `EmailChangeStarted`, `EmailChangeConfirmed`, `EmailChangeStatus`.
+- **Davranış:** e-posta yalnız iki taraflı (veya destek yolunda yeni adres) bağlantı tıklamasıyla değişir; tamamlanınca yeni adres doğrulanmış sayılır ve bütün oturumlar kapanır.
+
+## 1.29.0 — 2026-10-14 (#181 hesap silme ve yasal saklama)
+
+- Mehmet'in kapsam kararı: paylaşım/yorum metinleri ve sürümleri kaldırılır, bütün görseller temizlenir; hesapla ilişkili oy kayıtları kimliksiz istatistik gruplarına dönüştürülür. Sayım/snapshot/trend formülleri korunur.
+- `willRemove` artık paylaşım, yorum ve tüm görselleri de sayar. Silme transaction'ı mevcut oturumda tek kullanımlık MFA ister (`mfa_required`). Depo hataları gecikmeli tekrar denenir ve sonraki kayıtları tıkamaz.
+
+Kırıcı değişiklik yok: yeni endpoint'ler, şemalar ve yetkiler (yalnız SUPER_ADMIN).
+
+- **Eklendi:** `admin.users.erasure.preview` (salt okunur etki özeti ve engeller), `admin.users.erasure.create` (geri alınamaz anonimleştirme; gerekçe + kullanıcı adıyla yazılı teyit; idempotent), `admin.users.legalHold.put` / `admin.users.legalHold.release` (yasal saklama: açıkken anonimleştirme engellenir). Yetkiler `user.anonymize` (sanctionTarget: kendi hesabı için kullanılamaz) ve `user.legalHold.manage`; audit `user.anonymize` (`anonymize`) ve `user.legalHold.manage` (`place`, `release`), ikisi de gerekçeli.
+- Şemalar: `AccountErasurePreview`, `AccountErasureResult`, `ErasureBlocker`, `LegalHold`.
+- **Davranış:** anonimleştirilmiş hesabın kullanıcı adı `silinmis_<12 hane>`, görünen adı "Silinmiş hesap" olur; içerik ve oylar korunur. 409 kodları: `confirmation_mismatch`, `legal_hold`, `active_sanction`, `has_role`, `export_in_progress`, `user_deleted`.
+
 ## 1.28.0 — 2026-10-13 (Mert, #184 topluluk sahibi atama, KV-54 S1)
 
 Kırıcı değişiklik yok: yeni endpoint'ler, yeni (boş olabilen) alan ve ayar; varsayılan kapalı bayrak arkasında.

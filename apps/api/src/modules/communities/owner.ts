@@ -34,11 +34,11 @@ export interface CommunityOwnerStore {
 }
 
 /**
- * BAN uygulanan hesabın sahip olduğu toplulukları yönetici yönetimine döndürür (KV-54 §5: sahip BANNED olursa). Çağıranın
+ * BAN uygulanan veya anonimleştirilen (#181) hesabın sahip olduğu toplulukları yönetici yönetimine döndürür (KV-54 §5: sahip BANNED olursa; hesap silinirse). Çağıranın
  * transaction'ında, kullanıcı satırı kilitliyken çalışır; her topluluk için audit (community.owner.assign / auto_release,
  * aktör = yaptırımı uygulayan yönetici, gerekçe = yaptırım gerekçesi). Üyelik ve içerik etkilenmez. Döner: bırakılan topluluk sayısı.
  */
-export async function releaseOwnedCommunities(tx: Tx, userId: string, trail: AdminTrail & { reason: string }): Promise<number> {
+export async function releaseOwnedCommunities(tx: Tx, userId: string, trail: AdminTrail & { reason: string; trigger?: "ban" | "anonymize" }): Promise<number> {
   const rows = await tx.$queryRaw<{ id: string }[]>`
     UPDATE communities SET owner_id = NULL, updated_at = ${trail.now.toISOString()}::timestamptz
     WHERE owner_id = ${userId}::uuid RETURNING id::text AS id`;
@@ -51,7 +51,7 @@ export async function releaseOwnedCommunities(tx: Tx, userId: string, trail: Adm
       target: { type: "COMMUNITY", id: row.id },
       reason: trail.reason,
       before: { ownerId: userId },
-      after: { ownerId: null, trigger: "ban" },
+      after: { ownerId: null, trigger: trail.trigger ?? "ban" },
       requestId: trail.requestId,
       at: trail.now,
     });

@@ -104,13 +104,21 @@ model User {
   polls            Poll[]
   votes            Vote[]
   voteEvents       VoteEvent[]       @relation("VoteEventUser")
+  accountErasure       AccountErasure?   @relation("AccountErasureSubject")
+  erasuresRequested    AccountErasure[]  @relation("AccountErasureRequester")
+  legalHolds           UserLegalHold[]   @relation("LegalHoldSubject")
+  holdsPlaced          UserLegalHold[]   @relation("LegalHoldPlacer")
+  holdsReleased        UserLegalHold[]   @relation("LegalHoldReleaser")
+  emailChanges          EmailChangeRequest[] @relation("EmailChangeSubject")
+  emailChangesRequested EmailChangeRequest[] @relation("EmailChangeRequester")
+  deletionRequests      AccountDeletionRequest[] @relation("AccountDeletionSubject")
   // KV-43: yaptığı oy geçersiz sayma / geri alma işlemleri
-  voteCorrections  VoteEvent[]       @relation("VoteEventActor")
-  comments         Comment[]
-  commentReactions CommentReaction[]
-  pollReactions    PollReaction[]
-  pollRevisions    PollRevision[]
-  commentRevisions CommentRevision[]
+  voteCorrections       VoteEvent[]          @relation("VoteEventActor")
+  comments              Comment[]
+  commentReactions      CommentReaction[]
+  pollReactions         PollReaction[]
+  pollRevisions         PollRevision[]
+  commentRevisions      CommentRevision[]
 
   // Mert — media.prisma (KV-16)
   uploadedMedia            MediaAsset[]             @relation("MediaUploader")
@@ -268,8 +276,8 @@ model Category {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  polls     Poll[]
-  interests UserInterest[]
+  polls             Poll[]
+  interests         UserInterest[]
   communityRequests CommunityRequest[]
 
   @@index([isActive, sortOrder])
@@ -362,6 +370,7 @@ model Poll {
   follows           PollFollow[]           @relation("PollFollowPoll")
   decision          PollDecision?          @relation("PollDecisionPoll")
   voteEvents        VoteEvent[]
+  anonymousVoteGroups AnonymousVoteGroup[]
   comments          Comment[]
   dailySnapshots    PollDailySnapshot[]
   trendScores       TrendScore[]
@@ -400,6 +409,7 @@ model PollOption {
   eventsTo       VoteEvent[]               @relation("VoteEventTo")
   dailySnapshots PollOptionDailySnapshot[]
   decisions      PollDecision[]            @relation("PollDecisionOption")
+  anonymousVoteGroups AnonymousVoteGroup[]
 
   @@unique([pollId, position])
   // Vote ve snapshot'taki bileşik FK'ler için: seçenek gerçekten o ankete ait olmalı.
@@ -467,6 +477,24 @@ model Vote {
   // Trend pencereleri (KV-28): son 24 saat / 7 günde verilen oylar.
   @@index([createdAt])
   @@map("votes")
+}
+
+// Privacy-safe statistical groups: no account or original vote/event identity.
+model AnonymousVoteGroup {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pollId String @map("poll_id") @db.Uuid
+  optionId String @map("option_id") @db.Uuid
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  invalidatedAt DateTime? @map("invalidated_at") @db.Timestamptz(3)
+  history Json
+  fingerprint String @db.Char(32)
+  multiplicity Int @default(1)
+  poll Poll @relation(fields: [pollId], references: [id], onDelete: Restrict)
+  option PollOption @relation(fields: [pollId, optionId], references: [pollId, id], onDelete: Restrict)
+
+  @@unique([pollId, fingerprint])
+  @@index([pollId, createdAt, invalidatedAt], map: "anonymous_vote_groups_window_idx")
+  @@map("anonymous_vote_groups")
 }
 
 // Append-only oy geçmişi (UPDATE/DELETE trigger ile engellenir).
