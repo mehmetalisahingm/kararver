@@ -1,6 +1,17 @@
 name: Staging security read-only gate
 on:
   workflow_dispatch:
+  # Güvenlik kapısı kodu değiştiğinde main'de hemen tekrar kanıt üret.
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/security-staging.yml
+      - scripts/security-acceptance.mjs
+      - scripts/security-acceptance.test.mjs
+  # Salt-okuma güvenlik kapısı; kullanıcı hesabı açmaz, veri değiştirmez, beta GO vermez.
+  # Deployment izleme işinden ayrıdır: anonim auth/CORS/HSTS sızıntı regresyonunu sınar.
+  schedule:
+    - cron: "17 */3 * * *"
 permissions:
   contents: read
 concurrency:
