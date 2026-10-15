@@ -9,7 +9,7 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
-## 1.28.0 — 2026-10-15 (Mert, #183 güvenli geri alma)
+## 1.33.0 — 2026-10-15 (Mert, #183 güvenli geri alma)
 
 Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; `ModerationBatchView` ek alanlar (`undoOfId`, `undone`, `undoable`). Yeni yetki veya audit işlemi yok (telafi kararları mevcut `moderation.poll.apply` / `moderation.comment.apply` yolundan geçer, her biri kendi audit kaydını yazar).
 
@@ -17,13 +17,60 @@ Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; `ModerationBatchView`
 - Şemalar: `UndoPreview`, `UndoPreviewItem`, `UndoResult`, `UndoResultItem`, `UndoBlockedCode`.
 - **Sözleşme notu (#185/#194):** "her undo yeni audit oluşturur, append-only audit değişmez, yalnız önceden tanımlı reversible çiftler, sürüm koşulu" bu uçlarla uygulanmıştır; genel audit undo'su aynı ilkeleri kullanabilir.
 
-## 1.27.0 — 2026-10-15 (Mert, #183 toplu moderasyon)
+## 1.32.0 — 2026-10-15 (Mert, #183 toplu moderasyon)
 
 Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; yeni yetki veya audit işlemi yok (mevcut `moderation.poll.apply` / `moderation.comment.apply` / `moderation.content.search`).
 
 - **Eklendi:** `admin.moderation.polls.bulkPreview` / `.bulk` ve `admin.moderation.comments.bulkPreview` / `.bulk` (seçilen en çok 50 anket/yorum için HIDE/REMOVE/RESTORE; önizleme → gerekçe + digest ile onay → kayıt başına bağımsız işlem, kısmi başarısızlık raporu) ve `admin.moderation.batches.list` (parti geçmişi).
 - Şemalar: `BulkPreview`, `BulkPreviewItem`, `BulkResult`, `BulkResultItem`, `BulkBlockedCode`, `BulkModerationAction`, `ModerationBatchView`, `BULK_MAX_ITEMS`.
 - **Davranış:** kapsam kayıt başınadır (moderatör yalnız atandığı topluluk); önizleme sonrası durum değişirse 409 `preview_stale`; aktör başına saatte 20 parti.
+
+## 1.31.0 — 2026-10-15 (Mert, #181 kullanıcının kendi hesabını silmesi)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, şemalar, yetkiler ve varsayılan kapalı ayar.
+
+- **Eklendi:** `me.deletion.preview` (silinecek/korunacak kayıtlar, engeller, açık talep), `me.deletion.request` (parola + yazılı teyit, MFA açıksa taze step-up; hesabı SİLMEZ, e-postaya onay bağlantısı gönderir), `me.deletion.cancel`; **(token, oturumsuz):** `auth.deletion.confirm` (açık onayla kalıcı silme, idempotent) ve `auth.deletion.cancel` ("bu ben değilim": talep iptal, oturumlar kapanır).
+- Yetkiler `account.deletion.manage` (user) ve `account.deletion.confirm` (public, token); audit `request/cancel` ve `apply/deny`.
+- **Ayar:** `account.selfDeletionEnabled` (boolean, varsayılan **false**). Kapalıyken talep 503; iptal ve bağlantı onayı/iptali çalışır.
+- Şemalar: `SelfDeletionPreview`, `SelfDeletionRequestView`, `SelfDeletionStarted`, `SelfDeletionDone`, `SelfDeletionStatus`.
+- **Davranış:** silme yönetici başlatmalı anonimleştirmeyle aynı kapsamdadır (KV-33 §10); tamamlanınca eski e-posta adresine bildirim gider.
+
+## 1.30.0 — 2026-10-14 (Mert, #181 e-posta değişimi)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, şemalar, yetkiler ve varsayılan kapalı ayar.
+
+- **Eklendi (kullanıcı):** `me.emailChange.request` (parola + yeni adres), `me.emailChange.get`, `me.emailChange.cancel`; **(token, oturumsuz):** `auth.emailChange.confirm` (yeni adres doğrulaması / eski adres onayı) ve `auth.emailChange.deny` (eski adreste "bu ben değilim": talep reddedilir, oturumlar kapanır). **(SUPER_ADMIN, gerekçeli):** `admin.users.emailChange.start` (destek yolu; yeni adres doğrulaması yine zorunlu), `.list`, `.cancel`.
+- Yetkiler `account.emailChange.manage` (verified), `account.emailChange.confirm` (public, token), `user.emailChange.manage` (super_admin, sanctionTarget); audit işlemleri `request/cancel`, `verify/approve/apply/deny`, `start/cancel`.
+- **Ayar:** `account.emailChangeEnabled` (boolean, varsayılan **false**): posta altyapısı doğrulanmadan açılmaz. Kapalıyken 503 FEATURE_DISABLED; iptal/reddet/onay çalışır.
+- Şemalar: `EmailChangeView` (maskeli adres, yalnız açıkken), `EmailChangeStarted`, `EmailChangeConfirmed`, `EmailChangeStatus`.
+- **Davranış:** e-posta yalnız iki taraflı (veya destek yolunda yeni adres) bağlantı tıklamasıyla değişir; tamamlanınca yeni adres doğrulanmış sayılır ve bütün oturumlar kapanır.
+
+## 1.29.0 — 2026-10-14 (#181 hesap silme ve yasal saklama)
+
+- Mehmet'in kapsam kararı: paylaşım/yorum metinleri ve sürümleri kaldırılır, bütün görseller temizlenir; hesapla ilişkili oy kayıtları kimliksiz istatistik gruplarına dönüştürülür. Sayım/snapshot/trend formülleri korunur.
+- `willRemove` artık paylaşım, yorum ve tüm görselleri de sayar. Silme transaction'ı mevcut oturumda tek kullanımlık MFA ister (`mfa_required`). Depo hataları gecikmeli tekrar denenir ve sonraki kayıtları tıkamaz.
+
+Kırıcı değişiklik yok: yeni endpoint'ler, şemalar ve yetkiler (yalnız SUPER_ADMIN).
+
+- **Eklendi:** `admin.users.erasure.preview` (salt okunur etki özeti ve engeller), `admin.users.erasure.create` (geri alınamaz anonimleştirme; gerekçe + kullanıcı adıyla yazılı teyit; idempotent), `admin.users.legalHold.put` / `admin.users.legalHold.release` (yasal saklama: açıkken anonimleştirme engellenir). Yetkiler `user.anonymize` (sanctionTarget: kendi hesabı için kullanılamaz) ve `user.legalHold.manage`; audit `user.anonymize` (`anonymize`) ve `user.legalHold.manage` (`place`, `release`), ikisi de gerekçeli.
+- Şemalar: `AccountErasurePreview`, `AccountErasureResult`, `ErasureBlocker`, `LegalHold`.
+- **Davranış:** anonimleştirilmiş hesabın kullanıcı adı `silinmis_<12 hane>`, görünen adı "Silinmiş hesap" olur; içerik ve oylar korunur. 409 kodları: `confirmation_mismatch`, `legal_hold`, `active_sanction`, `has_role`, `export_in_progress`, `user_deleted`.
+
+## 1.28.0 — 2026-10-13 (Mert, #184 topluluk sahibi atama, KV-54 S1)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, yeni (boş olabilen) alan ve ayar; varsayılan kapalı bayrak arkasında.
+
+- **Eklendi:** `admin.communities.owner.put` (SUPER_ADMIN, gerekçeli zorunlu atama; `503 FEATURE_DISABLED` bayrak kapalıyken; `user_not_eligible`/`owner_limit`), `admin.communities.owner.release` (SUPER_ADMIN, gerekçeli), `communities.owner.release` (sahip kendi sahipliğini bırakır). Yetkiler `community.owner.assign` (super_admin) ve `community.owner.release` (owner); audit `community.owner.assign` (`assign`/`release`/`auto_release`) ve `community.owner.release`.
+- **Değişti (additive):** `AdminCommunityRow` ve `AdminCommunityOverview` artık `owner` (`CommunityOwnerRef | null`) taşır. Public şemalar değişmedi.
+- **Ayar:** `communities.ownershipEnabled` (boolean, varsayılan **false**). Kapalıyken #172 başvuru onayı sahip atamaz; mevcut sahiplik korunur.
+- **Davranış:** sahip topluluktan ayrılamaz (`communities.leave` 409 `owner_must_release`); BAN uygulanan hesabın sahip olduğu topluluklar otomatik yönetici yönetimine döner. Yeni `community_role` değeri yok.
+
+## 1.27.0 — 2026-10-14 (SA #180/#182 MFA ve bağımsız rol onayı)
+
+- TOTP kurulumu, oturuma bağlı tek kullanımlık yeniden doğrulama ve iki yönetici rol onayı endpoint'leri.
+- Kurulum onayında bir kez gösterilen 10 kurtarma kodu; parola ile tek kullanımlık kurtarma. Kod ve TOTP secret'ı audit'e yazılmaz.
+- `admin.roleApprovals.get`: onay vermeden önce hedef, rol ve gerekçeyi inceleme. `account.mfa` güvenlik olayları.
+- Rol koruması `ROLE_APPROVALS_REQUIRED` ile etkinleşir; varsayılan kapalıdır, tek yöneticili hesapları kilitlemez. #180/#182 yayın kabulü ayrıca izlenir.
 
 ## 1.26.0 — 2026-10-13 (Mert, #184 topluluk yönetim görünümü)
 

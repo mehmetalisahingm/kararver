@@ -18,11 +18,17 @@ import type { RateLimitStore } from "../../src/modules/rate-limit/store.ts";
 import { createMemoryRateLimitStore } from "./memory-rate-limit-store.ts";
 import { createPrismaAuditStore } from "../../src/modules/audit/prisma-store.ts";
 import { createPrismaAdminUserStore } from "../../src/modules/admin-users/prisma-store.ts";
+import { createPrismaAccountDeletionStore } from "../../src/modules/account-deletion/prisma-store.ts";
+import { createPrismaEmailChangeStore } from "../../src/modules/email-change/prisma-store.ts";
+import { createPrismaAccountErasureStore } from "../../src/modules/account-erasure/prisma-store.ts";
 import { createPrismaContentJobStore } from "../../src/modules/content-jobs/prisma-store.ts";
 import { createPrismaDataExportStore } from "../../src/modules/data-exports/prisma-store.ts";
+import { createPrismaMfaStore } from "../../src/modules/security/prisma-store.ts";
+import { createPrismaRoleApprovalStore } from "../../src/modules/security/approval-store.ts";
 import { createPrismaAuthStore } from "../../src/modules/auth/prisma-store.ts";
 import { createPrismaCategoryAdminStore } from "../../src/modules/categories/prisma-store.ts";
 import { createPrismaCommunityAdminReadStore } from "../../src/modules/communities/admin-read.ts";
+import { createPrismaCommunityOwnerStore } from "../../src/modules/communities/owner.ts";
 import { createPrismaCommunityStore } from "../../src/modules/communities/prisma-store.ts";
 import { createPrismaCommunityRequestStore } from "../../src/modules/communities/request-routes.ts";
 import type { AuthStore, UserStatus } from "../../src/modules/auth/store.ts";
@@ -236,6 +242,8 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     rateLimitStore,
     rateLimitSettings: async () => rateLimitSettings,
     authStore: backend.store,
+    mfaStore: backend.prisma ? createPrismaMfaStore(backend.prisma, PEPPER) : undefined,
+    roleApprovalStore: backend.prisma ? createPrismaRoleApprovalStore(backend.prisma) : undefined,
     rbacStore: backend.rbac,
     hasher: createArgon2Hasher(),
     mailer: { send: async (mail) => void mails.push(mail) },
@@ -256,12 +264,16 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     communityStore: backend.prisma ? createPrismaCommunityStore(backend.prisma) : undefined,
     communityRequestStore: backend.prisma ? createPrismaCommunityRequestStore(backend.prisma) : undefined,
     communityAdminReadStore: backend.prisma ? createPrismaCommunityAdminReadStore(backend.prisma) : undefined,
+    communityOwnerStore: backend.prisma ? createPrismaCommunityOwnerStore(backend.prisma) : undefined,
     onboardingStore: backend.prisma ? createPrismaOnboardingStore(backend.prisma) : undefined,
     reportStore: backend.prisma ? createPrismaReportStore(backend.prisma) : undefined,
     moderationStore: backend.prisma ? createPrismaModerationStore(backend.prisma) : undefined,
     bulkModerationStore: backend.prisma ? createPrismaBulkModerationStore(backend.prisma) : undefined,
     adminUserStore: backend.prisma ? createPrismaAdminUserStore(backend.prisma) : undefined,
     dataExportStore: backend.prisma ? createPrismaDataExportStore(backend.prisma) : undefined,
+    accountErasureStore: backend.prisma ? createPrismaAccountErasureStore(backend.prisma) : undefined,
+    emailChangeStore: backend.prisma ? createPrismaEmailChangeStore(backend.prisma) : undefined,
+    accountDeletionStore: backend.prisma ? createPrismaAccountDeletionStore(backend.prisma) : undefined,
     contentJobStore: backend.prisma ? createPrismaContentJobStore(backend.prisma) : undefined,
     metricsStore: backend.prisma ? createPrismaMetricsStore(backend.prisma, () => clock.now) : undefined,
     notificationStore: backend.prisma ? createPrismaNotificationStore(backend.prisma) : undefined,

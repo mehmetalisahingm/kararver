@@ -11,6 +11,12 @@ import { createRouter } from "./http/route.ts";
 import { registerSecurity } from "./http/security.ts";
 import type { Mailer } from "./mail/mailer.ts";
 import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
+import { registerAccountDeletionRoutes } from "./modules/account-deletion/routes.ts";
+import type { AccountDeletionStore } from "./modules/account-deletion/store.ts";
+import { registerEmailChangeRoutes } from "./modules/email-change/routes.ts";
+import type { EmailChangeStore } from "./modules/email-change/store.ts";
+import { registerAccountErasureRoutes } from "./modules/account-erasure/routes.ts";
+import type { AccountErasureStore } from "./modules/account-erasure/store.ts";
 import { registerContentJobRoutes } from "./modules/content-jobs/routes.ts";
 import type { ContentJobStore } from "./modules/content-jobs/store.ts";
 import { registerDataExportRoutes } from "./modules/data-exports/routes.ts";
@@ -19,6 +25,7 @@ import type { AdminUserStore } from "./modules/admin-users/store.ts";
 import type { PasswordHasher } from "./modules/auth/crypto.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerCommunityAdminRoutes } from "./modules/communities/admin-routes.ts";
+import { registerCommunityOwnerRoutes, type CommunityOwnerStore } from "./modules/communities/owner.ts";
 import { registerCommunityAdminReadRoutes, type CommunityAdminReadStore } from "./modules/communities/admin-read.ts";
 import { registerCommunityRoutes } from "./modules/communities/routes.ts";
 import type { CommunityStore } from "./modules/communities/store.ts";
@@ -57,6 +64,10 @@ import { registerSettingsRoutes } from "./modules/settings/routes.ts";
 import type { SettingsService } from "./modules/settings/service.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
 import { registerRoleRoutes } from "./modules/rbac/roles-routes.ts";
+import { registerMfaRoutes } from "./modules/security/routes.ts";
+import { registerRoleApprovalRoutes } from "./modules/security/approval-routes.ts";
+import type { RoleApprovalStore } from "./modules/security/approval-store.ts";
+import type { MfaStore } from "./modules/security/store.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
 import { registerRevisionRoutes } from "./modules/revisions/routes.ts";
 import { registerAuditRoutes } from "./modules/audit/routes.ts";
@@ -87,6 +98,9 @@ export type AppDeps = {
  decisionStore?: DecisionStore;
   config: Config;
   authStore: AuthStore;
+  /** MFA endpoints only when a persistent store is available. */
+  mfaStore?: MfaStore;
+  roleApprovalStore?: RoleApprovalStore;
   /** Rol, yaptırım ve topluluk moderatörlüğü (KV-12); her istekte okunur. */
   rbacStore: RbacStore;
   hasher: PasswordHasher;
@@ -140,6 +154,8 @@ export type AppDeps = {
   adminUserStore?: AdminUserStore;
   /** #181 KVKK veri dışa aktarma; paket okuma için media.storage da gerekir. */
   dataExportStore?: DataExportStore;
+  /** #181 hesap anonimleştirme ve yasal saklama; adminUserStore ile birlikte kaydedilir (hedef rolü okunur). */
+  accountErasureStore?: AccountErasureStore;
   /** #181 kullanıcı içeriğinin toplu gizlenmesi; adminUserStore ile birlikte verilirse route'lar kaydedilir (işi runner.ts işler). */
   contentJobStore?: ContentJobStore;
   metricsStore?: MetricsStore;
@@ -157,6 +173,18 @@ export type AppDeps = {
   commentStore?: CommentStore;
   /** Acil durum anahtarı features.comments (KV-40, #42); verilmezse açık. */
   isCommentsEnabled?: () => Promise<boolean>;
+  /** communities.ownershipEnabled (#184); verilmezse ayar servisinden, o da yoksa kapalı. */
+  isOwnershipEnabled?: () => Promise<boolean>;
+  /** account.emailChangeEnabled (#181); verilmezse ayar servisinden, o da yoksa kapalı. */
+  isEmailChangeEnabled?: () => Promise<boolean>;
+  /** account.selfDeletionEnabled (#181); verilmezse ayar servisinden, o da yoksa kapalı. */
+  isSelfDeletionEnabled?: () => Promise<boolean>;
+  /** #181 kullanıcının kendi hesabını silme talebi; accountErasureStore ile birlikte kaydedilir (silmeyi o yapar). */
+  accountDeletionStore?: AccountDeletionStore;
+  /** #181 e-posta değişimi; adminUserStore ile birlikte kaydedilir (destek yolunda hedef rolü okunur). */
+  emailChangeStore?: EmailChangeStore;
+  /** #184 / KV-54 S1 topluluk sahibi atama/bırakma. */
+  communityOwnerStore?: CommunityOwnerStore;
   /** Üçü birlikte verilirse medya route'ları kaydedilir (config.storage yoksa server vermez). */
   media?: { store: MediaStore; storage: MediaStorage; queue: MediaQueue; settings?: () => Promise<MediaSettings> };
   /** Log seviyesi/hedefi; verilmezse config.logLevel ile stdout. Testler log akışını yakalar. */
@@ -230,6 +258,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const feedSettings = deps.feedSettings ?? (settings ? () => settings.feedSettings() : async () => DEFAULT_FEED_SETTINGS);
   const mediaSettings = deps.media?.settings ?? (settings ? () => settings.mediaSettings() : async () => DEFAULT_MEDIA_SETTINGS);
   const isRegistrationEnabled = deps.isRegistrationEnabled ?? (settings ? () => settings.isRegistrationEnabled() : async () => true);
+  const isOwnershipEnabled = deps.isOwnershipEnabled ?? (settings ? () => settings.isOwnershipEnabled() : async () => false);
+  const isEmailChangeEnabled = deps.isEmailChangeEnabled ?? (settings ? () => settings.isEmailChangeEnabled() : async () => false);
+  const isSelfDeletionEnabled = deps.isSelfDeletionEnabled ?? (settings ? () => settings.isSelfDeletionEnabled() : async () => false);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
   const rateLimitSettings =
@@ -259,6 +290,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return roles.length > 0 ? roles : ["USER" as const];
   };
 
+  if (deps.mfaStore) registerMfaRoutes(route, { store: deps.mfaStore, hasher: deps.hasher, now });
   registerAuthRoutes(route, {
     rolesOf,
     store: deps.authStore,
@@ -350,7 +382,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerCommunityRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
     registerCommunityAdminRoutes(route, { store: deps.communityStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
-  if (deps.communityRequestStore) registerCommunityRequestRoutes(route, deps.communityRequestStore, now);
+  if (deps.communityRequestStore) registerCommunityRequestRoutes(route, deps.communityRequestStore, now, { isOwnershipEnabled });
+  if (deps.communityOwnerStore) registerCommunityOwnerRoutes(route, { store: deps.communityOwnerStore, now, isOwnershipEnabled });
   if (deps.communityAdminReadStore) registerCommunityAdminReadRoutes(route, { store: deps.communityAdminReadStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
@@ -371,6 +404,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       webUrl: config.webUrl,
     });
     registerRoleRoutes(route, { store: deps.adminUserStore, now });
+    if (deps.roleApprovalStore) registerRoleApprovalRoutes(route, { store: deps.roleApprovalStore, users: deps.adminUserStore, now });
     if (deps.contentJobStore) registerContentJobRoutes(route, { store: deps.contentJobStore, users: deps.adminUserStore, now });
   }
   if (deps.dataExportStore && deps.media) {
@@ -382,6 +416,36 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       tokenPepper: config.authTokenPepper,
       webUrl: config.webUrl,
     });
+  }
+  if (deps.emailChangeStore && deps.adminUserStore) {
+    registerEmailChangeRoutes(route, {
+      store: deps.emailChangeStore,
+      users: deps.adminUserStore,
+      hasher: deps.hasher,
+      mailer: deps.mailer,
+      loginGuard: limiter?.login,
+      isEnabled: isEmailChangeEnabled,
+      now,
+      tokenPepper: config.authTokenPepper,
+      webUrl: config.webUrl,
+    });
+  }
+  if (deps.accountDeletionStore && deps.accountErasureStore) {
+    registerAccountDeletionRoutes(route, {
+      store: deps.accountDeletionStore,
+      erasure: deps.accountErasureStore,
+      mfa: deps.mfaStore,
+      hasher: deps.hasher,
+      mailer: deps.mailer,
+      loginGuard: limiter?.login,
+      isEnabled: isSelfDeletionEnabled,
+      now,
+      tokenPepper: config.authTokenPepper,
+      webUrl: config.webUrl,
+    });
+  }
+  if (deps.accountErasureStore && deps.adminUserStore) {
+    registerAccountErasureRoutes(route, { store: deps.accountErasureStore, users: deps.adminUserStore, now });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
   registerOpsRoutes(route, {

@@ -59,7 +59,7 @@ describe("kayıt defteri ↔ PublicConfig", () => {
 
   test(
     "varsayılanlardan üretilen config PublicConfig.parse()'tan geçer",
-    { todo: `resmî varsayılanı olmayan alanlar: ${MISSING_DEFAULTS.join(", ")}` },
+    { skip: `resmî varsayılanı olmayan alanlar: ${MISSING_DEFAULTS.join(", ")}` },
     () => {
       PublicConfig.parse(buildPublicConfig(defaultSettings().values));
     },

@@ -89,6 +89,10 @@ model User {
 
   avatarMedia      MediaAsset?       @relation("UserAvatar", fields: [avatarMediaId], references: [id], onDelete: SetNull)
   sessions         Session[]
+  mfaCredential    UserMfaCredential?
+  roleApprovalTargets    RoleChangeApproval[] @relation("RoleApprovalTarget")
+  roleApprovalRequests   RoleChangeApproval[] @relation("RoleApprovalRequester")
+  roleApprovalApprovals  RoleChangeApproval[] @relation("RoleApprovalApprover")
   authTokens       AuthToken[]
   // #181 KVKK veri dışa aktarma (admin.prisma)
   dataExports          DataExport[] @relation("DataExportSubject")
@@ -102,13 +106,21 @@ model User {
   polls            Poll[]
   votes            Vote[]
   voteEvents       VoteEvent[]       @relation("VoteEventUser")
+  accountErasure       AccountErasure?   @relation("AccountErasureSubject")
+  erasuresRequested    AccountErasure[]  @relation("AccountErasureRequester")
+  legalHolds           UserLegalHold[]   @relation("LegalHoldSubject")
+  holdsPlaced          UserLegalHold[]   @relation("LegalHoldPlacer")
+  holdsReleased        UserLegalHold[]   @relation("LegalHoldReleaser")
+  emailChanges          EmailChangeRequest[] @relation("EmailChangeSubject")
+  emailChangesRequested EmailChangeRequest[] @relation("EmailChangeRequester")
+  deletionRequests      AccountDeletionRequest[] @relation("AccountDeletionSubject")
   // KV-43: yaptığı oy geçersiz sayma / geri alma işlemleri
-  voteCorrections  VoteEvent[]       @relation("VoteEventActor")
-  comments         Comment[]
-  commentReactions CommentReaction[]
-  pollReactions    PollReaction[]
-  pollRevisions    PollRevision[]
-  commentRevisions CommentRevision[]
+  voteCorrections       VoteEvent[]          @relation("VoteEventActor")
+  comments              Comment[]
+  commentReactions      CommentReaction[]
+  pollReactions         PollReaction[]
+  pollRevisions         PollRevision[]
+  commentRevisions      CommentRevision[]
 
   // Mert — media.prisma (KV-16)
   uploadedMedia            MediaAsset[]             @relation("MediaUploader")
@@ -122,6 +134,7 @@ model User {
   moderationActionsAgainst ModerationAction[]       @relation("ModerationTargetUser")
   // Mert — community.prisma (KV-31)
   createdCommunities       Community[]              @relation("CommunityCreator")
+  ownedCommunities         Community[]              @relation("CommunityOwner")
   communityRequests        CommunityRequest[]
   communityMemberships     CommunityMembership[]
   // Utku — admin.prisma (KV-12)
@@ -151,6 +164,72 @@ model User {
   @@map("users")
 }
 
+// SA #180 MFA credential: secret ciphertext only, never the plaintext enrollment QR.
+// Setup is bound to the issuing session by UUID; deleting an expired session must not delete the enabled credential.
+model UserMfaCredential {
+  userId             String   @id @map("user_id") @db.Uuid
+  secretCipher       Bytes    @map("secret_cipher")
+  setupSessionId     String   @map("setup_session_id") @db.Uuid
+  pendingExpiresAt   DateTime @map("pending_expires_at") @db.Timestamptz(6)
+  enabledAt          DateTime? @map("enabled_at") @db.Timestamptz(6)
+  lastAcceptedStep   BigInt   @default(-1) @map("last_accepted_step")
+  failedAttempts     Int      @default(0) @map("failed_attempts")
+  lockedUntil        DateTime? @map("locked_until") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recoveryCodes MfaRecoveryCode[]
+
+  @@index([enabledAt], map: "user_mfa_credentials_enabled_idx")
+  @@map("user_mfa_credentials")
+}
+
+model MfaRecoveryCode {
+  userId String @map("user_id") @db.Uuid
+  codeHash String @map("code_hash") @db.Char(64)
+  createdAt DateTime @map("created_at") @db.Timestamptz(6)
+  usedAt DateTime? @map("used_at") @db.Timestamptz(6)
+  credential UserMfaCredential @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@id([userId, codeHash])
+  @@map("mfa_recovery_codes")
+}
+
+// SA #182: explicit second-superadmin approval, no reuse after execution.
+model RoleChangeApproval {
+  id                 String    @id @db.Uuid
+  targetUserId       String    @map("target_user_id") @db.Uuid
+  initiatorId        String    @map("initiator_id") @db.Uuid
+  approvedById       String?   @map("approved_by_id") @db.Uuid
+  expectedRole       String    @map("expected_role") @db.VarChar(20)
+  expectedUpdatedAt  DateTime? @map("expected_updated_at") @db.Timestamptz(6)
+  requestedRole      String    @map("requested_role") @db.VarChar(20)
+  reason             String    @db.VarChar(500)
+  status             String    @default("PENDING") @db.VarChar(20)
+  createdAt          DateTime  @map("created_at") @db.Timestamptz(6)
+  expiresAt          DateTime  @map("expires_at") @db.Timestamptz(6)
+  approvedAt         DateTime? @map("approved_at") @db.Timestamptz(6)
+  consumedAt         DateTime? @map("consumed_at") @db.Timestamptz(6)
+
+  target     User  @relation("RoleApprovalTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  requester  User  @relation("RoleApprovalRequester", fields: [initiatorId], references: [id], onDelete: Restrict)
+  approver   User? @relation("RoleApprovalApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+
+  @@index([targetUserId, createdAt(sort: Desc)], map: "role_change_approvals_target_idx")
+  @@index([status, expiresAt], map: "role_change_approvals_expiry_idx")
+  @@map("role_change_approvals")
+}
+
+model SessionMfaStepup {
+  sessionId String    @id @map("session_id") @db.Uuid
+  verifiedAt DateTime @map("verified_at") @db.Timestamptz(6)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_mfa_stepups")
+}
+
 model Session {
   id         String    @id @default(uuid(7)) @db.Uuid
   userId     String    @map("user_id") @db.Uuid
@@ -164,6 +243,7 @@ model Session {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mfaStepup SessionMfaStepup?
 
   @@index([userId])
   @@index([expiresAt])
@@ -198,8 +278,8 @@ model Category {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  polls     Poll[]
-  interests UserInterest[]
+  polls             Poll[]
+  interests         UserInterest[]
   communityRequests CommunityRequest[]
 
   @@index([isActive, sortOrder])
@@ -292,6 +372,7 @@ model Poll {
   follows           PollFollow[]           @relation("PollFollowPoll")
   decision          PollDecision?          @relation("PollDecisionPoll")
   voteEvents        VoteEvent[]
+  anonymousVoteGroups AnonymousVoteGroup[]
   comments          Comment[]
   dailySnapshots    PollDailySnapshot[]
   trendScores       TrendScore[]
@@ -330,6 +411,7 @@ model PollOption {
   eventsTo       VoteEvent[]               @relation("VoteEventTo")
   dailySnapshots PollOptionDailySnapshot[]
   decisions      PollDecision[]            @relation("PollDecisionOption")
+  anonymousVoteGroups AnonymousVoteGroup[]
 
   @@unique([pollId, position])
   // Vote ve snapshot'taki bileşik FK'ler için: seçenek gerçekten o ankete ait olmalı.
@@ -397,6 +479,24 @@ model Vote {
   // Trend pencereleri (KV-28): son 24 saat / 7 günde verilen oylar.
   @@index([createdAt])
   @@map("votes")
+}
+
+// Privacy-safe statistical groups: no account or original vote/event identity.
+model AnonymousVoteGroup {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pollId String @map("poll_id") @db.Uuid
+  optionId String @map("option_id") @db.Uuid
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  invalidatedAt DateTime? @map("invalidated_at") @db.Timestamptz(3)
+  history Json
+  fingerprint String @db.Char(32)
+  multiplicity Int @default(1)
+  poll Poll @relation(fields: [pollId], references: [id], onDelete: Restrict)
+  option PollOption @relation(fields: [pollId, optionId], references: [pollId, id], onDelete: Restrict)
+
+  @@unique([pollId, fingerprint])
+  @@index([pollId, createdAt, invalidatedAt], map: "anonymous_vote_groups_window_idx")
+  @@map("anonymous_vote_groups")
 }
 
 // Append-only oy geçmişi (UPDATE/DELETE trigger ile engellenir).

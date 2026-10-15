@@ -40,12 +40,18 @@ export function statusImpactText(overview: Pick<CommunityOverviewView, "status" 
     : `Yeniden açılırsa topluluk listeye, sayfaya ve katılıma döner. Geri gelen: ${counts}.`;
 }
 
+/** Sahip satırı: sahipsiz topluluk V1'deki gibi yönetici yönetimindedir. */
+export const ownerText = (owner: { displayName: string; username: string } | null) =>
+  owner ? `Sahip: ${owner.displayName} (@${owner.username})` : "Sahip yok: topluluk yönetici yönetiminde.";
+
 export const OPERATION_LABEL: Record<string, string> = {
   update: "Güncelleme",
   create: "Açılış",
-  assign: "Moderatör atama",
+  assign: "Moderatör / sahip atama",
   remove: "Moderatör kaldırma",
   approve: "Başvuru onayı",
   reject: "Başvuru reddi",
   expire: "Otomatik kapanış",
+  release: "Sahipliği bırakma",
+  auto_release: "Sahipliğin otomatik kalkması (yasak)",
 };

@@ -44,11 +44,14 @@ model Community {
   // Denormalize sayaç; üyelikle aynı transaction'da güncellenir (DATA_MODEL §2.5).
   memberCount       Int                        @default(0) @map("member_count")
   createdById       String                     @map("created_by_id") @db.Uuid
+  // #184 / KV-54 S1: boş olabilir (yönetici yönetimi). Sahip üyedir ve üyeliği silinemez (migration tetikleyicileri).
+  ownerId           String?                    @map("owner_id") @db.Uuid
   createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   imageMedia  MediaAsset?           @relation(fields: [imageMediaId], references: [id], onDelete: Restrict)
   createdBy   User                  @relation("CommunityCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  owner       User?                 @relation("CommunityOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   memberships CommunityMembership[]
   requests    CommunityRequest[]
 
@@ -56,6 +59,7 @@ model Community {
   polls Poll[]
 
   @@index([status, memberCount(sort: Desc)])
+  @@index([ownerId])
   @@map("communities")
 }
 

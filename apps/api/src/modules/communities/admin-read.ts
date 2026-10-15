@@ -59,6 +59,7 @@ type Row = {
   moderators: number;
   polls: number;
   createdAt: Date;
+  owner: { id: string; username: string; displayName: string } | null;
   threshold: Threshold;
 };
 type Overview = Row & {
@@ -111,7 +112,7 @@ export function createPrismaCommunityAdminReadStore(prisma: PrismaClient): Commu
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: limit,
-        select: { id: true, slug: true, name: true, status: true, membersVisibility: true, createdAt: true },
+        select: { id: true, slug: true, name: true, status: true, membersVisibility: true, createdAt: true, owner: { select: { id: true, username: true, displayName: true } } },
       });
       const counts = await countsFor(rows.map((r) => r.id));
       return rows.map((r) => {
@@ -127,6 +128,7 @@ export function createPrismaCommunityAdminReadStore(prisma: PrismaClient): Commu
           moderators: counts.moderators.get(r.id) ?? 0,
           polls: counts.pollCount.get(r.id) ?? 0,
           createdAt: r.createdAt,
+          owner: r.owner,
           threshold: thresholdOf(counts.request.get(r.id) ?? null, status, members, now),
         } satisfies Row;
       });
@@ -144,6 +146,7 @@ export function createPrismaCommunityAdminReadStore(prisma: PrismaClient): Commu
           membersVisibility: true,
           createdAt: true,
           createdBy: { select: { id: true, username: true, displayName: true } },
+          owner: { select: { id: true, username: true, displayName: true } },
         },
       });
       if (!c) return null;
@@ -175,6 +178,7 @@ export function createPrismaCommunityAdminReadStore(prisma: PrismaClient): Commu
         moderators,
         polls,
         createdAt: c.createdAt,
+        owner: c.owner,
         threshold: thresholdOf(counts.request.get(id) ?? null, status, members, now),
         createdBy: c.createdBy,
         impact: { members, moderators, polls, activePolls, openPolls, comments: comments._sum.commentCount ?? 0, openReports },
@@ -229,6 +233,7 @@ const rowView = (r: Row) => ({
   moderators: r.moderators,
   polls: r.polls,
   createdAt: r.createdAt.toISOString(),
+  owner: r.owner,
   threshold: thresholdView(r.threshold),
 });
 

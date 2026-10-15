@@ -5,8 +5,8 @@
 // Yetki sunucudadır (ADMIN+, 403); bu bileşen yalnız yönetici panelinde gösterilir.
 import { useCallback, useEffect, useState } from "react";
 import type { AdminClient, CommunityOverviewView, CommunityRowView } from "./admin-client.ts";
-import { OPERATION_LABEL, statusImpactText, THRESHOLD_BADGE, thresholdText } from "./community-model.ts";
-import { ActionDialog, errorMessage, formatDate, ListState, useRemoteList } from "./admin-ui";
+import { OPERATION_LABEL, ownerText, statusImpactText, THRESHOLD_BADGE, thresholdText } from "./community-model.ts";
+import { ActionDialog, errorMessage, formatDate, ListState, useAdminRoles, useRemoteList } from "./admin-ui";
 import styles from "./admin-shell.module.css";
 
 export function CommunityOverviewSection({ admin }: { admin: AdminClient }) {
@@ -61,6 +61,9 @@ function CommunityDetail({ id, admin, onChanged, onClose }: { id: string; admin:
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const [dialog, setDialog] = useState(false);
+  const [ownerDialog, setOwnerDialog] = useState<"assign" | "release" | null>(null);
+  const [ownerId, setOwnerId] = useState("");
+  const canOwn = useAdminRoles().includes("SUPER_ADMIN");
   const [notice, setNotice] = useState("");
   const [input, setInput] = useState("");
   const [q, setQ] = useState("");
@@ -84,6 +87,16 @@ function CommunityDetail({ id, admin, onChanged, onClose }: { id: string; admin:
         <>
           <h4>{overview.name} <small className="kv-muted">/{overview.slug} · {overview.status === "ACTIVE" ? "Açık" : "Kapalı"}</small></h4>
           <p className="kv-muted">Oluşturan: {overview.createdBy.displayName} (@{overview.createdBy.username}) · {formatDate(overview.createdAt)}</p>
+          <div role="group" aria-label="Topluluk sahibi">
+            <p>{ownerText(overview.owner)}</p>
+            <p className="kv-muted">Sahiplik şimdilik ek yetki vermez; kayıttır. Sahip topluluktan ayrılamaz, yasaklanırsa topluluk yönetici yönetimine döner.</p>
+            {canOwn ? (
+              <div className="kv-row">
+                <button className="kv-button kv-button--secondary" onClick={() => { setNotice(""); setOwnerId(""); setOwnerDialog("assign"); }}>{overview.owner ? "Sahibi değiştir…" : "Sahip ata…"}</button>
+                {overview.owner ? <button className="kv-button kv-button--secondary" onClick={() => { setNotice(""); setOwnerDialog("release"); }}>Sahipliği kaldır…</button> : null}
+              </div>
+            ) : null}
+          </div>
           <div role="group" aria-label="Eşik durumu">
             <strong>{THRESHOLD_BADGE[overview.threshold.state]}</strong>
             <p>{thresholdText(overview.threshold)}</p>
@@ -128,6 +141,31 @@ function CommunityDetail({ id, admin, onChanged, onClose }: { id: string; admin:
           <ListState remote={members} empty="Üye bulunamadı." />
         </>
       ) : null}
+
+      <ActionDialog
+        open={ownerDialog !== null}
+        title={ownerDialog === "release" ? "Sahipliği kaldır" : "Topluluk sahibi ata"}
+        description={ownerDialog === "release"
+          ? "Topluluk yönetici yönetimine döner; üyelik ve içerik etkilenmez. Gerekçe yönetim izine yazılır."
+          : "Sahip uygun olmalı: hesap aktif, e-postası doğrulanmış ve en çok 3 topluluğa sahip. Üye değilse üye olarak eklenir. Özellik kapalıysa (communities.ownershipEnabled) atama reddedilir."}
+        submitLabel={ownerDialog === "release" ? "Kaldır" : "Ata"}
+        validate={() => (ownerDialog === "assign" && !/^[0-9a-f-]{36}$/i.test(ownerId.trim()) ? "Geçerli bir kullanıcı kimliği gir." : null)}
+        onClose={() => setOwnerDialog(null)}
+        onSubmit={async (reason) => {
+          if (!overview) return;
+          if (ownerDialog === "release") {
+            await admin.releaseCommunityOwner(overview.id, reason);
+            setNotice("Sahiplik kaldırıldı; topluluk yönetici yönetiminde.");
+          } else {
+            await admin.putCommunityOwner(overview.id, ownerId.trim(), reason);
+            setNotice("Sahip atandı; gerekçe yönetim izine yazıldı.");
+          }
+          setRevision((n) => n + 1);
+          onChanged();
+        }}
+      >
+        {ownerDialog === "assign" ? <label>Kullanıcı kimliği<input className="kv-input" value={ownerId} onChange={(event) => setOwnerId(event.target.value)} placeholder="UUID" required /></label> : null}
+      </ActionDialog>
 
       <ActionDialog
         open={dialog}

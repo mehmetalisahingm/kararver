@@ -25,11 +25,15 @@ export function registerRoleRoutes(route: Route, deps: RoleRouteDeps): void {
       activeSuperAdminCount: superAdminCountForRoleRule(await store.activeSuperAdminCount(), target),
     });
 
-    const result = await store.setRole({ userId: params.id, role: body.role as Role, reason: body.reason, actorId: viewer!.id, requestId: request.id, now: now() });
+    const result = await store.setRole({ userId: params.id, role: body.role as Role, reason: body.reason, actorId: viewer!.id, actorSessionId: viewer!.sessionId, approvalId: body.approvalId, requestId: request.id, now: now() });
     if (result.kind === "rejected") {
       switch (result.reason) {
         case "not_found":
           throw new ApiError("NOT_FOUND", "Kullanıcı bulunamadı.");
+        case "approval_required":
+          throw new ApiError("FORBIDDEN", "Kritik rol değişikliği için geçerli ikinci yönetici onayı ve MFA gerekiyor.");
+        case "user_deleted":
+          throw new ApiError("CONFLICT", "Silinmiş hesaba rol atanamaz.", [{ code: "user_deleted" }]);
         case "forbidden":
           throw new ApiError("FORBIDDEN", "Bu işlem için yetkiniz yok.");
         case "self":

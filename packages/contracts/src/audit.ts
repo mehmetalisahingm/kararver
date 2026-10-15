@@ -45,17 +45,31 @@ const commentOnlyExcluded = (o: string) => o.endsWith("_trends") || o.endsWith("
  * Tek türlü işlemde `operation` verilmezse o tür yazılır; birden çok türlüde her zaman açıkça verilir.
  */
 export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[]>>> = Object.freeze({
+  "account.mfa": ["setup", "enable", "verify", "recover", "deny", "lock"],
   "user.sanction": ["apply"],
   "user.sessions.manage": ["revoke"],
   "user.password.reset": ["send"],
+  // #184 topluluk sahipliği: yönetici atama/bırakma ve BAN'da otomatik bırakma (aktör = yaptırımı uygulayan yönetici); sahibin kendi bırakması ayrı.
+  "community.owner.assign": ["assign", "release", "auto_release"],
+  "community.owner.release": ["release"],
   // #181 toplu içerik işi: iş düzeyi kayıt; içerik başına kayıt moderation.*.apply'dadır.
   "user.content.bulk": ["request", "undo", "cancel"],
   // #181 KVKK: talep ve teslim yönetici işlemidir (gerekçeli); indirme kullanıcının kendi işlemidir.
   "privacy.export.manage": ["request", "deliver"],
   "privacy.export.download": ["download"],
+  // #181 anonimleştirme: geri alınamaz; yasal saklama koyma/kaldırma ayrı işlemdir.
+  "user.anonymize": ["anonymize"],
+  // #181 e-posta değişimi: adres hiçbir kayıtta yoktur; yalnız talep kimliği ve kaynak. Kullanıcı/token işlemlerinin aktörü hesabın sahibidir.
+  "account.emailChange.manage": ["request", "cancel"],
+  // #181 kendi hesabını silme: talep ve iptal kullanıcının işlemidir; apply = e-posta bağlantısıyla onaylanan anonimleştirme.
+  "account.deletion.manage": ["request", "cancel"],
+  "account.deletion.confirm": ["apply", "deny"],
+  "account.emailChange.confirm": ["verify", "approve", "apply", "deny"],
+  "user.emailChange.manage": ["start", "cancel"],
+  "user.legalHold.manage": ["place", "release"],
   "user.sanction.lift": ["lift"],
   // admin.roles.put: grant = USER'a rol verme, revoke = rolü kaldırıp USER'a düşürme, change = rolden role geçiş.
-  "user.role.assign": ["grant", "revoke", "change"],
+  "user.role.assign": ["grant", "revoke", "change", "request", "approve"],
   "vote.invalidate": ["invalidate", "restore"],
   "community.moderator.assign": ["assign", "remove"],
   "category.manage": ["create", "update"],
@@ -103,8 +117,12 @@ export function allowedAuditOperations(action: AuditAction): readonly string[] {
 export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditAction>([
   "user.sessions.manage",
   "user.password.reset",
+  "community.owner.assign",
   "user.content.bulk",
   "privacy.export.manage",
+  "user.anonymize",
+  "user.emailChange.manage",
+  "user.legalHold.manage",
   "user.sanction",
   "user.sanction.lift",
   "user.role.assign",

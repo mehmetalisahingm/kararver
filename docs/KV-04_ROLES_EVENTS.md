@@ -75,13 +75,13 @@ route("admin.reports.resolve", async ({ params, authorize }) => {
 
 | Seviye | İşlemler |
 |---|---|
-| public | `account.register` · `account.login` · `account.verifyEmail` · `account.recoverPassword` · `content.read` · `poll.share` |
-| user | `session.logout` · `privacy.export.download` · `account.resendVerification` · `account.read` · `account.update` · `reaction.set` · `bookmark.set` · `bookmark.read` · `follow.set` · `interests.read` · `interests.set` · `points.read` · `report.create` · `community.join` · `community.leave` · `community.request.create` · `community.request.read` · `notification.read` · `notification.update` |
-| verified | `poll.create` (kısıt: POSTING) · `vote.cast` (kural: selfVote) · `comment.create` (kısıt: COMMENTS) · `media.upload` (kısıt: POSTING, avatar hariç) |
-| owner | `poll.update` (kısıt: POSTING) · `poll.close` · `poll.delete` · `poll.addendum.create` (kısıt: POSTING) · `comment.update` (kısıt: COMMENTS) · `comment.delete` · `decision.set` (kısıt: POSTING) · `media.complete` (kısıt: POSTING, avatar hariç) · `media.read` |
+| public | `account.register` · `account.login` · `account.verifyEmail` · `account.recoverPassword` · `account.emailChange.confirm` · `account.deletion.confirm` · `content.read` · `poll.share` |
+| user | `session.logout` · `account.deletion.manage` · `privacy.export.download` · `account.resendVerification` · `account.read` · `account.update` · `account.mfa` · `reaction.set` · `bookmark.set` · `bookmark.read` · `follow.set` · `interests.read` · `interests.set` · `points.read` · `report.create` · `community.join` · `community.leave` · `community.request.create` · `community.request.read` · `notification.read` · `notification.update` |
+| verified | `account.emailChange.manage` · `poll.create` (kısıt: POSTING) · `vote.cast` (kural: selfVote) · `comment.create` (kısıt: COMMENTS) · `media.upload` (kısıt: POSTING, avatar hariç) |
+| owner | `community.owner.release` (kapsam: kendi topluluğu) · `poll.update` (kısıt: POSTING) · `poll.close` · `poll.delete` · `poll.addendum.create` (kısıt: POSTING) · `comment.update` (kısıt: COMMENTS) · `comment.delete` · `decision.set` (kısıt: POSTING) · `media.complete` (kısıt: POSTING, avatar hariç) · `media.read` |
 | moderator | `report.queue.read` (kapsam: queue) · `report.resolve` (kapsam: community) · `moderation.poll.apply` (kapsam: community) · `moderation.comment.apply` (kapsam: community) · `moderation.content.search` (kapsam: queue) · `moderation.content.history` (kapsam: community) · `moderation.poll.move` (kapsam: community) · `moderation.user.warn` (kapsam: community, kural: sanctionTarget) · `media.queue.read` (kapsam: queue) · `media.review` (kapsam: community) |
 | admin | `revision.read` · `vote.invalidate` · `media.ban.manage` · `community.create` · `community.update` · `community.admin.read` · `community.moderator.assign` · `community.request.queue` · `community.request.review` · `user.read` · `user.sanction` (kural: sanctionTarget) · `user.sanction.lift` (kural: sanctionTarget) · `user.password.reset` (kural: sanctionTarget) · `user.content.bulk` (kural: sanctionTarget) · `settings.read` · `audit.read` · `points.adjust` · `metrics.read` · `featured.manage` · `announcement.manage` · `category.manage` |
-| super_admin | `user.role.assign` (kural: roleAssignment) · `user.sessions.manage` · `privacy.export.manage` · `ops.read` · `settings.update` · `emergency.update` |
+| super_admin | `user.role.assign` (kural: roleAssignment) · `user.sessions.manage` · `community.owner.assign` · `privacy.export.manage` · `user.anonymize` (kural: sanctionTarget) · `user.emailChange.manage` (kural: sanctionTarget) · `user.legalHold.manage` · `ops.read` · `settings.update` · `emergency.update` |
 
 ---
 
@@ -161,6 +161,9 @@ Payload şemaları `events.ts` içindedir (strict zod). Kabul koşulundaki alanl
 | `media.maxBytes` | integer | 1 B – 50 MB | 8 MB | `media.maxBytes` | MEDIA_MODERATION §5 madde 2; `media.ts` sizeBytes yorumu, `.max(50 MB)` |
 | `media.maxPerPoll` | integer | 0 – 10 | 10 | `media.maxPerPoll` | `polls.ts` mediaIds `.max(10)` (varsayılan şu an tavana eşit) |
 | `media.riskMediumPercent` | integer | 10 – 60 | 35 | hayır | MEDIA_MODERATION §6.1 MEDIUM_THRESHOLD 0,35 (yüzde); ≤ `riskHighPercent`. KV-38 (#40) |
+| `account.selfDeletionEnabled` | boolean | — | kapalı (`false`) | hayır | #181: kullanıcı kendi hesabını silebilir (parola + yazılı teyit + e-posta onayı); geri alınamaz, posta altyapısı ve silme kapsamı onayı olmadan açılmaz. Kapalıyken `me.deletion.request` 503 `FEATURE_DISABLED`; iptal ve bağlantı onayı/iptali çalışır. |
+| `account.emailChangeEnabled` | boolean | — | kapalı (`false`) | hayır | #181: e-posta değişimi posta altyapısı hazır olmadan, doğrulama atlanarak açılmaz. Kapalıyken `me.emailChange.request` ve `admin.users.emailChange.start` 503 `FEATURE_DISABLED`; iptal, reddet ve onay çalışır. |
+| `communities.ownershipEnabled` | boolean | — | kapalı (`false`) | hayır | KV-54 §2/1: bayraklar varsayılan kapalı. Kapalıyken sahip atanamaz (FEATURE_DISABLED) ve başvuru onayı sahip atamaz; mevcut sahiplik korunur. #184 |
 | `media.riskHighPercent` | integer | 40 – 95 | 65 | hayır | MEDIA_MODERATION §6.1 HIGH_THRESHOLD 0,65 (yüzde). Üst sınır 95: yüksek güvenli tespit otomatik yayına bırakılamaz. KV-38 (#40) |
 | `media.allowedTypes` | mimeTypes | 1 – 3 | jpeg, png, webp | `media.allowedTypes` | `media.ts` AllowedMimeType; MEDIA_MODERATION §5 madde 1 |
 | `points.initialGrant` | integer | 0 – sınırsız | 20 | `points.initialGrant` | V1_USER_FLOW "Başlangıç puanı ve yayın maliyeti — V1" |

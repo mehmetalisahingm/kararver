@@ -40,7 +40,7 @@ export function scoreQuery(format: ComputedFormat, windowEnd: Date, movers: Move
     ),
     v AS (
       SELECT x.poll_id, count(*)::int AS voters
-      FROM votes x
+      FROM statistical_votes x
       WHERE x.created_at > ${start} AND x.created_at <= ${end} AND x.invalidated_at IS NULL
       GROUP BY x.poll_id
     ),
@@ -84,7 +84,7 @@ export function scoreQuery(format: ComputedFormat, windowEnd: Date, movers: Move
           jsonb_build_object('newVoters', s.voters, 'votersBefore', b.before) AS components
         FROM s
         CROSS JOIN LATERAL (
-          SELECT count(*)::int AS before FROM votes x
+          SELECT count(*)::int AS before FROM statistical_votes x
           WHERE x.poll_id = s.id AND x.created_at <= ${start} AND x.invalidated_at IS NULL
         ) b
         WHERE s.voters >= ${w.minNewVoters}`;
@@ -152,7 +152,7 @@ function moversQuery(windowEnd: Date, m: MoversThresholds): Prisma.Sql {
     active AS (
       SELECT pr.id, count(DISTINCT ev.user_id)::int AS n
       FROM pairs pr
-      JOIN vote_events ev ON ev.poll_id = pr.id AND ev.occurred_at >= pr.from_end AND ev.occurred_at < pr.to_end
+      JOIN statistical_vote_events ev ON ev.poll_id = pr.id AND ev.occurred_at >= pr.from_end AND ev.occurred_at < pr.to_end
         AND ev.type IN ('CAST', 'CHANGE', 'RESTORE')
       GROUP BY pr.id
     ),

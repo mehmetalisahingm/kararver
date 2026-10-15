@@ -27,6 +27,7 @@ import {
   type TrustedActor,
 } from "@kararver/contracts";
 import { Prisma, type PrismaClient, type Role, type SanctionType, type UserStatus } from "@kararver/db";
+import { releaseOwnedCommunities } from "../communities/owner.ts";
 import { linkSanctionToReport, ownerOfTarget, targetOfReport } from "../moderation/trail.ts";
 import { assertNoCommittedKey, runIdempotent } from "../../http/idempotency.ts";
 import { writeAudit } from "../audit/write.ts";
@@ -34,6 +35,7 @@ import { ApiError } from "../../http/errors.ts";
 import { normalizeEmail } from "../auth/routes.ts";
 import { writeEvent } from "../events/write.ts";
 import { likeLiteral } from "../search/prisma-store.ts";
+import { consumeFreshStepup } from "../security/stepup-guard.ts";
 import {
   superAdminCountForRoleRule,
   type ActivityRow,
@@ -115,7 +117,7 @@ export async function lockTarget(tx: Tx, userId: string): Promise<LockedTarget |
 }
 
 /** Son aktif SUPER_ADMIN kuralı için: eşzamanlı iki işlem (birbirini düşüren/banlayan iki SUPER_ADMIN) burada sıraya girer. */
-async function lockSuperAdmins(tx: Tx): Promise<void> {
+export async function lockSuperAdmins(tx: Tx): Promise<void> {
   await tx.$queryRaw`SELECT user_id FROM user_roles WHERE role = 'SUPER_ADMIN' ORDER BY user_id FOR UPDATE`;
 }
 
@@ -167,7 +169,7 @@ const HOUR_MS = 60 * 60 * 1000;
 
 const REVOKES_SESSIONS: ReadonlySet<SanctionType> = new Set(["SUSPEND", "BAN"]);
 
-export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore {
+export function createPrismaAdminUserStore(prisma: PrismaClient, options: { enforceCriticalApprovals?: boolean } = {}): AdminUserStore {
   async function reportCounts(ids: string[]): Promise<Map<string, number>> {
     if (ids.length === 0) return new Map();
     const rows = await prisma.$queryRaw<{ id: string; n: number }[]>`
@@ -341,6 +343,8 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
         const sessionsRevoked = REVOKES_SESSIONS.has(type)
           ? (await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } })).count
           : 0;
+        // KV-54 §5: BAN'lı hesabın sahip olduğu topluluklar aynı transaction'da yönetici yönetimine döner (üyelik/içerik etkilenmez).
+        const communitiesReleased = type === "BAN" ? await releaseOwnedCommunities(tx, userId, { actorId, requestId: input.requestId, now, reason: input.reason }) : 0;
 
         await writeAudit(tx, {
           source: "API",
@@ -356,6 +360,7 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
             type,
             endsAt: input.endsAt?.toISOString() ?? null,
             sessionsRevoked,
+            ...(communitiesReleased > 0 ? { communitiesReleased } : {}),
             ...(input.reportId ? { reportId: input.reportId, closedReports } : {}),
           },
           requestId: input.requestId,
@@ -466,6 +471,7 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
       return prisma.$transaction(async (tx) => {
         const target = await lockTarget(tx, userId);
         if (!target) return { kind: "rejected", reason: "not_found" } as const;
+        if (target.deleted) return { kind: "rejected", reason: "user_deleted" } as const;
         await lockSuperAdmins(tx);
         const current = await roleOf(tx, userId);
         const decision = await decide(tx, actorId, "user.role.assign", {
@@ -481,6 +487,35 @@ export function createPrismaAdminUserStore(prisma: PrismaClient): AdminUserStore
 
         const before: Role = current ?? "USER";
         if (before === role) return { kind: "unchanged", role } as const;
+        // SA #182: Transaction-bound second approval for SUPER_ADMIN promotions/revocations.
+        // The flag is activated only after two distinct enrolled SUPER_ADMIN accounts exist.
+        if (options.enforceCriticalApprovals && (before === "SUPER_ADMIN" || role === "SUPER_ADMIN")) {
+          if (!input.approvalId || !input.actorSessionId)
+            return { kind: "rejected", reason: "approval_required" } as const;
+          const approvals = await tx.$queryRaw<Array<{
+            id: string; initiator_id: string; target_user_id: string; approved_by_id: string | null;
+            expected_role: Role; requested_role: Role; expected_updated_at: Date | null;
+            reason: string; status: string; expires_at: Date;
+          }>>`
+            SELECT * FROM role_change_approvals WHERE id = ${input.approvalId}::uuid FOR UPDATE`;
+          const ap = approvals[0];
+          const roleRow = await tx.userRole.findUnique({ where: { userId }, select: { updatedAt: true } });
+          const revision = roleRow?.updatedAt ?? null;
+          if (!ap || ap.status !== "APPROVED" || ap.expires_at <= now ||
+            ap.initiator_id !== actorId || ap.target_user_id !== userId ||
+            !ap.approved_by_id || ap.approved_by_id === actorId || ap.approved_by_id === userId ||
+            ap.expected_role !== before || ap.requested_role !== role || ap.reason !== input.reason ||
+            (ap.expected_updated_at?.getTime() ?? null) !== (revision?.getTime() ?? null))
+            return { kind: "rejected", reason: "approval_required" } as const;
+          const approvingAdmin = await tx.$queryRaw<{ id: string }[]>`
+            SELECT u.id FROM users u JOIN user_roles ur ON ur.user_id = u.id
+            WHERE u.id = ${ap.approved_by_id}::uuid AND ur.role = 'SUPER_ADMIN'
+              AND u.status = 'ACTIVE' AND u.deleted_at IS NULL`;
+          if (approvingAdmin.length !== 1 || !(await consumeFreshStepup(tx, actorId, input.actorSessionId, now)))
+            return { kind: "rejected", reason: "approval_required" } as const;
+          await tx.$executeRaw`UPDATE role_change_approvals SET status = 'CONSUMED',
+            consumed_at = ${now}::timestamptz WHERE id = ${ap.id}::uuid AND status = 'APPROVED'`;
+        }
         // USER: rol satırı silinir (user_roles_not_user_check); diğerleri satırı yazar, veren aktördür.
         if (role === "USER") await tx.userRole.delete({ where: { userId } });
         else {

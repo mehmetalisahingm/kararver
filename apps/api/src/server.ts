@@ -6,12 +6,16 @@ import { buildApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
 import { createMailer } from "./mail/mailer.ts";
 import { createPrismaAdminUserStore } from "./modules/admin-users/prisma-store.ts";
+import { createPrismaAccountDeletionStore } from "./modules/account-deletion/prisma-store.ts";
+import { createPrismaEmailChangeStore } from "./modules/email-change/prisma-store.ts";
+import { createPrismaAccountErasureStore } from "./modules/account-erasure/prisma-store.ts";
 import { createPrismaContentJobStore } from "./modules/content-jobs/prisma-store.ts";
 import { startContentJobRunner } from "./modules/content-jobs/runner.ts";
 import { createPrismaDataExportStore } from "./modules/data-exports/prisma-store.ts";
 import { createArgon2Hasher } from "./modules/auth/crypto.ts";
 import { createPrismaAuthStore } from "./modules/auth/prisma-store.ts";
 import { createPrismaCommunityAdminReadStore } from "./modules/communities/admin-read.ts";
+import { createPrismaCommunityOwnerStore } from "./modules/communities/owner.ts";
 import { createPrismaCommunityStore } from "./modules/communities/prisma-store.ts";
 import { createPrismaCommunityRequestStore } from "./modules/communities/request-routes.ts";
 import { createPrismaMediaStore } from "./modules/media/prisma-store.ts";
@@ -27,6 +31,8 @@ import { createPrismaPollStore } from "./modules/polls/prisma-store.ts";
 import { createPrismaProfileStore } from "./modules/profiles/prisma-store.ts";
 import { createPrismaRbacStore } from "./modules/rbac/prisma-store.ts";
 import { createPrismaBulkModerationStore } from "./modules/moderation/bulk.ts";
+import { createPrismaMfaStore } from "./modules/security/prisma-store.ts";
+import { createPrismaRoleApprovalStore } from "./modules/security/approval-store.ts";
 import { createPrismaModerationStore } from "./modules/moderation/prisma-store.ts";
 import { createPrismaNotificationStore } from "./modules/notifications/prisma-store.ts";
 import { createPrismaReportStore } from "./modules/reports/prisma-store.ts";
@@ -64,6 +70,8 @@ const app = buildApp({
   config,
   settingsService,
   authStore: createPrismaAuthStore(prisma),
+  mfaStore: createPrismaMfaStore(prisma, config.authTokenPepper),
+  roleApprovalStore: createPrismaRoleApprovalStore(prisma),
   rbacStore: createPrismaRbacStore(prisma),
   pollStore: createPrismaPollStore(prisma),
   profileStore: createPrismaProfileStore(prisma),
@@ -82,13 +90,17 @@ const app = buildApp({
   communityStore: createPrismaCommunityStore(prisma),
   communityRequestStore: createPrismaCommunityRequestStore(prisma),
   communityAdminReadStore: createPrismaCommunityAdminReadStore(prisma),
+  communityOwnerStore: createPrismaCommunityOwnerStore(prisma),
   onboardingStore: createPrismaOnboardingStore(prisma),
   reportStore: createPrismaReportStore(prisma),
   moderationStore: createPrismaModerationStore(prisma),
   bulkModerationStore: createPrismaBulkModerationStore(prisma),
   notificationStore: createPrismaNotificationStore(prisma),
-  adminUserStore: createPrismaAdminUserStore(prisma),
+  adminUserStore: createPrismaAdminUserStore(prisma, { enforceCriticalApprovals: config.roleApprovalsRequired }),
   dataExportStore: createPrismaDataExportStore(prisma),
+  accountErasureStore: createPrismaAccountErasureStore(prisma),
+  emailChangeStore: createPrismaEmailChangeStore(prisma),
+  accountDeletionStore: createPrismaAccountDeletionStore(prisma),
   contentJobStore: createPrismaContentJobStore(prisma),
   metricsStore: createPrismaMetricsStore(prisma),
   opsProbe: createPrismaOpsProbe(prisma),

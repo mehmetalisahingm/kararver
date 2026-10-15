@@ -4,6 +4,9 @@ import surfaces from "../../components/content-surfaces.module.css";
 import { FormEvent, useEffect, useState } from "react";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
+import { ApiClient } from "../../lib/api-client";
+import { DeletionSection } from "../../features/account/deletion-section";
+import { EmailChangeSection } from "../../features/account/email-change-section";
 import type { Poll, PublicProfile } from "../../lib/model";
 
 export default function Page() {
@@ -138,9 +141,13 @@ export default function Page() {
 
         <div className="kv-row">
           <Link className="kv-button kv-button--secondary" href="/ilgi-alanlari">İlgi alanlarını düzenle</Link>
+          <Link className="kv-button kv-button--secondary" href="/hesap/guvenlik">Hesap güvenliği</Link>
           <Link href="/">Akışa dön</Link>
         </div>
       </section>
+
+      {client instanceof ApiClient && <EmailChangeSection client={client} currentEmail={user.email} />}
+      {client instanceof ApiClient && <DeletionSection client={client} />}
 
       {realProfile && (
         <section className="kv-card screen-stack" aria-labelledby="saved-title">

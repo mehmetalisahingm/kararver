@@ -59,13 +59,13 @@ export async function snapshotDay(deps: SnapshotJobDeps, localDate: string, poll
       ),
       last_event AS (
         SELECT DISTINCT ON (e.poll_id, e.user_id) e.poll_id, e.vote_id, e.type, e.to_option_id
-        FROM vote_events e JOIN polls_in pi ON pi.id = e.poll_id, bounds b
+        FROM statistical_vote_events e JOIN polls_in pi ON pi.id = e.poll_id, bounds b
         WHERE e.occurred_at < b.cutoff_at
         ORDER BY e.poll_id, e.user_id, e.occurred_at DESC, e.id DESC
       ),
       totals AS (
         SELECT l.poll_id, count(*)::int AS total
-        FROM last_event l JOIN votes v ON v.id = l.vote_id
+        FROM last_event l JOIN statistical_votes v ON v.id = l.vote_id
         WHERE l.type IN ('CAST', 'CHANGE', 'RESTORE') AND v.invalidated_at IS NULL
         GROUP BY l.poll_id
       )
@@ -86,13 +86,13 @@ export async function snapshotDay(deps: SnapshotJobDeps, localDate: string, poll
       day_rows AS (SELECT s.poll_id FROM poll_daily_snapshots s, bounds b WHERE s.local_date = b.local_date ${only(Prisma.sql`s.poll_id`)}),
       last_event AS (
         SELECT DISTINCT ON (e.poll_id, e.user_id) e.poll_id, e.vote_id, e.type, e.to_option_id
-        FROM vote_events e JOIN day_rows d ON d.poll_id = e.poll_id, bounds b
+        FROM statistical_vote_events e JOIN day_rows d ON d.poll_id = e.poll_id, bounds b
         WHERE e.occurred_at < b.cutoff_at
         ORDER BY e.poll_id, e.user_id, e.occurred_at DESC, e.id DESC
       ),
       counts AS (
         SELECT l.poll_id, l.to_option_id AS option_id, count(*)::int AS n
-        FROM last_event l JOIN votes v ON v.id = l.vote_id
+        FROM last_event l JOIN statistical_votes v ON v.id = l.vote_id
         WHERE l.type IN ('CAST', 'CHANGE', 'RESTORE') AND v.invalidated_at IS NULL
         GROUP BY l.poll_id, l.to_option_id
       )
