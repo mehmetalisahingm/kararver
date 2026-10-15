@@ -234,8 +234,8 @@ Hesap silme paylaşım ve yorum metinlerini de kaldırır. `willRemove` paylaş�
 2. **Kullanıcı adı ve e-posta serbest kalır** (yeni kayıt alabilir). Marka/taklit riski için ayrılmış ad listesi gerekirse ayrı iş.
 
 Yedeklerin açık saklama süresi ve geri yüklemede silme kararlarını yeniden uygulama mekanizması yayın kabulünde ayrıca kanıtlanmalıdır.
-3. **Kullanıcıya kendi hesabını silme akışı yok**; yalnız yönetici başlatır. Self-servis (e-postayla onay bağlantısı) sonraki dilim.
-4. **Kullanıcıya bildirim yok**: anonimleştirme sonrası adres silindiği için e-posta gönderilmez. İşlemden önce onay e-postası istenirse #182 ikinci onay akışıyla birlikte.
+3. **Kullanıcının kendi silme akışı** [§12](#12-kullanıcının-kendi-hesabını-silmesi)'dedir (varsayılan kapalı); bu bölüm yönetici başlatmalı yoldur.
+4. **Yönetici yolunda kullanıcıya bildirim yok**: anonimleştirme sonrası adres silindiği için e-posta gönderilmez. Kullanıcının kendi yolunda onay ve tamamlandı bildirimleri vardır (§12).
 5. **MFA zorunlu:** işlemi yapan süper adminin mevcut, iptal edilmemiş oturumuna bağlı 5 dakikalık doğrulama mutation transaction'ında bir kez tüketilir. Yazılı kullanıcı adı ve gerekçe kontrolleri sürer. İki yönetici rol onayı bu farklı işlemi onaylamış sayılmaz; ikinci kişi politikası ayrıca ele alınabilir.
 6. **Depo temizliği asenkron:** avatar ve içerik görselleri DB'de hemen yayından kalkar. Worker 20'lik gruplar işler; hata sonrası 1–15 dakika gecikmeyle tekrar dener. Başarısız ilk grup sonraki hesapları sürekli tıkamaz. Bir dakikada bütün kuyruğun biteceği garanti edilmez.
 7. Anonimleştirmeden hemen önce giriş yapan bir isteğin açtığı oturum satırı (yarış) kalabilir; `deleted_at` doluyken oturum çözümlenmez ve satır süresi dolunca temizlenir.
@@ -279,3 +279,37 @@ Eski adrese erişimini kaybeden kullanıcı içindir; kimlik destek kanalında d
 - Uygulama içi (web) bildirim yoktur; yalnız e-posta.
 
 **Test:** `apps/api/test/email-change.test.ts` (bayrak, yetki ve kendi hesabı, parola/doğrulama, tam akış ve sıra, tekrar tıklama, reddet ve `already_applied`, iptal/`replaced`, adres çakışması ve `email_taken`, süre, sıklık sınırı, yarışlar, destek yolu, anonimleştirme, audit'te adres olmaması) ve `apps/worker/test/email-change-expire.test.ts`.
+
+## 12. Kullanıcının kendi hesabını silmesi
+
+KVKK silme hakkının **kullanıcı başlatmalı** yolu (#181). Silmenin kendisi §10'daki anonimleştirmedir (aynı kapsam, engeller, kilitler ve idempotency; `account-erasure` `anonymize`, `self` kipi); bu bölüm yalnız **talebin nasıl açıldığı, doğrulandığı ve onaylandığı**dır. Ayar `account.selfDeletionEnabled` (KV-40, **varsayılan kapalı**): geri alınamaz olduğu, posta altyapısı ve silme kapsamının hukuki kabulü doğrulanmadan açılmaz. Kapalıyken talep 503 `FEATURE_DISABLED`; iptal ve bağlantı onayı/iptali çalışır.
+
+### 12.1 Akış (üç adım, her biri ayrı güvence)
+
+1. **Önizleme** `GET /me/deletion`: silinecek (paylaşım, yorum, görsel, oturum, üyelik, tercih...) ve korunacak kayıtlar, engeller, MFA gerekip gerekmediği, açık talep. Salt okunur. **Yasal saklamanın gerekçesi gösterilmez**, yalnız engel kodu (`legal_hold`).
+2. **Talep** `POST /me/deletion` — **yeniden kimlik doğrulama**: mevcut parola (yanlışı giriş başarısızlık sayacına eklenir; çalınmış oturumla parola denenemez) + MFA açıksa bu oturumda **taze step-up** (talep transaction'ında bir kez tüketilir) + **kullanıcı adının yazılı teyidi**. Bu adım **hesabı silmez**: hesabın kayıtlı e-postasına 24 saat geçerli "onayla" ve "bu ben değilim" bağlantıları gider. Saatte en çok 3 talep, 60 sn bekleme; yeni talep öncekini iptal eder (`replaced`); hesap başına tek açık talep (kısmi unique index).
+3. **Açık onay** `POST /auth/deletion/confirm` (token): e-postadaki bağlantıyı açmak hiçbir şey yapmaz; kullanıcı sayfadaki tehlike düğmesine basınca **tek transaction'da** silinir. Oturum gerekmez (bağlantı başka cihazda açılabilir); yetki token'dır (yalnız özet saklanır, URL fragment'ında taşınır, sayfa adresi geçmişten temizler).
+
+**Bildirimler:** talepte onay + iptal bağlantıları; tamamlanınca **eski adrese** "hesabın silindi" (adres artık hesapta tutulmaz, son bildirimdir); "ben değilim" kullanılınca iptal bildirimi.
+
+### 12.2 İptal ve güvenlik
+
+- **Kendi iptali** `DELETE /me/deletion` ve **bağlantıyla iptal** `POST /auth/deletion/cancel`. Bağlantıyla iptal "talebi ben açmadım" sinyalidir: hesabın **bütün oturumları kapanır** ve bekleyen doğrulama/sıfırlama bağlantıları geçersiz olur. Tekrar tıklama idempotent; silme tamamlanmışsa 409 `already_deleted`.
+- **İptal ile onay yarışı:** silme transaction'ı hesap satırı kilitliyken talebin hâlâ açık ve süresi geçmemiş olduğunu doğrular (`onLocked`) ve talebi aynı transaction'da kapatır (`onDone`). Kilidi kazanan belirler: ya silinir ya iptal olur, ikisi birden olmaz; iptal edilmiş talep asla silmez (testli).
+- **Talep ile onay arasında engel doğarsa** (yasal saklama, yaptırım, rol, veri paketi) onay 409 + kod döner, talep FAILED (`blocked:<kod>`) olur ve **hiçbir şey silinmez**; engeller onay anında yeniden denetlenir.
+- **Idempotency:** tekrar tıklama 200 `unchanged` (yeni bildirim ve audit yok); beş paralel onaydan biri siler, kalanı `unchanged` döner.
+- **Engeller:** §10.2 ile aynı (`legal_hold`, `active_sanction`, `has_role`, `export_in_progress`). Rolü olan hesap önce rolünü bırakmalı (destek). `confirmation_mismatch` ve `mfa_required` yalnız talep adımındadır.
+
+### 12.3 Audit ve gizlilik
+
+`account.deletion.manage` (`request`, `cancel`; aktör hesabın sahibi), `account.deletion.confirm` (`apply` = silme, `deny` = bağlantıyla iptal). Silme kaydı yönetici işlemi (`user.anonymize`) olarak değil kullanıcının kendi işlemi olarak yazılır; `account_erasures.requested_by` hesabın kendisidir. Talep tablosu kişisel veri taşımaz (adres, ad, parola yok); audit'te e-posta, kullanıcı adı veya token yok (testli).
+
+### 12.4 Bilinen sınırlar ve açık kararlar
+
+- **Hukuki kabul gerekir:** kapsam §10.1; "tamamen silinir" ifadesi yerine "kişisel veriler kaldırılır, hesapla bağı olmayan istatistik/denetim kayıtları kalır" doğru ifadedir. Ayar bu kabul olmadan açılmamalı. Yedek saklama süresi ve geri yüklemede silme kararlarını yeniden uygulama (§10.7) hâlâ açık.
+- **Posta altyapısı:** onay bağlantısı e-postaya bağlıdır; gerçek teslimat doğrulanmadan ayar açılmaz. Gönderim başarısızsa talep açık bırakılmaz (`SEND_FAILED`).
+- **Bekleme süresi (cooling-off) yok:** onay bağlantısı tıklanınca silme anında olur. İstenirse onay ile silme arasına geri alınabilir süre eklemek ayrı karardır (geri yükleme için anonimleştirmeden önce verinin tutulması gerekir; §10 ile çelişir).
+- Kullanıcının e-postasına erişimi yoksa kendi yolunu kullanamaz; yönetici başlatmalı yol (§10) veya e-posta değişimi (§11) kullanılır.
+- Talep adımında MFA kodu kullanıcı arayüzünde step-up ile alınır; MFA'sız hesapta yalnız parola istenir.
+
+**Test:** `apps/api/test/account-deletion.test.ts` (bayrak, kimlik, yeniden kimlik doğrulama ve teyit, önizleme ve yasal saklama gerekçesinin sızmaması, engeller, talebin silmemesi ve onayla silinmesi, idempotency ve paralel onay, kendi iptali ve `replaced`, bağlantıyla iptal ve oturum kapanışı, süre, sıklık sınırı, talep-onay arası engel, iptal/onay yarışı, MFA, audit'te kişisel veri olmaması), `apps/web/test/self-deletion.test.ts` ve `apps/web/test/states/self-deletion.spec.ts` (tarayıcıda açık tıklama, fragment temizliği, MFA sırası, yasal saklama).

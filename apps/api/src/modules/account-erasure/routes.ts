@@ -11,6 +11,7 @@ export type AccountErasureDeps = { store: AccountErasureStore; users: AdminUserS
 const conflict = (message: string, code: string) => new ApiError("CONFLICT", message, [{ code }]);
 
 const ANONYMIZE_CONFLICTS: Record<Exclude<AnonymizeRejection, "not_found" | "forbidden">, () => ApiError> = {
+  stale: () => conflict("İşlem artık geçerli değil; sayfayı yenile.", "stale"),
   mfa_required: () => conflict("Hesap silmeden önce bu oturumda MFA ile yeniden doğrula.", "mfa_required"),
   confirmation_mismatch: () => conflict("Yazılı teyit hesabın kullanıcı adıyla eşleşmiyor; hiçbir şey değişmedi.", "confirmation_mismatch"),
   legal_hold: () => conflict("Hesapta yasal saklama var; kaldırılana kadar anonimleştirilemez.", "legal_hold"),

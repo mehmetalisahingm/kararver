@@ -2,6 +2,7 @@
 //
 // Her değiştiren işlem tek transaction'dadır: hedef kullanıcı satırı kilitlenir (admin-users ile aynı kilit), yetki taze
 // aktörle yeniden verilir, ardından kişisel veri temizliği, kalıcı kayıt (account_erasures) ve audit birlikte yazılır.
+import type { Prisma } from "@kararver/db";
 import type { Mutation } from "../admin-users/store.ts";
 
 export type ErasureBlocker = "legal_hold" | "active_sanction" | "has_role" | "export_in_progress";
@@ -33,8 +34,25 @@ export type ErasurePreviewRow = {
   willRetain: RetainedCounts;
 };
 
-export type AnonymizeInput = Mutation & { userId: string; reason: string; confirmUsername: string; actorSessionId?: string };
-export type AnonymizeRejection = "not_found" | "forbidden" | "confirmation_mismatch" | "mfa_required" | ErasureBlocker;
+/**
+ * `self`: kullanıcının kendi silme talebi (account-deletion modülü, KV-33 §12). Yetki yönetici kuralıyla değil "aktör = hedef"
+ * ile verilir; yazılı teyit ve MFA talep adımında alınmıştır, burada aranmaz. Engeller, kilitler, kapsam ve idempotency aynıdır.
+ */
+export type AnonymizeInput = Mutation & {
+  userId: string;
+  reason: string;
+  confirmUsername: string;
+  actorSessionId?: string;
+  self?: boolean;
+  /**
+   * Yalnız `self`: hesap satırı kilitliyken, silmeden önce çağrılır; false dönerse hiçbir şey silinmez (`stale`). Silme talebinin
+   * hâlâ açık olduğunu kilit altında doğrular: iptal ile onay yarışında iptal kazanır.
+   */
+  onLocked?: (tx: Prisma.TransactionClient) => Promise<boolean>;
+  /** Yalnız `self`: silme (veya zaten silinmiş) sonucu aynı transaction'da talebi kapatır. */
+  onDone?: (tx: Prisma.TransactionClient) => Promise<void>;
+};
+export type AnonymizeRejection = "not_found" | "forbidden" | "confirmation_mismatch" | "mfa_required" | "stale" | ErasureBlocker;
 export type AnonymizeResult =
   | { kind: "anonymized" | "unchanged"; at: Date }
   | { kind: "rejected"; reason: AnonymizeRejection };

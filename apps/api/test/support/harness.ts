@@ -18,6 +18,7 @@ import type { RateLimitStore } from "../../src/modules/rate-limit/store.ts";
 import { createMemoryRateLimitStore } from "./memory-rate-limit-store.ts";
 import { createPrismaAuditStore } from "../../src/modules/audit/prisma-store.ts";
 import { createPrismaAdminUserStore } from "../../src/modules/admin-users/prisma-store.ts";
+import { createPrismaAccountDeletionStore } from "../../src/modules/account-deletion/prisma-store.ts";
 import { createPrismaEmailChangeStore } from "../../src/modules/email-change/prisma-store.ts";
 import { createPrismaAccountErasureStore } from "../../src/modules/account-erasure/prisma-store.ts";
 import { createPrismaContentJobStore } from "../../src/modules/content-jobs/prisma-store.ts";
@@ -270,6 +271,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     dataExportStore: backend.prisma ? createPrismaDataExportStore(backend.prisma) : undefined,
     accountErasureStore: backend.prisma ? createPrismaAccountErasureStore(backend.prisma) : undefined,
     emailChangeStore: backend.prisma ? createPrismaEmailChangeStore(backend.prisma) : undefined,
+    accountDeletionStore: backend.prisma ? createPrismaAccountDeletionStore(backend.prisma) : undefined,
     contentJobStore: backend.prisma ? createPrismaContentJobStore(backend.prisma) : undefined,
     metricsStore: backend.prisma ? createPrismaMetricsStore(backend.prisma, () => clock.now) : undefined,
     notificationStore: backend.prisma ? createPrismaNotificationStore(backend.prisma) : undefined,
