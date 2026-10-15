@@ -92,6 +92,7 @@ import type { MetricsStore } from "./modules/metrics/store.ts";
 import type { OpsProbe } from "./modules/ops/probe.ts";
 import { registerOpsRoutes } from "./modules/ops/routes.ts";
 import { readHeartbeatFile } from "./modules/ops/status.ts";
+import { emergencySwitchesView } from "./modules/ops/switches.ts";
 import { createOpsTelemetry, type OpsTelemetry } from "./modules/ops/telemetry.ts";
 
 export type AppDeps = {
@@ -458,6 +459,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       const s = await rateLimitSettings();
       return { email: s.loginFailuresPerEmail, ip: s.loginFailuresPerIp };
     },
+    switches: settings ? () => emergencySwitchesView(settings) : undefined,
   });
   if (deps.commentStore) {
     registerCommentRoutes(route, {
