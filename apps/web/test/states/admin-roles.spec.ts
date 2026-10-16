@@ -107,6 +107,8 @@ for (const path of SECTIONS) {
     const main = page.locator("main");
     await expect(main.getByRole("alert").first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Yönetim açılamadı." })).toHaveCount(0);
+    // Yükleme hatası boş durumla karıştırılmaz: hata varken "başvuru yok" denmez.
+    if (path === "/admin/communities") await expect(main.getByText("Bu durumda başvuru yok.")).toHaveCount(0);
     expect((await axe(page)).violations).toEqual([]);
 
     failing = false;
