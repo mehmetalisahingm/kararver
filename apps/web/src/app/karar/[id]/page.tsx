@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PollDetail } from "../../../features/polls/screens";
 import { ShareActions } from "../../../features/polls/share-actions";
 import { loadPublicPoll, webBaseUrl } from "../../../lib/server-public-polls";
-import { publicRobots } from "../../../lib/seo";
+import { pollShareMetadata, publicRobots } from "../../../lib/seo";
 
 function descriptionOf(value: string | null): string {
   const text = (value ?? "Kararver topluluğunda bu karar hakkında fikirleri keşfet.").replace(/\s+/g, " ").trim();
@@ -27,15 +27,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     title,
     description,
     alternates: { canonical },
-    openGraph: {
-      type: "article",
-      url: canonical,
-      siteName: "Kararver",
-      locale: "tr_TR",
-      title,
-      description,
-      ...(poll.media[0] ? { images: [{ url: poll.media[0].url, alt: poll.title }] } : {}),
-    },
+    ...pollShareMetadata({ title, description, canonical, imageUrl: poll.media[0]?.url }),
     robots: publicRobots(),
   };
 }
