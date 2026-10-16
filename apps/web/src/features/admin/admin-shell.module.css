@@ -33,3 +33,11 @@
 .nav a{min-height:44px;justify-content:center}
 .nav a:focus-visible{outline:3px solid var(--kv-focus);outline-offset:2px}
 @media(max-width:900px){.nav{scroll-padding-inline:10px}.nav a{flex:0 0 auto;min-height:44px}}
+
+/* #194: keep the sixteen real dashboard totals scannable on phones/tablets.
+   Narrower screens retain a single column; tables keep their keyboard scroll region. */
+@media(min-width:340px) and (max-width:900px){
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .metric{min-width:0;padding:12px;overflow-wrap:anywhere}
+  .metric strong{font-size:clamp(1.15rem,4vw,1.35rem)}
+}
