@@ -40,3 +40,8 @@ beta-reports/
 # Private browser sessions and local verification snapshots
 .playwright-cli/
 output/playwright/
+
+# KV-48 / #51: yedek anahtarları ve yedek dosyaları asla commit edilmez.
+*.pem
+*.dump
+*.dump.enc
