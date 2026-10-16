@@ -4,7 +4,7 @@ import { checkStagingWrites } from "./staging-write-acceptance.mjs";
 
 const sha = "a".repeat(40);
 const options = { email: "operator@example.test", password: "secret-password", expectedSha: sha, apply: true };
-const response = (status, data = null, cookie) => new Response(status === 204 ? null : JSON.stringify(data), { status, headers: { "content-type": "application/json", ...(cookie ? { "set-cookie": `kv_session=${cookie}; Secure; HttpOnly; SameSite=Lax` } : {}) } });
+const response = (status, data = null, cookie) => new Response(status === 204 ? null : JSON.stringify(data), { status, headers: { "content-type": "application/json", ...(status === 429 ? { "retry-after": "20" } : {}), ...(cookie ? { "set-cookie": `kv_session=${cookie}; Secure; HttpOnly; SameSite=Lax` } : {}) } });
 
 test("staging writes require explicit opt-in and verified SHA before any network access", async () => {
   const never = () => { throw new Error("network forbidden"); };
@@ -33,7 +33,7 @@ test("wrong release or non-SUPER_ADMIN stops before creating accounts and logs o
 
 function harness({ failGrant = false, leakResults = false } = {}) {
   const calls = [], actors = [];
-  let role = "USER", votes = 0, closed = false, banned = false;
+  let role = "USER", votes = 0, closed = false, banned = false, pollCount = 0, communityCount = 0, locked = false;
   const http = async (url, init = {}) => {
     assert.ok(url.startsWith("https://kararver-staging.vercel.app/api/v1/") || url === "https://api-staging-45cb.up.railway.app/health");
     const path = new URL(url).pathname.replace("/api/v1", ""), method = init.method ?? "GET", body = init.body ? JSON.parse(init.body) : undefined;
@@ -54,13 +54,23 @@ function harness({ failGrant = false, leakResults = false } = {}) {
     }
     if (path.endsWith("/role")) { if (failGrant && body.role === "ADMIN") return response(500, {}); role = body.role; return response(200, {}); }
     if (path === "/admin/ops") return response(403, {});
+    if (path === "/admin/communities") return response(201, { data: { id: `community-${communityCount++}` } });
+    if (path.endsWith("/membership")) return response(204);
+    if (path.includes("/moderators/")) return response(200, { data: { role: "MODERATOR" } });
+    if (path.startsWith("/admin/communities/")) return response(200, {});
+    if (path.endsWith("/moderation")) {
+      if (path.includes("owned-other") && cookie === "kv_session=actor-1-cookie") return response(403, {});
+      locked = body.action === "LOCK";
+      return response(200, {});
+    }
     if (path.endsWith("/sanctions")) { if (path.includes("actor-1")) banned = true; return response(201, {}); }
     if (path === "/categories") return response(200, { data: [{ id: "category" }] });
-    if (path === "/polls") return response(201, { data: { id: "owned-poll", options: [{ id: "A" }, { id: "B" }] } });
+    if (path === "/polls") return response(201, { data: { id: pollCount++ ? "owned-other" : "owned-poll", options: [{ id: "A" }, { id: "B" }] } });
     if (path.endsWith("/close")) { closed = true; return response(200, {}); }
     if (path.endsWith("/vote")) {
       if (cookie === "kv_session=actor-0-cookie") return response(403, { error: { code: "SELF_VOTE_FORBIDDEN" } });
       if (banned) return response(403, {});
+      if (locked) return response(409, { error: { code: "CONTENT_LOCKED" } });
       if (closed) return response(409, { error: { code: "POLL_CLOSED" } });
       votes++;
       return response(votes === 1 ? 201 : votes > 15 ? 429 : 200, {});
@@ -75,10 +85,10 @@ test("bounded acceptance verifies live-role changes, concurrency and cleanup wit
   const { calls, http } = harness();
   const report = await checkStagingWrites(options, http, async ms => assert.ok(ms <= 59_000));
   assert.equal(report.totals.fail, 0, JSON.stringify(report));
-  assert.equal(calls.filter(c => c.path.endsWith("/vote")).length, 23);
-  assert.equal(calls.filter(c => c.path.endsWith("/role")).length, 4);
+  assert.equal(calls.filter(c => c.path.endsWith("/vote")).length, 24);
+  assert.equal(calls.filter(c => c.path.endsWith("/role")).length, 6);
   assert.ok(!calls.some(c => c.path.includes("/users/root/")));
-  assert.ok(calls.some(c => c.path === "/polls/owned-poll" && c.method === "DELETE"));
+  assert.ok(calls.some(c => c.path === "/admin/polls/owned-poll/moderation" && c.body.action === "REMOVE"));
   assert.equal(calls.filter(c => c.path.endsWith("/sanctions")).length, 2);
   for (const secret of [options.password, options.email, "root-cookie", "actor-0-cookie"]) assert.ok(!JSON.stringify(report).includes(secret));
 });
