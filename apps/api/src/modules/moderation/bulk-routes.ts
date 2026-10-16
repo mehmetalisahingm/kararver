@@ -12,7 +12,7 @@ import type { Route } from "../../http/route.ts";
 import { toPublicUser } from "../admin-users/view.ts";
 import type { RbacStore } from "../rbac/store.ts";
 import { rateLimitError } from "../rate-limit/limiter.ts";
-import { BATCH_HOURLY_LIMIT, batchDigest, type BulkModerationStore } from "./bulk.ts";
+import { BATCH_HOURLY_LIMIT, approvalRequired, batchDigest, type BulkModerationStore } from "./bulk.ts";
 import { approvalView, registerBulkApprovalRoutes } from "./bulk-approval-routes.ts";
 import type { BulkApprovalStore } from "./bulk-approval.ts";
 import { createPlanner, executeBatch, type Plan } from "./bulk-core.ts";
@@ -33,8 +33,7 @@ export type BulkModerationDeps = {
 export { BATCH_HOURLY_LIMIT };
 const HOUR_MS = 60 * 60 * 1000;
 
-/** Pencere toplamı (onaysız uygulanan) + bu işlemin değişecek kayıt sayısı eşiğe ulaşıyorsa ikinci onay gerekir. */
-export const approvalRequired = (willChange: number, windowApplied: number): boolean => willChange > 0 && windowApplied + willChange >= BULK_APPROVAL_THRESHOLD;
+export { approvalRequired };
 
 export function registerBulkModerationRoutes(route: Route, deps: BulkModerationDeps): void {
   registerUndoRoutes(route, deps);
@@ -80,12 +79,27 @@ export function registerBulkModerationRoutes(route: Route, deps: BulkModerationD
       if (batchDigest(kind, body.action, body.ids, states) !== body.digest) {
         throw new ApiError("CONFLICT", "Seçilen kayıtlar önizlemeden sonra değişti; önizlemeyi yenile.", [{ code: "preview_stale" }]);
       }
-      if ((await batches.recentBatchCount(viewer!.id, new Date(at.getTime() - HOUR_MS))) >= BATCH_HOURLY_LIMIT) throw rateLimitError(HOUR_MS / 1000 / 4);
 
-      // İkinci onay: pencere toplamı eşiğe ulaşıyorsa hiçbir şey uygulanmaz, bekleyen bir talep açılır (KV-37 §8).
-      const willChange = plans.filter((p) => p.outcome === "WILL_CHANGE").length;
-      const windowApplied = await batches.unapprovedAppliedSince(viewer!.id, new Date(at.getTime() - BULK_APPROVAL_WINDOW_MINUTES * 60_000));
-      if (approvalRequired(willChange, windowApplied)) {
+      // Saatlik sınır + ikinci onay penceresi + parti açılışı tek transaction'da (aktör kilidi altında): paralel istekler birbirinin
+      // rezervasyonunu görür. Eşik aşılırsa hiçbir şey uygulanmaz, bekleyen bir talep açılır (KV-37 §8).
+      const willPlans = plans.filter((p) => p.outcome === "WILL_CHANGE");
+      const willChange = willPlans.length;
+      const begin = await batches.beginBatch({
+        actorId: viewer!.id,
+        kind,
+        action: body.action,
+        reason: body.reason,
+        digest: body.digest,
+        requestId: request.id,
+        total: body.ids.length,
+        willChange,
+        now: at,
+        hourlySince: new Date(at.getTime() - HOUR_MS),
+        hourlyLimit: BATCH_HOURLY_LIMIT,
+        windowSince: new Date(at.getTime() - BULK_APPROVAL_WINDOW_MINUTES * 60_000),
+      });
+      if (begin.kind === "rate_limited") throw rateLimitError(HOUR_MS / 1000 / 4);
+      if (begin.kind === "approval_required") {
         const created = await approvals.create({
           initiatorId: viewer!.id,
           kind,
@@ -94,6 +108,9 @@ export function registerBulkModerationRoutes(route: Route, deps: BulkModerationD
           digest: body.digest,
           ids: [...body.ids].sort(),
           willChange,
+          // Onayda başlatanın yetkisi bu kapsama göre yeniden doğrulanır: topluluk dışı içerik veya kaldırılmışı geri yükleme yönetici ister.
+          needsAdmin: willPlans.some((p) => p.state!.communityId === null || p.state!.status === "REMOVED"),
+          communityIds: [...new Set(willPlans.map((p) => p.state!.communityId).filter((c): c is string => c !== null))].sort(),
           requestId: request.id,
           now: at,
           expiresAt: new Date(at.getTime() + BULK_APPROVAL_TTL_MINUTES * 60_000),
@@ -105,7 +122,7 @@ export function registerBulkModerationRoutes(route: Route, deps: BulkModerationD
       }
 
       const admin = (await ctx.moderationScope()).all;
-      const batchId = await batches.startBatch({ actorId: viewer!.id, kind, action: body.action, reason: body.reason, digest: body.digest, requestId: request.id, total: body.ids.length, now: at });
+      const batchId = begin.batchId;
       const { counts, items } = await executeBatch(deps, { batchId, kind, action: body.action, reason: body.reason, plans, actorId: viewer!.id, actorIsAdmin: admin, requestId: request.id, at });
       return { status: 200, body: { data: { batchId, summary: { total: body.ids.length, ...counts }, items } } };
     });

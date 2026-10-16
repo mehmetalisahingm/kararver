@@ -4,17 +4,19 @@
 //
 // Güvenlik:
 //  - Talep içeriği DEĞİŞTİRMEZ; yalnız ikinci onaycı onaylayınca parti uygulanır.
-//  - Onay transaction'ı: talep satır kilidi → durum/süre → başlatan ≠ onaylayan → onaylayan etkin ADMIN+ → taze tek kullanımlık MFA
-//    step-up (en son, doğrulamalar geçtikten sonra tüketilir) → parti kaydı + talep güncellemesi + audit aynı transaction'da.
+//  - Onay transaction'ı: talep satır kilidi → durum/süre → başlatan ≠ onaylayan → onaylayan etkin ADMIN+ (aktif askı/ban yok) →
+//    BAŞLATANIN yetkisi yeniden doğrulanır (etkin hesap, rol, MODERATOR ise talep kapsamındaki topluluk atamaları; satırlar FOR SHARE) →
+//    taze tek kullanımlık MFA step-up (en son, doğrulamalar geçtikten sonra tüketilir) → parti kaydı + talep güncellemesi + audit
+//    aynı transaction'da. Süresi dolan talepler worker tarafından EXPIRED yapılır (apps/worker jobs/moderation/expire-approvals.ts).
 //  - Aynı anda bekleyen talep sayısı başlatan başına sınırlıdır (kullanıcı satırı kilidi altında sayılır).
 import { BULK_APPROVAL_PENDING_MAX } from "@kararver/contracts";
-import type { Prisma, PrismaClient, UserStatus } from "@kararver/db";
+import { Prisma, type PrismaClient, type UserStatus } from "@kararver/db";
 import { writeAudit } from "../audit/write.ts";
 import { consumeFreshStepup } from "../security/stepup-guard.ts";
 import type { BulkAction } from "./bulk.ts";
 import type { ContentKind, ListAfter, PublicUserRef } from "./store.ts";
 
-export type ApprovalState = "PENDING" | "APPROVED" | "REJECTED" | "CANCELED";
+export type ApprovalState = "PENDING" | "APPROVED" | "REJECTED" | "CANCELED" | "EXPIRED";
 
 export type ApprovalRecord = {
   id: string;
@@ -39,7 +41,22 @@ export type ApprovalRecord = {
 /** Başlatanın şimdiki hali: onay anında yetki yeniden kurulur (rol/durum değişmiş olabilir). */
 export type InitiatorRow = { id: string; status: UserStatus; emailVerified: boolean; deleted: boolean };
 
-export type CreateInput = { initiatorId: string; kind: ContentKind; action: BulkAction; reason: string; digest: string; ids: string[]; willChange: number; requestId: string | null; now: Date; expiresAt: Date };
+export type CreateInput = {
+  initiatorId: string;
+  kind: ContentKind;
+  action: BulkAction;
+  reason: string;
+  digest: string;
+  ids: string[];
+  willChange: number;
+  /** Değişecek kayıtlardan biri topluluksuz veya kaldırılmış (geri yüklenecek) ise yönetici gerekir. */
+  needsAdmin: boolean;
+  /** Değişecek kayıtların toplulukları: MODERATOR başlatanın onay anında bunların hepsinde atanmış olması gerekir. */
+  communityIds: string[];
+  requestId: string | null;
+  now: Date;
+  expiresAt: Date;
+};
 export type ApproveInput = { approvalId: string; approverId: string; sessionId: string; reason: string; requestId: string | null; now: Date };
 export type DeclineInput = { approvalId: string; actorId: string; mode: "reject" | "cancel"; reason: string; requestId: string | null; now: Date };
 
@@ -56,7 +73,12 @@ export interface BulkApprovalStore {
   get(id: string): Promise<ApprovalRecord | null>;
   list(filter: ListFilter, limit: number): Promise<ApprovalRecord[]>;
   initiator(id: string): Promise<InitiatorRow | null>;
-  approve(input: ApproveInput): Promise<{ kind: "ok"; approval: ApprovalRecord; batchId: string } | { kind: "rejected"; reason: "closed" | "self_approval" | "forbidden" | "stepup_required" }>;
+  approve(
+    input: ApproveInput,
+  ): Promise<
+    | { kind: "ok"; approval: ApprovalRecord; batchId: string; initiatorIsAdmin: boolean }
+    | { kind: "rejected"; reason: "closed" | "self_approval" | "forbidden" | "stepup_required" | "initiator_changed" }
+  >;
   decline(input: DeclineInput): Promise<{ kind: "ok"; approval: ApprovalRecord } | { kind: "rejected"; reason: "closed" | "self_approval" | "forbidden" }>;
 }
 
@@ -93,7 +115,24 @@ function toRecord(r: Row): ApprovalRecord {
   };
 }
 
-type Locked = { id: string; status: string; expires_at: Date; initiator_id: string; kind: string; action: string; will_change: number; ids: string[]; reason: string; digest: string };
+type Locked = {
+  id: string;
+  status: string;
+  expires_at: Date;
+  initiator_id: string;
+  kind: string;
+  action: string;
+  will_change: number;
+  ids: string[];
+  reason: string;
+  digest: string;
+  needs_admin: boolean;
+  community_ids: string[];
+};
+
+/** Etkin SUSPEND/BAN yaptırımı olan hesap onaylayamaz ve (başlatan olarak) işlem yaptıramaz; users.status ile senkron olsa da kemer-askı. */
+const NO_BLOCKING_SANCTION = Prisma.sql`NOT EXISTS (
+  SELECT 1 FROM sanctions s WHERE s.user_id = u.id AND s.lifted_at IS NULL AND (s.ends_at IS NULL OR s.ends_at > now()) AND s.type IN ('SUSPEND', 'BAN'))`;
 
 export function createPrismaBulkApprovalStore(prisma: PrismaClient): BulkApprovalStore {
   const load = async (db: Prisma.TransactionClient | PrismaClient, id: string) => {
@@ -116,6 +155,8 @@ export function createPrismaBulkApprovalStore(prisma: PrismaClient): BulkApprova
             digest: input.digest,
             ids: input.ids,
             willChange: input.willChange,
+            needsAdmin: input.needsAdmin,
+            communityIds: input.communityIds,
             initiatorId: input.initiatorId,
             requestId: input.requestId,
             createdAt: input.now,
@@ -145,7 +186,13 @@ export function createPrismaBulkApprovalStore(prisma: PrismaClient): BulkApprova
       const after = filter.after;
       const s = filter.status;
       const statusWhere: Prisma.ModerationBulkApprovalWhereInput =
-        s === "EXPIRED" ? { status: "PENDING", expiresAt: { lte: filter.now } } : s === "PENDING" ? { status: "PENDING", expiresAt: { gt: filter.now } } : s ? { status: s } : {};
+        s === "EXPIRED"
+          ? { OR: [{ status: "EXPIRED" }, { status: "PENDING", expiresAt: { lte: filter.now } }] }
+          : s === "PENDING"
+            ? { status: "PENDING", expiresAt: { gt: filter.now } }
+            : s
+              ? { status: s }
+              : {};
       const rows = await prisma.moderationBulkApproval.findMany({
         where: {
           ...statusWhere,
@@ -167,15 +214,37 @@ export function createPrismaBulkApprovalStore(prisma: PrismaClient): BulkApprova
     async approve(input) {
       return prisma.$transaction(async (tx) => {
         const rows = await tx.$queryRaw<Locked[]>`
-          SELECT id, status, expires_at, initiator_id, kind::text AS kind, action::text AS action, will_change, ids, reason, digest
+          SELECT id, status, expires_at, initiator_id, kind::text AS kind, action::text AS action, will_change, ids, reason, digest, needs_admin, community_ids
           FROM moderation_bulk_approvals WHERE id = ${input.approvalId}::uuid FOR UPDATE`;
         const a = rows[0];
         if (!a || a.status !== "PENDING" || a.expires_at <= input.now) return { kind: "rejected" as const, reason: "closed" as const };
         if (a.initiator_id === input.approverId) return { kind: "rejected" as const, reason: "self_approval" as const };
-        const approvers = await tx.$queryRaw<{ id: string }[]>`
+        const approvers = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
           SELECT u.id FROM users u JOIN user_roles ur ON ur.user_id = u.id
-          WHERE u.id = ${input.approverId}::uuid AND ur.role IN ('ADMIN', 'SUPER_ADMIN') AND u.status = 'ACTIVE' AND u.deleted_at IS NULL`;
+          WHERE u.id = ${input.approverId}::uuid AND ur.role IN ('ADMIN', 'SUPER_ADMIN') AND u.status = 'ACTIVE' AND u.deleted_at IS NULL
+            AND ${NO_BLOCKING_SANCTION}`);
         if (approvers.length !== 1) return { kind: "rejected" as const, reason: "forbidden" as const };
+
+        // Başlatanın yetkisi onay anında transaction içinde yeniden doğrulanır (rol/hesap/atama kilitli okunur): onay ile uygulama
+        // arasında yetkisini kaybeden başlatan adına işlem yapılmaz ve step-up harcanmaz.
+        const [initiator] = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+          SELECT u.id FROM users u WHERE u.id = ${a.initiator_id}::uuid AND u.status = 'ACTIVE' AND u.deleted_at IS NULL AND ${NO_BLOCKING_SANCTION} FOR SHARE`);
+        const [initiatorRole] = initiator
+          ? await tx.$queryRaw<{ role: string }[]>`SELECT role::text AS role FROM user_roles WHERE user_id = ${a.initiator_id}::uuid FOR SHARE`
+          : [];
+        const role = initiatorRole?.role ?? null;
+        const initiatorIsAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+        let initiatorOk = initiatorIsAdmin || role === "MODERATOR";
+        if (initiatorOk && role === "MODERATOR") {
+          if (a.needs_admin) initiatorOk = false;
+          else if (a.community_ids.length > 0) {
+            const assigned = await tx.$queryRaw<{ community_id: string }[]>`
+              SELECT community_id::text AS community_id FROM community_memberships
+              WHERE user_id = ${a.initiator_id}::uuid AND role = 'MODERATOR' AND community_id = ANY(${a.community_ids}::uuid[]) FOR SHARE`;
+            initiatorOk = new Set(assigned.map((r) => r.community_id)).size === new Set(a.community_ids).size;
+          }
+        }
+        if (!initiatorOk) return { kind: "rejected" as const, reason: "initiator_changed" as const };
         // En son: step-up tek kullanımlıktır, ancak bütün koşullar sağlandığında tüketilir.
         if (!(await consumeFreshStepup(tx, input.approverId, input.sessionId, input.now))) return { kind: "rejected" as const, reason: "stepup_required" as const };
         const batch = await tx.moderationBatch.create({
@@ -207,14 +276,14 @@ export function createPrismaBulkApprovalStore(prisma: PrismaClient): BulkApprova
           requestId: input.requestId,
           at: input.now,
         });
-        return { kind: "ok" as const, approval: (await load(tx, a.id))!, batchId: batch.id };
+        return { kind: "ok" as const, approval: (await load(tx, a.id))!, batchId: batch.id, initiatorIsAdmin };
       });
     },
 
     async decline(input) {
       return prisma.$transaction(async (tx) => {
         const rows = await tx.$queryRaw<Locked[]>`
-          SELECT id, status, expires_at, initiator_id, kind::text AS kind, action::text AS action, will_change, ids, reason, digest
+          SELECT id, status, expires_at, initiator_id, kind::text AS kind, action::text AS action, will_change, ids, reason, digest, needs_admin, community_ids
           FROM moderation_bulk_approvals WHERE id = ${input.approvalId}::uuid FOR UPDATE`;
         const a = rows[0];
         if (!a || a.status !== "PENDING" || a.expires_at <= input.now) return { kind: "rejected" as const, reason: "closed" as const };

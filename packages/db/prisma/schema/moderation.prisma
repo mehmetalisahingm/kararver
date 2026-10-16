@@ -239,6 +239,8 @@ model ModerationBatch {
   // Dolu ise bu parti başka bir partinin geri almasıdır (telafi kararları); geri almanın geri alması yoktur.
   undoOfId   String?             @map("undo_of_id") @db.Uuid
   total      Int
+  // Parti açılırken rezerve edilen değişecek kayıt sayısı; bitmemiş partinin ikinci onay penceresindeki ağırlığı (bitince applied).
+  reserved   Int                 @default(0)
   applied    Int                 @default(0)
   unchanged  Int                 @default(0)
   failed     Int                 @default(0)
@@ -267,6 +269,8 @@ model ModerationBulkApproval {
   digest         String               @db.Char(64)
   ids            String[]             @db.Uuid
   willChange     Int                  @map("will_change")
+  needsAdmin     Boolean              @map("needs_admin")
+  communityIds   String[]             @default([]) @map("community_ids") @db.Uuid
   initiatorId    String               @map("initiator_id") @db.Uuid
   status         String               @default("PENDING") @db.VarChar(20)
   requestId      String?              @map("request_id") @db.Uuid

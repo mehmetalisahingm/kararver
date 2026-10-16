@@ -119,6 +119,7 @@ export function registerBulkApprovalRoutes(route: Route, deps: BulkModerationDep
       if (result.reason === "closed") throw conflict("Bu talep artık açık değil.", "closed");
       if (result.reason === "self_approval") throw new ApiError("FORBIDDEN", "Kendi talebini onaylayamazsın; başka bir yönetici onaylamalı.", [{ code: "self_approval" }]);
       if (result.reason === "stepup_required") throw new ApiError("FORBIDDEN", "Önce doğrulayıcı kodunla kimliğini doğrula.", [{ code: "stepup_required" }]);
+      if (result.reason === "initiator_changed") throw conflict("Talebi başlatan artık bu işlem için yetkili değil; talebi reddet.", "initiator_changed");
       throw new ApiError("FORBIDDEN", "Bu işlem için yetkin yok.");
     }
     const executed = await executeBatch(deps, {
@@ -128,7 +129,8 @@ export function registerBulkApprovalRoutes(route: Route, deps: BulkModerationDep
       reason: a.reason,
       plans: ev.plans,
       actorId: a.initiatorId,
-      actorIsAdmin: (await ev.access.moderationScope()).all,
+      // Yönetici bayrağı onay transaction'ında kilitli okunan rolden gelir (planlama ile onay arasında rol değişmiş olabilir).
+      actorIsAdmin: result.initiatorIsAdmin,
       requestId: request.id,
       at,
     });

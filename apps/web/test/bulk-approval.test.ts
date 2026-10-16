@@ -92,6 +92,11 @@ test("hata yüzeyi: self_approval ve stepup_required 403, preview_stale ve close
     const a = admin(() => reply("admin.moderation.bulkApprovals.approve", name));
     await assert.rejects(a.client.approveBulk(APPROVAL, "Kayıtları inceledim"), (e) => e instanceof UiError && e.code === code, `${name} → ${status}`);
   }
+  // Aynı hata kodu altındaki durumlar ayrıntı kodundan ayrılır (arayüz stepup_required'da kod alanını yeniden açar).
+  for (const [name, detail] of [["self-approval", "self_approval"], ["stepup-required", "stepup_required"], ["stale", "preview_stale"], ["closed", "closed"]] as const) {
+    const a = admin(() => reply("admin.moderation.bulkApprovals.approve", name));
+    await assert.rejects(a.client.approveBulk(APPROVAL, "Kayıtları inceledim"), (e) => e instanceof UiError && e.detail === detail, name);
+  }
 });
 
 test("karar kuralları: yalnız açık talepte; başlatan geri çeker, başka ADMIN+ onaylar/reddeder; kendi talebini onaylayamaz; moderatör karar veremez", () => {

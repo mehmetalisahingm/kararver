@@ -4,6 +4,7 @@
 // uygular) veya reddeder; başlatan kendi talebini geri çeker. Yetki ve kurallar sunucudadır; düğme gizleme yalnız yönlendirmedir.
 import { useCallback, useEffect, useState } from "react";
 import { useProduct } from "../../components/product-provider";
+import { UiError } from "../../lib/model.ts";
 import type { AdminClient, BulkApprovalDetailView, BulkApprovalFilter, BulkApprovalRecord } from "./admin-client.ts";
 import { ActionDialog, ListState, errorMessage, formatDate, isAdminRole, useAdminRoles, useRemoteList } from "./admin-ui";
 import { approvalActions, approvalStatusLabels, blockedLabels, bulkActionLabels, outcomeLabels, resultSummary } from "./bulk-model.ts";
@@ -113,9 +114,15 @@ function ApproveDialog({ admin, approval, onClose, onDone }: { admin: AdminClien
           await admin.stepUp(code);
           setVerified(true);
         }
-        const decision = await admin.approveBulk(approval!.id, reason);
-        setCode("");
-        onDone(`Onaylandı ve uygulandı: ${resultSummary(decision.result)}`);
+        try {
+          const decision = await admin.approveBulk(approval!.id, reason);
+          setCode("");
+          onDone(`Onaylandı ve uygulandı: ${resultSummary(decision.result)}`);
+        } catch (cause) {
+          // Doğrulama süresi dolmuş veya tüketilmiş: kod alanı yeniden açılır, kullanıcı yeni kod girer.
+          if (cause instanceof UiError && cause.detail === "stepup_required") { setVerified(false); setCode(""); }
+          throw cause;
+        }
       }}
     >
       {error ? <p role="alert">{error}</p> : null}

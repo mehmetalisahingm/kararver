@@ -47,7 +47,8 @@ export class HttpClient {
             fields[option ? `option-${option[1]}` : (aliases[key] ?? key)] = "message" in detail && typeof detail.message === "string" ? detail.message : parsed.data.error.message;
           }
         }
-        throw new UiError(parsed.data.error.code, parsed.data.error.message, fields);
+        const coded = parsed.data.error.details.find((d): d is { code: string } => typeof d === "object" && d !== null && "code" in d && typeof d.code === "string");
+        throw new UiError(parsed.data.error.code, parsed.data.error.message, fields, coded?.code);
       }
       throw new UiError(response.status === 404 ? "ENDPOINT_UNAVAILABLE" : "HTTP_ERROR", response.status === 404 ? "Bu hizmet henüz kullanıma açılmamış." : `İstek tamamlanamadı (${response.status}).`);
     }

@@ -17,6 +17,8 @@ Kırıcı değişiklik yok: yeni endpoint'ler, yeni yetki/audit işlemleri; `adm
 - **Değişti:** `BulkPreview.approval` (`required`, `threshold`, `windowMinutes`, `windowApplied`); `bulk` 409 `too_many_pending`.
 - Şemalar/sabitler: `BulkApprovalView`, `BulkApprovalDetail`, `BulkApprovalDecision`, `BulkApprovalStatus`, `BulkApprovalListQuery`, `BULK_APPROVAL_THRESHOLD`, `BULK_APPROVAL_WINDOW_MINUTES`, `BULK_APPROVAL_TTL_MINUTES`, `BULK_APPROVAL_PENDING_MAX`.
 - **Yetki/audit:** yeni işlemler `moderation.bulk.approve` (admin: onay, ret) ve `moderation.bulk.cancel` (moderatör: kendi talebini geri çekme); audit işlemleri `request`, `approve`, `reject`, `cancel`; yeni audit hedef türü `BULK_APPROVAL`.
+- **Sistem audit:** `moderation.bulk.expire` (worker, aktörsüz): süresi dolan talepler kalıcı `EXPIRED` olur; `BulkApprovalView.status = EXPIRED` artık hem okunurken hem kalıcıdır.
+- **İnceleme düzeltmeleri:** eşik kontrolü ve parti açılışı atomik (rezervasyonlu pencere); onay transaction'ında başlatanın yetkisi yeniden doğrulanır (`409 initiator_changed` artık transaction içinden de döner); hata ayrıntı kodu istemciye `UiError.detail` olarak iletilir.
 
 ## 1.35.0 — 2026-10-16 (Mert, #183 kullanıcı birleşik geçmişi)
 

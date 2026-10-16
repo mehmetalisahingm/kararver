@@ -7,8 +7,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
-import { BULK_APPROVAL_PENDING_MAX, BULK_APPROVAL_THRESHOLD, BulkApprovalDecision, BulkApprovalDetail, BulkApprovalView, BulkPreview, ErrorBody } from "@kararver/contracts";
+import { BULK_APPROVAL_PENDING_MAX, BULK_APPROVAL_THRESHOLD, BulkApprovalDecision, BulkApprovalDetail, BulkApprovalView, BulkPreview, ErrorBody, actions, getEndpoint, permissionForEndpoint } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
+import { createPrismaBulkApprovalStore } from "../src/modules/moderation/bulk-approval.ts";
 import { decodeBase32, hotp } from "../src/modules/security/totp.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
@@ -80,6 +81,15 @@ describe("toplu moderasyon ikinci onay (postgres)", { skip: backend ? false : "T
     h.clock.advance(30_000);
     assert.equal((await send("POST", "/me/mfa/step-up", { code: totp(user.secret!) }, user.cookie)).statusCode, 200);
   }
+  /** Aynı hesapla yeni bir oturum (farklı session id → ayrı step-up). */
+  async function login(user: User): Promise<User> {
+    const email = (await db.user.findUniqueOrThrow({ where: { id: user.id }, select: { email: true } })).email;
+    const res = await send("POST", "/auth/login", { email, password: user.password });
+    assert.equal(res.statusCode, 200, res.body);
+    const session = await db.session.findFirstOrThrow({ where: { userId: user.id }, orderBy: { createdAt: "desc" } });
+    return { ...user, cookie: sessionCookie(res.headers["set-cookie"] as string), sessionId: session.id };
+  }
+  const consumedAt = async (user: User) => (await db.sessionMfaStepup.findUniqueOrThrow({ where: { sessionId: user.sessionId } })).consumedAt;
   async function staff(role: "ADMIN" | "MODERATOR", opts: { communityId?: string; mfa?: boolean } = {}): Promise<User> {
     const user = await signUp();
     await db.userRole.create({ data: { userId: user.id, role, grantedById: superAdmin.id } });
@@ -185,6 +195,7 @@ describe("toplu moderasyon ikinci onay (postgres)", { skip: backend ? false : "T
     assert.equal(row.digest, pv.digest);
     const audit = await auditOf(view.id);
     assert.equal(audit.length, 1);
+    assert.equal(audit[0]!.action, "moderation.bulk.approve", "talep ve onay aynı işlemin türleridir (user.role.assign deseni); onay raporları operation='approve' süzer");
     assert.equal(audit[0]!.operation, "request");
     assert.equal(audit[0]!.actorId, mod.id);
     assert.equal(audit[0]!.reason, REASON);
@@ -511,5 +522,156 @@ describe("toplu moderasyon ikinci onay (postgres)", { skip: backend ? false : "T
     await assert.rejects(set({ status: "REJECTED", decidedById: other.id, decidedAt: null, decisionReason: "Gerekçeli ret" }), "karar zamanı zorunlu");
     await assert.rejects(set({ status: "APPROVED", decidedById: other.id, decidedAt: new Date(), decisionReason: "Onay", batchId: null }), "onaylı talepte parti zorunlu");
     assert.equal((await approvalRow(id)).status, "PENDING");
+  });
+
+  // ─── İnceleme düzeltmeleri (PR #252) ────────────────────────
+
+  test("eşik paralel isteklerle aşılamaz: 19'ar kayıtlık iki eşzamanlı istekten biri uygulanır (200), diğeri onaya düşer (202)", async () => {
+    const racer = await staff("ADMIN");
+    const a = await polls(N - 1);
+    const b = await polls(N - 1);
+    const pa = BulkPreview.parse((await preview(racer.cookie, a)).json().data);
+    const pb = BulkPreview.parse((await preview(racer.cookie, b)).json().data);
+    assert.equal(pa.approval.required, false);
+    assert.equal(pb.approval.required, false, "ikisi de tek başına eşiğin altında");
+    const [x, y] = await Promise.all([apply(racer.cookie, a, pa.digest), apply(racer.cookie, b, pb.digest)]);
+    assert.deepEqual([x.statusCode, y.statusCode].sort(), [200, 202], x.body + y.body);
+    const applied = x.statusCode === 200 ? a : b;
+    const held = x.statusCode === 200 ? b : a;
+    assert.deepEqual(new Set(await statuses(applied)), new Set(["HIDDEN"]));
+    assert.deepEqual(new Set(await statuses(held)), new Set(["ACTIVE"]), "onaya düşen talep içeriği değiştirmez");
+  });
+
+  test("yarıda kalan (bitmemiş) parti rezerve ettiği sayıyla pencerede kalır: çökmüş 19 kayıtlık parti sonrası 1 kayıt bile onaya düşer", async () => {
+    const racer = await staff("ADMIN");
+    // Çökmüş parti: açıldı, finishBatch hiç yazılmadı (applied 0, reserved 19).
+    await db.moderationBatch.create({ data: { actorId: racer.id, kind: "POLLS", action: "HIDE", reason: REASON, digest: "b".repeat(64), total: N - 1, reserved: N - 1, createdAt: h.clock.now } });
+    const one = await polls(1);
+    const pv = BulkPreview.parse((await preview(racer.cookie, one)).json().data);
+    assert.equal(pv.approval.windowApplied, N - 1);
+    assert.equal(pv.approval.required, true);
+    assert.equal((await apply(racer.cookie, one, pv.digest)).statusCode, 202);
+    // Bitmiş partide yalnız gerçekten uygulanan sayılır (rezervasyon uygulanan sayıya iner).
+    const other = await staff("ADMIN");
+    const batch = await db.moderationBatch.create({ data: { actorId: other.id, kind: "POLLS", action: "HIDE", reason: REASON, digest: "c".repeat(64), total: N - 1, reserved: N - 1, createdAt: h.clock.now } });
+    await db.moderationBatch.update({ where: { id: batch.id }, data: { applied: 2, unchanged: N - 3, finishedAt: h.clock.now } });
+    const two = BulkPreview.parse((await preview(other.cookie, await polls(1))).json().data);
+    assert.equal(two.approval.windowApplied, 2);
+    assert.equal(two.approval.required, false);
+  });
+
+  test("onay transaction'ı başlatanın yetkisini yeniden doğrular (route ön kontrolünü atlasa bile): rol, hesap, atama, yönetici gereksinimi, aktif yaptırım; step-up harcanmaz", async () => {
+    const store = createPrismaBulkApprovalStore(db);
+    const approver = await staff("ADMIN", { mfa: true });
+    const tryApprove = async (id: string) => {
+      await stepup(approver);
+      const result = await store.approve({ approvalId: id, approverId: approver.id, sessionId: approver.sessionId, reason: "Kayıtları inceledim", requestId: randomUUID(), now: h.clock.now });
+      if (result.kind === "ok") assert.notEqual(await consumedAt(approver), null, "başarılı onay step-up'ı harcar");
+      else assert.equal(await consumedAt(approver), null, "reddedilen onay step-up'ı harcamaz");
+      return result;
+    };
+
+    // a) rolü alındı
+    const demoted = await staff("ADMIN");
+    const a = await request(demoted, await polls(N));
+    await db.userRole.delete({ where: { userId: demoted.id } });
+    assert.deepEqual(await tryApprove(a), { kind: "rejected", reason: "initiator_changed" });
+
+    // b) hesap banlandı
+    const banned = await staff("ADMIN");
+    const b = await request(banned, await polls(N));
+    await db.user.update({ where: { id: banned.id }, data: { status: "BANNED" } });
+    assert.deepEqual(await tryApprove(b), { kind: "rejected", reason: "initiator_changed" });
+
+    // c) moderatörün topluluk ataması kaldırıldı
+    const c1 = await community();
+    const mod = await staff("MODERATOR", { communityId: c1.id });
+    const c = await request(mod, await polls(N, c1.id));
+    await db.communityMembership.delete({ where: { communityId_userId: { communityId: c1.id, userId: mod.id } } });
+    assert.deepEqual(await tryApprove(c), { kind: "rejected", reason: "initiator_changed" });
+
+    // d) yönetici topluluksuz içerik için talep açtı, sonra moderatöre düşürüldü (topluluksuz içerik yönetici ister)
+    const downgraded = await staff("ADMIN");
+    const d = await request(downgraded, await polls(N));
+    assert.equal((await approvalRow(d)).needsAdmin, true);
+    await db.userRole.update({ where: { userId: downgraded.id }, data: { role: "MODERATOR" } });
+    assert.deepEqual(await tryApprove(d), { kind: "rejected", reason: "initiator_changed" });
+
+    // e) başlatanda aktif BAN yaptırımı (users.status senkronu olmasa bile)
+    const sanctioned = await staff("ADMIN");
+    const e = await request(sanctioned, await polls(N));
+    await db.sanction.create({ data: { userId: sanctioned.id, type: "BAN", reason: "Test yaptırımı", createdById: superAdmin.id } });
+    assert.deepEqual(await tryApprove(e), { kind: "rejected", reason: "initiator_changed" });
+
+    // f) yetkisi sürenler onaylanır: topluluk ataması duran moderatör
+    const c2 = await community();
+    const ok = await staff("MODERATOR", { communityId: c2.id });
+    const f1 = await request(ok, await polls(N, c2.id));
+    const approved = await tryApprove(f1);
+    assert.equal(approved.kind, "ok");
+    if (approved.kind === "ok") assert.equal(approved.initiatorIsAdmin, false);
+    for (const id of [a, b, c, d, e]) assert.equal((await approvalRow(id)).status, "PENDING");
+  });
+
+  test("onaylayanda aktif askı/ban yaptırımı varsa onay reddedilir (403), step-up harcanmaz", async () => {
+    const initiator = await staff("ADMIN");
+    const approver = await staff("ADMIN", { mfa: true });
+    const id = await request(initiator, await polls(N));
+    await db.sanction.create({ data: { userId: approver.id, type: "BAN", reason: "Test yaptırımı", createdById: superAdmin.id } });
+    await stepup(approver);
+    const res = await approve(approver.cookie, id);
+    assert.ok([401, 403].includes(res.statusCode), res.body);
+    assert.equal((await approvalRow(id)).status, "PENDING");
+  });
+
+  test("step-up: süresi (5 dk) dolmuş doğrulama ve başka oturumun doğrulaması kabul edilmez", async () => {
+    const initiator = await staff("ADMIN");
+    const approver = await staff("ADMIN", { mfa: true });
+    const id = await request(initiator, await polls(N));
+    await stepup(approver);
+    h.clock.advance(5 * MIN + 1_000);
+    assertError(await approve(approver.cookie, id), 403, "FORBIDDEN", "stepup_required");
+    // Başka oturumda yapılan doğrulama bu oturuma geçmez.
+    const second = await login(approver);
+    await stepup(second);
+    assertError(await approve(approver.cookie, id), 403, "FORBIDDEN", "stepup_required");
+    assert.equal((await approve(second.cookie, id)).statusCode, 200, "doğrulamanın yapıldığı oturum onaylar");
+  });
+
+  test("worker ile kalıcı EXPIRED olan talep: liste EXPIRED gösterir, onay/ret/geri çekme 409 closed, bekleyen sınırını doldurmaz", async () => {
+    const initiator = await staff("ADMIN");
+    const approver = await staff("ADMIN", { mfa: true });
+    const id = await request(initiator, await polls(N));
+    await db.moderationBulkApproval.update({ where: { id }, data: { status: "EXPIRED", decidedAt: h.clock.now } });
+    await stepup(approver);
+    assertError(await approve(approver.cookie, id), 409, "CONFLICT", "closed");
+    assertError(await reject(approver.cookie, id), 409, "CONFLICT", "closed");
+    assertError(await cancel(initiator.cookie, id), 409, "CONFLICT", "closed");
+    const expired = await send("GET", "/admin/moderation/bulk-approvals?status=EXPIRED&limit=100", undefined, initiator.cookie);
+    assert.ok(expired.json().data.some((a: any) => a.id === id && a.status === "EXPIRED"));
+    const view = BulkApprovalDetail.parse((await send("GET", `/admin/moderation/bulk-approvals/${id}`, undefined, initiator.cookie)).json().data);
+    assert.equal(view.status, "EXPIRED");
+    for (let i = 0; i < BULK_APPROVAL_PENDING_MAX; i++) await request(initiator, await polls(N));
+  });
+
+  test("yetki seviyesi sabit: onay ve ret ADMIN+, geri çekme moderatör; endpoint.auth ile işlem kuralı birlikte düşürülemez", () => {
+    for (const id of ["admin.moderation.bulkApprovals.approve", "admin.moderation.bulkApprovals.reject"]) {
+      assert.equal(getEndpoint(id).auth, "admin", id);
+      assert.equal(permissionForEndpoint(id), "moderation.bulk.approve", id);
+    }
+    assert.equal(actions["moderation.bulk.approve"].level, "admin");
+    assert.equal(getEndpoint("admin.moderation.bulkApprovals.cancel").auth, "moderator");
+    assert.equal(actions["moderation.bulk.cancel"].level, "moderator");
+  });
+
+  test("kapsamı (topluluk ataması) kaldırılan moderatör kendi talebini listeleyemez ama geri çekebilir (bilinçli: bekleyen talebi kapatabilmeli)", async () => {
+    const c = await community();
+    const mod = await staff("MODERATOR", { communityId: c.id });
+    const id = await request(mod, await polls(N, c.id));
+    await db.communityMembership.delete({ where: { communityId_userId: { communityId: c.id, userId: mod.id } } });
+    assertError(await send("GET", "/admin/moderation/bulk-approvals", undefined, mod.cookie), 403, "FORBIDDEN");
+    const res = await cancel(mod.cookie, id);
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal((await approvalRow(id)).status, "CANCELED");
   });
 });

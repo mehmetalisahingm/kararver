@@ -346,6 +346,30 @@ describe("operasyon yoklaması (postgres + gerçek pg-boss)", { skip: backend ? 
     for (const leak of [target.email, "198.51.100.", "login.email:"]) assert.ok(!body.includes(leak), leak);
   });
 
+  test("toplu moderasyon partileri (#183) kuyruk olarak: süren, yarıda kalmış (bekleyen) ve tamamlanan; yarıda kalan kuyruğu degraded yapar; tablo yoksa yok", async () => {
+    const table = `${schema}.moderation_batches`;
+    await h.prisma!.$executeRawUnsafe(`CREATE TABLE ${table} (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), created_at timestamptz NOT NULL DEFAULT now(), finished_at timestamptz)`);
+    await h.prisma!.$executeRawUnsafe(
+      `INSERT INTO ${table} (created_at, finished_at) VALUES
+         (now() - interval '30 seconds', NULL),
+         (now() - interval '20 minutes', NULL),
+         (now() - interval '2 hours', NULL),
+         (now() - interval '1 hour', now() - interval '59 minutes'),
+         (now() - interval '4 days', now() - interval '4 days')`,
+    );
+    const queues = await createPrismaOpsProbe(h.prisma!, { schema, batchesTable: table }).queues();
+    const batches = queues.find((q) => q.name === "moderation.batches");
+    assert.ok(batches, queues.map((q) => q.name).join(","));
+    // Süren 1 (30 sn), yarıda kalan 2 (20 dk ve 2 saat), son 24 saatte biten 1; eski biten parti sayılmaz.
+    assert.deepEqual([batches.waiting, batches.active, batches.failed24h, batches.completed24h], [2, 1, 0, 1]);
+    assert.ok(batches.oldestWaitingSeconds! >= 7190 && batches.oldestWaitingSeconds! < 7300, String(batches.oldestWaitingSeconds));
+    assert.equal(classifyQueues([batches]), "degraded");
+
+    const without = await createPrismaOpsProbe(h.prisma!, { schema, batchesTable: "public.yok_moderation_batches" }).queues();
+    assert.ok(!without.some((q) => q.name === "moderation.batches"));
+    assert.throws(() => createPrismaOpsProbe(h.prisma!, { batchesTable: "moderation_batches; --" }), /geçersiz tablo/);
+  });
+
   test("anonimleştirme depo temizliği (#228) kuyruk olarak: bekleyen, geri çekilmede, başarısız, tamamlanan; tablo yoksa yok", async () => {
     const table = `${schema}.account_erasures`;
     await h.prisma!.$executeRawUnsafe(

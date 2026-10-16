@@ -63,6 +63,33 @@ test("a second admin reviews the records, verifies with the authenticator code a
   expect(mock.unexpected).toEqual([]);
 });
 
+test("an expired verification reopens the code field so the reviewer can verify again", async ({ page }) => {
+  const mock = await api(page);
+  const codes: string[] = [];
+  let attempts = 0;
+  mock.handlers.set("me.mfa.stepup", route => { codes.push(route.request().postDataJSON().code); return route.fulfill({ json: sample("me.mfa.stepup") }); });
+  mock.handlers.set("admin.moderation.bulkApprovals.approve", route => {
+    if (attempts++ === 0) return route.fulfill({ status: 403, json: sample("admin.moderation.bulkApprovals.approve", "stepup-required") });
+    return route.fulfill({ json: sample("admin.moderation.bulkApprovals.approve") });
+  });
+  await page.goto("/admin/polls");
+  await page.getByText("Toplu işlem onayları", { exact: true }).click();
+  await page.getByRole("list", { name: "Onay talepleri" }).getByRole("button", { name: "İncele ve onayla…" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Gerekçe", { exact: true }).fill("Kayıtları inceledim");
+  await dialog.getByLabel("Doğrulayıcı kodun").fill("111111");
+  await dialog.getByRole("button", { name: "Onayla ve uygula", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("doğrulayıcı kodunla");
+  // Doğrulama süresi dolmuş/tüketilmiş: kod alanı yeniden açılır ve yeni kod istenir.
+  await expect(dialog.getByLabel("Doğrulayıcı kodun")).toBeVisible();
+  await expect(dialog.getByLabel("Doğrulayıcı kodun")).toHaveValue("");
+  await dialog.getByLabel("Doğrulayıcı kodun").fill("222222");
+  await dialog.getByRole("button", { name: "Onayla ve uygula", exact: true }).click();
+  await expect(page.getByText(/Onaylandı ve uygulandı/)).toBeVisible();
+  expect(codes).toEqual(["111111", "222222"]);
+  expect(mock.unexpected).toEqual([]);
+});
+
 test("a stale request cannot be approved from the dialog", async ({ page }) => {
   const mock = await api(page);
   let approved = 0;

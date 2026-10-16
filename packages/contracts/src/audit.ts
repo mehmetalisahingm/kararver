@@ -32,7 +32,7 @@ export const auditTargetTypes = Object.freeze([
 export type AuditTargetType = (typeof auditTargetTypes)[number];
 
 /** KV-04 kataloğunda olmayan, aktörsüz (CLI/worker) işlemler. API isteği bunları yazamaz. */
-export const systemAuditActions = Object.freeze(["user.status.sync", "community.request.expire"] as const);
+export const systemAuditActions = Object.freeze(["user.status.sync", "community.request.expire", "moderation.bulk.expire"] as const);
 export type SystemAuditAction = (typeof systemAuditActions)[number];
 export type AuditAction = ActionId | SystemAuditAction;
 

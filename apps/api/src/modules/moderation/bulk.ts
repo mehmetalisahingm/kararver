@@ -4,7 +4,8 @@
 // mevcut `ModerationStore.apply` yoludur (satır kilidi, geçiş tablosu, sayaçlar, moderation_actions, audit, olay outbox'ı):
 // toplu işlem yeni bir yazma yolu AÇMAZ, yetki ve geçiş kuralları tekil moderasyonla aynıdır.
 import { createHash } from "node:crypto";
-import type { Prisma, PrismaClient } from "@kararver/db";
+import { BULK_APPROVAL_THRESHOLD } from "@kararver/contracts";
+import { Prisma, type PrismaClient } from "@kararver/db";
 import { communityOfTarget } from "./community-of.ts";
 import type { ContentKind, ContentStatus, ListAfter } from "./store.ts";
 
@@ -12,6 +13,28 @@ import type { ContentKind, ContentStatus, ListAfter } from "./store.ts";
 export const BATCH_HOURLY_LIMIT = 20;
 
 export type BulkAction = "HIDE" | "REMOVE" | "RESTORE";
+
+/** Pencere toplamı (onaysız uygulanan + rezerve) + bu işlemin değişecek kayıt sayısı eşiğe ulaşıyorsa ikinci onay gerekir (KV-37 §8). */
+export const approvalRequired = (willChange: number, windowApplied: number): boolean => willChange > 0 && windowApplied + willChange >= BULK_APPROVAL_THRESHOLD;
+
+export type BeginBatchInput = {
+  actorId: string;
+  kind: ContentKind;
+  action: BulkAction;
+  reason: string;
+  digest: string;
+  requestId: string | null;
+  total: number;
+  /** Değişecek kayıt sayısı: parti açılırken rezerve edilir ve bitene kadar ikinci onay penceresinde sayılır. */
+  willChange: number;
+  now: Date;
+  /** Saatlik parti sınırı: `hourlySince` sonrası açılan parti sayısı `hourlyLimit`'e ulaştıysa rate_limited. */
+  hourlySince: Date;
+  hourlyLimit: number;
+  /** İkinci onay penceresinin başlangıcı. */
+  windowSince: Date;
+};
+export type BeginBatchResult = { kind: "started"; batchId: string } | { kind: "rate_limited" } | { kind: "approval_required"; windowApplied: number };
 
 /** Önizleme/özet için okunan durum. `label` yalnız yetkili kayıtta kullanılır (içerik sızmaz). */
 export type BulkItemState = { id: string; label: string; status: ContentStatus; communityId: string | null };
@@ -75,10 +98,15 @@ export interface BulkModerationStore {
   recentBatchCount(actorId: string, since: Date): Promise<number>;
   /**
    * Aktörün `since` sonrası ONAYSIZ uygulanan kayıt sayısı (geri alma partileri ve ikinci onaydan geçen partiler hariç):
-   * ikinci onay eşiğinin pencere toplamı. Bitmemiş partinin sayısı bitişte yazıldığından eşzamanlı istekler birbirini görmez;
-   * saatlik parti sınırı bu boşluğu sınırlar (KV-37 §8).
+   * ikinci onay eşiğinin pencere toplamı. Bitmiş partide `applied`, bitmemiş (süren veya yarıda kesilen) partide rezerve edilen
+   * `reserved` sayılır; böylece paralel istekler ve çökmüş partiler pencereden kaçamaz (KV-37 §8).
    */
   unapprovedAppliedSince(actorId: string, since: Date): Promise<number>;
+  /**
+   * Saatlik sınır + ikinci onay penceresi + parti açılışı TEK transaction'da, aktörün kullanıcı satırı kilidi altında: aynı aktörün
+   * paralel istekleri sıraya girer, her biri öncekinin rezervasyonunu görür. Eşik aşılırsa parti açılmaz (çağıran talep açar).
+   */
+  beginBatch(input: BeginBatchInput): Promise<BeginBatchResult>;
   listBatches(filter: { actorId?: string; after: ListAfter }, limit: number): Promise<BatchRow[]>;
 }
 
@@ -113,6 +141,16 @@ export function undoDigest(batchId: string, rows: Array<{ id: string; status: st
 }
 
 type Db = Prisma.TransactionClient | PrismaClient;
+
+/** Onaysız hacim: bitmiş partide uygulanan, bitmemişte rezerve edilen kayıt sayısı (geri alma ve ikinci onaydan geçen partiler hariç). */
+async function windowSum(db: Prisma.TransactionClient | PrismaClient, actorId: string, since: Date): Promise<number> {
+  const [row] = await db.$queryRaw<Array<{ n: number }>>`
+    SELECT coalesce(sum(CASE WHEN b.finished_at IS NULL THEN b.reserved ELSE b.applied END), 0)::int AS n
+      FROM moderation_batches b
+     WHERE b.actor_id = ${actorId}::uuid AND b.undo_of_id IS NULL AND b.created_at > ${since}::timestamptz
+       AND NOT EXISTS (SELECT 1 FROM moderation_bulk_approvals a WHERE a.batch_id = b.id)`;
+  return row?.n ?? 0;
+}
 
 export function createPrismaBulkModerationStore(prisma: PrismaClient): BulkModerationStore {
   const ref = (u: { id: string; username: string; displayName: string; avatarMedia: { status: string; publicObjectKey: string | null } | null }) => ({
@@ -233,9 +271,30 @@ export function createPrismaBulkModerationStore(prisma: PrismaClient): BulkModer
 
     recentBatchCount: (actorId, since) => prisma.moderationBatch.count({ where: { actorId, createdAt: { gt: since } } }),
 
-    async unapprovedAppliedSince(actorId, since) {
-      const sum = await prisma.moderationBatch.aggregate({ _sum: { applied: true }, where: { actorId, undoOfId: null, approval: null, createdAt: { gt: since } } });
-      return sum._sum.applied ?? 0;
+    unapprovedAppliedSince: (actorId, since) => windowSum(prisma, actorId, since),
+
+    async beginBatch(input) {
+      return prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${input.actorId}::uuid FOR NO KEY UPDATE`;
+        if ((await tx.moderationBatch.count({ where: { actorId: input.actorId, createdAt: { gt: input.hourlySince } } })) >= input.hourlyLimit) return { kind: "rate_limited" as const };
+        const windowApplied = await windowSum(tx, input.actorId, input.windowSince);
+        if (approvalRequired(input.willChange, windowApplied)) return { kind: "approval_required" as const, windowApplied };
+        const row = await tx.moderationBatch.create({
+          data: {
+            actorId: input.actorId,
+            kind: input.kind === "polls" ? "POLLS" : "COMMENTS",
+            action: input.action,
+            reason: input.reason,
+            digest: input.digest,
+            requestId: input.requestId,
+            total: input.total,
+            reserved: Math.min(input.willChange, input.total),
+            createdAt: input.now,
+          },
+          select: { id: true },
+        });
+        return { kind: "started" as const, batchId: row.id };
+      });
     },
 
     async listBatches(filter, limit) {
