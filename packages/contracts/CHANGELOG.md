@@ -9,6 +9,12 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.34.0 — 2026-10-15 (Faruk, operasyon merkezi: acil durum anahtarları, #186)
+
+Kırıcı değişiklik yok: yanıta alan eklendi (minör). Eski API yanıtında alan yoksa `null` olur (`default(null)`).
+
+- **Eklendi:** `OpsStatus.switches` (`{ propagationSeconds, items: [{ name, key, enabled, changedAt }] }` | null): bakım, kayıt, anket oluşturma, yorum ve görsel anahtarlarının etkin değeri ve son değişiklik zamanı. `propagationSeconds` ayar önbelleğinin ömrüdür (değişikliğin bütün API süreçlerine en geç yayılma süresi). Değiştiren kişi audit'tedir, yanıtta yoktur.
+
 ## 1.33.0 — 2026-10-15 (Mert, #183 güvenli geri alma)
 
 Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; `ModerationBatchView` ek alanlar (`undoOfId`, `undone`, `undoable`). Yeni yetki veya audit işlemi yok (telafi kararları mevcut `moderation.poll.apply` / `moderation.comment.apply` yolundan geçer, her biri kendi audit kaydını yazar).

@@ -51,6 +51,8 @@ export const DEFAULT_UPDATED_AT = new Date(0);
 export type SettingEntry = StoredSetting;
 
 export type SettingsService = {
+  /** Önbellek ömrü (ms): bir ayar değişikliğinin bütün API süreçlerine en geç yayılma süresi (#186 operasyon paneli). */
+  readonly cacheTtlMs?: number;
   /** Etkin değerler (önbellekli). */
   values(): Promise<SettingValues>;
   /** Bütün kayıt defteri anahtarları, sıralı; satırı olmayanlar sürüm 1 / varsayılan değerle. */
@@ -124,6 +126,7 @@ export function createSettingsService(store: SettingsStore, options: SettingsSer
   const bool = (v: SettingValues, key: SettingKey) => v[key] as boolean;
 
   const service: SettingsService = {
+    cacheTtlMs: ttlMs,
     async values() {
       return (await current()).values;
     },

@@ -128,8 +128,13 @@ Dosya değiştirilmiş ya da kesikse çözme reddedilir ve çıktı silinir. Man
 4. **Sonuç `SONUÇ: yedek eksiksiz ve tutarlı geri yüklendi` değilse dur.** Fark listesi neyin eksik olduğunu söyler.
 5. **Şema:** Yedek eski bir sürüme aitse `prisma migrate status` bekleyen migration'ları gösterir. Uygulamanın sürümüne göre `prisma migrate deploy`, ardından `db:verify`.
 6. **Medya:** Bucket'ları aynı ana döndür (yedek bucket'ından), sonra `media:check`. Public bucket'ı APPROVED kayıtlardan yeniden üret. Sahipsiz public nesneleri sil.
-7. **Yönlendir:** API ve worker'ın `DATABASE_URL`'ini yeni veritabanına çevir, yeniden başlat, bakım modunu kapat.
-8. **Smoke:** `pnpm smoke --api … --web …`, ardından giriş, oy ve feed kontrolü. Gerekirse trend ve snapshot işlerini elle tetikle (`trends.refresh`, `snapshots.daily`).
+7. **KVKK: yedekten sonra yapılmış anonimleştirmeleri yeniden uygula (#228, #236).** Restore edilen veritabanı yedeğin anındadır. O andan sonra anonimleştirilen (yönetici ya da kullanıcının kendi silmesi) hesaplar **kişisel verileriyle geri gelir**; `account_erasures` kaydı da yeni veritabanında yoktur. Trafiğe açmadan önce:
+   - Eski veritabanından (3. adımda silinmeden kalan) yedek anından sonraki kayıtların **yalnız kimliklerini** al: `SELECT user_id, created_at FROM account_erasures WHERE created_at > '<yedek createdAt>' ORDER BY created_at`.
+   - Her biri için restore edilen veritabanında, bakım modu açıkken SUPER_ADMIN ile `admin.users.erasure.create` çalıştır. Gerekçe: "restore sonrası yeniden uygulama (KV-48)"; yazılı teyit için kullanıcı adı restore edilen veritabanından okunur. Engel (`legal_hold`, `active_sanction`, `has_role`) çıkarsa durup hukuk/Mehmet kararı alınır; kendiliğinden atlanmaz.
+   - Avatar dosyalarını `account-erasure.cleanup` işi siler. Panelde `account.erasure.storage` kuyruğu sıfırlanana kadar izlenir.
+   - **Eski veritabanı yoksa** (felaket), bu liste de yoktur. Anonimleştirilen kimliklerin veritabanı dışında, yedek bucket'ında ayrıca tutulması kararı Mehmet/hukuk'ta (açık karar).
+8. **Yönlendir:** API ve worker'ın `DATABASE_URL`'ini yeni veritabanına çevir, yeniden başlat, bakım modunu kapat.
+9. **Smoke:** `pnpm smoke --api … --web …`, ardından giriş, oy ve feed kontrolü. Gerekirse trend ve snapshot işlerini elle tetikle (`trends.refresh`, `snapshots.daily`).
 
 Ölçülen veri adımı (aşağıda) birkaç saniyedir. Toplam süreyi insan adımları belirler: karar, bakım modu, ortam değişkeni değişikliği, yeniden başlatma. Bu adımların süresi staging'de ölçülecek.
 

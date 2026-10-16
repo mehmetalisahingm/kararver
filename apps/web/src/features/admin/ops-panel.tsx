@@ -9,6 +9,10 @@ const numbers = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 });
 const health = { ok: "Çalışıyor", degraded: "Uyarı", down: "Erişilemiyor", unknown: "Ölçüm yok" };
 const measure = (value: number | null | undefined, unit = "") => value == null ? "Ölçüm yok" : `${numbers.format(value)}${unit}`;
 const date = (value: string | null) => value ? new Date(value).toLocaleString("tr-TR") : "Ölçüm yok";
+const switchLabel = { maintenance: "Bakım modu", registration: "Yeni kayıt", pollCreation: "Anket oluşturma", comments: "Yorumlar", uploads: "Görsel yükleme" } as const;
+/** Bakım modu açıkken, diğerleri kapalıyken olağandışıdır (acil durum). */
+const switchState = (name: keyof typeof switchLabel, enabled: boolean) =>
+  name === "maintenance" ? (enabled ? "Açık: site bakımda" : "Kapalı") : (enabled ? "Açık" : "Kapalı (acil durum)");
 
 export function OpsPanel({ admin }: { admin: AdminClient }) {
   const [status, setStatus] = useState<OpsView | null>(null);
@@ -61,6 +65,18 @@ export function OpsPanel({ admin }: { admin: AdminClient }) {
               <tbody>{status.security.adminActions24h.map(a => <tr key={`${a.action}:${a.operation}`}><th scope="row">{a.action}</th><td>{a.operation}</td><td>{measure(a.count)}</td></tr>)}</tbody>
             </table>
           </div>}
+      </article>
+      <article className="kv-card"><h3>Acil durum anahtarları</h3>
+        {status.switches == null ? <p>Anahtar durumu: Ölçüm yok</p> : <>
+          <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Acil durum anahtarları tablosu">
+            <table className={styles.table}>
+              <caption>Etkin değerler ve son değişiklik</caption>
+              <thead><tr><th scope="col">Anahtar</th><th scope="col">Durum</th><th scope="col">Son değişiklik</th></tr></thead>
+              <tbody>{status.switches.items.map(s => <tr key={s.name}><th scope="row">{switchLabel[s.name]}</th><td>{switchState(s.name, s.enabled)}</td><td>{s.changedAt ? date(s.changedAt) : "Hiç değiştirilmedi"}</td></tr>)}</tbody>
+            </table>
+          </div>
+          <p className="kv-muted">Değişiklik en geç {measure(status.switches.propagationSeconds, " sn")} içinde bütün sunuculara yayılır. Anahtarlar Ayarlar bölümünden değiştirilir: yalnız SUPER_ADMIN, gerekçe zorunlu, audit'e yazılır.</p>
+        </>}
       </article>
       <article className="kv-card"><h3>Yedek ve geri yükleme</h3><p>Yedek durumu: {health[status.backup.status]} · Son yedek: {date(status.backup.lastBackupAt)}</p>
         {status.backup.restoreDrill ? <p>Son kayıtlı geri yükleme tatbikatı: {status.backup.restoreDrill.at} · {status.backup.restoreDrill.environment} · {measure(status.backup.restoreDrill.rtoSeconds, " sn")}</p> : <p>Geri yükleme tatbikatı bilgisi yok.</p>}

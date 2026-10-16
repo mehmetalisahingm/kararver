@@ -13,6 +13,7 @@ import { PgBoss } from "pg-boss";
 import { createPrismaOpsProbe } from "../src/modules/ops/probe.ts";
 import { buildOpsStatus, classifyBackup, classifyQueues, classifyWorker, RESTORE_DRILL } from "../src/modules/ops/status.ts";
 import { recordBackupRun, type Manifest } from "../../../packages/db/ops/backup.ts";
+import { writeAudit } from "../src/modules/audit/write.ts";
 import { createOpsTelemetry, percentile } from "../src/modules/ops/telemetry.ts";
 import { createHarness, memoryBackend, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 import { rbacSeeds } from "./support/rbac-probe.ts";
@@ -158,6 +159,7 @@ describe("admin.ops.status (memory)", () => {
     assert.equal(data.components.queue.status, "unknown");
     assert.deepEqual(data.components.queue.queues, []);
     assert.deepEqual([data.security.lockedLogins, data.security.adminActions24h], [null, null], "DB yoklaması yoksa bilinmiyor (null), 0 değil");
+    assert.equal(data.switches, null, "ayar servisi yoksa anahtar durumu bilinmiyor (null)");
     assert.deepEqual(data.backup, { status: "unknown", lastBackupAt: null, restoreDrill: { ...RESTORE_DRILL } });
     assert.equal(data.release.env, "test");
   });
@@ -323,14 +325,53 @@ describe("operasyon yoklaması (postgres + gerçek pg-boss)", { skip: backend ? 
     for (let i = 0; i < limits.email; i++) await inject("POST", "/auth/login", { email: target.email, password: "yanlis-parola-xx" }, undefined, `198.51.100.${40 + i}`);
     const sanction = await inject("POST", `/admin/users/${target.id}/sanctions`, { type: "WARNING", reason: "Güvenlik sinyali testi" }, root.cookie);
     assert.equal(sanction.statusCode, 201, sanction.body);
+    // MFA kilitlenmesi ve başarısız denemesi (#206) brute force izidir; kurulum gibi olağan MFA işlemleri sayılmaz.
+    const mfa = (operation: string) =>
+      h.prisma!.$transaction((tx) =>
+        writeAudit(tx, { source: "API", actorId: target.id, action: "account.mfa", operation, target: { type: "USER", id: target.id }, reason: null, before: null, after: null, requestId: `ops-${randomUUID()}`, at: h.clock.now }),
+      );
+    await mfa("deny");
+    await mfa("lock");
+    await mfa("setup");
 
     const after = (await read()).security;
+    assert.equal(count(after.adminActions24h, "account.mfa", "lock"), count(before.adminActions24h, "account.mfa", "lock") + 1);
+    assert.equal(count(after.adminActions24h, "account.mfa", "deny"), count(before.adminActions24h, "account.mfa", "deny") + 1);
+    assert.equal(count(after.adminActions24h, "account.mfa", "setup"), 0);
     assert.equal(after.lockedLogins!.emails, before.lockedLogins!.emails + 1);
     assert.equal(count(after.adminActions24h, "user.sanction", "apply"), count(before.adminActions24h, "user.sanction", "apply") + 1);
     // Kritik olmayan işlemler listede yok; yanıt ham e-posta, IP ya da anahtar özeti içermez.
     assert.ok(after.adminActions24h!.every((a) => a.action !== "revision.read" && a.action !== "category.manage"));
     const body = JSON.stringify(after);
     for (const leak of [target.email, "198.51.100.", "login.email:"]) assert.ok(!body.includes(leak), leak);
+  });
+
+  test("anonimleştirme depo temizliği (#228) kuyruk olarak: bekleyen, geri çekilmede, başarısız, tamamlanan; tablo yoksa yok", async () => {
+    const table = `${schema}.account_erasures`;
+    await h.prisma!.$executeRawUnsafe(
+      `CREATE TABLE ${table} (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), storage_cleaned_at timestamptz,
+         storage_cleanup_attempts int NOT NULL DEFAULT 0, storage_next_attempt_at timestamptz, created_at timestamptz NOT NULL DEFAULT now())`,
+    );
+    await h.prisma!.$executeRawUnsafe(
+      `INSERT INTO ${table} (storage_cleaned_at, storage_cleanup_attempts, storage_next_attempt_at, created_at) VALUES
+         (NULL, 0, NULL, now() - interval '30 seconds'),
+         (NULL, 2, now() - interval '1 minute', now() - interval '40 minutes'),
+         (NULL, 3, now() + interval '30 minutes', now() - interval '2 hours'),
+         (now() - interval '1 hour', 0, NULL, now() - interval '2 hours'),
+         (now() - interval '3 days', 1, NULL, now() - interval '4 days')`,
+    );
+    const queues = await createPrismaOpsProbe(h.prisma!, { schema, erasuresTable: table }).queues();
+    const erasure = queues.find((q) => q.name === "account.erasure.storage");
+    assert.ok(erasure, queues.map((q) => q.name).join(","));
+    // Bekleyen 2 (biri deneme zamanı gelmiş başarısız), geri çekilmede 1, hâlâ temizlenmemiş başarısız 2, son 24 saatte tamamlanan 1.
+    assert.deepEqual([erasure.waiting, erasure.active, erasure.failed24h, erasure.completed24h], [2, 1, 2, 1]);
+    // En eski: 2 saattir temizlenmeyen kayıt (kişisel veri dosyası depoda duruyor).
+    assert.ok(erasure.oldestWaitingSeconds! >= 7190 && erasure.oldestWaitingSeconds! < 7300, String(erasure.oldestWaitingSeconds));
+    assert.equal(classifyQueues([erasure]), "degraded");
+
+    const without = await createPrismaOpsProbe(h.prisma!, { schema, erasuresTable: "public.yok_account_erasures" }).queues();
+    assert.ok(!without.some((q) => q.name === "account.erasure.storage"));
+    assert.throws(() => createPrismaOpsProbe(h.prisma!, { erasuresTable: "account_erasures; --" }), /geçersiz tablo/);
   });
 
   test("kuyruk sayıları, bekleyen iş ve worker izi gerçek pg-boss tablolarından", async () => {
@@ -357,5 +398,62 @@ describe("operasyon yoklaması (postgres + gerçek pg-boss)", { skip: backend ? 
     assert.equal(status.components.queue.status, "degraded");
     assert.equal(status.components.worker.status, "ok");
     assert.ok(status.components.worker.ageSeconds! < 60);
+  });
+});
+
+describe("acil durum anahtarları operasyon durumunda (postgres + gerçek ayar servisi)", { skip: backend ? false : "TEST_DATABASE_URL yok (CI'da çalışır)" }, () => {
+  let h: Harness;
+  let root: { cookie: string; id: string };
+
+  const send = (method: "GET" | "POST" | "PUT", url: string, body?: unknown, cookie?: string) =>
+    h.app.inject({
+      method,
+      url: `/v1${url}`,
+      headers: { origin: WEB_ORIGIN, ...(body === undefined ? {} : { "content-type": "application/json" }), ...(cookie ? { cookie } : {}) },
+      payload: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+  before(async () => {
+    h = await createHarness(backend!, { realSettings: true });
+    const id = randomUUID().replaceAll("-", "").slice(0, 10);
+    const account = { email: `sw_${id}@example.test`, username: `sw_${id}`, displayName: "Anahtar", password: "guclu-bir-sifre-1" };
+    const mailCount = h.mails.length;
+    assert.equal((await send("POST", "/auth/register", account)).statusCode, 202);
+    assert.equal((await send("POST", "/auth/email/verify", { token: tokenFrom(h.mails[mailCount]) })).statusCode, 200);
+    const login = await send("POST", "/auth/login", { email: account.email, password: account.password });
+    root = { cookie: sessionCookie(login.headers["set-cookie"] as string), id: login.json().data.id };
+    await rbacSeeds(h).setRole(root.id, "SUPER_ADMIN", null);
+  });
+  after(async () => {
+    await h?.close();
+  });
+
+  test("anahtarların etkin değeri, son değişiklik zamanı ve yayılma süresi; değiştiren kişi yanıtta yok", async () => {
+    const read = async () => {
+      const res = await send("GET", "/admin/ops", undefined, root.cookie);
+      assert.equal(res.statusCode, 200, res.body);
+      return OpsStatus.parse(res.json().data).switches!;
+    };
+    const item = (s: Awaited<ReturnType<typeof read>>, name: string) => s.items.find((i) => i.name === name)!;
+    const before = await read();
+    assert.ok(before, "ayar servisi varken null değil");
+    assert.equal(before.propagationSeconds, 5, "harness önbellek ömrü 5 sn");
+    assert.deepEqual(before.items.map((i) => i.name).sort(), ["comments", "maintenance", "pollCreation", "registration", "uploads"]);
+    assert.equal(item(before, "comments").key, "features.comments");
+
+    const off = await send("PUT", "/admin/emergency", { switches: { comments: false }, reason: "Operasyon paneli testi" }, root.cookie);
+    assert.equal(off.statusCode, 200, off.body);
+    try {
+      h.settings!.invalidate();
+      const after = await read();
+      assert.equal(item(after, "comments").enabled, false);
+      assert.ok(item(after, "comments").changedAt, "değişiklik zamanı var");
+      assert.equal(item(after, "maintenance").enabled, item(before, "maintenance").enabled, "diğer anahtarlar değişmedi");
+      assert.ok(!JSON.stringify(after).includes(root.id), "değiştiren kişi yanıtta yok (audit'te)");
+    } finally {
+      // Ayarlar test veritabanında kalıcıdır: sonraki dosyalar için eski haline döndür.
+      const back = await send("PUT", "/admin/emergency", { switches: { comments: item(before, "comments").enabled }, reason: "Operasyon paneli testi geri alma" }, root.cookie);
+      assert.equal(back.statusCode, 200, back.body);
+    }
   });
 });

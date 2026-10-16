@@ -77,3 +77,23 @@ test("operations: security events without DB data say unknown, not zero", async 
   await expect(security.getByRole("table")).toHaveCount(0);
   expect(mock.unexpected).toEqual([]);
 });
+
+test("operations: emergency switches show state, last change and propagation; unknown without data", async ({ page }) => {
+  const mock = await api(page);
+  const body = sample("admin.ops.status");
+  mock.handlers.set("admin.ops.status", r => r.fulfill({ json: body }));
+  await page.goto("/admin");
+  const panel = page.getByRole("region", { name: "Operasyon durumu", exact: true });
+  const table = panel.getByRole("region", { name: "Acil durum anahtarları tablosu" });
+  await expect(table.getByRole("row", { name: /Yorumlar Kapalı \(acil durum\)/ })).toBeVisible();
+  await expect(table.getByRole("row", { name: /Bakım modu Kapalı Hiç değiştirilmedi/ })).toBeVisible();
+  await expect(panel).toContainText("en geç 5 sn içinde bütün sunuculara yayılır");
+  await table.focus();
+  await expect(table).toBeFocused();
+
+  body.data.switches = null;
+  await panel.getByRole("button", { name: "Operasyon verilerini yenile" }).click();
+  await expect(panel).toContainText("Anahtar durumu: Ölçüm yok");
+  await expect(panel.getByRole("region", { name: "Acil durum anahtarları tablosu" })).toHaveCount(0);
+  expect(mock.unexpected).toEqual([]);
+});

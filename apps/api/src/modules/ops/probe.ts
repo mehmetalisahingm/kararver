@@ -37,21 +37,31 @@ export const CRITICAL_ADMIN_ACTIONS = [
   "user.anonymize",
   "user.legalHold.manage",
   "community.owner.assign",
+  // #232: destek yolu, yöneticinin başkasının e-posta değişimini başlatması (hesap ele geçirmede ilk bakılacak işlem).
+  "user.emailChange.manage",
   "privacy.export.manage",
   "settings.update",
   "emergency.update",
   "points.adjust",
 ] as const;
 
+/** Hesap güvenliği olayları (#206): MFA başarısız denemesi ve kilitlenmesi. Kullanıcının kendi işlemidir, brute force izidir. */
+export const SECURITY_EVENT_OPERATIONS = { action: "account.mfa", operations: ["deny", "lock"] } as const;
+
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
 const TABLE = /^[a-z_][a-z0-9_]{0,62}.[a-z_][a-z0-9_]{0,62}$/;
 
-export function createPrismaOpsProbe(prisma: PrismaClient, options: { schema?: string; contentJobsTable?: string } = {}): OpsProbe {
+export function createPrismaOpsProbe(
+  prisma: PrismaClient,
+  options: { schema?: string; contentJobsTable?: string; erasuresTable?: string } = {},
+): OpsProbe {
   const schema = options.schema ?? "pgboss";
   const contentJobsTable = options.contentJobsTable ?? "public.content_jobs";
   // Şema/tablo adları SQL'e tanımlayıcı olarak girer; yalnız sabit/yapılandırma değeri, kullanıcı girdisi değil.
   if (!SCHEMA.test(schema)) throw new Error(`geçersiz pg-boss şeması: ${schema}`);
+  const erasuresTable = options.erasuresTable ?? "public.account_erasures";
   if (!TABLE.test(contentJobsTable)) throw new Error(`geçersiz tablo: ${contentJobsTable}`);
+  if (!TABLE.test(erasuresTable)) throw new Error(`geçersiz tablo: ${erasuresTable}`);
   const job = `"${schema}".job`;
   const queue = `"${schema}".queue`;
 
@@ -79,7 +89,9 @@ export function createPrismaOpsProbe(prisma: PrismaClient, options: { schema?: s
         FROM rate_limit_counters WHERE expires_at > now()`;
       const actions = await prisma.$queryRaw<Array<{ action: string; operation: string; count: number }>>`
         SELECT action, operation, count(*)::int AS count FROM audit_logs
-        WHERE created_at > now() - interval '24 hours' AND action = ANY(${[...CRITICAL_ADMIN_ACTIONS]}::text[])
+        WHERE created_at > now() - interval '24 hours'
+          AND (action = ANY(${[...CRITICAL_ADMIN_ACTIONS]}::text[])
+            OR (action = ${SECURITY_EVENT_OPERATIONS.action} AND operation = ANY(${[...SECURITY_EVENT_OPERATIONS.operations]}::text[])))
         GROUP BY action, operation ORDER BY count DESC, action, operation`;
       return { lockedLogins: locked ?? { emails: 0, ips: 0 }, adminActions24h: actions };
     },
@@ -100,8 +112,8 @@ export function createPrismaOpsProbe(prisma: PrismaClient, options: { schema?: s
          FROM ${queue} q LEFT JOIN ${job} j ON j.name = q.name
          GROUP BY q.name ORDER BY q.name`,
       );
-      const contentJobs = await contentJobsQueue(prisma, contentJobsTable);
-      return [...rows, ...(contentJobs ? [contentJobs] : [])].map((r) => ({
+      const extra = [await contentJobsQueue(prisma, contentJobsTable), await erasureStorageQueue(prisma, erasuresTable)].filter((q) => q !== null);
+      return [...rows, ...extra].map((r) => ({
         name: r.name,
         waiting: r.waiting,
         active: r.active,
@@ -142,4 +154,29 @@ async function contentJobsQueue(prisma: PrismaClient, table: string) {
     FROM ${table}
     WHERE status IN ('QUEUED', 'PROCESSING') OR finished_at > now() - interval '24 hours'`);
   return { name: CONTENT_JOBS_QUEUE, ...row! };
+}
+
+/** Anonimleştirilen hesapların depo temizliği (#228): pg-boss'taki `account-erasure.cleanup` cron'u turları, bu satır ise işi gösterir. */
+export const ERASURE_STORAGE_QUEUE = "account.erasure.storage";
+
+/**
+ * Tablo yoksa null. Bekleyen: temizlenmemiş ve deneme zamanı gelmiş kayıt; çalışan: deneme zamanı ileride (geri çekilmede)
+ * olan kayıt; başarısız: en az bir kez başarısız olmuş ve hâlâ temizlenmemiş kayıt (kişisel veri dosyası depoda duruyor).
+ * Worker dakikada bir çalışır; 5 dakikadan eski bekleme ya da başarısız kayıt kuyruğu `degraded` yapar (KVKK).
+ */
+async function erasureStorageQueue(prisma: PrismaClient, table: string) {
+  const [exists] = await prisma.$queryRaw<Array<{ ok: boolean }>>`SELECT to_regclass(${table}) IS NOT NULL AS ok`;
+  if (!exists?.ok) return null;
+  const [row] = await prisma.$queryRawUnsafe<
+    Array<{ waiting: number; active: number; failed24h: number; completed24h: number; oldest: number | null }>
+  >(`
+    SELECT
+      count(*) FILTER (WHERE storage_cleaned_at IS NULL AND (storage_next_attempt_at IS NULL OR storage_next_attempt_at <= now()))::int AS waiting,
+      count(*) FILTER (WHERE storage_cleaned_at IS NULL AND storage_next_attempt_at > now())::int AS active,
+      count(*) FILTER (WHERE storage_cleaned_at IS NULL AND storage_cleanup_attempts > 0)::int AS "failed24h",
+      count(*) FILTER (WHERE storage_cleaned_at > now() - interval '24 hours')::int AS "completed24h",
+      floor(EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE storage_cleaned_at IS NULL)))::float8 AS oldest
+    FROM ${table}
+    WHERE storage_cleaned_at IS NULL OR storage_cleaned_at > now() - interval '24 hours'`);
+  return { name: ERASURE_STORAGE_QUEUE, ...row! };
 }

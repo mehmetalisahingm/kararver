@@ -81,16 +81,25 @@ export type OpsStatusDeps = {
   now: () => Date;
   /** KV-19 giriş sınırları (`limits.loginFailuresPer*`); kilit sayımı aynı eşiği kullanır. */
   loginLimits?: () => Promise<LoginLimits>;
+  /** Acil durum anahtarları (KV-40); verilmezse `switches: null`. */
+  switches?: () => Promise<SwitchesView>;
+};
+
+export type SwitchName = "maintenance" | "registration" | "pollCreation" | "comments" | "uploads";
+export type SwitchesView = {
+  propagationSeconds: number;
+  items: Array<{ name: SwitchName; key: string; enabled: boolean; changedAt: string | null }>;
 };
 
 export async function buildOpsStatus(deps: OpsStatusDeps) {
   const { probe, telemetry } = deps;
-  const [database, workerSeen, queues, lastBackup, signals] = await Promise.all([
+  const [database, workerSeen, queues, lastBackup, signals, switches] = await Promise.all([
     settle(probe ? () => probe.database() : undefined),
     settle(probe ? () => probe.workerLastSeen() : undefined),
     settle(probe ? () => probe.queues() : undefined),
     settle(probe ? () => probe.lastBackup() : undefined),
     settle(probe && deps.loginLimits ? async () => probe.securitySignals(await deps.loginLimits!()) : undefined),
+    settle(deps.switches),
   ]);
   const now = deps.now();
   // İki iz varsa yenisi: dosya heartbeat'i (aynı servis) ya da worker'ın aldığı son iş (ayrı servis).
@@ -124,5 +133,6 @@ export async function buildOpsStatus(deps: OpsStatusDeps) {
       lastBackupAt: lastBackup.ok && lastBackup.value ? lastBackup.value.toISOString() : null,
       restoreDrill: { ...RESTORE_DRILL },
     },
+    switches: switches.ok ? switches.value : null,
   };
 }
