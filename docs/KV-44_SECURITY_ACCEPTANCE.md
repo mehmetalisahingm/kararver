@@ -2,6 +2,13 @@
 
 **Kayıt tarihi:** 9 Ekim 2026. **Teslim sahibi:** Mehmet (@mehmetalisahingm; Utku görevinden devralındı). **Durum: NO-GO — gerçek staging kanıtı tamamlanmadı.** Bu belge plan veya test listesi ile gerçek PASS'ı ayırır.
 
+## 16 Ekim 2026 akşam — #246 staging dağıtımı, ilave salt-okuma medya sınırı
+
+- PR #246 ve #247 main'de, güncel main SHA `28f23188ee2b6aa75b3e7718d37f8e8e0b35465d`. Railway API deploy `375fe83b-b66f-466c-8472-94dde180bde7` **SUCCESS**; canlı health `release.sha=28f23188ee2b`, worker `ready`. Ayrı public bucket credential referansları ve media proxy base URL staging'e uygulandı.
+- Eksik UUID için hem doğrudan API hem Next.js `/api` proxy yolu gerçek HTTP 404 döndü. Staging robots tüm dizini disallow eder; sitemap boştur. **Bu kontroller onaylı medyanın başarıyla işlendiği, okunabildiği veya kaldırılabildiği anlamına gelmez.**
+- Yeni `scripts/public-media-readonly.mjs` güvenlik otomasyonu, iki sabit staging origin üzerinde yalnız anonim GET ile eksik/geçersiz medya 404, no-store, noindex, redirect ve imzalı URL sızıntısı ile proxy uyumunu izler. Bu tarama kimlikli E2E kabulüne eşit değildir.
+- **Hâlâ BLOCKED:** gerçek izole yükleme/model zaman aşımı, private→public onay, 200→ret→404, tarayıcı PUT/CORS, iki bağımsız yönetici MFA, acil anahtar, SMTP ve gerçek cihazlar. Beta **NO-GO**. Aşağıdaki eski SHA listeleri tarihsel kanıttır.
+
 ## A. Sürüm ve kanıt ilkesi
 
 ### 16 Ekim 2026 — güncel kanıt, kalanlar

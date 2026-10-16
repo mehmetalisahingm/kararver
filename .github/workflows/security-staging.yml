@@ -1,6 +1,13 @@
 name: Staging security read-only gate
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/security-staging.yml
+      - scripts/security-acceptance.mjs
+      - scripts/security-acceptance.test.mjs
+      - scripts/public-media-readonly.mjs
+      - scripts/public-media-readonly.test.mjs
   # Güvenlik kapısı kodu değiştiğinde main'de hemen tekrar kanıt üret.
   push:
     branches: [main]
@@ -8,6 +15,8 @@ on:
       - .github/workflows/security-staging.yml
       - scripts/security-acceptance.mjs
       - scripts/security-acceptance.test.mjs
+      - scripts/public-media-readonly.mjs
+      - scripts/public-media-readonly.test.mjs
   # Salt-okuma güvenlik kapısı; kullanıcı hesabı açmaz, veri değiştirmez, beta GO vermez.
   # Deployment izleme işinden ayrıdır: anonim auth/CORS/HSTS sızıntı regresyonunu sınar.
   schedule:
@@ -27,17 +36,23 @@ jobs:
         with:
           node-version-file: .nvmrc
       - name: Local gate regression (no HTTP writes)
-        run: node --test scripts/security-acceptance.test.mjs
+        run: node --test scripts/security-acceptance.test.mjs scripts/public-media-readonly.test.mjs
       - name: Live staging guest/CORS/HSTS/config controls (NO beta GO)
         run: |
           node scripts/security-acceptance.mjs \
             --api https://api-staging-45cb.up.railway.app --json \
             > security-staging-results.json
           node -e 'const r=require("./security-staging-results.json"); console.log("PASS",r.totals.pass,"FAIL",r.totals.fail,"beta",r.betaGate)'
+      - name: Live staging public-media API/proxy denied-object checks (NO media GO)
+        run: |
+          node scripts/public-media-readonly.mjs --json > media-staging-results.json
+          node -e 'const r=require("./media-staging-results.json"); console.log("MEDIA PASS",r.totals.pass,"FAIL",r.totals.fail,r.releaseGate)'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: kv46-read-only-security
-          path: security-staging-results.json
+          path: |
+            security-staging-results.json
+            media-staging-results.json
           if-no-files-found: warn
           retention-days: 14
