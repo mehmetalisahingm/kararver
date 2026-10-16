@@ -76,7 +76,7 @@ test("bounded acceptance verifies live-role changes, concurrency and cleanup wit
   const report = await checkStagingWrites(options, http, async ms => assert.ok(ms <= 59_000));
   assert.equal(report.totals.fail, 0, JSON.stringify(report));
   assert.equal(calls.filter(c => c.path.endsWith("/vote")).length, 23);
-  assert.equal(calls.filter(c => c.path.endsWith("/role")).length, 2);
+  assert.equal(calls.filter(c => c.path.endsWith("/role")).length, 4);
   assert.ok(!calls.some(c => c.path.includes("/users/root/")));
   assert.ok(calls.some(c => c.path === "/polls/owned-poll" && c.method === "DELETE"));
   assert.equal(calls.filter(c => c.path.endsWith("/sanctions")).length, 2);

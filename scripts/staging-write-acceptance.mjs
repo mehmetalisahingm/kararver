@@ -114,7 +114,9 @@ export async function checkStagingWrites({ email, password, expectedSha, apply }
     }
     for (const actor of actors) {
       try {
-        if (actor.elevated) await role(actor, "USER");
+        // A lost grant response can hide a committed role change. Reset every owned
+        // account, including unknown outcomes, before banning it.
+        await role(actor, "USER");
         if (!actor.banned) {
           const r = await req(`/admin/users/${own(actor)}/sanctions`, { method: "POST", body: { type: "BAN", reason: "İzole QA46 test hesabı temizliği" } });
           check("cleanup.account-banned", r.response.status === 201, r.response);
