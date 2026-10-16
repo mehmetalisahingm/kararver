@@ -9,6 +9,8 @@ import type {
   UserTimelineItem,
   UserTimelineSummary,
   BulkApprovalDecision,
+  UndoActionPreview,
+  UndoActionResult,
   BulkApprovalDetail,
   BulkApprovalView,
   UndoPreview,
@@ -67,6 +69,9 @@ export type ModerationBatch = ReturnType<typeof WireBatch.parse>;
 export type AdminPoll = ReturnType<typeof AdminPollItem.parse>;
 export type AdminComment = ReturnType<typeof AdminCommentItem.parse>;
 export type HistoryItem = ReturnType<typeof ContentHistoryItem.parse>;
+export type HistoryAction = Extract<HistoryItem, { kind: "ACTION" }>;
+export type UndoActionPreviewView = ReturnType<typeof UndoActionPreview.parse>;
+export type UndoActionResultView = ReturnType<typeof UndoActionResult.parse>;
 export type Featured = ReturnType<typeof FeaturedPlacement.parse>;
 export type AnnouncementView = ReturnType<typeof Announcement.parse>;
 export type AuditRecord = ReturnType<typeof AuditEntry.parse>;
@@ -339,6 +344,14 @@ export class AdminClient {
   }
   async history(kind: ContentKind, id: string, cursor?: string, signal?: AbortSignal) {
     return page<HistoryItem>(await this.http.request(`admin.moderation.history.${kind}`, { params: { id }, query: { cursor, limit: "20" }, signal }));
+  }
+  /** #183 tek kararın güvenli geri alma önizlemesi (salt okuma). */
+  async actionUndoPreview(actionId: string, signal?: AbortSignal) {
+    return data<UndoActionPreviewView>(await this.http.request("admin.moderation.actions.undoPreview", { params: { id: actionId }, signal }));
+  }
+  /** Telafi kararını uygular (sürüm koşullu); durum değiştiyse 409. */
+  async undoAction(actionId: string, reason: string, digest: string) {
+    return data<UndoActionResultView>(await this.http.request("admin.moderation.actions.undo", { params: { id: actionId }, body: { reason, digest } }));
   }
   async movePoll(id: string, placement: PollPlacement, reason: string) {
     return data<AdminPoll>(await this.http.request("admin.moderation.polls.move", { params: { id }, body: { ...placement, reason } }));

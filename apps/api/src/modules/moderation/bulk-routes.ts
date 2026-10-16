@@ -16,6 +16,7 @@ import { BATCH_HOURLY_LIMIT, approvalRequired, batchDigest, type BulkModerationS
 import { approvalView, registerBulkApprovalRoutes } from "./bulk-approval-routes.ts";
 import type { BulkApprovalStore } from "./bulk-approval.ts";
 import { createPlanner, executeBatch, type Plan } from "./bulk-core.ts";
+import { registerSingleUndoRoutes } from "./single-undo-routes.ts";
 import { registerUndoRoutes } from "./undo-routes.ts";
 import type { ContentKind, ModerationStore } from "./store.ts";
 
@@ -37,6 +38,7 @@ export { approvalRequired };
 
 export function registerBulkModerationRoutes(route: Route, deps: BulkModerationDeps): void {
   registerUndoRoutes(route, deps);
+  registerSingleUndoRoutes(route, deps);
   registerBulkApprovalRoutes(route, deps);
   const { store, batches, approvals, now } = deps;
   const plan = createPlanner(batches);

@@ -86,6 +86,8 @@ const historyView = (h: HistoryRow, base: string) =>
         toStatus: h.toStatus,
         reason: h.reason,
         reportId: h.reportId,
+        undoOfId: h.undoOfId,
+        undone: h.undone,
       };
 
 /** Filtre değeri cursor'a bağlanır; filtre değişince eski cursor 400 INVALID_CURSOR olur. */

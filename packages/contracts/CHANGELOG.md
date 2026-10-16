@@ -9,6 +9,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.37.0 — 2026-10-16 (Mert, #183 tekil kararın geri alınması)
+
+Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; `ContentHistoryItem` ACTION satırına `undoOfId` ve `undone` alanları eklendi (web ile birlikte yayınlanır). Yeni yetki veya audit işlemi yok (telafi kararı mevcut `moderation.poll.apply` / `moderation.comment.apply` yolundan geçer).
+
+- **Eklendi:** `admin.moderation.actions.undoPreview` (GET, salt okuma) ve `admin.moderation.actions.undo` (POST: gerekçe + digest). Geri alınabilir karar çiftleri: HIDE/REMOVE → RESTORE, RESTORE → HIDE/REMOVE, LOCK ↔ UNLOCK, EXCLUDE_FROM_TRENDS ↔ INCLUDE_IN_TRENDS, CLOSE_COMMENTS ↔ OPEN_COMMENTS; sürüm koşulu, bir karar en çok bir kez, geri almanın geri alması yok. Moderatör yalnız kendi kararını geri alır.
+- Şemalar: `UndoActionPreview`, `UndoActionResult`, `UndoActionBlockedCode`.
+- **Değişti:** `ContentHistoryItem` (kind=ACTION) → `undoOfId` (telafi satırı geri aldığı kararı gösterir), `undone` (karar geri alındı mı).
+
 ## 1.36.0 — 2026-10-16 (Mert, #183 yüksek hacimli toplu işlemde ikinci onay)
 
 Kırıcı değişiklik yok: yeni endpoint'ler, yeni yetki/audit işlemleri; `admin.moderation.{polls,comments}.bulk` yeni bir başarı durumu (202) ve `BulkPreview` yeni bir zorunlu `approval` alanı alır (web ile birlikte yayınlanır).
