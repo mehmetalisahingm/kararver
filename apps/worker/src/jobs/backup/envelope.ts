@@ -6,7 +6,8 @@
 // Etiket sonda olduğu için çözme önce etiketi okur, sonra akışı doğrular; değiştirilmiş dosya çözülmez.
 import { constants, createCipheriv, createDecipheriv, createPrivateKey, createPublicKey, privateDecrypt, publicEncrypt, randomBytes } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { open, stat } from "node:fs/promises";
+import { link, mkdtemp, open, rm, stat } from "node:fs/promises";
+import path from "node:path";
 import { pipeline } from "node:stream/promises";
 
 const MAGIC = Buffer.from("KVBK1\n", "ascii");
@@ -29,7 +30,7 @@ export async function encryptFile(source: string, target: string, publicKeyPem: 
 
   const cipher = createCipheriv("aes-256-gcm", dataKey, iv);
   dataKey.fill(0);
-  const out = createWriteStream(target, { flags: "wx" });
+  const out = createWriteStream(target, { flags: "wx", mode: 0o600 });
   out.write(Buffer.concat([MAGIC, length, headerBytes]));
   await pipeline(createReadStream(source), cipher, out, { end: false });
   await new Promise<void>((resolve, reject) => out.end(cipher.getAuthTag(), (err?: Error | null) => (err ? reject(err) : resolve())));
@@ -70,7 +71,15 @@ export async function decryptFile(source: string, target: string, privateKeyPem:
   const decipher = createDecipheriv("aes-256-gcm", dataKey, Buffer.from(header.iv, "base64"));
   dataKey.fill(0);
   decipher.setAuthTag(tag);
-  // Etiket doğrulanana kadar (final) çıktı geçicidir; doğrulama başarısızsa hedef dosya silinmelidir (çağıran).
-  await pipeline(createReadStream(source, { start: headerEnd, end: size - TAG_BYTES - 1 }), decipher, createWriteStream(target, { flags: "wx" }));
+  // Doğrulanmamış düz metin hedef adıyla görünmez. Aynı dosya sistemindeki geçici dosya
+  // yalnız etiket doğrulandıktan sonra atomik ve üzerine yazmadan yayımlanır.
+  const work = await mkdtemp(path.join(path.dirname(path.resolve(target)), ".kv-decrypt-"));
+  const temporary = path.join(work, "verified.dump");
+  try {
+    await pipeline(createReadStream(source, { start: headerEnd, end: size - TAG_BYTES - 1 }), decipher, createWriteStream(temporary, { flags: "wx", mode: 0o600 }));
+    await link(temporary, target);
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
 }
 

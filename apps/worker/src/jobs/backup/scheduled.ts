@@ -34,8 +34,8 @@ export type ScheduledBackupResult = { dumpKey: string; manifestKey: string; encr
 const PREFIX = /^[a-z0-9][a-z0-9/_-]{0,79}$/;
 
 export async function runScheduledBackup(deps: ScheduledBackupDeps): Promise<ScheduledBackupResult> {
-  if (!DESTINATION.test(deps.destination)) throw new Error(`geçersiz yedek hedefi etiketi: ${deps.destination}`);
-  if (!PREFIX.test(deps.prefix) || deps.prefix.includes("..")) throw new Error(`geçersiz yedek öneki: ${deps.prefix}`);
+  if (!DESTINATION.test(deps.destination)) throw new Error("geçersiz yedek hedefi etiketi");
+  if (!PREFIX.test(deps.prefix) || deps.prefix.includes("..")) throw new Error("geçersiz yedek öneki");
   const work = await mkdtemp(path.join(tmpdir(), "kv-backup-"));
   const started = Date.now();
   try {

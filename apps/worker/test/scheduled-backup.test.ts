@@ -48,11 +48,34 @@ describe("yedek zarf şifrelemesi", () => {
     tampered[tampered.length - 100]! ^= 0xff;
     await writeFile(`${plain}.bad`, tampered);
     await assert.rejects(decryptFile(`${plain}.bad`, `${plain}.bad.out`, privateKey));
+    assert.equal(existsSync(`${plain}.bad.out`), false, "bozuk yedek düz metin bırakmaz");
     await writeFile(`${plain}.cut`, enc.subarray(0, 40));
     await assert.rejects(decryptFile(`${plain}.cut`, `${plain}.cut.out`, privateKey), /kesik|geçersiz/);
     await assert.rejects(decryptFile(`${plain}.enc`, `${plain}.wrong.out`, keys().privateKey));
     await assert.rejects(encryptFile(plain, `${plain}.weak`, keys(2048).publicKey), /en az 3072/);
     await assert.rejects(decryptFile(plain, `${plain}.raw.out`, privateKey), /şifreli yedek değil/);
+  });
+
+  test("mevcut çıktı ve kaynak dosyalar korunur; CLI hata yolu da mevcut dosyayı silmez", async () => {
+    const plain = path.join(dir, "protected.dump");
+    const existing = path.join(dir, "existing.dump");
+    const key = path.join(dir, "restore-key.pem");
+    await writeFile(plain, randomBytes(4096));
+    await writeFile(existing, "mevcut yedek silinmemeli");
+    await writeFile(key, privateKey, { mode: 0o600 });
+    await encryptFile(plain, `${plain}.enc`, publicKey);
+    const original = await sha256(`${plain}.enc`);
+    await assert.rejects(decryptFile(`${plain}.enc`, existing, privateKey), { code: "EEXIST" });
+    assert.equal(await readFile(existing, "utf8"), "mevcut yedek silinmemeli");
+    await assert.rejects(decryptFile(`${plain}.enc`, `${plain}.enc`, privateKey), { code: "EEXIST" });
+    assert.equal(await sha256(`${plain}.enc`), original);
+    const cli = path.resolve(import.meta.dirname, "../scripts/decrypt-backup.ts");
+    for (const input of [`${plain}.enc`, plain]) {
+      const result = spawnSync(process.execPath, [cli, "--in", input, "--out", existing, "--key", key], { encoding: "utf8" });
+      assert.equal(result.status, 1, result.stderr);
+      assert.equal(await readFile(existing, "utf8"), "mevcut yedek silinmemeli");
+    }
+    assert.ok(!(await readdir(dir)).some((name) => name.startsWith(".kv-decrypt-")), "geçici düz metin temizlendi");
   });
 });
 

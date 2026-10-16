@@ -24,7 +24,7 @@ try {
   const env = process.env.APP_ENV ?? "local";
   const result = await runScheduledBackup({
     databaseUrl: required("DATABASE_URL"),
-    publicKeyPem: required("BACKUP_PUBLIC_KEY").replaceAll("\n", "\n"),
+    publicKeyPem: required("BACKUP_PUBLIC_KEY").replaceAll("\\n", "\n"),
     upload: createS3BackupUpload({
       endpoint: required("BACKUP_S3_ENDPOINT"),
       region: process.env.BACKUP_S3_REGION ?? "auto",
