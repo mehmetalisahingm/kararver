@@ -16,6 +16,7 @@ const TAG_BYTES = 16;
 type Header = { v: 1; alg: "aes-256-gcm"; wrap: "rsa-oaep-sha256"; wrappedKey: string; iv: string };
 
 export async function encryptFile(source: string, target: string, publicKeyPem: string): Promise<void> {
+  if (!/^-----BEGIN (?:RSA )?PUBLIC KEY-----/.test(publicKeyPem.trimStart())) throw new Error("sunucuya yalnız açık anahtar verilmeli");
   const publicKey = createPublicKey(publicKeyPem);
   if (publicKey.asymmetricKeyType !== "rsa" || (publicKey.asymmetricKeyDetails?.modulusLength ?? 0) < 3072) {
     throw new Error("yedek açık anahtarı RSA ve en az 3072 bit olmalı");

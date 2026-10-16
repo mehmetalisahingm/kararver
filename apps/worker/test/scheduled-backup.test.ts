@@ -53,6 +53,7 @@ describe("yedek zarf şifrelemesi", () => {
     await assert.rejects(decryptFile(`${plain}.cut`, `${plain}.cut.out`, privateKey), /kesik|geçersiz/);
     await assert.rejects(decryptFile(`${plain}.enc`, `${plain}.wrong.out`, keys().privateKey));
     await assert.rejects(encryptFile(plain, `${plain}.weak`, keys(2048).publicKey), /en az 3072/);
+    await assert.rejects(encryptFile(plain, `${plain}.private`, privateKey), /yalnız açık anahtar/);
     await assert.rejects(decryptFile(plain, `${plain}.raw.out`, privateKey), /şifreli yedek değil/);
   });
 

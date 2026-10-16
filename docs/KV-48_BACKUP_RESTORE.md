@@ -73,19 +73,19 @@ pnpm --filter @kararver/worker media:check
 
 | Seçenek | Nasıl | Artı | Eksi |
 |---|---|---|---|
-| **A. Railway cron servisi** (önerilen) | Ayrı bir Railway servisi (`cronSchedule: "30 0 * * *"`, İstanbul 03:30). Çalışınca `db:backup --destination r2` → şifreli (age) dosya yedek bucket'ına → `media:check` → çıkar. | DB'ye iç ağdan bağlanır (TCP proxy açılmaz). Kayıt ve panel hemen çalışır. Hata Railway deploy kaydında görünür. | Servis imajında PG 18 istemci araçları gerekir (staging PG 18.6). |
+| **A. Mevcut worker / pg-boss** (ücretsiz plan için uygulanan kod yolu) | `BACKUP_ENABLED=true` olduğunda mevcut worker `backup.scheduled` kuyruğunu UTC 00:30 / TSİ 03:30 için kaydeder. Şifreli döküm ve manifest ayrı yedek bucket'ına gider. | Ek Railway servisi ve public DB proxy gerekmez; mevcut API+worker süreci ve iç ağ kullanılır. İş başarısızlığı pg-boss ve ops panelinde görünür. | Mevcut imajda sunucuyla aynı major `pg_dump` gerekir (staging PG 18); mevcut servis kaynaklarını kullanır. Uyuyan servis veya çalışmayan worker zamanında yedek garantisi vermez. |
 | B. GitHub Actions gecelik iş | Secret'taki `DATABASE_PUBLIC_URL` ile `db:backup` → bucket. | Kurulumu basit; geçmiş Actions'ta görünür. | DB'nin public proxy'si sürekli açık kalmalı (KV-48'de iş bitince kapatıldı). Kişisel veri GitHub runner'ından geçer (KVKK). Önerilmez. |
 | C. Sağlayıcı yedeği / PITR | Railway'in volume yedeği ya da yönetilen PostgreSQL PITR'ı. | Bakım yok; RPO dakikalar. | Plan/sağlayıcıya bağlı; bağımsız kopya değildir (sağlayıcı ya da hesap sorunu yedeği de etkiler). `ops_backup_runs`'a yazmaz, panelde görünmesi için ayrı kontrol gerekir. |
 
-**Öneri:** C (varsa) + A birlikte. Sağlayıcı PITR'ı kısa RPO için, A sağlayıcıdan bağımsız günlük kopya ve panel kanıtı için.
+**Kullanıcı kararı:** Ücretsiz planda ayrı Railway servisi açılmaz. A yolu varsayılan **kapalıdır**; aşağıdaki anahtar/bucket ve gerçek restore kabulü tamamlanınca mevcut süreçte etkinleştirilebilir. Sağlayıcı PITR'ı ve ayrı cron servisi ileride plan ve bütçe uygun olduğunda ayrıca değerlendirilir. Bu kod yeni bir ücretli kaynak oluşturmaz; depolamanın/işlem kaynaklarının ücretsizliği sağlayıcı limitleri ayrıca doğrulanmadan iddia edilmez.
 
 A için gerekenler:
 1. Yedek bucket'ı ve **yalnız yazma** yetkili anahtar (uygulamanın anahtarı yedekleri silemez).
-2. `age` açık anahtarı (özel anahtar ekip dışında, çevrimdışı saklanır).
-3. Saklama kuralı (7 günlük + 4 haftalık + 3 aylık) bucket yaşam döngüsüyle.
+2. RSA (en az 3072 bit) **açık** anahtarı; özel anahtar sunucu dışında, sorumlusu belirlenmiş güvenli yerde saklanır. Sunucu yapılandırması özel anahtarı reddeder.
+3. Saklama kuralı bucket yaşam döngüsüyle; 35 gün önerisi ve daha uzun katmanlar Mehmet'in teyidini bekler. Kod bunları otomatik uygulamaz.
 4. `staging-monitor` gibi bir izleme: panel `degraded` olunca alarm.
 
-### Zamanlanmış yedek: uygulama (A seçeneği, #51)
+### Zamanlanmış yedek: uygulama (#51)
 
 Kod hazır: `apps/worker/scripts/scheduled-backup.ts` (iş: `apps/worker/src/jobs/backup/`). Tek çalıştırma:
 1. `db:backup` (tutarlı snapshot + manifest).
@@ -103,12 +103,13 @@ Herhangi bir adım başarısızsa kayıt yazılmaz, çıkış kodu 1 olur, panel
    openssl pkey -in kv-backup-private.pem -pubout -out kv-backup-public.pem
    ```
    Özel anahtar repoya, Railway'e, issue'ya **asla** girmez. Açık anahtar Railway değişkeni olur.
-2. **Yedek bucket'ı:** Uygulamanın bucket'larından ayrı; anahtarı **yalnız PutObject** yetkili, okuma/silme yok. Saklama yaşam döngüsü kuralıyla: ilk sürüm `db/` altında 35 gün. Haftalık/aylık katmanlar sonra ayrı önekle.
-3. **Railway cron servisi** (aynı repo, ortam başına bir servis):
-   - Start command `node apps/worker/scripts/scheduled-backup.ts`.
-   - Cron `30 0 * * *` (UTC 00:30 = TSİ 03:30). Yeniden başlatma politikası: hiçbir zaman.
+2. **Yedek bucket'ı:** Uygulamanın bucket'larından ayrı; anahtarı **yalnız PutObject** yetkili, okuma/silme yok. Saklama yaşam döngüsü kuralıyla, süre ayrıca teyit edilir. Uygulama bucket'ıyla aynı ad verilirse mevcut-worker yapılandırması reddedilir. Sağlayıcıda yazma yetkisi kapsamını ayrıca doğrula; kod IAM politikasını oluşturmaz.
+3. **Mevcut worker** (ek servis yok):
+   - `BACKUP_ENABLED=false` varsayılanını kurulum ve kabul bitene kadar koru. Worker başlarken yedek almaz.
+   - Etkinleştirme `BACKUP_ENABLED=true`; pg-boss aynı DB'de UTC `30 0 * * *` zamanlamasını tutar. `stately` politika tek aktif iş sağlar; 300 saniye arayla en çok iki retry vardır. Tekrar kapatıldığında zamanlama kaldırılır; o sırada çalışan işin bitmesi beklenir.
+   - Tek çalıştırmalık araç hâlâ `node apps/worker/scripts/scheduled-backup.ts`; zamanlayıcıdan bağımsız kabul/restore için kullanılabilir.
    - Değişkenler: `DATABASE_URL` (Postgres servisinin **iç** adresi, referansla), `APP_ENV`, `BACKUP_PUBLIC_KEY` (PEM; tek satırda `\n` ile yazılabilir), `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGION`, `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY`, `BACKUP_DESTINATION` (ör. `r2`), `BACKUP_PREFIX` (varsayılan `db/<APP_ENV>`).
-   - `pg_dump` sunucuyla **aynı major** olmalı (staging PG 18). İmaja PostgreSQL 18 istemci araçları eklenir; gerekirse `PG_BIN` ile yolu verilir. **İlk çalıştırmanın logunda sürüm doğrulanacak.**
+   - `pg_dump` sunucuyla **aynı major** olmalı (staging PG 18). Mevcut servis imajına PostgreSQL 18 istemci araçları eklenmeden etkinleştirme yapılmaz; gerekirse `PG_BIN` ile yolu verilir. Bu PR canlı servis imajını veya anahtarlarını değiştirmez. CI ise kendi PostgreSQL 17 sunucusu için 17 istemcisini zorunlu doğrular.
 4. **Doğrulama:**
    - İlk çalıştırmadan sonra bucket'ta iki dosya var mı, panelde `backup.status = ok` mu?
    - Bir yedeği aşağıdaki gibi çözüp boş bir veritabanına restore et.
@@ -118,7 +119,7 @@ Herhangi bir adım başarısızsa kayıt yazılmaz, çıkış kodu 1 olur, panel
 ```
 node apps/worker/scripts/decrypt-backup.ts --in <ad>.dump.enc --out <ad>.dump --key kv-backup-private.pem
 ```
-Dosya değiştirilmiş ya da kesikse çözme reddedilir ve çıktı silinir. Manifest aynı klasöre `<ad>.dump.manifest.json` olarak konur, sonra `db:restore --file <ad>.dump`.
+Dosya değiştirilmiş ya da kesikse çözme reddedilir, geçici düz metin temizlenir; mevcut çıktı ve kaynak dosya korunur. Hedef yalnız doğrulamadan sonra, üzerine yazılmadan oluşturulur. Manifest aynı klasöre `<ad>.dump.manifest.json` olarak konur, sonra `db:restore --file <ad>.dump`.
 
 ## Restore runbook'u
 
@@ -236,4 +237,4 @@ node scripts/staging-drill.mjs prepare   # staging'e yazmaz: smoke, yedek, resto
 node scripts/staging-drill.mjs switch    # API sağlıklı ve smoke geçene kadar bekler, RTO'yu yazar
 ```
 
-CI'da `pnpm test`, ops testlerini de koşar. Uçtan uca kısım `pg_dump` 17 yoksa gerekçesiyle atlanır (runner'ın istemcisi eski olabilir). Açmak için database job'ına PostgreSQL 17 istemcisi kurulmalı (@Utkuuzun14).
+CI'da `pnpm test`, ops testlerini de koşar. Database işi PostgreSQL 17 `pg_dump` ve `pg_restore` araçlarını doğrular; yoksa resmi PGDG deposundan istemci kurar ve `PG_BIN` ile testlere verir. Araç kurulamazsa iş başarısız olur. Yerelde istemci veya test DB yoksa eski atlama kuralı sürer; bu gerçek staging restore kabulü değildir. Kurulum kaynağı: [PostgreSQL resmi Ubuntu yönergesi](https://www.postgresql.org/download/linux/ubuntu/).

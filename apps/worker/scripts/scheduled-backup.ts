@@ -41,6 +41,6 @@ try {
   log("info", "çıkış", { key: result.dumpKey });
 } catch (err) {
   // Hata mesajında bağlantı adresi yok (pg-tools redact, s3-upload yalnız hata adı/kodu).
-  log("error", "zamanlanmış yedek başarısız", { error: err instanceof Error ? err.message : String(err) });
+  log("error", "zamanlanmış yedek başarısız; ortam değişkenlerini, araç sürümünü ve bucket erişimini denetle", { error: "backup_failed" });
   process.exitCode = 1;
 }

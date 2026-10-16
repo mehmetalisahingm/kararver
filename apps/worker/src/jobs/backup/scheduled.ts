@@ -1,4 +1,4 @@
-// KV-48 / #51 zamanlanmış veritabanı yedeği. Railway cron servisi günde bir çalıştırır (scripts/scheduled-backup.ts):
+// KV-48 / #51 zamanlanmış veritabanı yedeği. Mevcut worker zamanlayıcısı veya tek çalıştırma CLI'sı:
 //   1) db:backup (tutarlı snapshot + manifest, KV-48),
 //   2) dökümü zarf şifrelemesiyle şifrele (envelope.ts; sunucu yalnız açık anahtarı bilir),
 //   3) şifreli dökümü ve manifesti yedek bucket'ına yükle (manifest kişisel veri içermez: sayılar, şema kataloğu, sha256),
