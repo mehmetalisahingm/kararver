@@ -13,6 +13,7 @@ import { PgBoss } from "pg-boss";
 import { createPrismaOpsProbe } from "../src/modules/ops/probe.ts";
 import { buildOpsStatus, classifyBackup, classifyQueues, classifyWorker, RESTORE_DRILL } from "../src/modules/ops/status.ts";
 import { recordBackupRun, type Manifest } from "../../../packages/db/ops/backup.ts";
+import { writeAudit } from "../src/modules/audit/write.ts";
 import { createOpsTelemetry, percentile } from "../src/modules/ops/telemetry.ts";
 import { createHarness, memoryBackend, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 import { rbacSeeds } from "./support/rbac-probe.ts";
@@ -323,14 +324,53 @@ describe("operasyon yoklaması (postgres + gerçek pg-boss)", { skip: backend ? 
     for (let i = 0; i < limits.email; i++) await inject("POST", "/auth/login", { email: target.email, password: "yanlis-parola-xx" }, undefined, `198.51.100.${40 + i}`);
     const sanction = await inject("POST", `/admin/users/${target.id}/sanctions`, { type: "WARNING", reason: "Güvenlik sinyali testi" }, root.cookie);
     assert.equal(sanction.statusCode, 201, sanction.body);
+    // MFA kilitlenmesi ve başarısız denemesi (#206) brute force izidir; kurulum gibi olağan MFA işlemleri sayılmaz.
+    const mfa = (operation: string) =>
+      h.prisma!.$transaction((tx) =>
+        writeAudit(tx, { source: "API", actorId: target.id, action: "account.mfa", operation, target: { type: "USER", id: target.id }, reason: null, before: null, after: null, requestId: `ops-${randomUUID()}`, at: h.clock.now }),
+      );
+    await mfa("deny");
+    await mfa("lock");
+    await mfa("setup");
 
     const after = (await read()).security;
+    assert.equal(count(after.adminActions24h, "account.mfa", "lock"), count(before.adminActions24h, "account.mfa", "lock") + 1);
+    assert.equal(count(after.adminActions24h, "account.mfa", "deny"), count(before.adminActions24h, "account.mfa", "deny") + 1);
+    assert.equal(count(after.adminActions24h, "account.mfa", "setup"), 0);
     assert.equal(after.lockedLogins!.emails, before.lockedLogins!.emails + 1);
     assert.equal(count(after.adminActions24h, "user.sanction", "apply"), count(before.adminActions24h, "user.sanction", "apply") + 1);
     // Kritik olmayan işlemler listede yok; yanıt ham e-posta, IP ya da anahtar özeti içermez.
     assert.ok(after.adminActions24h!.every((a) => a.action !== "revision.read" && a.action !== "category.manage"));
     const body = JSON.stringify(after);
     for (const leak of [target.email, "198.51.100.", "login.email:"]) assert.ok(!body.includes(leak), leak);
+  });
+
+  test("anonimleştirme depo temizliği (#228) kuyruk olarak: bekleyen, geri çekilmede, başarısız, tamamlanan; tablo yoksa yok", async () => {
+    const table = `${schema}.account_erasures`;
+    await h.prisma!.$executeRawUnsafe(
+      `CREATE TABLE ${table} (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), storage_cleaned_at timestamptz,
+         storage_cleanup_attempts int NOT NULL DEFAULT 0, storage_next_attempt_at timestamptz, created_at timestamptz NOT NULL DEFAULT now())`,
+    );
+    await h.prisma!.$executeRawUnsafe(
+      `INSERT INTO ${table} (storage_cleaned_at, storage_cleanup_attempts, storage_next_attempt_at, created_at) VALUES
+         (NULL, 0, NULL, now() - interval '30 seconds'),
+         (NULL, 2, now() - interval '1 minute', now() - interval '40 minutes'),
+         (NULL, 3, now() + interval '30 minutes', now() - interval '2 hours'),
+         (now() - interval '1 hour', 0, NULL, now() - interval '2 hours'),
+         (now() - interval '3 days', 1, NULL, now() - interval '4 days')`,
+    );
+    const queues = await createPrismaOpsProbe(h.prisma!, { schema, erasuresTable: table }).queues();
+    const erasure = queues.find((q) => q.name === "account.erasure.storage");
+    assert.ok(erasure, queues.map((q) => q.name).join(","));
+    // Bekleyen 2 (biri deneme zamanı gelmiş başarısız), geri çekilmede 1, hâlâ temizlenmemiş başarısız 2, son 24 saatte tamamlanan 1.
+    assert.deepEqual([erasure.waiting, erasure.active, erasure.failed24h, erasure.completed24h], [2, 1, 2, 1]);
+    // En eski: 2 saattir temizlenmeyen kayıt (kişisel veri dosyası depoda duruyor).
+    assert.ok(erasure.oldestWaitingSeconds! >= 7190 && erasure.oldestWaitingSeconds! < 7300, String(erasure.oldestWaitingSeconds));
+    assert.equal(classifyQueues([erasure]), "degraded");
+
+    const without = await createPrismaOpsProbe(h.prisma!, { schema, erasuresTable: "public.yok_account_erasures" }).queues();
+    assert.ok(!without.some((q) => q.name === "account.erasure.storage"));
+    assert.throws(() => createPrismaOpsProbe(h.prisma!, { erasuresTable: "account_erasures; --" }), /geçersiz tablo/);
   });
 
   test("kuyruk sayıları, bekleyen iş ve worker izi gerçek pg-boss tablolarından", async () => {
