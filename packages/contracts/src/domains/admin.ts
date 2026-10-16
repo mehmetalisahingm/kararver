@@ -253,6 +253,25 @@ export const OpsStatus = z.strictObject({
     lastBackupAt: Timestamp.nullable(),
     restoreDrill: z.strictObject({ at: z.iso.date(), environment: z.string().max(20), rtoSeconds: Count, reference: z.string().max(200) }).nullable(),
   }),
+  /**
+   * Acil durum anahtarları (KV-40): etkin değer ve son değişiklik zamanı. `propagationSeconds`: ayar önbelleğinin ömrü, yani
+   * değişikliğin bütün API süreçlerine en geç yayılma süresi. Kimin değiştirdiği audit'tedir, burada yoktur. Ayar servisi
+   * yoksa ya da okunamazsa null.
+   */
+  switches: z
+    .strictObject({
+      propagationSeconds: Count,
+      items: z.array(
+        z.strictObject({
+          name: z.enum(["maintenance", "registration", "pollCreation", "comments", "uploads"]),
+          key: z.string().max(80),
+          enabled: z.boolean(),
+          changedAt: Timestamp.nullable(),
+        }),
+      ),
+    })
+    .nullable()
+    .default(null),
 });
 
 export const AdminSession = z.strictObject({

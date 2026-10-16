@@ -159,6 +159,7 @@ describe("admin.ops.status (memory)", () => {
     assert.equal(data.components.queue.status, "unknown");
     assert.deepEqual(data.components.queue.queues, []);
     assert.deepEqual([data.security.lockedLogins, data.security.adminActions24h], [null, null], "DB yoklaması yoksa bilinmiyor (null), 0 değil");
+    assert.equal(data.switches, null, "ayar servisi yoksa anahtar durumu bilinmiyor (null)");
     assert.deepEqual(data.backup, { status: "unknown", lastBackupAt: null, restoreDrill: { ...RESTORE_DRILL } });
     assert.equal(data.release.env, "test");
   });
@@ -397,5 +398,62 @@ describe("operasyon yoklaması (postgres + gerçek pg-boss)", { skip: backend ? 
     assert.equal(status.components.queue.status, "degraded");
     assert.equal(status.components.worker.status, "ok");
     assert.ok(status.components.worker.ageSeconds! < 60);
+  });
+});
+
+describe("acil durum anahtarları operasyon durumunda (postgres + gerçek ayar servisi)", { skip: backend ? false : "TEST_DATABASE_URL yok (CI'da çalışır)" }, () => {
+  let h: Harness;
+  let root: { cookie: string; id: string };
+
+  const send = (method: "GET" | "POST" | "PUT", url: string, body?: unknown, cookie?: string) =>
+    h.app.inject({
+      method,
+      url: `/v1${url}`,
+      headers: { origin: WEB_ORIGIN, ...(body === undefined ? {} : { "content-type": "application/json" }), ...(cookie ? { cookie } : {}) },
+      payload: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+  before(async () => {
+    h = await createHarness(backend!, { realSettings: true });
+    const id = randomUUID().replaceAll("-", "").slice(0, 10);
+    const account = { email: `sw_${id}@example.test`, username: `sw_${id}`, displayName: "Anahtar", password: "guclu-bir-sifre-1" };
+    const mailCount = h.mails.length;
+    assert.equal((await send("POST", "/auth/register", account)).statusCode, 202);
+    assert.equal((await send("POST", "/auth/email/verify", { token: tokenFrom(h.mails[mailCount]) })).statusCode, 200);
+    const login = await send("POST", "/auth/login", { email: account.email, password: account.password });
+    root = { cookie: sessionCookie(login.headers["set-cookie"] as string), id: login.json().data.id };
+    await rbacSeeds(h).setRole(root.id, "SUPER_ADMIN", null);
+  });
+  after(async () => {
+    await h?.close();
+  });
+
+  test("anahtarların etkin değeri, son değişiklik zamanı ve yayılma süresi; değiştiren kişi yanıtta yok", async () => {
+    const read = async () => {
+      const res = await send("GET", "/admin/ops", undefined, root.cookie);
+      assert.equal(res.statusCode, 200, res.body);
+      return OpsStatus.parse(res.json().data).switches!;
+    };
+    const item = (s: Awaited<ReturnType<typeof read>>, name: string) => s.items.find((i) => i.name === name)!;
+    const before = await read();
+    assert.ok(before, "ayar servisi varken null değil");
+    assert.equal(before.propagationSeconds, 5, "harness önbellek ömrü 5 sn");
+    assert.deepEqual(before.items.map((i) => i.name).sort(), ["comments", "maintenance", "pollCreation", "registration", "uploads"]);
+    assert.equal(item(before, "comments").key, "features.comments");
+
+    const off = await send("PUT", "/admin/emergency", { switches: { comments: false }, reason: "Operasyon paneli testi" }, root.cookie);
+    assert.equal(off.statusCode, 200, off.body);
+    try {
+      h.settings!.invalidate();
+      const after = await read();
+      assert.equal(item(after, "comments").enabled, false);
+      assert.ok(item(after, "comments").changedAt, "değişiklik zamanı var");
+      assert.equal(item(after, "maintenance").enabled, item(before, "maintenance").enabled, "diğer anahtarlar değişmedi");
+      assert.ok(!JSON.stringify(after).includes(root.id), "değiştiren kişi yanıtta yok (audit'te)");
+    } finally {
+      // Ayarlar test veritabanında kalıcıdır: sonraki dosyalar için eski haline döndür.
+      const back = await send("PUT", "/admin/emergency", { switches: { comments: item(before, "comments").enabled }, reason: "Operasyon paneli testi geri alma" }, root.cookie);
+      assert.equal(back.statusCode, 200, back.body);
+    }
   });
 });
