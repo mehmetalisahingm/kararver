@@ -1,6 +1,13 @@
 name: Staging security read-only gate
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/security-staging.yml
+      - scripts/security-acceptance.mjs
+      - scripts/security-acceptance.test.mjs
+      - scripts/public-media-readonly.mjs
+      - scripts/public-media-readonly.test.mjs
   # Güvenlik kapısı kodu değiştiğinde main'de hemen tekrar kanıt üret.
   push:
     branches: [main]
