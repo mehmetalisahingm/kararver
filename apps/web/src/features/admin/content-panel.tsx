@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AdminClient } from "./admin-client.ts";
 import type { AdminComment, AdminPoll, Community, ContentKind, ContentStatus, ModerationAction, PollCategory } from "./admin-client.ts";
 import { BulkDialog } from "./bulk-dialog";
+import { BulkApprovals } from "./bulk-approvals";
 import { BulkHistory } from "./bulk-history";
 import { BULK_MAX, toggleSelection } from "./bulk-model.ts";
 import { HistoryDialog } from "./content-history";
@@ -146,6 +147,7 @@ export function ContentPanel({ admin, kind }: { admin: AdminClient; kind: Conten
 
       <BulkDialog admin={admin} kind={kind} ids={[...selected]} open={bulkOpen} onClose={() => setBulkOpen(false)} onDone={done} />
       <BulkHistory admin={admin} revision={bulkRevision} onChanged={done} />
+      <BulkApprovals admin={admin} revision={bulkRevision} onChanged={done} />
 
       <ActionDialog
         open={dialog?.type === "action"}

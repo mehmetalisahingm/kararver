@@ -8,6 +8,9 @@ import type {
   LegalHold,
   UserTimelineItem,
   UserTimelineSummary,
+  BulkApprovalDecision,
+  BulkApprovalDetail,
+  BulkApprovalView,
   UndoPreview,
   UndoResult,
   BulkPreview,
@@ -52,6 +55,12 @@ export type BulkPreviewView = ReturnType<typeof BulkPreview.parse>;
 export type BulkResultView = ReturnType<typeof BulkResult.parse>;
 export type UserTimelineItemView = ReturnType<typeof UserTimelineItem.parse>;
 export type UserTimelineSummaryView = ReturnType<typeof UserTimelineSummary.parse>;
+export type BulkApprovalRecord = ReturnType<typeof BulkApprovalView.parse>;
+export type BulkApprovalDetailView = ReturnType<typeof BulkApprovalDetail.parse>;
+export type BulkApprovalDecisionView = ReturnType<typeof BulkApprovalDecision.parse>;
+/** `bulkApply` sonucu: eşik altında uygulanır (200), eşik aşılırsa ikinci onay talebi açılır (202, içerik değişmez). */
+export type BulkApplyOutcome = { kind: "applied"; result: BulkResultView } | { kind: "pending"; approval: BulkApprovalRecord };
+export type BulkApprovalFilter = "PENDING" | "APPROVED" | "REJECTED" | "CANCELED" | "EXPIRED";
 export type UndoPreviewView = ReturnType<typeof UndoPreview.parse>;
 export type UndoResultView = ReturnType<typeof UndoResult.parse>;
 export type ModerationBatch = ReturnType<typeof WireBatch.parse>;
@@ -276,8 +285,31 @@ export class AdminClient {
     return data<BulkPreviewView>(await this.http.request(`admin.moderation.${kind}.bulkPreview`, { query: { ids: ids.join(","), action } }));
   }
   /** Önizlenen durumda uygular; durum değiştiyse 409 preview_stale. Kayıt başına sonuç (kısmi başarısızlık dahil) döner. */
-  async bulkApply(kind: ContentKind, input: { ids: string[]; action: "HIDE" | "REMOVE" | "RESTORE"; reason: string; digest: string }) {
-    return data<BulkResultView>(await this.http.request(`admin.moderation.${kind}.bulk`, { body: input }));
+  async bulkApply(kind: ContentKind, input: { ids: string[]; action: "HIDE" | "REMOVE" | "RESTORE"; reason: string; digest: string }): Promise<BulkApplyOutcome> {
+    const wire = data<BulkResultView | BulkApprovalRecord>(await this.http.request(`admin.moderation.${kind}.bulk`, { body: input }));
+    // 200 sonuç partisi (batchId), 202 bekleyen onay talebi (status): gövde şekli ayırt eder.
+    return "batchId" in wire && "summary" in wire ? { kind: "applied", result: wire } : { kind: "pending", approval: wire as BulkApprovalRecord };
+  }
+  /** #183 ikinci onay: talepler (moderatör kendi taleplerini, ADMIN+ hepsini görür). */
+  async bulkApprovals(status: BulkApprovalFilter | undefined, cursor?: string, signal?: AbortSignal) {
+    return page<BulkApprovalRecord>(await this.http.request("admin.moderation.bulkApprovals.list", { query: { status, cursor, limit: "20" }, signal }));
+  }
+  async bulkApproval(id: string, signal?: AbortSignal) {
+    return data<BulkApprovalDetailView>(await this.http.request("admin.moderation.bulkApprovals.get", { params: { id }, signal }));
+  }
+  /** Başlatandan farklı ADMIN+; oturumda taze MFA step-up gerekir (`stepUp`). Onay partiyi başlatan adına uygular. */
+  async approveBulk(id: string, reason: string) {
+    return data<BulkApprovalDecisionView>(await this.http.request("admin.moderation.bulkApprovals.approve", { params: { id }, body: { reason } }));
+  }
+  async rejectBulk(id: string, reason: string) {
+    return data<BulkApprovalRecord>(await this.http.request("admin.moderation.bulkApprovals.reject", { params: { id }, body: { reason } }));
+  }
+  async cancelBulk(id: string, reason: string) {
+    return data<BulkApprovalRecord>(await this.http.request("admin.moderation.bulkApprovals.cancel", { params: { id }, body: { reason } }));
+  }
+  /** Oturum için 5 dakikalık, tek kullanımlık MFA doğrulaması (me.mfa.stepup). */
+  async stepUp(code: string) {
+    await this.http.request("me.mfa.stepup", { body: { code } });
   }
   /** #183 kullanıcı birleşik geçmişi (salt okuma, ADMIN+): süzgeçler API sorgusu olarak verilir (timeline-model.toQuery). */
   async userTimeline(id: string, query: Record<string, string>, cursor?: string, signal?: AbortSignal) {

@@ -58,6 +58,7 @@ import { registerProfileRoutes } from "./modules/profiles/routes.ts";
 import type { ProfileStore } from "./modules/profiles/store.ts";
 import { registerBulkModerationRoutes } from "./modules/moderation/bulk-routes.ts";
 import type { BulkModerationStore } from "./modules/moderation/bulk.ts";
+import type { BulkApprovalStore } from "./modules/moderation/bulk-approval.ts";
 import { registerModerationRoutes } from "./modules/moderation/routes.ts";
 import type { ModerationStore } from "./modules/moderation/store.ts";
 import { registerNotificationRoutes } from "./modules/notifications/routes.ts";
@@ -171,6 +172,7 @@ export type AppDeps = {
   moderationStore?: ModerationStore;
   /** #183 toplu moderasyon parti kaydı; moderationStore ile birlikte kaydedilir. */
   bulkModerationStore?: BulkModerationStore;
+  bulkApprovalStore?: BulkApprovalStore;
   /** Verilmezse bildirim okuma route'ları (notifications.*; KV-21) kaydedilmez. */
   notificationStore?: NotificationStore;
   /** Verilmezse yorum route'u kaydedilmez. */
@@ -394,8 +396,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
   if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
-  if (deps.moderationStore && deps.bulkModerationStore) {
-    registerBulkModerationRoutes(route, { store: deps.moderationStore, batches: deps.bulkModerationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  if (deps.moderationStore && deps.bulkModerationStore && deps.bulkApprovalStore) {
+    registerBulkModerationRoutes(route, { store: deps.moderationStore, batches: deps.bulkModerationStore, approvals: deps.bulkApprovalStore, rbac: deps.rbacStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
   if (deps.notificationStore) {
     registerNotificationRoutes(route, { store: deps.notificationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });

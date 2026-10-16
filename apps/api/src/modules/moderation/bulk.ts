@@ -73,6 +73,12 @@ export interface BulkModerationStore {
   finishBatch(batchId: string, counts: { applied: number; unchanged: number; failed: number }, now: Date): Promise<void>;
   /** Aktörün `since` sonrası açtığı parti sayısı (saatlik sınır). */
   recentBatchCount(actorId: string, since: Date): Promise<number>;
+  /**
+   * Aktörün `since` sonrası ONAYSIZ uygulanan kayıt sayısı (geri alma partileri ve ikinci onaydan geçen partiler hariç):
+   * ikinci onay eşiğinin pencere toplamı. Bitmemiş partinin sayısı bitişte yazıldığından eşzamanlı istekler birbirini görmez;
+   * saatlik parti sınırı bu boşluğu sınırlar (KV-37 §8).
+   */
+  unapprovedAppliedSince(actorId: string, since: Date): Promise<number>;
   listBatches(filter: { actorId?: string; after: ListAfter }, limit: number): Promise<BatchRow[]>;
 }
 
@@ -226,6 +232,11 @@ export function createPrismaBulkModerationStore(prisma: PrismaClient): BulkModer
     },
 
     recentBatchCount: (actorId, since) => prisma.moderationBatch.count({ where: { actorId, createdAt: { gt: since } } }),
+
+    async unapprovedAppliedSince(actorId, since) {
+      const sum = await prisma.moderationBatch.aggregate({ _sum: { applied: true }, where: { actorId, undoOfId: null, approval: null, createdAt: { gt: since } } });
+      return sum._sum.applied ?? 0;
+    },
 
     async listBatches(filter, limit) {
       const after = filter.after;

@@ -27,6 +27,7 @@ export const auditTargetTypes = Object.freeze([
   "SETTING",
   "ANNOUNCEMENT",
   "FEATURED",
+  "BULK_APPROVAL",
 ] as const);
 export type AuditTargetType = (typeof auditTargetTypes)[number];
 
@@ -79,6 +80,9 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   // KV-38 yasaklı görsel listesi: ekleme gerekçeli, kaldırma (DELETE) gövdesiz.
   "media.ban.manage": ["create", "delete"],
   "report.resolve": ["actioned", "dismissed"],
+  // #183 yüksek hacimli toplu moderasyon için ikinci onay: talep (aktör = başlatan), onay/ret (aktör = ikinci onaycı), geri çekme (başlatan).
+  "moderation.bulk.approve": ["request", "approve", "reject"],
+  "moderation.bulk.cancel": ["cancel"],
   "moderation.poll.apply": moderationOps,
   "moderation.comment.apply": moderationOps.filter((o) => !commentOnlyExcluded(o)),
   // KV-37: kategori/topluluk taşıma ve rapor kuyruğundan uyarı.
@@ -131,6 +135,8 @@ export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditActi
   "vote.invalidate",
   "points.adjust",
   "category.manage",
+  "moderation.bulk.approve",
+  "moderation.bulk.cancel",
   "moderation.poll.apply",
   "moderation.comment.apply",
   "moderation.poll.move",
