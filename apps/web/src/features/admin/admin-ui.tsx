@@ -66,11 +66,14 @@ export function useRemoteList<T>(load: (cursor: string | undefined, signal: Abor
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const controller = useRef<AbortController | null>(null);
+  const morePending = useRef(false);
 
   useEffect(() => {
     controller.current?.abort();
     const current = new AbortController();
     controller.current = current;
+    morePending.current = false;
+    setLoadingMore(false);
     setLoading(true);
     setError("");
     load(undefined, current.signal)
@@ -92,7 +95,8 @@ export function useRemoteList<T>(load: (cursor: string | undefined, signal: Abor
   }, [load, attempt]);
 
   const loadMore = useCallback(() => {
-    if (!next || loadingMore) return;
+    if (!next || loading || morePending.current) return;
+    morePending.current = true;
     const signal = controller.current?.signal ?? new AbortController().signal;
     setLoadingMore(true);
     setError("");
@@ -106,9 +110,9 @@ export function useRemoteList<T>(load: (cursor: string | undefined, signal: Abor
         if (!signal.aborted) setError(errorMessage(cause));
       })
       .finally(() => {
-        if (!signal.aborted) setLoadingMore(false);
+        if (!signal.aborted) { morePending.current = false; setLoadingMore(false); }
       });
-  }, [load, next, loadingMore]);
+  }, [load, next, loading]);
 
   return { items, loading, loadingMore, error, hasMore: next !== null, reload: () => setAttempt((n) => n + 1), loadMore };
 }
