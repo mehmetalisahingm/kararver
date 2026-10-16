@@ -9,6 +9,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.35.0 — 2026-10-16 (Mert, #183 kullanıcı birleşik geçmişi)
+
+Kırıcı değişiklik yok: yeni salt okuma endpoint'leri ve şemalar; yeni yetki veya audit işlemi yok (mevcut `user.read`, ADMIN+).
+
+- **Eklendi:** `admin.users.timeline` (kullanıcının anket, yorum, medya, rapor, moderasyon ve yaptırım olayları tek zaman çizgisinde; tür, topluluk, içerik ve zaman süzgeçleri, keyset sayfalama) ve `admin.users.timeline.summary` (tür başına sayı, ilk/son olay).
+- Şemalar: `UserTimelineItem`, `UserTimelineKind`, `UserTimelineSummary`, `UserTimelineKinds`.
+- **Veri politikası:** IP/cihaz bilgisi bu uçlarda YOKTUR (veri minimizasyonu); raporlayan kimliği gösterilmez.
+
 ## 1.34.0 — 2026-10-15 (Faruk, operasyon merkezi: acil durum anahtarları, #186)
 
 Kırıcı değişiklik yok: yanıta alan eklendi (minör). Eski API yanıtında alan yoksa `null` olur (`default(null)`).

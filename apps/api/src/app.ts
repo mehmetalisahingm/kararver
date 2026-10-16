@@ -13,6 +13,8 @@ import type { Mailer } from "./mail/mailer.ts";
 import { registerAdminUserRoutes } from "./modules/admin-users/routes.ts";
 import { registerAccountDeletionRoutes } from "./modules/account-deletion/routes.ts";
 import type { AccountDeletionStore } from "./modules/account-deletion/store.ts";
+import { registerUserTimelineRoutes } from "./modules/admin-users/timeline.ts";
+import type { UserTimelineStore } from "./modules/admin-users/timeline.ts";
 import { registerEmailChangeRoutes } from "./modules/email-change/routes.ts";
 import type { EmailChangeStore } from "./modules/email-change/store.ts";
 import { registerAccountErasureRoutes } from "./modules/account-erasure/routes.ts";
@@ -184,6 +186,8 @@ export type AppDeps = {
   accountDeletionStore?: AccountDeletionStore;
   /** #181 e-posta değişimi; adminUserStore ile birlikte kaydedilir (destek yolunda hedef rolü okunur). */
   emailChangeStore?: EmailChangeStore;
+  /** #183 kullanıcı birleşik geçmişi (salt okuma); adminUserStore ile birlikte kaydedilir. */
+  userTimelineStore?: UserTimelineStore;
   /** #184 / KV-54 S1 topluluk sahibi atama/bırakma. */
   communityOwnerStore?: CommunityOwnerStore;
   /** Üçü birlikte verilirse medya route'ları kaydedilir (config.storage yoksa server vermez). */
@@ -418,6 +422,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       webUrl: config.webUrl,
     });
   }
+  if (deps.userTimelineStore && deps.adminUserStore) registerUserTimelineRoutes(route, { store: deps.userTimelineStore, now });
   if (deps.emailChangeStore && deps.adminUserStore) {
     registerEmailChangeRoutes(route, {
       store: deps.emailChangeStore,

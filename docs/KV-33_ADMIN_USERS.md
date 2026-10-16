@@ -313,3 +313,41 @@ KVKK silme hakkının **kullanıcı başlatmalı** yolu (#181). Silmenin kendisi
 - Talep adımında MFA kodu kullanıcı arayüzünde step-up ile alınır; MFA'sız hesapta yalnız parola istenir.
 
 **Test:** `apps/api/test/account-deletion.test.ts` (bayrak, kimlik, yeniden kimlik doğrulama ve teyit, önizleme ve yasal saklama gerekçesinin sızmaması, engeller, talebin silmemesi ve onayla silinmesi, idempotency ve paralel onay, kendi iptali ve `replaced`, bağlantıyla iptal ve oturum kapanışı, süre, sıklık sınırı, talep-onay arası engel, iptal/onay yarışı, MFA, audit'te kişisel veri olmaması), `apps/web/test/self-deletion.test.ts` ve `apps/web/test/states/self-deletion.spec.ts` (tarayıcıda açık tıklama, fragment temizliği, MFA sırası, yasal saklama).
+
+## 13. Birleşik kullanıcı geçmişi (#183)
+
+Bir hesabın anket, yorum, görsel, rapor, moderasyon ve yaptırım olaylarını **tek zaman çizgisinde** gösteren salt okuma görünümü. Yazma yolu yoktur; moderasyon kararı vermek için mevcut kapılar (§4–§9, KV-37) kullanılır.
+
+### 13.1 Uç noktalar ve yetki
+
+| Uç nokta | İstek | Yetki |
+| --- | --- | --- |
+| `admin.users.timeline` | `GET /admin/users/:id/timeline?kinds&communityId&contentId&from&to&cursor&limit` | `user.read` (ADMIN+) |
+| `admin.users.timeline.summary` | `GET /admin/users/:id/timeline/summary` | `user.read` (ADMIN+) |
+
+Moderatör bu görünüme erişmez (kullanıcı detayı ADMIN+'dır); moderatörün kapsam sınırlı içerik görünümü değişmedi.
+
+### 13.2 Olay türleri
+
+`POLL`, `COMMENT`, `MEDIA` (hesabın ürettikleri), `REPORT_FILED` (hesabın yaptığı rapor), `REPORT_AGAINST` (hesabı veya içeriğini hedefleyen rapor), `MODERATION` (hesabı veya içeriği üzerindeki karar; karar veren görünür), `MODERATION_BY` (hesabın verdiği kararlar), `SANCTION` (durum: `ACTIVE` / `EXPIRED` / `LIFTED`; oluşturan görünür).
+
+Sıralama `(zaman, tür, kimlik)` azalan; sayfalama keyset'tir. İmleç süzgeçlere bağlıdır: süzgeç değişince eski imleç `400 INVALID_CURSOR` döner ve arayüz listeyi baştan yükler. `kinds` virgülle ayrılır; `contentId` anket, yorum veya görsel kimliğiyle eşleşir; `from` dahil, `to` hariçtir (arayüz bitiş gününü kapsamak için ertesi günün başını yollar). Bilinmeyen kullanıcı `404 NOT_FOUND`.
+
+### 13.3 Veri minimizasyonu
+
+- **IP, cihaz ve oturum bilgisi yoktur.** Süzgeç olarak da sunulmaz (veri politikası IP süzgecine izin verdiği ölçüde ayrı karardır; §13.5).
+- **Raporlayanın kimliği** `REPORT_AGAINST` satırlarında yoktur; yalnız neden ve durum gösterilir.
+- Metinler en çok 140 karakterdir. Anonimleştirilmiş hesabın içeriği zaten "Silinmiş içerik"tir (§10); geçmişi yeni bir hesaba bağlanmaz.
+- Görüntüleme audit'e yazılmaz (salt okuma, testli); erişim `user.read` kapısıyla sınırlıdır. Anonimleştirilmiş/silinmiş hesap da denetim için görüntülenir, silinmiş içeriğin metni sızmaz.
+
+### 13.4 Arayüz
+
+Kullanıcı yönetimi penceresinde "Birleşik geçmiş": tür sayacı çipleri ve ilk/son olay zamanı, tür onay kutuları (hiçbiri seçili değilse hepsi), topluluk, içerik kimliği (UUID doğrulanır, geçersizse "Süz" kapalı) ve tarih aralığı. "Daha fazla göster" sonraki sayfayı yükler.
+
+### 13.5 Bilinen sınırlar
+
+- Birleşik görünüm yalnız mevcut kayıtlardan türetilir; tekil moderasyon kararı geri alma ve spam uyarı puanı ayrı dilimlerdir (KV-37 §7).
+- IP süzgeci eklenmedi: oturum/IP verisi bu görünümde taşınmaz, gerekirse ayrı gerekçe ve saklama kuralıyla eklenmeli.
+- Çok büyük hesaplarda `UNION ALL` sorgusu hesabın tüm olaylarını tarar; her kol kullanıcıya göre indekslidir ve sayfa `LIMIT`'lidir, ancak özet sayımı tüm olayları sayar. Ölçüm 10 bin+ olaylı hesapta tekrarlanmalı.
+
+**Test:** `apps/api/test/user-timeline.test.ts` (yetki ve 404, tüm türler ve sıralama, özet tutarlılığı, `MODERATION_BY` ayrımı, yaptırım durumları, süzgeçler, keyset sayfalama ve imleç bağlama, başkasının verisinin sızmaması, IP/cihaz alanı olmaması, salt okuma, silinmiş hesap), `apps/web/test/user-timeline.test.ts` (süzgeç → sorgu, satır metni, çipler, istemci), `apps/web/test/states/user-timeline.spec.ts` (tarayıcıda süzgeç ve doğrulama; yerelde çalıştırılamadı, CI'a bırakıldı).

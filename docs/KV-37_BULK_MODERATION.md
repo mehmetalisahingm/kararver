@@ -73,7 +73,7 @@ Yönetici anket ve yorum listelerinde satır onay kutusu; seçim varken "Seçile
 ## 7. Kapsam dışı (sonraki dilimler, #183)
 
 - Tekil (toplu olmayan) moderasyon kararlarının geri alınması: bu dilim yalnız toplu partileri hedefler.
-- Kullanıcının anket, yorum, rapor, medya ve moderasyon geçmişini tek ekranda birleştirme; kullanıcı/içerik/topluluk/IP süzgeçleri (IP yalnız veri politikasının izin verdiği ölçüde).
+- ~~Kullanıcının anket, yorum, rapor, medya ve moderasyon geçmişini tek ekranda birleştirme~~ — yapıldı: KV-33 §13 (tür, topluluk, içerik ve tarih süzgeçleri). IP süzgeci veri politikası gereği eklenmedi.
 - Tekrarlı/spam içerik **uyarı puanı**, operatör incelemesi ve yanlış pozitif itiraz yolu (otomatik kalıcı ban yok).
 - İkinci onay/MFA (#182) gerektiren eşik: bu dilimde yüksek hacimli toplu işlem için ek onay yoktur; 50 kayıt sınırı ve saatlik parti sınırı vardır.
 - Toplu `LOCK`/`UNLOCK`, trend ve yorum kapatma işlemleri; hesaptan bağımsız arama sonucu seçimi tek sayfa ile sınırlıdır (seçim sayfalar arası korunur, en çok 50).
