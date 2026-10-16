@@ -6,6 +6,8 @@ import type {
   AccountErasurePreview,
   AccountErasureResult,
   LegalHold,
+  UserTimelineItem,
+  UserTimelineSummary,
   UndoPreview,
   UndoResult,
   BulkPreview,
@@ -48,6 +50,8 @@ export type Category = ReturnType<typeof AdminCategory.parse>;
 export type PollCategory = ReturnType<typeof PublicCategory.parse>;
 export type BulkPreviewView = ReturnType<typeof BulkPreview.parse>;
 export type BulkResultView = ReturnType<typeof BulkResult.parse>;
+export type UserTimelineItemView = ReturnType<typeof UserTimelineItem.parse>;
+export type UserTimelineSummaryView = ReturnType<typeof UserTimelineSummary.parse>;
 export type UndoPreviewView = ReturnType<typeof UndoPreview.parse>;
 export type UndoResultView = ReturnType<typeof UndoResult.parse>;
 export type ModerationBatch = ReturnType<typeof WireBatch.parse>;
@@ -274,6 +278,13 @@ export class AdminClient {
   /** Önizlenen durumda uygular; durum değiştiyse 409 preview_stale. Kayıt başına sonuç (kısmi başarısızlık dahil) döner. */
   async bulkApply(kind: ContentKind, input: { ids: string[]; action: "HIDE" | "REMOVE" | "RESTORE"; reason: string; digest: string }) {
     return data<BulkResultView>(await this.http.request(`admin.moderation.${kind}.bulk`, { body: input }));
+  }
+  /** #183 kullanıcı birleşik geçmişi (salt okuma, ADMIN+): süzgeçler API sorgusu olarak verilir (timeline-model.toQuery). */
+  async userTimeline(id: string, query: Record<string, string>, cursor?: string, signal?: AbortSignal) {
+    return page<UserTimelineItemView>(await this.http.request("admin.users.timeline", { params: { id }, query: { ...query, cursor, limit: "30" }, signal }));
+  }
+  async userTimelineSummary(id: string, signal?: AbortSignal) {
+    return data<UserTimelineSummaryView>(await this.http.request("admin.users.timeline.summary", { params: { id }, signal }));
   }
   /** #183 güvenli geri alma önizlemesi (salt okuma): kayıt başına WILL_UNDO / BLOCKED / ALREADY_UNDONE + digest. */
   async undoPreview(batchId: string, signal?: AbortSignal) {

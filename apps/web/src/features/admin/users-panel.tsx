@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { AdminClient, ContentJobAction, ContentJobPreviewView, ContentJobScope, ContentJobView, DataExportView, UserDetail, StrongSanction } from "./admin-client";
 import type { AdminRole } from "./admin-model";
 import { AccountErasure } from "./account-erasure";
+import { UserTimeline } from "./user-timeline";
 import { AdminEmailChange } from "./admin-email-change";
 import { ActionDialog, errorMessage, formatDate, ListState, useAdminRoles, useRemoteList } from "./admin-ui";
 import { HttpClient } from "../../lib/http-client";
@@ -66,6 +67,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       {canAssign ? <AccountErasure id={id} admin={admin} onAnonymized={refresh} /> : null}
       <button className="kv-button" onClick={() => setAction("sanction")}>Uyar / kısıtla / askıya al / yasakla</button>
       {user.activeSanctions.map(s => <article key={s.id}><p>{s.type} · {s.reason} · Bitiş: {formatDate(s.endsAt)}</p><button onClick={() => { setTarget(s.id); setAction("lift"); }}>Yaptırımı kaldır</button></article>)}
+      <UserTimeline id={id} admin={admin} />
       <h3>Gönderiler ve yorumlar</h3>
       {activity.items.map(item => <article key={`${item.kind}:${item.id}`}><p>{item.kind} · {item.excerpt} · {item.status}</p><button className="kv-button" onClick={() => { setTarget(item.id); setKind(item.kind === "COMMENT" ? "comments" : "polls"); setAction(item.status === "REMOVED" ? "restore" : "remove"); }}>{item.status === "REMOVED" ? "Geri yükle" : "Kaldır"}</button></article>)}
       <ListState remote={activity} empty="Gönderi veya yorum yok." />

@@ -244,6 +244,14 @@ const pollParams = { id: POLL };
 const reason = "Topluluk kurallarına aykırı";
 
 export const examples: Example[] = [
+  { endpoint: "admin.users.timeline", name: "ok", request: { params: { id: U1 }, query: { kinds: "POLL,COMMENT,REPORT_AGAINST,MODERATION" } }, status: 200, body: { data: [
+    { kind: "MODERATION", id: id(971), at: "2026-09-27T12:00:00.000Z", title: null, status: "HIDDEN", detail: "HIDE", reason: "Moderatör incelemesi", refs: { pollId: id(960), commentId: null, mediaId: null, reportId: null, communityId: id(940) }, actor: { id: id(2), username: "moderator" } },
+    { kind: "REPORT_AGAINST", id: id(970), at: "2026-09-27T11:00:00.000Z", title: null, status: "ACTIONED", detail: "HARASSMENT", reason: null, refs: { pollId: id(960), commentId: null, mediaId: null, reportId: id(970), communityId: id(940) }, actor: null },
+    { kind: "COMMENT", id: id(961), at: "2026-09-27T10:30:00.000Z", title: "Bence kararın arkasındayım.", status: "ACTIVE", detail: null, reason: null, refs: { pollId: id(960), commentId: id(961), mediaId: null, reportId: null, communityId: id(940) }, actor: null },
+    { kind: "POLL", id: id(960), at: "2026-09-27T10:00:00.000Z", title: "Bu karar doğru mu?", status: "HIDDEN", detail: null, reason: null, refs: { pollId: id(960), commentId: null, mediaId: null, reportId: null, communityId: id(940) }, actor: null },
+  ], page: { nextCursor: null, hasMore: false } } },
+  { endpoint: "admin.users.timeline", name: "invalid-cursor", request: { params: { id: U1 }, query: { cursor: "eski" } }, status: 400, body: error("INVALID_CURSOR", "Sayfa bilgisi geçersiz; listeyi baştan yükleyin.", [{ field: "cursor", code: "invalid" }]) },
+  { endpoint: "admin.users.timeline.summary", name: "ok", request: { params: { id: U1 } }, status: 200, body: { data: { counts: { POLL: 4, COMMENT: 12, MEDIA: 1, REPORT_FILED: 1, REPORT_AGAINST: 2, MODERATION: 3, MODERATION_BY: 0, SANCTION: 1 }, firstAt: "2026-09-01T09:00:00.000Z", lastAt: "2026-09-27T12:00:00.000Z" } } },
   { endpoint: "admin.moderation.polls.bulkPreview", name: "ok", request: { query: { ids: [id(940), id(941), id(942), id(943)].join(","), action: "HIDE" } }, status: 200, body: { data: { kind: "polls", action: "HIDE", maxItems: 50, digest: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90", summary: { willChange: 1, noChange: 1, blocked: 2 }, items: [
     { id: id(940), label: "Bu karar doğru mu?", status: "ACTIVE", communityId: id(940), outcome: "WILL_CHANGE", blocked: null },
     { id: id(941), label: "Zaten gizli içerik", status: "HIDDEN", communityId: id(940), outcome: "NO_CHANGE", blocked: null },

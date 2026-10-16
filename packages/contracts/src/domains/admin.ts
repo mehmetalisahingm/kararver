@@ -103,6 +103,49 @@ export const AdminUserActivity = z.strictObject({
   createdAt: Timestamp,
 });
 
+/**
+ * #183 kullanıcı birleşik geçmişi (KV-33 §13): bir hesabın anket, yorum, medya, rapor, moderasyon ve yaptırım olayları tek zaman
+ * çizgisinde. Salt okuma. IP/cihaz BİLEREK yoktur (veri minimizasyonu; oturum ağ bilgisi yalnız admin.users.sessions.list'te maskeli).
+ * Raporlayan kimliği gösterilmez. Silinmiş/anonimleştirilmiş hesapta içerik metinleri zaten kaldırılmıştır ("Silinmiş içerik").
+ */
+export const UserTimelineKind = z.enum(["POLL", "COMMENT", "MEDIA", "REPORT_FILED", "REPORT_AGAINST", "MODERATION", "MODERATION_BY", "SANCTION"]);
+export const UserTimelineItem = z.strictObject({
+  kind: UserTimelineKind,
+  id: Id,
+  at: Timestamp,
+  /** Anket başlığı veya yorumun ilk 140 karakteri; diğer türlerde null. */
+  title: z.string().nullable(),
+  /** İçerik/rapor/yaptırım durumu; moderasyonda geçişin sonraki durumu. */
+  status: z.string().nullable(),
+  /** Rapor nedeni, moderasyon işlemi, medya amacı veya yaptırım türü. */
+  detail: z.string().nullable(),
+  /** Moderasyon ve yaptırım gerekçesi. */
+  reason: z.string().nullable(),
+  refs: z.strictObject({ pollId: Id.nullable(), commentId: Id.nullable(), mediaId: Id.nullable(), reportId: Id.nullable(), communityId: Id.nullable() }),
+  /** İşlemi yapan yönetici/moderatör (moderasyon, yaptırım); diğerlerinde null. */
+  actor: z.strictObject({ id: Id, username: z.string() }).nullable(),
+});
+export const UserTimelineSummary = z.strictObject({
+  counts: z.strictObject({
+    POLL: Count,
+    COMMENT: Count,
+    MEDIA: Count,
+    REPORT_FILED: Count,
+    REPORT_AGAINST: Count,
+    MODERATION: Count,
+    MODERATION_BY: Count,
+    SANCTION: Count,
+  }),
+  firstAt: Timestamp.nullable(),
+  lastAt: Timestamp.nullable(),
+});
+/** Virgülle ayrılmış tür listesi (UserTimelineKind). */
+export const UserTimelineKinds = z
+  .string()
+  .max(160)
+  .refine((v) => v.split(",").every((k) => UserTimelineKind.safeParse(k).success), "Bilinmeyen tür")
+  .refine((v) => new Set(v.split(",")).size === v.split(",").length, "Aynı tür iki kez verilemez");
+
 export const Setting = z.strictObject({
   key: z.string().regex(/^[a-z]+(\.[a-zA-Z]+)+$/),
   value: z.unknown(),
@@ -719,6 +762,35 @@ export const adminEndpoints = [
     availability: { status: "ready" }, request: { params: ContentJobParams, body: z.strictObject({ reason: Reason }) },
     responses: { 200: dataOf(ContentJob) }, errors: ["CONFLICT", "NOT_FOUND"], idempotency: "natural", cache: "private",
     notes: ["İşlenmiş içerik olduğu gibi kalır (geri almak için undo); kalan içeriğe dokunulmaz. 409 not_cancellable: iş zaten bitmiş."],
+  }),
+  defineEndpoint({
+    id: "admin.users.timeline", domain: "admin", method: "GET", path: "/admin/users/:id/timeline",
+    summary: "Kullanıcı birleşik geçmişi: anket, yorum, medya, rapor, moderasyon ve yaptırım tek zaman çizgisinde", auth: "admin", provider: adminUsers, consumers: utkuUi, unblocks: ["#183"],
+    availability: { status: "ready" },
+    request: {
+      params: IdParams,
+      query: z.strictObject({
+        ...CursorQuery.shape,
+        kinds: UserTimelineKinds.optional(),
+        communityId: Id.optional(),
+        contentId: Id.optional(),
+        from: Timestamp.optional(),
+        to: Timestamp.optional(),
+      }),
+    },
+    responses: { 200: pageOf(UserTimelineItem) }, errors: ["INVALID_CURSOR", "NOT_FOUND"], idempotency: "none", cache: "private",
+    notes: [
+      "Salt okuma, ADMIN+ (user.read). En yeni önce; keyset (zaman, tür, kimlik). Süzgeçler: kinds (virgülle tür listesi), communityId (olayın topluluğu; medya olayları topluluk taşımaz), contentId (anket, yorum veya medya kimliği: o içerikle ilişkili olaylar), from (dahil) / to (hariç). Süzgeç değişince eski cursor 400 INVALID_CURSOR.",
+      "Türler: POLL, COMMENT, MEDIA (yüklenenler), REPORT_FILED (kullanıcının yaptığı), REPORT_AGAINST (kullanıcıya veya içeriğine yapılan; raporlayan gösterilmez), MODERATION (kullanıcının içeriği/hesabı üzerindeki kararlar), MODERATION_BY (kullanıcı moderatörse verdiği kararlar), SANCTION.",
+      "IP ve cihaz bilgisi bu uçta YOKTUR (veri minimizasyonu). Silinmiş/anonimleştirilmiş hesapta içerik metinleri kaldırıldığından başlıklar 'Silinmiş içerik' görünür.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.users.timeline.summary", domain: "admin", method: "GET", path: "/admin/users/:id/timeline/summary",
+    summary: "Kullanıcı birleşik geçmişi özeti: tür başına olay sayısı ve ilk/son olay zamanı", auth: "admin", provider: adminUsers, consumers: utkuUi, unblocks: ["#183"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(UserTimelineSummary) }, errors: ["NOT_FOUND"], idempotency: "none", cache: "private",
+    notes: ["Salt okuma, ADMIN+ (user.read). Süzgeçsiz tüm olaylar üzerinden sayar; zaman çizgisi süzgeçleriyle karşılaştırma için başlık çipleri içindir."],
   }),
   ...(["sanctions", "reports", "activity"] as const).map((sub) =>
     defineEndpoint({

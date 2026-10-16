@@ -340,6 +340,8 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.users.sanctions": "user.read",
   "admin.users.reports": "user.read",
   "admin.users.activity": "user.read",
+  "admin.users.timeline": "user.read",
+  "admin.users.timeline.summary": "user.read",
   "admin.sanctions.create": "user.sanction",
   "admin.sanctions.lift": "user.sanction.lift",
   "me.mfa.status": "account.read",
