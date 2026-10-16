@@ -15,6 +15,8 @@ export interface MediaStorage {
   presignPrivateRead(key: string, now: Date): Promise<{ url: string; expiresAt: Date }>;
   /** Private nesneyi okur (KVKK veri paketi, #181: şifreli paket API'de çözülür). Nesne yoksa null. */
   readPrivate(key: string): Promise<Buffer | null>;
+  /** Only processed approved copies; never an original or an export package. */
+  readPublic(key: string): Promise<Buffer | null>;
   /** Moderatör onayı: işlenmiş (EXIF'siz) kopyayı private bucket'tan public bucket'a kopyalar. Tekrarı zararsızdır. */
   publishFromPrivate(privateKey: string, publicKey: string): Promise<void>;
   /** Onaylı görselin kaldırılması: public kopyayı siler. Nesne yoksa hata vermez. */
@@ -38,6 +40,32 @@ function isNotFound(err: unknown): boolean {
 /** S3/R2 bağlantı kurma ve istek (8 MB indirme/yükleme dahil) üst sınırları. SDK varsayılanı sınırsızdır. */
 /** readPrivate üst sınırı: şifreli veri paketi (worker en çok 25 MB JSON üretir, gzip küçültür). */
 export const MAX_PRIVATE_READ_BYTES = 40 * 1024 * 1024;
+export const MAX_PUBLIC_READ_BYTES = 8 * 1024 * 1024;
+
+/** Bound actual bytes too: Content-Length may be absent or incorrect. */
+export async function readBoundedObject(client: S3Client, bucket: string, key: string, maxBytes: number): Promise<Buffer | null> {
+  try {
+    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const body = res.Body;
+    if (!body) return null;
+    if ((res.ContentLength ?? 0) > maxBytes) {
+      (body as { destroy?: () => void }).destroy?.();
+      throw new Error("Storage object exceeds read limit");
+    }
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    for await (const chunk of body as AsyncIterable<Uint8Array>) {
+      const buffer = Buffer.from(chunk);
+      bytes += buffer.length;
+      if (bytes > maxBytes) throw new Error("Storage object exceeds read limit");
+      chunks.push(buffer);
+    }
+    return Buffer.concat(chunks, bytes);
+  } catch (err) {
+    if (isNotFound(err)) return null;
+    throw err;
+  }
+}
 
 export const S3_CONNECTION_TIMEOUT_MS = 5_000;
 export const S3_REQUEST_TIMEOUT_MS = 30_000;
@@ -51,6 +79,11 @@ export function createS3MediaStorage(config: StorageConfig): MediaStorage {
     requestHandler: { connectionTimeout: S3_CONNECTION_TIMEOUT_MS, requestTimeout: S3_REQUEST_TIMEOUT_MS },
     credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
   });
+  const publicClient = config.publicCredentials ? new S3Client({
+    endpoint: config.endpoint, region: config.region, forcePathStyle: config.forcePathStyle,
+    requestHandler: { connectionTimeout: S3_CONNECTION_TIMEOUT_MS, requestTimeout: S3_REQUEST_TIMEOUT_MS },
+    credentials: config.publicCredentials,
+  }) : client;
   const Bucket = config.privateBucket;
 
   return {
@@ -78,17 +111,11 @@ export function createS3MediaStorage(config: StorageConfig): MediaStorage {
     },
 
     async readPrivate(key) {
-      try {
-        const res = await client.send(new GetObjectCommand({ Bucket, Key: key }));
-        if ((res.ContentLength ?? 0) > MAX_PRIVATE_READ_BYTES) {
-          res.Body?.transformToWebStream().cancel();
-          throw new Error(`private nesne çok büyük: ${res.ContentLength} bayt`);
-        }
-        return Buffer.from(await res.Body!.transformToByteArray());
-      } catch (err) {
-        if (isNotFound(err)) return null;
-        throw err;
-      }
+      return readBoundedObject(client, Bucket, key, MAX_PRIVATE_READ_BYTES);
+    },
+
+    async readPublic(key) {
+      return readBoundedObject(publicClient, config.publicBucket, key, MAX_PUBLIC_READ_BYTES);
     },
 
     async presignPrivateRead(key, now) {
@@ -97,6 +124,14 @@ export function createS3MediaStorage(config: StorageConfig): MediaStorage {
     },
 
     async publishFromPrivate(privateKey, publicKey) {
+      if (config.publicCredentials) {
+        // A destination-bucket key cannot authenticate CopySource in another private bucket.
+        const data = await readBoundedObject(client, Bucket, privateKey, MAX_PUBLIC_READ_BYTES);
+        if (!data) throw new Error("Processed media object is missing");
+        await publicClient.send(new PutObjectCommand({ Bucket: config.publicBucket, Key: publicKey, Body: data,
+          ContentType: "image/webp", CacheControl: PUBLIC_MEDIA_CACHE_CONTROL }));
+        return;
+      }
       await client.send(
         new CopyObjectCommand({
           Bucket: config.publicBucket,
@@ -110,7 +145,7 @@ export function createS3MediaStorage(config: StorageConfig): MediaStorage {
     },
 
     async deletePublic(publicKey) {
-      await client.send(new DeleteObjectCommand({ Bucket: config.publicBucket, Key: publicKey }));
+      await publicClient.send(new DeleteObjectCommand({ Bucket: config.publicBucket, Key: publicKey }));
     },
   };
 }

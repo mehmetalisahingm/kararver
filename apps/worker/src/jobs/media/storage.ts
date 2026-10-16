@@ -36,6 +36,11 @@ export function createS3WorkerStorage(config: StorageConfig): WorkerStorage & Pr
     requestHandler: { connectionTimeout: S3_CONNECTION_TIMEOUT_MS, requestTimeout: S3_REQUEST_TIMEOUT_MS },
     credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
   });
+  const publicClient = config.publicCredentials ? new S3Client({
+    endpoint: config.endpoint, region: config.region, forcePathStyle: config.forcePathStyle,
+    requestHandler: { connectionTimeout: S3_CONNECTION_TIMEOUT_MS, requestTimeout: S3_REQUEST_TIMEOUT_MS },
+    credentials: config.publicCredentials,
+  }) : client;
 
   return {
     async readPrivate(key, maxBytes) {
@@ -55,7 +60,7 @@ export function createS3WorkerStorage(config: StorageConfig): WorkerStorage & Pr
       await client.send(new PutObjectCommand({ Bucket: config.privateBucket, Key: key, Body: data, ContentType: contentType }));
     },
     async writePublic(key, data, contentType) {
-      await client.send(
+      await publicClient.send(
         new PutObjectCommand({
           Bucket: config.publicBucket,
           Key: key,
@@ -66,7 +71,7 @@ export function createS3WorkerStorage(config: StorageConfig): WorkerStorage & Pr
       );
     },
     async deletePublic(key) {
-      await client.send(new DeleteObjectCommand({ Bucket: config.publicBucket, Key: key }));
+      await publicClient.send(new DeleteObjectCommand({ Bucket: config.publicBucket, Key: key }));
     },
     async deletePrivate(key) {
       await client.send(new DeleteObjectCommand({ Bucket: config.privateBucket, Key: key }));

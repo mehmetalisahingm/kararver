@@ -34,6 +34,8 @@ const Env = z.object({
   S3_FORCE_PATH_STYLE: bool.default(false),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  S3_PUBLIC_ACCESS_KEY_ID: z.string().min(1).optional(),
+  S3_PUBLIC_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   S3_BUCKET_PRIVATE: z.string().min(3).optional(),
   S3_BUCKET_PUBLIC: z.string().min(3).optional(),
 });
@@ -47,6 +49,8 @@ export type StorageConfig = {
   privateBucket: string;
   /** admin.media.decide onayda kopyalar, red/kaldırmada siler; otomatik onayı worker yapar. */
   publicBucket: string;
+  /** Bucket-scoped providers (Railway) require a separate key for approved copies. */
+  publicCredentials?: { accessKeyId: string; secretAccessKey: string };
 };
 
 export type MailConfig =
@@ -128,6 +132,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     }
   }
   const missingStorage = STORAGE_KEYS.filter((k) => !e[k]);
+  if (Boolean(e.S3_PUBLIC_ACCESS_KEY_ID) !== Boolean(e.S3_PUBLIC_SECRET_ACCESS_KEY) ||
+      ((e.S3_PUBLIC_ACCESS_KEY_ID || e.S3_PUBLIC_SECRET_ACCESS_KEY) && missingStorage.length > 0)) {
+    throw new Error("API yapılandırması geçersiz → S3_PUBLIC_ACCESS_KEY_ID ve S3_PUBLIC_SECRET_ACCESS_KEY birlikte ve tam S3 ayarıyla verilmeli");
+  }
   if (missingStorage.length > 0 && (deployed || missingStorage.length < STORAGE_KEYS.length)) {
     // Yarım S3 ayarı her ortamda hatadır; staging/production'da hiç olmaması da hatadır.
     throw new Error(`API yapılandırması geçersiz → eksik: ${missingStorage.join(", ")}`);
@@ -166,6 +174,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
             secretAccessKey: e.S3_SECRET_ACCESS_KEY!,
             privateBucket: e.S3_BUCKET_PRIVATE!,
             publicBucket: e.S3_BUCKET_PUBLIC!,
+            ...(e.S3_PUBLIC_ACCESS_KEY_ID ? { publicCredentials: { accessKeyId: e.S3_PUBLIC_ACCESS_KEY_ID, secretAccessKey: e.S3_PUBLIC_SECRET_ACCESS_KEY! } } : {}),
           },
   };
 }

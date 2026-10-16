@@ -59,6 +59,8 @@ export type MediaDecisionResult =
 export interface MediaStore {
   createUpload(upload: NewUpload, scope: IdempotencyScope | null): Promise<IdempotentResult>;
   findMedia(id: string): Promise<MediaRecord | null>;
+  /** Only approved, non-erased media; linked hidden/removed content is excluded. */
+  findPublicKey(id: string): Promise<string | null>;
   /** Sadece hâlâ PENDING ise reddeder; worker'ın işlediği kayda dokunmaz. */
   rejectPending(id: string, reason: "TOO_LARGE" | "TYPE_NOT_ALLOWED"): Promise<void>;
 

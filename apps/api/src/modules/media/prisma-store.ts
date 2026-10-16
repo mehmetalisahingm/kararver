@@ -65,6 +65,30 @@ export function createPrismaMediaStore(prisma: PrismaClient): MediaStore {
   }
 
   return {
+    async findPublicKey(id) {
+      const row = await prisma.mediaAsset.findFirst({
+        where: {
+          id, status: "APPROVED", uploader: { deletedAt: null },
+          OR: [
+            { purpose: "POLL", OR: [
+              { pollMedia: { none: {} } },
+              { pollMedia: { some: { poll: { status: { in: ["ACTIVE", "LOCKED"] }, deletedAt: null,
+                OR: [{ communityId: null }, { community: { status: "ACTIVE" } }] } } } },
+            ] },
+            { purpose: "AVATAR", OR: [
+              { avatarOfUsers: { none: {} } },
+              { avatarOfUsers: { some: { deletedAt: null, status: { in: ["ACTIVE", "RESTRICTED"] } } } },
+            ] },
+            { purpose: "COMMUNITY", OR: [
+              { communityImages: { none: {} } },
+              { communityImages: { some: { status: "ACTIVE" } } },
+            ] },
+          ],
+        },
+        select: { publicObjectKey: true },
+      });
+      return row?.publicObjectKey ?? null;
+    },
     // Kayıt ve idempotency satırı aynı transaction'da; eşzamanlı aynı anahtar unique index'te çakışır
     // ve kaybeden taraf kaydedilmiş sonucu okur (polls modülündeki yaklaşımla aynı).
     async createUpload(upload, scope) {

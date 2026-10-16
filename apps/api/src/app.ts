@@ -33,6 +33,7 @@ import { registerCommunityRequestRoutes, type CommunityRequestStore } from "./mo
 import type { MediaQueue } from "./modules/media/queue.ts";
 import { registerMediaAdminRoutes } from "./modules/media/admin-routes.ts";
 import { registerMediaRoutes } from "./modules/media/routes.ts";
+import { registerPublicMediaRoutes } from "./modules/media/public-routes.ts";
 import type { MediaStorage } from "./modules/media/storage.ts";
 import { DEFAULT_MEDIA_SETTINGS, type MediaSettings, type MediaStore } from "./modules/media/store.ts";
 import { createAuthenticator, type SessionSettings } from "./modules/auth/session.ts";
@@ -471,6 +472,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     });
   }
   if (deps.media) {
+    registerPublicMediaRoutes(app, deps.media);
     registerMediaRoutes(route, {
       store: deps.media.store,
       storage: deps.media.storage,
