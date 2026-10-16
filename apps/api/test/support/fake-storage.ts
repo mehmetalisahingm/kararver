@@ -37,6 +37,9 @@ export function createFakeStorage(): FakeStorage {
     async readPrivate(key) {
       return blobs.get(key) ?? null;
     },
+    async readPublic(key) {
+      return publicKeys.has(key) ? blobs.get(key) ?? Buffer.from("test-webp") : null;
+    },
     async headPrivate(key) {
       return objects.get(key) ?? null;
     },

@@ -90,12 +90,13 @@ export async function listKeysOrExplain(client: S3Client, bucket: string, label:
   }
 }
 
-export function s3Client(config: StorageConfig): S3Client {
+export function s3Client(config: StorageConfig, target: "private" | "public" = "private"): S3Client {
   return new S3Client({
     endpoint: config.endpoint,
     region: config.region,
     forcePathStyle: config.forcePathStyle,
-    credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+    credentials: target === "public" && config.publicCredentials ? config.publicCredentials : { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+    requestHandler: { connectionTimeout: 5_000, requestTimeout: 30_000 },
   });
 }
 
@@ -110,7 +111,7 @@ if (import.meta.main) {
     const client = s3Client(config.storage);
     const [privateKeys, publicKeys] = await Promise.all([
       listKeysOrExplain(client, config.storage.privateBucket, "private"),
-      listKeysOrExplain(client, config.storage.publicBucket, "public"),
+      listKeysOrExplain(s3Client(config.storage, "public"), config.storage.publicBucket, "public"),
     ]);
     const report = compareMedia(rows, privateKeys, publicKeys);
     console.log(`medya: ${rows.length} kayıt, private ${privateKeys.size} nesne, public ${publicKeys.size} nesne`);

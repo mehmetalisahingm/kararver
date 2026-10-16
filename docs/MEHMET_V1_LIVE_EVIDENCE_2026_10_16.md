@@ -1,5 +1,17 @@
 # Mehmet — 16 Ekim 2026 gerçek staging kanıtı
 
+## 17:25 UTC — birleşmiş sürüm ve doğal oturum süresi kabulü
+
+- Main `2c6bb0ed6360441d0e375d50fe5a925c617f48ce`: #240/#241/#243/#244/#245 birleşti. [Main CI](https://github.com/mehmetalisahingm/kararver/actions/runs/38937887630) başarılı; web, database, integration, storage, ui ve üç tarayıcı geçti. CI staging-smoke atlandı; aşağıdaki HTTP kontrolleri ayrı çalıştırıldı.
+- Web Vercel READY `dpl_Dfc64F1htgGNBKFinKQ1Cz5bo2ZL`; API Railway SUCCESS `7b8b72d9-97bf-4825-b500-3985694b2b03`, aynı SHA. Son normal yeniden dağıtım `64cca3db-c739-4267-afb8-1cc31131d607` SUCCESS, aynı SHA.
+- Railway iç ağından `db:verify`: yarım migration, anket/seçenek oy sayacı, oy-seçenek aidiyeti, tepki sayaçları ve tetikleyiciler: **6/6 tutarlı**. 48 migration; bekleyen migration yok.
+- Önceden kararlaştırılmış normal #48 hesabında yalnız bu teste ait 20 saniyelik session: **200 → DB saatinde expired=true/revoked=false → aynı cookie 401 + cookie temizleme**. 17:20:44–17:21:14 UTC, `/api/v1/me`. Başarıdan sonra yalnız bu sentetik session revoke edildi; hesap/şifre/global TTL değişmedi. CLI: `apps/api/src/modules/auth/staging-expiry-cli.ts`. Bu kanıt, oturum süresi dolma eksikliğini kapatır; fiziksel cihaz veya iki yönetici kabulü değildir.
+- Geçici pre-deploy kabul komutu kaldırıldı; normal `pnpm --filter @kararver/db run db:deploy` ayarı tekrar okundu/doğrulandı. Test için DB dış erişimi açılmadı; ek servis kurulmadı. Medya denetimi komutunun çalıştığına dair bu dağıtımda kanıt yok; medya tutarlılığı PASS sayılmadı.
+- Yeni sürüm üzerinde gerçek admin UI **8/8** (360×800/1440×1000, yatay taşma yok, ops otomatik WCAG ihlali 0); kendi-oturumu güvenlik **17/17** (17:25 UTC). Yalnız testin açtığı session çıkışla kapatıldı. Sentetik beş güvenlik hesabı USER/BANNED olarak doğrulandı.
+- Ops worker `backupEnabled=false`; otomatik şifreli yedek henüz aktive edilmedi. Bucket/anahtar sorumlusu/saklama süresi/ilk gerçek encrypted restore kabulü gereklidir. Yeni ücretli worker servisi oluşturulmadı.
+
+Alttaki sabah sonuçları farklı SHA/zaman dilimindeki kanıttır; bu paragraf onları yeni sürümde yeniden çalışmış saymaz. Fiziksel cihaz/ekran okuyucu, sağlayıcı SMTP, bağımsız iki yönetici onayı, tam S01–S10 ve gerçek beta/yayın kapıları açık kalır.
+
 Bu kayıt beta/production GO değildir. Test hesapları sentetiktir; HTTP yanıtları gerçek staging API ve PostgreSQL yolundan gelir. Doğrudan DB sorgusu, fiziksel cihaz, gerçek SMTP alıcısı veya gerçek beta katılımcısı yerine geçmez.
 
 ## Sürüm ve kapsam

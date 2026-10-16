@@ -12,6 +12,7 @@ import type { PrismaClient } from "@kararver/db";
 import { loadConfig } from "../src/config.ts";
 import { startPgBossMediaQueue } from "../src/modules/media/queue.ts";
 import { createS3MediaStorage } from "../src/modules/media/storage.ts";
+import { createPrismaMediaStore } from "../src/modules/media/prisma-store.ts";
 import { createHarness, PEPPER, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
 const backend = prismaBackend();
@@ -298,6 +299,39 @@ describe("görsel yükleme (postgres)", { skip: backend ? false : "TEST_DATABASE
     await db.mediaAsset.update({ where: { id: mediaId }, data: { status: "REJECTED", publicObjectKey: null } });
     view = await read();
     assert.deepEqual([view.status, view.url, view.preview], ["REJECTED", null, null]);
+  });
+
+  test("public proxy DB gates approval, hidden parent/community and account erasure", async () => {
+    const user = await signUp();
+    const { mediaId } = await createUpload(user.cookie);
+    const key = `m/${mediaId}.webp`;
+    const store = createPrismaMediaStore(db);
+    const url = `/media-public/${key}`;
+    const read = () => h.app.inject({ url });
+    assert.equal(await store.findPublicKey(mediaId), null);
+    assert.equal((await read()).statusCode, 404);
+    await db.mediaAsset.update({ where: { id: mediaId }, data: { status: "APPROVED", processedObjectKey: `processed/${mediaId}.webp`, publicObjectKey: key } });
+    h.storage.publicKeys.add(key);
+    assert.equal((await read()).statusCode, 200, "approved unattached image is available while composing");
+    const category = await db.category.create({ data: { slug: `proxy-${randomUUID().slice(0, 8)}`, name: "Proxy test" } });
+    const community = await db.community.create({ data: { slug: `proxy-${randomUUID().slice(0, 8)}`, name: "Proxy test", createdById: user.id } });
+    const poll = await db.poll.create({ data: { publicId: randomUUID().replaceAll("-", "").slice(0, 12), slug: "proxy-test", title: "Proxy image", authorId: user.id, categoryId: category.id, communityId: community.id, closesAt: new Date(Date.now() + 86_400_000) } });
+    await db.pollMedia.create({ data: { pollId: poll.id, mediaId, position: 0 } });
+    assert.equal((await read()).statusCode, 200);
+    await db.community.update({ where: { id: community.id }, data: { status: "HIDDEN" } });
+    assert.equal((await read()).statusCode, 404);
+    await db.community.update({ where: { id: community.id }, data: { status: "ACTIVE" } });
+    for (const status of ["HIDDEN", "REMOVED"] as const) {
+      await db.poll.update({ where: { id: poll.id }, data: { status } });
+      assert.equal((await read()).statusCode, 404);
+    }
+    await db.poll.update({ where: { id: poll.id }, data: { status: "LOCKED" } });
+    assert.equal((await read()).statusCode, 200);
+    await db.mediaAsset.update({ where: { id: mediaId }, data: { status: "REJECTED", publicObjectKey: null } });
+    assert.equal((await read()).statusCode, 404, "stale object must not bypass moderation");
+    await db.mediaAsset.update({ where: { id: mediaId }, data: { status: "APPROVED", publicObjectKey: key } });
+    await db.user.update({ where: { id: user.id }, data: { status: "BANNED", deletedAt: new Date() } });
+    assert.equal((await read()).statusCode, 404);
   });
 
   test("gerçek pg-boss: aynı görsel iki kez kuyruğa alınsa da tek iş bekler", async () => {

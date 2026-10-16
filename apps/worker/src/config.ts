@@ -14,6 +14,8 @@ const Env = z.object({
   S3_FORCE_PATH_STYLE: bool.default(false),
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
+  S3_PUBLIC_ACCESS_KEY_ID: z.string().min(1).optional(),
+  S3_PUBLIC_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   S3_BUCKET_PRIVATE: z.string().min(3),
   S3_BUCKET_PUBLIC: z.string().min(3),
   /** apps/worker/python/requirements.txt kurulu Python yorumlayıcısı. */
@@ -29,6 +31,7 @@ export type StorageConfig = {
   secretAccessKey: string;
   privateBucket: string;
   publicBucket: string;
+  publicCredentials?: { accessKeyId: string; secretAccessKey: string };
 };
 
 export type WorkerConfig = {
@@ -47,6 +50,9 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     throw new Error(`Worker yapılandırması geçersiz → ${problems}`);
   }
   const e = parsed.data;
+  if (Boolean(e.S3_PUBLIC_ACCESS_KEY_ID) !== Boolean(e.S3_PUBLIC_SECRET_ACCESS_KEY)) {
+    throw new Error("Worker yapılandırması geçersiz → S3_PUBLIC_ACCESS_KEY_ID ve S3_PUBLIC_SECRET_ACCESS_KEY birlikte verilmeli");
+  }
   return {
     appEnv: e.APP_ENV,
     databaseUrl: e.DATABASE_URL,
@@ -59,6 +65,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
       secretAccessKey: e.S3_SECRET_ACCESS_KEY,
       privateBucket: e.S3_BUCKET_PRIVATE,
       publicBucket: e.S3_BUCKET_PUBLIC,
+      ...(e.S3_PUBLIC_ACCESS_KEY_ID ? { publicCredentials: { accessKeyId: e.S3_PUBLIC_ACCESS_KEY_ID, secretAccessKey: e.S3_PUBLIC_SECRET_ACCESS_KEY! } } : {}),
     },
     moderation: { python: e.MODERATION_PYTHON, script: path.resolve(import.meta.dirname, "../python/moderate.py") },
     mediaConcurrency: e.MEDIA_WORKER_CONCURRENCY,
