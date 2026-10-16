@@ -112,6 +112,22 @@ Bakım modu ve acil durum anahtarlarının değiştirilmesi bu API'de yoktur; KV
 5. `/health` ve smoke ile doğrulanır.
 6. Alarm issue'suna zaman çizelgesi ve kök neden yazılır.
 
+## Kapalı beta öncesi operasyon kontrol listesi (#51, #47)
+
+Pilot (KV-45) **staging'de gerçek kullanıcılarla** yapılır; bu yüzden staging, davetten önce aşağıdaki maddelerde production gibi davranmalıdır. Sahip: Faruk. Kanıt #51'e yazılır; e-posta adresi, anahtar ve gizli değer yazılmaz. Herhangi bir madde FAIL ise **davet atılmaz** (KV-45 §1).
+
+| # | Madde | Nasıl doğrulanır | Durum |
+|---|---|---|---|
+| 1 | **Mailpit kapalı, gerçek SMTP açık** | `MAIL_TRANSPORT=smtp`, `SMTP_URL` (STARTTLS/TLS). `mailpit_api` gerçek kullanıcıyla kullanılamaz: doğrulama maili gerçek kutuya gitmez ve kullanıcı hesabını doğrulayamaz | ⏳ sağlayıcı kararı (Mehmet) |
+| 2 | **Alan adı mail kayıtları** | `node scripts/mail-readiness.mjs --domain <alan> --dkim-selector <seçici> --from "<MAIL_FROM>" --smtp-host <sunucu>`: SPF, DKIM, MAIL_FROM hizası ve SMTP TLS/AUTH için FAIL olmamalı. Beta için DMARC `p=none` (WARN) kabul; yayından önce `quarantine` | ⏳ |
+| 3 | **Gerçek teslim** | Gmail ve Outlook'ta birer test hesabıyla kayıt doğrulama ve parola sıfırlama: mail **gelen kutusuna** (spam değil) 2 dk içinde düşer, bağlantı çalışır. Sonuç adres yazılmadan #51'e | ⏳ |
+| 4 | **Yedek açık** | Staging'de `BACKUP_ENABLED=true` (#245; ayrı bucket, yalnız-yazma anahtar, özel anahtar sorumluları). İlk şifreli yedek → `decrypt-backup` → boş DB'ye restore → doğrulama; panelde `backup.status = ok` | ⏳ bucket ve anahtar kararı |
+| 5 | **İzleme ve alarm** | `staging-monitor` (API, worker, web, deploy gecikmesi, main dışı commit) ve `security-staging` yeşil. `staging-alarm` bildirimleri sorumluya düşüyor. Pilot saatlerinde ilk yanıt ≤ 30 dk | ✅ izleme · ⏳ bildirim teyidi |
+| 6 | **Geri dönüş** | Uygulama rollback'i (15 Ekim'de denendi) ve KV-48 restore runbook'u. Pilot durdurma: `features.registration` kapatılır (yeni kayıt durur), gerekirse `maintenance.enabled`. Panelde "Acil durum anahtarları"ndan durum ve yayılma süresi izlenir | ✅ |
+| 7 | **Durdurma ölçütleri** | P0 (veri sızıntısı, yetki atlatma, veri kaybı, ödeme/puan çift harcama) → bakım modu + olay müdahalesi + davetler durur. P1 → yeni davet durur, düzeltme aynı SHA'da tekrar test edilir (KV-45 §5) | ✅ tanımlı |
+| 8 | **KVKK** | Gerçek kişisel veri oluşur: yedek saklama 35 gün; restore sonrası anonimleştirmeleri yeniden uygulama (KV-48 restore 7. adım); veri dışa aktarma ve silme talepleri çalışıyor (#181) | ✅ süreç · ⏳ yedek |
+| 9 | **QA hesapları** | Staging'deki test hesapları (`@example.test`) pilot ölçümüne girmez (KV-45 §4); davetten önce listelenir, gerekirse anonimleştirilir | ⏳ |
+
 ## Production'a geçiş listesi (Mehmet'in yayın kararından önce)
 
 - [ ] **Hosting kararı:** Production projesi ve bölgesi. Türkiye'deki kullanıcılar için `sfo` yerine Avrupa bölgesi önerilir.
