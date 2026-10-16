@@ -6,6 +6,7 @@ import fs from "node:fs";
 import { createPrismaClient } from "@kararver/db";
 import { PgBoss } from "pg-boss";
 import { loadWorkerConfig } from "./config.ts";
+import { BACKUP_QUEUE, loadBackupRunner, registerBackupRunner } from "./jobs/backup/runner.ts";
 import { createWorkerSettings } from "./settings.ts";
 import { cleanupEvents } from "./jobs/events/cleanup.ts";
 import { productionConsumers } from "./jobs/events/registry.ts";
@@ -53,6 +54,7 @@ if (!config.jobsEnabled) {
   log("warn", "JOBS_ENABLED=false: worker job almıyor");
   process.exit(0);
 }
+const backup = loadBackupRunner();
 
 const prisma = createPrismaClient(config.databaseUrl);
 const boss = new PgBoss(config.databaseUrl);
@@ -68,6 +70,7 @@ const moderator = createSubprocessModerator({
 const settings = createWorkerSettings(prisma, { now: () => new Date(), onError: (error) => log("error", "ayarlar okunamadı, son bilinen/varsayılan değerler", { error: String(error) }) });
 
 await boss.start();
+const backupEnabled = await registerBackupRunner(boss, backup, log);
 await boss.createQueue(MEDIA_PROCESS_QUEUE, MEDIA_QUEUE_OPTIONS);
 await boss.work<{ mediaId: string }>(MEDIA_PROCESS_QUEUE, { batchSize: 1, localConcurrency: config.mediaConcurrency }, async ([job]) => {
   const mediaId = job!.data.mediaId;
@@ -180,8 +183,10 @@ await boss.work(EMAIL_CHANGE_EXPIRE_QUEUE, { batchSize: 1 }, async () => {
   if (result.expired) log("info", "email-change.expire", result);
 });
 log("info", "worker hazır", {
+  backupEnabled,
   queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_QUEUE, DATA_EXPORTS_QUEUE, ACCOUNT_ERASURE_QUEUE, EMAIL_CHANGE_EXPIRE_QUEUE],
   concurrency: config.mediaConcurrency,
+  ...(backupEnabled ? { backupQueue: BACKUP_QUEUE } : {}),
 });
 const heartbeatPath = process.env.WORKER_HEARTBEAT_PATH ?? "/tmp/kararver-worker-heartbeat.json";
 const writeHeartbeat = () => {
