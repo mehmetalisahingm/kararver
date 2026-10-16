@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useProduct } from "../../components/product-provider";
 import type { Poll } from "../../lib/model";
 import { createShareLink, type ShareChannel } from "../../lib/share-client";
@@ -10,45 +10,72 @@ export function ShareActions({ routeId }: { routeId: string }) {
   const [poll, setPoll] = useState<Poll | null>(null);
   const [available, setAvailable] = useState(true);
   const [busy, setBusy] = useState<ShareChannel | null>(null);
+  const inFlight = useRef(false);
+  const pending = useRef<{ popup: Window | null; controller: AbortController } | null>(null);
+  const [fallback, setFallback] = useState<{ url: string; channel: ShareChannel; target?: string } | null>(null);
 
   useEffect(() => {
     let active = true;
     setPoll(null);
     setAvailable(true);
+    setFallback(null);
+    inFlight.current = false;
+    setBusy(null);
     client.get(routeId).then((value) => {
       if (active) setPoll(value);
     }).catch(() => {
       if (active) setAvailable(false);
     });
-    return () => { active = false; };
+    return () => { active = false; pending.current?.controller.abort(); pending.current?.popup?.close(); pending.current = null; };
   }, [client, routeId]);
 
   async function share(channel: ShareChannel) {
-    if (!poll || busy) return;
+    if (!poll || inFlight.current) return;
+    inFlight.current = true;
     setBusy(channel);
+    setFallback(null);
+    // Açılır pencereyi kullanıcı tıklaması içinde ayır. API beklenirse Safari'nin
+    // kullanıcı etkinliği süresi dolar. Boş sekme hiçbir dış içeriği çalıştırmaz.
+    let popup: Window | null = null;
+    if (channel === "x" || channel === "whatsapp") {
+      try { popup = window.open("about:blank", "_blank"); if (popup) popup.opener = null; } catch { /* Doğrudan bağlantı aşağıda. */ }
+    }
+    const controller = new AbortController();
+    pending.current = { popup, controller };
     try {
-      const { url } = await createShareLink(poll.id, channel);
+      const { url } = await createShareLink(poll.id, channel, controller.signal);
+      if (controller.signal.aborted) return;
       if (channel === "copy") {
-        await navigator.clipboard.writeText(url);
-        notify("Paylaşım bağlantısı kopyalandı.");
+        try {
+          await navigator.clipboard.writeText(url);
+          notify("Paylaşım bağlantısı kopyalandı.");
+        } catch {
+          setFallback({ url, channel });
+          notify("Panoya erişilemedi. Bağlantıyı aşağıdan seçip kopyalayabilirsin.");
+        }
         return;
       }
+      const target = new URL(channel === "x" ? "https://twitter.com/intent/tweet" : "https://wa.me/");
       if (channel === "x") {
-        const target = new URL("https://twitter.com/intent/tweet");
         target.searchParams.set("text", poll.title);
         target.searchParams.set("url", url);
-        window.open(target.toString(), "_blank", "noopener,noreferrer");
-        return;
-      }
-      if (channel === "whatsapp") {
-        const target = new URL("https://wa.me/");
+      } else {
         target.searchParams.set("text", `${poll.title} ${url}`);
-        window.open(target.toString(), "_blank", "noopener,noreferrer");
+      }
+      if (popup && !popup.closed) popup.location.replace(target.toString());
+      else {
+        setFallback({ url, channel, target: target.toString() });
+        notify("Paylaşım penceresi açılamadı. Aşağıdaki bağlantıyla devam edebilirsin.");
       }
     } catch (error) {
-      notify((error as Error).message);
+      popup?.close();
+      if (!controller.signal.aborted) notify((error as Error).message);
     } finally {
-      setBusy(null);
+      if (pending.current?.controller === controller) {
+        pending.current = null;
+        inFlight.current = false;
+        setBusy(null);
+      }
     }
   }
 
@@ -70,6 +97,10 @@ export function ShareActions({ routeId }: { routeId: string }) {
           {busy === "whatsapp" ? "Açılıyor…" : "WhatsApp'ta paylaş"}
         </button>
       </div>
+      {fallback ? <div className="kv-stack" role="status">
+        {fallback.target ? <a className="kv-button kv-button--secondary" href={fallback.target} target="_blank" rel="noopener noreferrer">{fallback.channel === "x" ? "X paylaşımını aç" : "WhatsApp paylaşımını aç"}</a> : null}
+        <label>Paylaşım bağlantısı<input className="kv-input" readOnly value={fallback.url} onFocus={e => e.currentTarget.select()} /></label>
+      </div> : null}
     </section>
   );
 }
