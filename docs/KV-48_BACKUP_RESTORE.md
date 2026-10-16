@@ -85,11 +85,46 @@ A için gerekenler:
 3. Saklama kuralı (7 günlük + 4 haftalık + 3 aylık) bucket yaşam döngüsüyle.
 4. `staging-monitor` gibi bir izleme: panel `degraded` olunca alarm.
 
+### Zamanlanmış yedek: uygulama (A seçeneği, #51)
+
+Kod hazır: `apps/worker/scripts/scheduled-backup.ts` (iş: `apps/worker/src/jobs/backup/`). Tek çalıştırma:
+1. `db:backup` (tutarlı snapshot + manifest).
+2. Dökümü **zarf şifrelemesiyle** şifreler: yedek başına rastgele AES-256-GCM anahtarı, RSA-OAEP (SHA-256) açık anahtarla sarılır. Sunucu yalnız **açık** anahtarı bilir; ele geçirilen sunucu ya da bucket anahtarı yedeği okuyamaz.
+3. `<önek>/YYYY/MM/DD/<ad>.dump.enc` ve `.manifest.json` dosyalarını yedek bucket'ına yükler. Manifest kişisel veri içermez: sayılar, şema kataloğu, sha256.
+4. `ops_backup_runs` kaydını yazar; panelde "son yedek" görünür.
+5. Yerel dosyaları siler. Şifresiz döküm yalnız şifreleme süresince diskte durur.
+
+Herhangi bir adım başarısızsa kayıt yazılmaz, çıkış kodu 1 olur, panel son yedeği eskimiş gösterir (26 sa sonra `degraded`).
+
+**Kurulum (karar sonrası, bir kez):**
+1. **Anahtar çifti** (yedeği çözebilecek iki kişi, ör. Mehmet + Faruk, şifre yöneticisinde/çevrimdışı saklar):
+   ```
+   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out kv-backup-private.pem
+   openssl pkey -in kv-backup-private.pem -pubout -out kv-backup-public.pem
+   ```
+   Özel anahtar repoya, Railway'e, issue'ya **asla** girmez. Açık anahtar Railway değişkeni olur.
+2. **Yedek bucket'ı:** Uygulamanın bucket'larından ayrı; anahtarı **yalnız PutObject** yetkili, okuma/silme yok. Saklama yaşam döngüsü kuralıyla: ilk sürüm `db/` altında 35 gün. Haftalık/aylık katmanlar sonra ayrı önekle.
+3. **Railway cron servisi** (aynı repo, ortam başına bir servis):
+   - Start command `node apps/worker/scripts/scheduled-backup.ts`.
+   - Cron `30 0 * * *` (UTC 00:30 = TSİ 03:30). Yeniden başlatma politikası: hiçbir zaman.
+   - Değişkenler: `DATABASE_URL` (Postgres servisinin **iç** adresi, referansla), `APP_ENV`, `BACKUP_PUBLIC_KEY` (PEM; tek satırda `\n` ile yazılabilir), `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGION`, `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY`, `BACKUP_DESTINATION` (ör. `r2`), `BACKUP_PREFIX` (varsayılan `db/<APP_ENV>`).
+   - `pg_dump` sunucuyla **aynı major** olmalı (staging PG 18). İmaja PostgreSQL 18 istemci araçları eklenir; gerekirse `PG_BIN` ile yolu verilir. **İlk çalıştırmanın logunda sürüm doğrulanacak.**
+4. **Doğrulama:**
+   - İlk çalıştırmadan sonra bucket'ta iki dosya var mı, panelde `backup.status = ok` mu?
+   - Bir yedeği aşağıdaki gibi çözüp boş bir veritabanına restore et.
+   - Bu tatbikat KV-48 restore runbook'unun kendisidir.
+
+**Şifreli yedekten restore:** Restore runbook'unun 3. adımından önce:
+```
+node apps/worker/scripts/decrypt-backup.ts --in <ad>.dump.enc --out <ad>.dump --key kv-backup-private.pem
+```
+Dosya değiştirilmiş ya da kesikse çözme reddedilir ve çıktı silinir. Manifest aynı klasöre `<ad>.dump.manifest.json` olarak konur, sonra `db:restore --file <ad>.dump`.
+
 ## Restore runbook'u
 
 1. **Karar ve kapsam:** Hangi ana dönülecek (en son yedek / deploy öncesi yedek / PITR)? Bu andan sonraki yazımlar kaybolur.
 2. **Yazımı durdur:** API'yi bakım moduna al (`maintenance.enabled`) ve worker'ı durdur. Restore sırasında eski DB'ye yazım olmasın.
-3. **Yeni, boş veritabanı:** `RESTORE_DATABASE_URL=... db:restore --file <yedek>`. Var olan veritabanı silinmez; inceleme için kalır.
+3. **Yeni, boş veritabanı:** Zamanlanmış yedekse önce çöz ("Şifreli yedekten restore"). `RESTORE_DATABASE_URL=... db:restore --file <yedek>`. Var olan veritabanı silinmez; inceleme için kalır.
 4. **Sonuç `SONUÇ: yedek eksiksiz ve tutarlı geri yüklendi` değilse dur.** Fark listesi neyin eksik olduğunu söyler.
 5. **Şema:** Yedek eski bir sürüme aitse `prisma migrate status` bekleyen migration'ları gösterir. Uygulamanın sürümüne göre `prisma migrate deploy`, ardından `db:verify`.
 6. **Medya:** Bucket'ları aynı ana döndür (yedek bucket'ından), sonra `media:check`. Public bucket'ı APPROVED kayıtlardan yeniden üret. Sahipsiz public nesneleri sil.

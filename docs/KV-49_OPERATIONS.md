@@ -121,7 +121,7 @@ Bakım modu ve acil durum anahtarlarının değiştirilmesi bu API'de yoktur; KV
 - [ ] **Bucket anahtarları:** Bucket başına doğru anahtar. Staging'de API anahtarı public bucket'a 403 alıyordu (KV-48 bulgusu); production'da onaylanan görselin yayına kopyalandığı doğrulanmalı.
 - [ ] **PostgreSQL sürümü:** Staging 18.6; proje kararı ve CI 17. Production için tek bir sürüm seçilmeli, yedek araçları da o sürümde olmalı.
 - [ ] **Web CSP:** Script ve görsel kısıtlayan sıkı CSP (nonce/SRI). Bu PR yalnız çerçeveleme ve temel başlıkları ekliyor.
-- [ ] **Zamanlanmış yedek ve ayrı yedek bucket'ı** (KV-48 politikası); sağlayıcı PITR'ının doğrulanması.
+- [ ] **Zamanlanmış yedek ve ayrı yedek bucket'ı** (KV-48 politikası); sağlayıcı PITR'ının doğrulanması. Kod hazır (#51: `apps/worker/scripts/scheduled-backup.ts`, şifreli, yalnız-yazma anahtar); kurulum adımları KV-48 "Zamanlanmış yedek: uygulama". Gereken karar: bucket, anahtar çifti sahipleri, saklama süresi.
 - [ ] **Production smoke:** `pnpm smoke --api … --web … --strict` ve e-posta doğrulama uçtan uca (gerçek kutu).
 - [ ] **İzleme:** `staging-monitor`'ün production kopyası (`PROD_API_URL`); alarm sorumlusu.
 
