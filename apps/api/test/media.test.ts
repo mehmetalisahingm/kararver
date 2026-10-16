@@ -315,7 +315,7 @@ describe("görsel yükleme (postgres)", { skip: backend ? false : "TEST_DATABASE
     assert.equal((await read()).statusCode, 200, "approved unattached image is available while composing");
     const category = await db.category.create({ data: { slug: `proxy-${randomUUID().slice(0, 8)}`, name: "Proxy test" } });
     const community = await db.community.create({ data: { slug: `proxy-${randomUUID().slice(0, 8)}`, name: "Proxy test", createdById: user.id } });
-    const poll = await db.poll.create({ data: { publicId: randomUUID().replaceAll("-", "").slice(0, 12), slug: "proxy-test", title: "Proxy image", authorId: user.id, categoryId: category.id, communityId: community.id } });
+    const poll = await db.poll.create({ data: { publicId: randomUUID().replaceAll("-", "").slice(0, 12), slug: "proxy-test", title: "Proxy image", authorId: user.id, categoryId: category.id, communityId: community.id, closesAt: new Date(Date.now() + 86_400_000) } });
     await db.pollMedia.create({ data: { pollId: poll.id, mediaId, position: 0 } });
     assert.equal((await read()).statusCode, 200);
     await db.community.update({ where: { id: community.id }, data: { status: "HIDDEN" } });

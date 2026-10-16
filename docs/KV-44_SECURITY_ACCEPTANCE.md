@@ -4,6 +4,23 @@
 
 ## A. Sürüm ve kanıt ilkesi
 
+### 16 Ekim 2026 — güncel kanıt, kalanlar
+
+Main `2c6bb0ed6360441d0e375d50fe5a925c617f48ce`, kanonik web `https://kararver-staging.vercel.app`, API `https://api-staging-45cb.up.railway.app`. Web/API aynı SHA; [main CI](https://github.com/mehmetalisahingm/kararver/actions/runs/38937887630) başarılı. CI staging-smoke skipped; canlı HTTP ayrı çalıştırıldı. Tam beta kararı **NO-GO** kalır. Önceki tarihli BLOCKED listeleri başlangıç kaydıdır; en yeni kapsam aşağıdadır.
+
+| Kapsam | Kaydedilen gerçek kanıt | Kalan |
+| --- | --- | --- |
+| S01–S04 | Sabah be6ebd23… sürümünde iki sentetik hesap/topluluk; aynı cookie USER→ADMIN→USER 403/200/403, scope dışı 403, 20 aynı-user isteğinde tek oy, kilitli/kapanmış oy retleri, sonuç gizliliği. Ek kapanış/MFA/kaldırma 27/27. | Sabah tam akışındaki 46 PASS/1 FAIL saklı; düzelen Retry-After beklemesiyle son adayda tam tekrar ve poll bazlı CAST-event eşlemesi gerekir. |
+| DB | 2c6bb0e, 17:20 UTC: yarım migration, anket/seçenek oy sayacı, oy-seçenek aidiyeti, tepki sayaçları ve etkin trigger kontrolü **6/6 tutarlı**. | Bu global kontrol poll bazlı CAST-event kanıtının yerine geçmez. |
+| S05 | Gerçek medya yolu için özel bucket/proxy ve bucket'a özel anahtar düzeltmesi #246. | #246 CI ve gerçek DB/S3 izole model-timeout → karantina → onay → public ret kabulü bekler. |
+| S06 | Sabah gerçek 429/Retry-After ve BAN sonrası aynı-cookie 401. | Kaynak/IP ayrımı ve suspend alt vakaları son adayda tamamlanmalı. |
+| S07 | Kod/CI senaryoları mevcut. | Shared staging'de kontrollü bakım/switch geri alma penceresi henüz yok. |
+| S08 | 2c6bb0e: anonim güvenlik 25/25; kendi-session 17/17 (17:25 UTC), Secure/HttpOnly/SameSite=Lax/no-store, CSRF 403, session korunumu, logout204/eski-cookie401. | Yeni yayın adayında tekrar. |
+| S09 | 2c6bb0e, 17:20:44–17:21:14 UTC: yalnız 20s test session'ı **200 → DB expired=true/revoked=false → aynı-cookie401 + temizleme**. Global TTL/hesap değişmedi; test session'ı sonunda revoke edildi. | Sağlayıcı SMTP kabulü ayrı; kullanıcının doğrulamayı geçici kapalı tutma kararı korunur. Doğal expiry artık eksik değildir. |
+| S10 | Main tam CI başarılı; gerçek admin mobil/desktop8/8. | Fiziksel cihaz/ekran okuyucu, iki yönetici zorunlu onayı, yedek aktivasyonu, #51/#53 ve kalan yüksek riskler. |
+
+[Ayrıntılı zaman/SHA ve sınırlamalar](MEHMET_V1_LIVE_EVIDENCE_2026_10_16.md). İç ağdaki kabul sonrası pre-deploy komutu normal migration komutuna döndürüldü ve tekrar okundu. DB dış erişimi veya ek ücretli worker servisi açılmadı. Sentetik güvenlik hesaplarının rol/yaptırım/temizlik sonucu ayrıca doğrulandı. Gerçek beta katılımcısı, fiziksel cihaz veya bağımsız insan onayı uydurulmadı.
+
 Her satır şu alanlara bağlanmalıdır: *staging URL, aynı release'e ait web SHA/API SHA, UTC zaman, kullanılan test tipi, gerçek HTTP durumları (kişisel veri maskeli), GitHub CI job/link, vaka/ticket, PASS/FAIL/BLOCKED, sahibi*. Bir eski PR'ın başarılı testi yeni staging adayının geçtiği anlamına gelmez.
 
 Güvenlik için **göstermelik test hesabı, sahte mock, demo fixture veya yalnız başarılı HTTP 200** yeterli değildir. Kritik kullanıcı durumu, eşzamanlılık, sızıntı ve bypass kontrolleri gerçek PostgreSQL ve canlı API sınırlarıyla ayrıca doğrulanır. Gizli erişim bilgisi, kullanıcı e-postası, oturum çerezi, doğrulama tokenı, ham IP ve özelleştirilmiş sağlık/kimlik bilgileri bu belgede veya halka açık issue yorumunda bulunmaz.
