@@ -16,6 +16,8 @@ test("session list excludes token material and serializes timestamps", async () 
   assert.equal(response.body.data[0].passwordHash, undefined);
   assert.equal(response.body.data[0].ipAddress, "192.0.2.0/24");
   assert.equal(response.body.data[0].userAgent, "Chrome · Windows");
+  assert.equal(response.body.data[0].status, "ACTIVE");
+  assert.equal(response.body.data[0].revokedAt, null);
   assert.equal(response.body.page.hasMore, false);
 });
 
@@ -48,4 +50,29 @@ test("revoke carries actor, reason, target and optional session to store", async
 test("missing target returns NOT_FOUND", async () => {
   const handlers = setup({ revokeSessions: async () => null });
   await assert.rejects(handlers.get("admin.users.sessions.revoke")({ params: { id: "missing" }, body: { reason: "Security review" }, viewer: { id: "admin" }, request: { id: "request" } }), { code: "NOT_FOUND" });
+});
+
+test("status filters are passed to store, state is server-computed and cursor bound to status", async () => {
+  const at = new Date("2026-10-09T10:00:00Z");
+  const calls: string[] = [];
+  const base = { createdAt: new Date("2026-10-09T08:00:00Z"), expiresAt: new Date("2026-10-10T09:00:00Z"), revokedAt: null, lastSeenAt: null, ipAddress: "203.0.113.19", userAgent: "Private-device-id" };
+  const handlers = setup({
+    target: async () => ({ id: "u" }),
+    listSessions: async (_id: string, _cursor: string | null, _limit: number, _now: Date, status: string) => {
+      calls.push(status);
+      const row = status === "revoked" ? { ...base, id: "a", revokedAt: at } :
+        status === "expired" ? { ...base, id: "b", expiresAt: at } : { ...base, id: "c" };
+      return [row, { ...row, id: "d" }];
+    },
+  });
+  const list = handlers.get("admin.users.sessions.list");
+  const revoked = await list({ params: { id: "u" }, query: { status: "revoked", limit: 1 } });
+  assert.equal(revoked.body.data[0].status, "REVOKED");
+  assert.equal(revoked.body.data[0].revokedAt, at.toISOString());
+  assert.equal(revoked.body.data[0].ipAddress, "203.0.113.0/24");
+  assert.equal(revoked.body.page.hasMore, true);
+  await assert.rejects(list({ params: { id: "u" }, query: { status: "active", limit: 1, cursor: revoked.body.page.nextCursor } }), { code: "INVALID_CURSOR" });
+  assert.equal((await list({ params: { id: "u" }, query: { status: "expired", limit: 1 } })).body.data[0].status, "EXPIRED");
+  assert.equal((await list({ params: { id: "u" }, query: { status: "active", limit: 1 } })).body.data[0].status, "ACTIVE");
+  assert.deepEqual(calls, ["revoked", "expired", "active"]);
 });
