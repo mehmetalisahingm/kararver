@@ -34,6 +34,11 @@ export type ApplyInput = {
    * `author_erased` (silinmiş veri geri üretilmez). Koşul ile yazma aynı transaction'dadır: kontrol ile uygulama arası boşluk yok.
    */
   expect?: { actionId: string; status: ContentStatus };
+  /**
+   * Tekil geri alma (#183): bu karar, verilen moderation_actions kaydının telafisidir (`undo_of_id`). UNIQUE kısıtı bir kararın en çok bir
+   * kez geri alınmasını veritabanında da sağlar; çakışma `superseded` döner.
+   */
+  undoOf?: string;
 };
 
 /** Uygulanan kararın kaydı: toplu işlem (ve geri alma) bunu hedef alır. */
@@ -128,6 +133,10 @@ export type HistoryRow =
       toStatus: string | null;
       reason: string;
       reportId: string | null;
+      /** Dolu ise bu satır başka bir kararın telafisidir. */
+      undoOfId: string | null;
+      /** Bu karar geri alınmış mı. */
+      undone: boolean;
     };
 
 export type MoveInput = {

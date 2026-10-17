@@ -177,6 +177,7 @@ export function ContentPanel({ admin, kind }: { admin: AdminClient; kind: Conten
         id={dialog?.type === "history" ? dialog.row.id : null}
         title={row ? ("title" in row ? row.title : row.body.slice(0, 120)) : ""}
         onClose={close}
+        onChanged={done}
       />
     </>
   );

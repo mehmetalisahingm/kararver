@@ -162,6 +162,10 @@ export const ContentHistoryItem = z.discriminatedUnion("kind", [
     toStatus: z.string().nullable(),
     reason: z.string(),
     reportId: Id.nullable(),
+    /** Dolu ise bu satır başka bir kararın telafisidir (geri alma). */
+    undoOfId: Id.nullable(),
+    /** Bu karar geri alınmış mı (telafi kararı var). */
+    undone: z.boolean(),
   }),
 ]);
 
@@ -259,6 +263,37 @@ export const BulkApprovalDetail = BulkApprovalView.extend({
 });
 export const BulkApprovalDecision = z.strictObject({ approval: BulkApprovalView, result: BulkResult });
 export const BulkApprovalListQuery = z.strictObject({ ...CursorQuery.shape, status: BulkApprovalStatus.optional() });
+/**
+ * #183 tekil moderasyon kararının geri alınması (KV-37 §10). Telafi kararı yeni bir moderation_actions satırıdır (`undoOfId`), normal
+ * moderasyon yolundan geçer; geri alınan satır ve audit değişmez. Geri alınabilenler: HIDE/REMOVE (önceki durum ACTIVE) → RESTORE,
+ * RESTORE (önceki HIDDEN) → HIDE, RESTORE (önceki REMOVED) → REMOVE, LOCK (ACTIVE) ↔ UNLOCK (LOCKED), EXCLUDE_FROM_TRENDS ↔
+ * INCLUDE_IN_TRENDS, CLOSE_COMMENTS ↔ OPEN_COMMENTS. Sürüm koşulu: içeriğin şimdiki durumu kararın bıraktığı durum VE hedefin son
+ * kararı bu karar olmalı. Geri almanın geri alması yoktur; uyarı/yaptırım, rapor reddi, taşıma ve görsel kararları geri alınmaz.
+ * Karar sahibi silinmiş/anonimleştirilmişse içerik geri getirilmez.
+ */
+export const UndoActionBlockedCode = z.enum(["forbidden", "admin_required", "not_reversible", "is_undo", "status_changed", "superseded", "author_erased"]);
+export const UndoActionPreview = z.strictObject({
+  actionId: Id,
+  kind: z.enum(["polls", "comments"]),
+  targetId: Id,
+  /** Anket başlığı / yorumun ilk 80 karakteri; yetkisiz kayıtta null (içerik sızmaz). */
+  label: z.string().nullable(),
+  originalAction: ModerationRecordAction,
+  /** Uygulanacak telafi kararı; geri alınamayan kararda null. */
+  undoAction: ModerationRecordAction.nullable(),
+  /** İçeriğin şimdiki durumu. */
+  currentStatus: ContentStatus,
+  outcome: z.enum(["WILL_UNDO", "BLOCKED", "ALREADY_UNDONE"]),
+  blocked: UndoActionBlockedCode.nullable(),
+  digest: z.string().length(64),
+});
+export const UndoActionResult = z.strictObject({
+  /** Yeni telafi kararı. */
+  actionId: Id,
+  undoOfId: Id,
+  outcome: z.strictObject({ id: Id, status: ContentStatus, trendExcluded: z.boolean().nullable(), commentsClosed: z.boolean().nullable() }),
+});
+
 /**
  * #183 güvenli geri alma (telafi kararı). Yalnız önceden tanımlı çiftler geri alınır: HIDE/REMOVE (önceki durum ACTIVE) → RESTORE,
  * RESTORE (önceki HIDDEN) → HIDE, RESTORE (önceki REMOVED) → REMOVE. Sürüm koşulu: içeriğin şimdiki durumu kararın bıraktığı durum
@@ -891,6 +926,48 @@ export const moderationEndpoints = [
     idempotency: "natural",
     cache: "private",
     notes: ["Yalnız başlatan; başkasının talebi 404. Kapalı talep 409 closed."],
+  }),
+  defineEndpoint({
+    id: "admin.moderation.actions.undoPreview",
+    domain: "moderation",
+    method: "GET",
+    path: "/admin/moderation/actions/:id/undo/preview",
+    summary: "Tek moderasyon kararının güvenli geri alma önizlemesi (salt okuma)",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183", "#185"],
+    availability: { status: "ready" },
+    request: { params: IdParams },
+    responses: { 200: dataOf(UndoActionPreview) },
+    errors: ["NOT_FOUND"],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "Hiçbir şey yazmaz. Sonuç: WILL_UNDO, ALREADY_UNDONE veya BLOCKED (forbidden = kapsam dışı, admin_required = kaldırılmış içeriği yalnız ADMIN+ geri yükler, not_reversible, is_undo = geri almanın geri alması yok, status_changed, superseded = araya daha yeni karar girdi, author_erased).",
+      "Moderatör yalnız kendi kararlarını, ADMIN+ herhangi bir kararı geri alır (başkasının kararı moderatöre 404). Karar yoksa veya içerik/görsel dışı bir hedefe aitse 404.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.moderation.actions.undo",
+    domain: "moderation",
+    method: "POST",
+    path: "/admin/moderation/actions/:id/undo",
+    summary: "Tek moderasyon kararını güvenli geri al (telafi kararı, sürüm kontrollü)",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183", "#185"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: Reason, digest: z.string().length(64) }) },
+    responses: { 200: dataOf(UndoActionResult) },
+    errors: ["CONFLICT", "NOT_FOUND"],
+    idempotency: "natural",
+    cache: "private",
+    notes: [
+      "Önizlenen durumda uygulanır (digest); fark varsa 409 preview_stale. Telafi kararı kilit altında sürüm koşuluyla (durum + son karar) normal moderasyon yolundan uygulanır ve kendi audit/moderation_actions kaydını yazar; bir karar en çok bir kez geri alınır (eşzamanlı ikinci istek 409 superseded).",
+      "Kararın kapattığı raporlar yeniden AÇILMAZ (rapor geçmişi değişmez). 409 CONFLICT details[0].code: preview_stale, already_undone, not_reversible, is_undo, status_changed, superseded, author_erased, community_changed. Kaldırılmış içeriği geri yüklemek ADMIN+ ister (403).",
+    ],
   }),
   defineEndpoint({
     id: "admin.moderation.batches.undoPreview",

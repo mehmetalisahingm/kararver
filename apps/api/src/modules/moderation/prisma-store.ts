@@ -36,7 +36,7 @@ async function recordTrail(tx: Tx, input: ApplyInput, from: ContentStatus, to: C
   const column = input.kind === "polls" ? { pollId: input.id } : { commentId: input.id };
   const type = input.kind === "polls" ? "POLL" : "COMMENT";
   const recorded = await tx.moderationAction.create({
-    data: { actorId: input.actorId, action: input.action, ...column, fromStatus: from, toStatus: to, reason: input.reason },
+    data: { actorId: input.actorId, action: input.action, ...column, fromStatus: from, toStatus: to, reason: input.reason, undoOfId: input.undoOf ?? null },
     select: { id: true },
   });
   // Yayını kısıtlayan işlem raporu karşılar; kuyrukta içeriği zaten görünmeyen ölü kayıt kalmaz.
@@ -49,7 +49,7 @@ async function recordTrail(tx: Tx, input: ApplyInput, from: ContentStatus, to: C
     target: { type, id: input.id },
     reason: input.reason,
     before,
-    after: { ...after, closedReports },
+    after: { ...after, closedReports, ...(input.undoOf ? { undoOfActionId: input.undoOf } : {}) },
     requestId: input.requestId,
     at: input.now,
   });
@@ -181,8 +181,14 @@ export function createPrismaModerationStore(prisma: PrismaClient): ModerationSto
       return comment ? { id: comment.id, status: comment.status, communityId: await communityOfTarget(prisma, { type: "COMMENT", id }) } : null;
     },
 
-    apply(input) {
-      return prisma.$transaction((tx) => (input.kind === "polls" ? applyToPoll(tx, input) : applyToComment(tx, input)));
+    async apply(input) {
+      try {
+        return await prisma.$transaction((tx) => (input.kind === "polls" ? applyToPoll(tx, input) : applyToComment(tx, input)));
+      } catch (err) {
+        // Aynı kararın eşzamanlı ikinci geri alması: UNIQUE(undo_of_id) son güvenceyi verir (sürüm koşulu zaten kilit altındadır).
+        if (input.undoOf && (err as { code?: string }).code === "P2002") return { kind: "conflict", reason: "superseded" };
+        throw err;
+      }
     },
 
     listPolls: (filter, limit) => listPolls(prisma, filter, limit),
