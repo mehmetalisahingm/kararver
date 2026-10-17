@@ -17,16 +17,20 @@ export function CommunityRequestQueue({ admin }: { admin: AdminClient }) {
   const [reason, setReason] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<keyof typeof STATUS_LABEL>("PENDING");
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState("");
   const load = useCallback(async () => setItems(await admin.communityRequests(status)), [admin, status]);
 
+  // Yükleme hatası işlem hatasından ayrı tutulur: her yeni yüklemede temizlenir, "Tekrar dene" ile yeniden istenir.
   useEffect(() => {
     let current = true;
+    setLoadError("");
     admin.communityRequests(status)
       .then((data) => { if (current) setItems(data); })
-      .catch(() => { if (current) setError("Başvurular yüklenemedi."); });
+      .catch(() => { if (current) { setItems([]); setLoadError("Başvurular yüklenemedi."); } });
     return () => { current = false; };
-  }, [admin, status]);
+  }, [admin, status, attempt]);
 
   async function decide(item: CommunityRequestRecord, decision: "APPROVE" | "REJECT") {
     if (busyId) return;
@@ -50,9 +54,15 @@ export function CommunityRequestQueue({ admin }: { admin: AdminClient }) {
           {Object.entries(STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
       </label>
+      {loadError ? (
+        <div role="alert" className={styles.inlineError}>
+          <span>{loadError}</span>
+          <button className="kv-button kv-button--secondary" onClick={() => setAttempt((n) => n + 1)}>Tekrar dene</button>
+        </div>
+      ) : null}
       {error ? <p role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
-      {!items.length ? <p className="kv-muted">Bu durumda başvuru yok.</p> : null}
+      {!loadError && !items.length ? <p className="kv-muted">Bu durumda başvuru yok.</p> : null}
       {items.map((item) => (
         <article key={item.id} className="kv-card screen-stack">
           <div className="kv-row kv-between">
