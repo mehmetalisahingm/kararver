@@ -65,7 +65,9 @@ export function verifyPreview({ html, status, url, removed, environment }) {
   if (removed) {
     add("removed-status", [200, 404, 410].includes(status));
     add("removed-noindex", noindex);
-    add("removed-not-shared", !m("og:url") && !m("og:image") && !m("twitter:image"));
+    let refersToRemoved = false;
+    try { refersToRemoved = new URL(m("og:url")).pathname === url.pathname; } catch { /* OG URL absent */ }
+    add("removed-not-shared", !refersToRemoved && !m("og:image") && !m("twitter:image"));
     return checks;
   }
 
