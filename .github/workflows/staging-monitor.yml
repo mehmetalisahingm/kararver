@@ -97,6 +97,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           STAGING_SHA: ${{ steps.health.outputs.sha }}
+          # Kabul testi için staging bilerek bir SHA'da tutuluyorsa (#46/#47 "aynı SHA" kuralı) repo değişkeni olarak verilir.
+          # Doluyken gecikme alarmı yerine "staging sabitlenen SHA'da mı" denetlenir; iş bitince değişken silinir.
+          STAGING_PINNED_SHA: ${{ vars.STAGING_PINNED_SHA }}
           DEPLOY_LAG_MAX_MIN: "60"
           MAIN_RED_MAX_HOURS: "24"
         shell: bash
@@ -124,10 +127,23 @@ jobs:
             fi
           fi
 
-          # (1) staging, CI'ı yeşil son main commit'inin gerisinde mi?
+          # (1) staging, CI'ı yeşil son main commit'inin gerisinde mi? Sabitlenmişse yerine sabit SHA'da mı?
           green_sha=$(printf '%s' "$green" | awk '{ print $2 }')
           green_at=$(printf '%s' "$green" | awk '{ print $3 }')
-          if [[ "$STAGING_SHA" =~ ^[0-9a-f]{12}$ ]] && [[ "$green_sha" =~ ^[0-9a-f]{40}$ ]] && [ "${green_sha:0:12}" != "$STAGING_SHA" ]; then
+          pinned="${STAGING_PINNED_SHA:-}"
+          if [ -n "$pinned" ] && ! [[ "$pinned" =~ ^[0-9a-f]{7,40}$ ]]; then
+            problems+=("STAGING_PINNED_SHA geçersiz (7–40 haneli küçük harf hex olmalı)")
+            pinned=""
+          fi
+          if [ -n "$pinned" ]; then
+            # Kısa ya da uzun SHA: ortak önek karşılaştırılır.
+            n=$(( ${#pinned} < 12 ? ${#pinned} : 12 ))
+            if [ "${STAGING_SHA:0:$n}" = "${pinned:0:$n}" ]; then
+              echo "- Staging bilerek sabitlendi: \`${pinned:0:12}\` (gecikme alarmı kapalı; değişken silinince açılır)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              problems+=("staging sabitlenen SHA'da değil: beklenen ${pinned:0:12}, çalışan ${STAGING_SHA} (kabul testi sırasında beklenmeyen deploy)")
+            fi
+          elif [[ "$STAGING_SHA" =~ ^[0-9a-f]{12}$ ]] && [[ "$green_sha" =~ ^[0-9a-f]{40}$ ]] && [ "${green_sha:0:12}" != "$STAGING_SHA" ]; then
             # "ahead": yeşil commit staging'in ilerisinde. "behind"/"identical": staging daha yeni ya da aynı (alarm yok).
             # Yalnız API/worker'ı etkileyen değişiklik sayılır: web (Vercel), doküman ve workflow değişikliği API deploy'u gerektirmez.
             relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$STAGING_SHA...$green_sha" --jq '.status' 2>/dev/null || echo "bilinmiyor")
