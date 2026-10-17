@@ -68,6 +68,12 @@ export function verifyPreview({ html, status, url, removed, environment }) {
     let refersToRemoved = false;
     try { refersToRemoved = new URL(m("og:url")).pathname === url.pathname; } catch { /* OG URL absent */ }
     add("removed-not-shared", !refersToRemoved && !m("og:image") && !m("twitter:image"));
+    // A 404/noindex response can still reveal a removed title or excerpt in inherited OG tags.
+    // Only sitewide metadata or the deliberately generic tombstone title is safe.
+    const safeTitles = ["", "Kararver · Birlikte karar ver", "İçerik bulunamadı · Kararver"];
+    const safeDescriptions = ["", "Sorularını topluluğa sor, farklı bakış açılarını gör ve kendi kararını ver."];
+    add("removed-title-private", safeTitles.includes(m("og:title")) && safeTitles.includes(m("twitter:title")));
+    add("removed-description-private", safeDescriptions.includes(m("og:description")) && safeDescriptions.includes(m("twitter:description")));
     return checks;
   }
 
@@ -122,7 +128,7 @@ export async function checkSharePreview({ live, removed, environment }, http = f
       } catch {
         checks = [{ id: "network", result: "FAIL" }];
       }
-      cases.push({ agent, type, path: page.pathname, checks });
+      cases.push({ agent, type, path: "/karar/[redacted]", checks });
     }
   }
   const count = status => cases.reduce((n, c) => n + c.checks.filter(x => x.result === status).length, 0);
