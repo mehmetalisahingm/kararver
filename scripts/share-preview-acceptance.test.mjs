@@ -63,6 +63,8 @@ test("canonical, indexing and production robots are checked", () => {
 test("removed content cannot be indexed or presented as active social share", () => {
   const options = { html: gone, status: 404, url: new URL(removed), removed: true, environment: "staging" };
   assert.deepEqual(failed(verifyPreview(options)), []);
+  const generic = gone.replace("</head>", '<meta property="og:url" content="https://kararver-staging.vercel.app/"/></head>');
+  assert.deepEqual(failed(verifyPreview({ ...options, html: generic })), []);
   assert.ok(failed(verifyPreview({ ...options, html: body() })).includes("removed-not-shared"));
   assert.ok(failed(verifyPreview({ ...options, html: "<head></head>" })).includes("removed-noindex"));
 });
