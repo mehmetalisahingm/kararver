@@ -321,6 +321,7 @@ export const AdminSession = z.strictObject({
   id: Id, createdAt: Timestamp, expiresAt: Timestamp, lastSeenAt: Timestamp.nullable(),
   // Compatibility names: masked network (/24 or /48) and coarse browser/OS only; never raw identifiers.
   ipAddress: z.string().nullable(), userAgent: z.string().nullable(),
+  status: z.enum(["ACTIVE", "REVOKED", "EXPIRED"]), revokedAt: Timestamp.nullable(),
 });
 
 /** KVKK veri dışa aktarma talebi (#181). Paketin kendisi hiçbir admin yanıtında yoktur. */
@@ -585,8 +586,8 @@ export const adminEndpoints = [
   }),
   defineEndpoint({
     id: "admin.users.sessions.list", domain: "admin", method: "GET", path: "/admin/users/:id/sessions",
-    summary: "Aktif kullanıcı oturumları", auth: "super_admin", provider: adminUsers, consumers: utkuUi, unblocks: ["#35"],
-    availability: { status: "ready" }, request: { params: IdParams, query: CursorQuery },
+    summary: "Aktif, iptal edilmiş veya süresi dolmuş kullanıcı oturumları", auth: "super_admin", provider: adminUsers, consumers: utkuUi, unblocks: ["#35"],
+    availability: { status: "ready" }, request: { params: IdParams, query: CursorQuery.extend({ status: z.enum(["active", "revoked", "expired"]).optional() }) },
     responses: { 200: pageOf(AdminSession) }, errors: ["INVALID_CURSOR"], idempotency: "none", cache: "private",
   }),
   defineEndpoint({

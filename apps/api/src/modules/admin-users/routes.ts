@@ -100,12 +100,14 @@ export function registerAdminUserRoutes(route: Route, deps: AdminUserDeps): void
   });
   route("admin.users.sessions.list", async ({ params, query }) => {
     if (!(await store.target(params.id))) throw userNotFound();
-    const key = `sessions:${params.id}`;
+    const status = query.status ?? "active";
+    const key = `sessions:${params.id}:${status}`;
     const cursor = decodeCursor(query.cursor, key);
-    const rows = await store.listSessions(params.id, cursor?.id ?? null, query.limit + 1, now());
+    const at = now();
+    const rows = await store.listSessions(params.id, cursor?.id ?? null, query.limit + 1, at, status);
     const items = rows.slice(0, query.limit);
     const nextCursor = rows.length > query.limit ? encodeCursor(key, [], items.at(-1)!.id) : null;
-    return { status: 200, body: { data: items.map(sessionView), page: { nextCursor, hasMore: nextCursor !== null } } };
+    return { status: 200, body: { data: items.map(item => sessionView(item, at)), page: { nextCursor, hasMore: nextCursor !== null } } };
   });
   route("admin.users.sessions.revoke", async ({ params, body, viewer, request }) => {
     const revokedCount = await store.revokeSessions({ userId: params.id, sessionId: body.sessionId, reason: body.reason, actorId: viewer!.id, requestId: request.id, now: now() });
