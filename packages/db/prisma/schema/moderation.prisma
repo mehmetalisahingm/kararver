@@ -239,6 +239,8 @@ model ModerationBatch {
   // Dolu ise bu parti başka bir partinin geri almasıdır (telafi kararları); geri almanın geri alması yoktur.
   undoOfId   String?             @map("undo_of_id") @db.Uuid
   total      Int
+  // Parti açılırken rezerve edilen değişecek kayıt sayısı; bitmemiş partinin ikinci onay penceresindeki ağırlığı (bitince applied).
+  reserved   Int                 @default(0)
   applied    Int                 @default(0)
   unchanged  Int                 @default(0)
   failed     Int                 @default(0)
@@ -250,10 +252,42 @@ model ModerationBatch {
   undoOf     ModerationBatch?  @relation("ModerationBatchUndo", fields: [undoOfId], references: [id], onDelete: Restrict)
   undoneBy   ModerationBatch[] @relation("ModerationBatchUndo")
   undoneItems ModerationBatchItem[] @relation("ModerationBatchItemUndone")
+  approval   ModerationBulkApproval? @relation("BulkApprovalBatch")
 
   @@index([actorId, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
   @@map("moderation_batches")
+}
+
+// #183 yüksek hacimli toplu işlem için ikinci onay talebi. Talep içeriği değiştirmez; başlatandan farklı bir ADMIN+ MFA ile onaylayınca
+// parti (batchId) başlatan adına uygulanır. Süresi dolan talep PENDING kalır, okunurken EXPIRED sayılır. CHECK'ler migration'dadır.
+model ModerationBulkApproval {
+  id             String               @id @default(uuid(7)) @db.Uuid
+  kind           ModerationBatchKind
+  action         ModerationActionType
+  reason         String               @db.VarChar(500)
+  digest         String               @db.Char(64)
+  ids            String[]             @db.Uuid
+  willChange     Int                  @map("will_change")
+  needsAdmin     Boolean              @map("needs_admin")
+  communityIds   String[]             @default([]) @map("community_ids") @db.Uuid
+  initiatorId    String               @map("initiator_id") @db.Uuid
+  status         String               @default("PENDING") @db.VarChar(20)
+  requestId      String?              @map("request_id") @db.Uuid
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt      DateTime             @map("expires_at") @db.Timestamptz(3)
+  decidedById    String?              @map("decided_by_id") @db.Uuid
+  decidedAt      DateTime?            @map("decided_at") @db.Timestamptz(3)
+  decisionReason String?              @map("decision_reason") @db.VarChar(500)
+  batchId        String?              @unique @map("batch_id") @db.Uuid
+
+  initiator User             @relation("BulkApprovalInitiator", fields: [initiatorId], references: [id], onDelete: Restrict)
+  decidedBy User?            @relation("BulkApprovalDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  batch     ModerationBatch? @relation("BulkApprovalBatch", fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@index([initiatorId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("moderation_bulk_approvals")
 }
 
 model ModerationBatchItem {

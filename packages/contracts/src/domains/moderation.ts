@@ -206,6 +206,8 @@ export const BulkPreview = z.strictObject({
   /** Onayda aynen geri gönderilir: önizlemeden sonra herhangi bir kaydın durumu/topluluğu değiştiyse 409 preview_stale. */
   digest: z.string().length(64),
   summary: z.strictObject({ willChange: Count, noChange: Count, blocked: Count }),
+  /** İkinci onay: bu işlemle birlikte son saatteki onaysız uygulanan kayıt sayısı eşiğe ulaşıyorsa `required` (KV-37 §8). */
+  approval: z.strictObject({ required: z.boolean(), threshold: z.number().int(), windowMinutes: z.number().int(), windowApplied: Count }),
   items: z.array(BulkPreviewItem),
 });
 export const BulkResultItem = z.strictObject({
@@ -220,6 +222,43 @@ export const BulkResult = z.strictObject({
   summary: z.strictObject({ total: Count, applied: Count, unchanged: Count, failed: Count }),
   items: z.array(BulkResultItem),
 });
+/**
+ * #183 yüksek hacimli toplu işlemde ikinci onay (KV-37 §8). Eşik: başlatanın son saatteki ONAYSIZ uygulanan kayıt sayısı + bu işlemin
+ * değişecek kayıt sayısı >= BULK_APPROVAL_THRESHOLD. Eşik aşılınca `bulk` hiçbir şey uygulamaz, bekleyen bir talep açar (202).
+ * Başlatandan farklı bir ADMIN+ talebi (kayıt listesini görerek) MFA step-up ile onaylar; parti başlatan adına, mevcut toplu işlem
+ * yolundan ve başlatanın yetkisiyle yeniden hesaplanarak uygulanır. Süre dolarsa talep EXPIRED sayılır (okunurken).
+ */
+export const BULK_APPROVAL_THRESHOLD = 20;
+export const BULK_APPROVAL_WINDOW_MINUTES = 60;
+export const BULK_APPROVAL_TTL_MINUTES = 30;
+/** Başlatan başına aynı anda bekleyen (süresi dolmamış) talep sayısı. */
+export const BULK_APPROVAL_PENDING_MAX = 3;
+export const BulkApprovalStatus = z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELED", "EXPIRED"]);
+export const BulkApprovalView = z.strictObject({
+  id: Id,
+  kind: z.enum(["polls", "comments"]),
+  action: BulkModerationAction,
+  reason: z.string(),
+  /** Talep anında değişecek kayıt sayısı. */
+  itemCount: Count,
+  status: BulkApprovalStatus,
+  initiator: PublicUser,
+  createdAt: Timestamp,
+  expiresAt: Timestamp,
+  decidedBy: PublicUser.nullable(),
+  decidedAt: Timestamp.nullable(),
+  decisionReason: z.string().nullable(),
+  /** Onaylanınca açılan parti. */
+  batchId: Id.nullable(),
+});
+export const BulkApprovalDetail = BulkApprovalView.extend({
+  /** Başlatanın yetkisiyle ŞİMDİ hesaplanan kayıt başına sonuç (onaylayan neyi onayladığını görür). */
+  items: z.array(BulkPreviewItem),
+  /** Talepten sonra kayıtların durumu değiştiyse true: onay 409 preview_stale verir. */
+  stale: z.boolean(),
+});
+export const BulkApprovalDecision = z.strictObject({ approval: BulkApprovalView, result: BulkResult });
+export const BulkApprovalListQuery = z.strictObject({ ...CursorQuery.shape, status: BulkApprovalStatus.optional() });
 /**
  * #183 güvenli geri alma (telafi kararı). Yalnız önceden tanımlı çiftler geri alınır: HIDE/REMOVE (önceki durum ACTIVE) → RESTORE,
  * RESTORE (önceki HIDDEN) → HIDE, RESTORE (önceki REMOVED) → REMOVE. Sürüm koşulu: içeriğin şimdiki durumu kararın bıraktığı durum
@@ -743,7 +782,7 @@ export const moderationEndpoints = [
       unblocks: ["#183"],
       availability: { status: "ready" },
       request: { body: z.strictObject({ ids: BulkIds, action: BulkModerationAction, reason: Reason, digest: z.string().length(64) }) },
-      responses: { 200: dataOf(BulkResult) },
+      responses: { 200: dataOf(BulkResult), 202: dataOf(BulkApprovalView) },
       errors: ["CONFLICT", "RATE_LIMITED"],
       idempotency: "natural",
       cache: "private",
@@ -751,9 +790,108 @@ export const moderationEndpoints = [
         "Önizlenen durumda uygulanır: kayıtların durumu/topluluğu önizlemeden sonra değiştiyse 409 CONFLICT details[0].code=preview_stale ve hiçbir şey yazılmaz (önizlemeyi yenile).",
         "Her kayıt kendi transaction'ında ve mevcut tekil moderasyon yolundan geçer (satır kilidi, geçiş tablosu, sayaçlar, moderation_actions, audit, olay outbox'ı); biri başarısız olursa diğerleri etkilenmez. Sonuç kayıt başınadır (APPLIED / UNCHANGED / FAILED + neden). Kapsam dışı kayıt FAILED forbidden olur ve dokunulmaz.",
         "Aynı istek tekrarında kayıtlar UNCHANGED döner (idempotent). Aktör başına saatte en çok 20 parti (429 RATE_LIMITED). Kaldırılmış içeriği yalnız ADMIN+ geri yükler.",
+        "İkinci onay: başlatanın son saatteki onaysız uygulanan kayıt sayısı + değişecek kayıt sayısı >= 20 ise hiçbir şey uygulanmaz, 202 ile bekleyen bir onay talebi döner (aynı anda en çok 3 bekleyen; fazlası 409 too_many_pending). Başlatandan farklı bir ADMIN+ talebi onaylayınca parti uygulanır (admin.moderation.bulkApprovals.*).",
       ],
     }),
   ]),
+  defineEndpoint({
+    id: "admin.moderation.bulkApprovals.list",
+    domain: "moderation",
+    method: "GET",
+    path: "/admin/moderation/bulk-approvals",
+    summary: "Yüksek hacimli toplu moderasyon onay talepleri (en yeni önce)",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183"],
+    availability: { status: "ready" },
+    request: { query: BulkApprovalListQuery },
+    responses: { 200: pageOf(BulkApprovalView) },
+    errors: ["INVALID_CURSOR"],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "Moderatör yalnız kendi taleplerini, ADMIN+ hepsini görür. `status` süzgeci EXPIRED'ı da destekler (süresi dolmuş bekleyen talepler). Süzgeç değişince eski imleç INVALID_CURSOR olur.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.moderation.bulkApprovals.get",
+    domain: "moderation",
+    method: "GET",
+    path: "/admin/moderation/bulk-approvals/:id",
+    summary: "Onay talebinin ayrıntısı: kayıt başına şimdiki sonuç",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183"],
+    availability: { status: "ready" },
+    request: { params: IdParams },
+    responses: { 200: dataOf(BulkApprovalDetail) },
+    errors: ["NOT_FOUND"],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "Salt okuma. `items` başlatanın yetkisiyle şimdi yeniden hesaplanır; `stale` talep sonrası kayıt durumu değiştiyse true. Moderatör yalnız kendi talebini görür (başkasınınki 404).",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.moderation.bulkApprovals.approve",
+    domain: "moderation",
+    method: "POST",
+    path: "/admin/moderation/bulk-approvals/:id/approve",
+    summary: "Yüksek hacimli toplu moderasyonu ikinci onaycı olarak onayla ve uygula",
+    auth: "admin",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(BulkApprovalDecision) },
+    errors: ["CONFLICT", "NOT_FOUND"],
+    idempotency: "natural",
+    cache: "private",
+    notes: [
+      "ADMIN+ ve başlatandan farklı olmalı (self_approval, 403 FORBIDDEN details[0].code); oturumda taze, tek kullanımlık MFA step-up gerekir (stepup_required, 403 FORBIDDEN). Step-up yalnız doğrulamalar geçtikten sonra tüketilir.",
+      "Talep anındaki özet (digest) başlatanın şimdiki yetkisiyle yeniden hesaplanır; kayıtlar değiştiyse 409 CONFLICT preview_stale ve hiçbir şey uygulanmaz. Başlatan artık yetkili/etkin değilse 409 initiator_changed. Kapalı talep (onaylanmış, reddedilmiş, geri çekilmiş, süresi dolmuş) 409 closed.",
+      "Parti başlatan adına uygulanır (moderation_actions aktörü başlatan); onaylayan talep ve audit kaydındadır. Kayıt başına kısmi başarısızlık normal toplu işlemdeki gibi raporlanır. Aynı talebin ikinci onayı 409 closed.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.moderation.bulkApprovals.reject",
+    domain: "moderation",
+    method: "POST",
+    path: "/admin/moderation/bulk-approvals/:id/reject",
+    summary: "Yüksek hacimli toplu moderasyon talebini reddet",
+    auth: "admin",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(BulkApprovalView) },
+    errors: ["CONFLICT", "NOT_FOUND"],
+    idempotency: "natural",
+    cache: "private",
+    notes: ["ADMIN+ ve başlatandan farklı (başlatan geri çeker: cancel). Hiçbir içerik değişmez. Kapalı talep 409 closed."],
+  }),
+  defineEndpoint({
+    id: "admin.moderation.bulkApprovals.cancel",
+    domain: "moderation",
+    method: "POST",
+    path: "/admin/moderation/bulk-approvals/:id/cancel",
+    summary: "Kendi bekleyen toplu moderasyon talebini geri çek",
+    auth: "moderator",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(BulkApprovalView) },
+    errors: ["CONFLICT", "NOT_FOUND"],
+    idempotency: "natural",
+    cache: "private",
+    notes: ["Yalnız başlatan; başkasının talebi 404. Kapalı talep 409 closed."],
+  }),
   defineEndpoint({
     id: "admin.moderation.batches.undoPreview",
     domain: "moderation",

@@ -59,10 +59,12 @@ test("önizleme özeti ve uygulanabilirlik: yalnız değişecek kayıt varsa ona
 
 test("uygulama: gövde ids+action+reason+digest taşır, sonuç özeti kısmi başarısızlığı nedenleriyle yazar; stale ve hız sınırı hata olarak yüzeye çıkar", async () => {
   const ok = admin(() => reply("admin.moderation.polls.bulk", "ok"));
-  const result = await ok.client.bulkApply("polls", { ids: IDS, action: "HIDE", reason: "Toplu moderasyon incelemesi", digest: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90" });
+  const outcome = await ok.client.bulkApply("polls", { ids: IDS, action: "HIDE", reason: "Toplu moderasyon incelemesi", digest: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90" });
   assert.equal(ok.calls[0]!.method, "POST");
   assert.ok(ok.calls[0]!.url.endsWith("/admin/moderation/polls/bulk"));
   assert.deepEqual(Object.keys(ok.calls[0]!.body as object).sort(), ["action", "digest", "ids", "reason"]);
+  assert.equal(outcome.kind, "applied");
+  const result = (outcome as Extract<typeof outcome, { kind: "applied" }>).result;
   assert.equal(result.summary.applied, 1);
   assert.equal(resultSummary(result), "1 uygulandı, 1 değişmedi, 1 başarısız (1 × Kapsam dışı: bu topluluk için yetkin yok).");
 
