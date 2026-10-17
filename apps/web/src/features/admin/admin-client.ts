@@ -154,8 +154,8 @@ export class AdminClient {
   async users(q?: string, cursor?: string, signal?: AbortSignal) {
     return page<UserSummary>(await this.http.request("admin.users.list", { query: { q: q || undefined, cursor, limit: "20" }, signal }));
   }
-  async userSessions(id: string, cursor?: string, signal?: AbortSignal) {
-    return page<ReturnType<typeof AdminSession.parse>>(await this.http.request("admin.users.sessions.list", { params: { id }, query: { cursor, limit: "20" }, signal }));
+  async userSessions(id: string, cursor?: string, signal?: AbortSignal, status: "active" | "revoked" | "expired" = "active") {
+    return page<ReturnType<typeof AdminSession.parse>>(await this.http.request("admin.users.sessions.list", { params: { id }, query: { cursor, limit: "20", status }, signal }));
   }
   async revokeUserSessions(id: string, reason: string, sessionId?: string) {
     return this.http.request("admin.users.sessions.revoke", { params: { id }, body: { reason, ...(sessionId ? { sessionId } : {}) } });

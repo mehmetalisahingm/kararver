@@ -213,7 +213,7 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `GET /config`<br>Public limitler, puan maliyeti, özellik anahtarları · `config.get` | G | 200 | — | Utku `settings` | Ümit (web), herkes | #42 #15 #18 | hazır |
 | `GET /admin/users`<br>Kullanıcı arama · `admin.users.list` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `GET /admin/users/:id`<br>Kullanıcı detayı, aktivite ve yaptırımlar · `admin.users.get` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
-| `GET /admin/users/:id/sessions`<br>Aktif kullanıcı oturumları · `admin.users.sessions.list` | SA | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
+| `GET /admin/users/:id/sessions`<br>Aktif, iptal edilmiş veya süresi dolmuş kullanıcı oturumları · `admin.users.sessions.list` | SA | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `POST /admin/users/:id/sessions/revoke`<br>Tek veya tüm aktif oturumları kapat · `admin.users.sessions.revoke` | SA | 200 | doğal | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `POST /admin/users/:id/password-reset`<br>Kullanıcıya şifre sıfırlama bağlantısı e-postası gönder · `admin.users.passwordReset.send` | A | 202 | — | Utku `admin-users` | Utku (admin UI) | #181 | hazır |
 | `POST /admin/users/:id/data-exports`<br>KVKK veri dışa aktarma talebi başlat · `admin.users.dataExports.create` | SA | 202 | doğal | Mert `data-exports` | Utku (admin UI) | #181 | hazır |
