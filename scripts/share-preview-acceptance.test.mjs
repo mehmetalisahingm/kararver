@@ -67,6 +67,10 @@ test("removed content cannot be indexed or presented as active social share", ()
   assert.deepEqual(failed(verifyPreview({ ...options, html: generic })), []);
   assert.ok(failed(verifyPreview({ ...options, html: body().replace(live, removed) })).includes("removed-not-shared"));
   assert.ok(failed(verifyPreview({ ...options, html: "<head></head>" })).includes("removed-noindex"));
+  const leaked = gone.replace("</head>", '<meta property="og:title" content="Removed private poll"/><meta name="twitter:description" content="Private excerpt"/></head>');
+  const leakIds = failed(verifyPreview({ ...options, html: leaked }));
+  assert.ok(leakIds.includes("removed-title-private"));
+  assert.ok(leakIds.includes("removed-description-private"));
 });
 
 test("both crawler user agents only GET live/removed without cookies, and never claim external cache", async () => {
@@ -80,6 +84,8 @@ test("both crawler user agents only GET live/removed without cookies, and never 
   assert.equal(report.totals.fail, 0);
   assert.equal(report.externalCacheVerified, false);
   assert.equal(report.cases.length, 4);
+  assert.ok(report.cases.every(item => item.path === "/karar/[redacted]"));
+  assert.doesNotMatch(JSON.stringify(report), /karsilastirma|kaldirilan/);
   assert.ok(calls.some(c => c.init.headers["user-agent"] === "Twitterbot/1.0"));
   assert.ok(calls.some(c => c.init.headers["user-agent"].startsWith("WhatsApp")));
   assert.ok(calls.every(c => c.init.method === "GET" && c.init.redirect === "manual" && c.init.credentials === "omit"));
