@@ -35,7 +35,14 @@ jobs:
           body=$(curl -sS --max-time 20 -w '\n%{http_code}' "$API_URL/health" || true)
           code=$(printf '%s' "$body" | tail -n1)
           json=$(printf '%s' "$body" | sed '$d')
-          if [ "$code" != "200" ]; then
+          if [ "$code" = "503" ]; then
+            # /health "down": DB yoklaması başarısız ya da worker ölü (#51). Gövde yalnız durum adlarını taşır.
+            db=$(printf '%s' "$json" | jq -r '.database.status // "?"' 2>/dev/null || echo "?")
+            wk=$(printf '%s' "$json" | jq -r '.worker.status // "?"' 2>/dev/null || echo "?")
+            [[ "$db" =~ ^[a-z]{1,12}$ ]] || db="?"
+            [[ "$wk" =~ ^[a-z]{1,12}$ ]] || wk="?"
+            problems+=("API /health 503 down: veritabanı=$db, worker=$wk")
+          elif [ "$code" != "200" ]; then
             problems+=("API /health HTTP $code")
           else
             status=$(printf '%s' "$json" | jq -r '.status // "?"')

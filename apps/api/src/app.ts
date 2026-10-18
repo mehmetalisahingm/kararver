@@ -95,7 +95,7 @@ import { registerMetricsRoutes } from "./modules/metrics/routes.ts";
 import type { MetricsStore } from "./modules/metrics/store.ts";
 import type { OpsProbe } from "./modules/ops/probe.ts";
 import { registerOpsRoutes } from "./modules/ops/routes.ts";
-import { readHeartbeatFile } from "./modules/ops/status.ts";
+import { buildHealth } from "./modules/ops/health.ts";
 import { emergencySwitchesView } from "./modules/ops/switches.ts";
 import { createOpsTelemetry, type OpsTelemetry } from "./modules/ops/telemetry.ts";
 
@@ -493,14 +493,19 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   if (settings) registerSettingsRoutes(route, { service: settings, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
 
+  // KV-49 (#51): DB ve worker gerçekten sağlıklı mı (#262); 503 yalnız "down"da. Kurallar: modules/ops/health.ts.
+  // Sürüm (deploy SHA): Railway GitHub entegrasyonu RAILWAY_GIT_COMMIT_SHA verir. Saat gerçek zamandır (uptime izleme).
+  const healthStartedAt = new Date();
   app.get("/health", async (_request, reply) => {
-    let worker: { status: string; at: string; ageMs: number } | { status: "unknown" } = { status: "unknown" };
-    // Worker kapalı ya da ayrı serviste olabilir: dosya yoksa "unknown".
-    const beat = readHeartbeatFile();
-    if (beat) worker = { status: beat.status, at: beat.at, ageMs: Date.now() - Date.parse(beat.at) };
-    // KV-49 (#51): hangi sürümün çalıştığı (deploy SHA). Railway GitHub entegrasyonu RAILWAY_GIT_COMMIT_SHA verir.
-    const sha = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null;
-    return reply.header("Cache-Control", "no-store").send({ status: "ok", worker, release: { sha: sha ? sha.slice(0, 12) : null, env: config.appEnv } });
+    const { httpStatus, body } = await buildHealth({
+      probe: deps.opsProbe,
+      now: () => new Date(),
+      startedAt: healthStartedAt,
+      env: config.appEnv,
+      sha: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null,
+      workerExpected: process.env.WORKER_HEARTBEAT_EXPECTED === "true",
+    });
+    return reply.code(httpStatus).header("Cache-Control", "no-store").send(body);
   });
   return app;
 }
