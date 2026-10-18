@@ -59,3 +59,35 @@ test("independent role approval is reviewed before approving", async ({ page }) 
   await expect(page.getByRole("region", { name: "Onay talebi ayrıntıları" })).toContainText("APPROVED");
   expect(mock.unexpected).toEqual([]);
 });
+
+
+test("single SUPER_ADMIN: approval form cannot request promotion or approve a legacy promotion", async ({ page }) => {
+  const mock = await api(page);
+  let requests = 0;
+  mock.handlers.set("admin.roleApprovals.request", route => {
+    requests++;
+    return route.fulfill({ status: 403, json: failure("FORBIDDEN") });
+  });
+  const target = sample("admin.users.get").data;
+  const old = sample("admin.roleApprovals.get");
+  old.data.role = "SUPER_ADMIN";
+  old.data.expectedRole = "USER";
+  old.data.initiatorId = "0199a000-0000-7000-8000-000000000099";
+  old.data.userId = "0199a000-0000-7000-8000-000000000098";
+  old.data.expiresAt = new Date(Date.now() + 600000).toISOString();
+  mock.handlers.set("admin.roleApprovals.get", route => route.fulfill({ json: old }));
+  await page.goto("/hesap/guvenlik");
+  const rolePanel = page.getByRole("region", { name: "Kritik rol onayları" });
+  await expect(rolePanel.getByRole("option", { name: "SUPER_ADMIN" })).toHaveCount(0);
+  await expect(rolePanel.getByRole("option", { name: "ADMIN" })).toHaveCount(1);
+  await rolePanel.getByLabel("Hedef kullanıcı numarası").fill(target.id);
+  await rolePanel.getByLabel("Rol değişimi gerekçesi").fill("Gerekçeli yetki talebi");
+  await rolePanel.getByRole("button", { name: "İkinci yöneticiye onay talebi oluştur" }).click();
+  await expect(rolePanel.getByRole("alert")).toContainText("yalnız mevcut bir SUPER_ADMIN rolünü düşürmek");
+  expect(requests).toBe(0);
+  await rolePanel.getByLabel("İncelenecek onay numarası").fill(old.data.id);
+  await rolePanel.getByRole("button", { name: "Onay talebini incele" }).click();
+  await expect(rolePanel.getByRole("alert")).toContainText("Eski bir SUPER_ADMIN yükseltme talebi");
+  await expect(rolePanel.getByRole("button", { name: "Bağımsız incelemeyi MFA ile onayla" })).toHaveCount(0);
+  expect(mock.unexpected).toEqual([]);
+});
