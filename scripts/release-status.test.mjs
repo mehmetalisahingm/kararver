@@ -9,6 +9,30 @@ test("kabul maddesi ilerlemesi: [x]/[X] tamam, [ ] açık; madde dışı köşel
   assert.deepEqual(checklistProgress(null), { done: 0, total: 0 });
 });
 
+test("CI özeti: ortam yoklayan işler (staging-monitor, security-staging) kodun CI'ını kırmızı göstermez", () => {
+  const runs = [
+    { name: "database", status: "completed", conclusion: "success" },
+    { name: "check", status: "completed", conclusion: "failure" },
+    { name: "check (staging)", status: "completed", conclusion: "failure" },
+    { name: "read-only-staging", status: "completed", conclusion: "failure" },
+  ];
+  assert.equal(ciSummary(runs), "passing");
+  assert.equal(ciSummary([{ name: "check", status: "completed", conclusion: "failure" }]), "none");
+});
+
+test("rapor: production satırı onaylı sürümde durduğu için 'main'in gerisinde' uyarısı vermez", () => {
+  const md = renderReport({
+    generatedAt: new Date("2026-10-18T12:00:00.000Z"),
+    repo: "o/r",
+    main: { sha: "88ed769e405c1234", ci: "passing" },
+    staging: { httpStatus: 200, status: "ok", sha: "88ed769e405c", onMain: true },
+    production: { httpStatus: 200, status: "ok", sha: "28f23188ee2b", onMain: false },
+    prs: [], gates: [], adminPackage: [], bugs: [], alarms: [{ number: 300 }],
+  });
+  assert.ok(md.includes("- **production:** production `28f23188ee2b` · /health 200 `ok`\n"));
+  assert.ok(!md.includes("staging `88ed769e405c` · /health 200 `ok` · **main"), "staging main'deyse uyarı yok");
+});
+
 test("CI özeti: başarısız > sürüyor > geçiyor; atlanan geçer", () => {
   assert.equal(ciSummary([]), "none");
   assert.equal(ciSummary([{ status: "completed", conclusion: "success" }, { status: "completed", conclusion: "skipped" }]), "passing");
@@ -50,7 +74,8 @@ test("rapor: başlık, staging uyarısı, tablolar ve Markdown kaçışı; GO ka
   assert.match(md, /## Release durumu — 2026-10-18 12:00 UTC/);
   assert.match(md, /GO\/NO-GO kararı değildir/);
   assert.match(md, /staging `28f23188ee2b` · \/health 200 `ok` · \*\*main'in son yeşil commit'i değil\*\*/);
-  assert.match(md, /Açık staging alarmı:\*\* #256/);
+  assert.match(md, /Açık izleme alarmı:\*\* #256/);
+  assert.ok(!md.includes("**production:**"), "production adresi yokken satır yok");
   assert.match(md, /\| #51 \[KV-49\] Production \| farukkemree \| 2\/4 \| 1 gün önce \|/);
   assert.match(md, /\| #263 fix \\\| health \| farukkemree \| ✅ \| review bekliyor \| 0 gün \| reviewer: review \|/);
 });

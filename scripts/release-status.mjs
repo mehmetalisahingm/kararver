@@ -2,7 +2,9 @@
  * #2 koordinasyon / #54 release kanıt paketi: yayına neyin engel olduğunu tek raporda toplar. SALT OKUMA: GitHub REST API'den
  * main CI, açık PR'lar (CI, review, yaş), yayın kapısı issue'larının kabul maddesi ilerlemesi, açık bug ve staging alarmları;
  * staging /health'ten çalışan sürüm. Hiçbir şeye yazmaz, birleştirmez, yorum göndermez. Çıktı Markdown'dır; #2/#54'e elle eklenir.
- *   GITHUB_TOKEN=$(gh auth token) node scripts/release-status.mjs [--repo sahip/ad] [--api https://…] [--out rapor.md]
+ *   GITHUB_TOKEN=$(gh auth token) node scripts/release-status.mjs [--repo sahip/ad] [--api https://…] [--prod-api https://…] [--out rapor.md]
+ * GITHUB_TOKEN zorunludur: rapor ~15 + 2×(açık PR) istek yapar; tokensiz GitHub saatte 60 istekle sınırlar.
+ * Adresler: --api / --prod-api ya da STAGING_API_URL / PROD_API_URL ortam değişkenleri (production açılınca adres unutulmasın).
  * Rapor GO/NO-GO kararı değildir: son karar Mehmet'tedir (#54).
  */
 import { writeFile } from "node:fs/promises";
@@ -21,9 +23,16 @@ export function checklistProgress(body) {
   return { done, total: done + open };
 }
 
+/**
+ * Ortamı yoklayan işler (staging-monitor `check`, security-staging `read-only-staging`) kodun CI'ı değildir: staging geride
+ * olduğu için başarısız biten izleme işi commit'i "kırmızı" göstermemeli.
+ */
+export const ENVIRONMENT_PROBES = /^(check( \(.+\))?|read-only-staging)$/;
+
 /** Check-run sonuçlarının özeti: başarısız varsa "failing", sürüyorsa "pending", hepsi geçti/atlandıysa "passing". */
-export function ciSummary(runs) {
-  if (!runs || runs.length === 0) return "none";
+export function ciSummary(allRuns) {
+  const runs = (allRuns ?? []).filter((r) => !ENVIRONMENT_PROBES.test(r.name ?? ""));
+  if (runs.length === 0) return "none";
   if (runs.some((r) => ["failure", "timed_out", "cancelled", "action_required"].includes(r.conclusion ?? ""))) return "failing";
   if (runs.some((r) => r.status !== "completed")) return "pending";
   return "passing";
@@ -55,17 +64,20 @@ export function nextStep(pr) {
   return { who: "reviewer", what: "review" };
 }
 
-export function renderReport({ generatedAt, repo, main, staging, prs, gates, adminPackage, bugs, alarms }) {
+export function renderReport({ generatedAt, repo, main, staging, production = null, prs, gates, adminPackage, bugs, alarms }) {
   const lines = [];
   lines.push(`## Release durumu — ${generatedAt.toISOString().slice(0, 16).replace("T", " ")} UTC`);
   lines.push("");
   lines.push(`> Salt okuma raporu (\`scripts/release-status.mjs\`). GO/NO-GO kararı değildir; son karar Mehmet'tedir (#54).`);
   lines.push("");
-  const stagingLine = staging.error
-    ? `staging /health okunamadı (${staging.error})`
-    : `staging \`${staging.sha ?? "?"}\` · /health ${staging.httpStatus} \`${staging.status}\`${staging.onMain ? "" : staging.sha ? " · **main'in son yeşil commit'i değil**" : ""}`;
-  lines.push(`- **main:** \`${main.sha.slice(0, 12)}\` · CI ${CI_LABEL[main.ci] ?? main.ci} · ${stagingLine}`);
-  lines.push(`- **Açık staging alarmı:** ${alarms.length ? alarms.map((a) => `#${a.number}`).join(", ") : "yok"} · **Açık bug:** ${bugs.length ? bugs.map((b) => `#${b.number}`).join(", ") : "yok"}`);
+  const envLine = (name, s, warnOffMain) =>
+    s.error
+      ? `${name} /health okunamadı (${s.error})`
+      : `${name} \`${s.sha ?? "?"}\` · /health ${s.httpStatus} \`${s.status}\`${warnOffMain && !s.onMain && s.sha ? " · **main'in son yeşil commit'i değil**" : ""}`;
+  lines.push(`- **main:** \`${main.sha.slice(0, 12)}\` · CI ${CI_LABEL[main.ci] ?? main.ci} · ${envLine("staging", staging, true)}`);
+  // Production bilerek onaylı sürümde durur: "main'in gerisinde" uyarısı verilmez.
+  if (production) lines.push(`- **production:** ${envLine("production", production, false)}`);
+  lines.push(`- **Açık izleme alarmı:** ${alarms.length ? alarms.map((a) => `#${a.number}`).join(", ") : "yok"} · **Açık bug:** ${bugs.length ? bugs.map((b) => `#${b.number}`).join(", ") : "yok"}`);
   lines.push("");
   lines.push("### Yayın kapıları");
   lines.push("| Issue | Sahip | Kabul maddeleri | Son güncelleme |");
@@ -94,7 +106,7 @@ export function renderReport({ generatedAt, repo, main, staging, prs, gates, adm
   return `${lines.join("\n")}\n`;
 }
 
-async function collect({ repo, api, token, now, http = fetch }) {
+async function collect({ repo, api, prodApi, token, now, http = fetch }) {
   const gh = async (path) => {
     const res = await http(`https://api.github.com/repos/${repo}${path}`, {
       headers: { accept: "application/vnd.github+json", ...(token ? { authorization: `Bearer ${token}` } : {}), "x-github-api-version": "2022-11-28" },
@@ -106,15 +118,22 @@ async function collect({ repo, api, token, now, http = fetch }) {
   const mainSha = (await gh("/commits/main")).sha;
   const runs = (await gh("/actions/workflows/foundation.yml/runs?branch=main&event=push&status=completed&per_page=20")).workflow_runs ?? [];
   const green = runs.find((r) => r.conclusion === "success")?.head_sha ?? null;
-  let staging;
-  try {
-    const res = await http(`${api}/health`, { signal: AbortSignal.timeout(15_000) });
-    const body = await res.json();
-    staging = { httpStatus: res.status, status: body.status, sha: body.release?.sha ?? null, onMain: !!green && !!body.release?.sha && green.startsWith(body.release.sha) };
-  } catch (err) {
-    staging = { error: err instanceof Error ? err.name : "hata" };
-  }
-  const openPrs = await gh("/pulls?state=open&per_page=50");
+  // main'in CI'ı: yalnız Foundation checks (main'e bağlanan izleme işleri kod CI'ı değildir). Henüz bitmediyse sürüyor.
+  const mainRun = ((await gh(`/actions/workflows/foundation.yml/runs?branch=main&event=push&head_sha=${mainSha}&per_page=5`)).workflow_runs ?? [])[0];
+  const mainCi = !mainRun ? "none" : mainRun.status !== "completed" ? "pending" : mainRun.conclusion === "success" ? "passing" : "failing";
+  const health = async (base) => {
+    try {
+      const res = await http(`${base}/health`, { signal: AbortSignal.timeout(15_000) });
+      const body = await res.json();
+      return { httpStatus: res.status, status: body.status, sha: body.release?.sha ?? null, onMain: !!green && !!body.release?.sha && green.startsWith(body.release.sha) };
+    } catch (err) {
+      return { error: err instanceof Error ? err.name : "hata" };
+    }
+  };
+  const staging = await health(api);
+  const production = prodApi ? await health(prodApi) : null;
+  // Tek sayfa (100): bu ölçekte yeterli; aşılırsa sayfalama eklenir.
+  const openPrs = await gh("/pulls?state=open&per_page=100");
   const prs = [];
   for (const p of openPrs) {
     prs.push({
@@ -142,13 +161,14 @@ async function collect({ repo, api, token, now, http = fetch }) {
   return {
     generatedAt: now,
     repo,
-    main: { sha: mainSha, ci: ciSummary(await checks(mainSha)) },
+    main: { sha: mainSha, ci: mainCi },
     staging,
+    production,
     prs,
     gates: gates.filter((g) => g.state === "open"),
     adminPackage,
     bugs: await listIssues("bug"),
-    alarms: await listIssues("staging-alarm"),
+    alarms: [...(await listIssues("staging-alarm")), ...(await listIssues("production-alarm"))],
   };
 }
 
@@ -156,12 +176,18 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const { values } = parseArgs({
     options: {
       repo: { type: "string", default: "mehmetalisahingm/kararver" },
-      api: { type: "string", default: "https://api-staging-45cb.up.railway.app" },
+      api: { type: "string", default: process.env.STAGING_API_URL ?? "https://api-staging-45cb.up.railway.app" },
+      "prod-api": { type: "string", default: process.env.PROD_API_URL },
       out: { type: "string" },
     },
   });
+  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+  if (!token) {
+    console.error("GITHUB_TOKEN gerekli (tokensiz GitHub saatte 60 istekle sınırlar): GITHUB_TOKEN=$(gh auth token) node scripts/release-status.mjs");
+    process.exit(2);
+  }
   try {
-    const report = renderReport(await collect({ repo: values.repo, api: values.api, token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN, now: new Date() }));
+    const report = renderReport(await collect({ repo: values.repo, api: values.api, prodApi: values["prod-api"], token, now: new Date() }));
     if (values.out) await writeFile(values.out, report);
     process.stdout.write(report);
   } catch (err) {
