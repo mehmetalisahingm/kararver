@@ -33,7 +33,7 @@ jobs:
       TARGET_TITLE: ${{ matrix.target == 'staging' && 'Staging' || 'Production' }}
       ALARM_LABEL: ${{ matrix.target }}-alarm
       # Production alarmı yedek sorumluya da gider (ilk sorumlu ulaşılamazsa).
-      RESPONDERS: ${{ matrix.target == 'production' && '@farukkemree · yedek: @mehmetalisahingm' || '@farukkemree' }}
+      RESPONDERS: "${{ matrix.target == 'production' && '@farukkemree · yedek: @mehmetalisahingm' || '@farukkemree' }}"
       API_URL: ${{ matrix.target == 'staging' && (vars.STAGING_API_URL || 'https://api-staging-45cb.up.railway.app') || vars.PROD_API_URL }}
       WEB_URL: ${{ matrix.target == 'staging' && (vars.STAGING_WEB_URL || 'https://kararver-staging.vercel.app') || vars.PROD_WEB_URL }}
       # Worker heartbeat'i 10 sn'de bir yazılır; 2 dakikadan eskiyse worker durmuş sayılır.
