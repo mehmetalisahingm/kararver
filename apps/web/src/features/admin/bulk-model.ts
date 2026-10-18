@@ -1,6 +1,6 @@
 // Toplu moderasyon ekranının saf kuralları (#183, KV-37 §bulk): seçim sınırı, etiketler ve sonuç özeti.
 // Karar sunucudadır (kapsam, geçiş tablosu, digest); buradakiler yalnız kullanıcıyı yönlendirir.
-import type { BulkPreviewView, BulkResultView, UndoPreviewView, UndoResultView } from "./admin-client.ts";
+import type { BulkApprovalRecord, BulkPreviewView, BulkResultView, UndoPreviewView, UndoResultView } from "./admin-client.ts";
 
 /** Sunucu sınırı (contracts BULK_MAX_ITEMS) ile aynı; aşımı sunucu zaten reddeder. */
 export const BULK_MAX = 50;
@@ -42,6 +42,30 @@ export function resultSummary(result: BulkResultView): string {
   for (const item of result.items) if (item.result === "FAILED" && item.code) reasons.set(item.code, (reasons.get(item.code) ?? 0) + 1);
   const why = [...reasons].map(([code, n]) => `${n} × ${blockedLabels[code] ?? code}`).join("; ");
   return `${applied} uygulandı, ${unchanged} değişmedi, ${failed} başarısız${why ? ` (${why})` : ""}.`;
+}
+
+// ── İkinci onay (#183, KV-37 §8) ──
+export const approvalStatusLabels: Record<BulkApprovalRecord["status"], string> = {
+  PENDING: "Onay bekliyor",
+  APPROVED: "Onaylandı ve uygulandı",
+  REJECTED: "Reddedildi",
+  CANCELED: "Geri çekildi",
+  EXPIRED: "Süresi doldu",
+};
+/** Önizlemede eşik uyarısı; gerekli değilse null. */
+export function approvalNotice(preview: BulkPreviewView | null): string | null {
+  if (!preview?.approval.required) return null;
+  const { threshold, windowMinutes, windowApplied } = preview.approval;
+  return `Bu işlem yüksek hacimli: son ${windowMinutes} dakikada onaysız ${windowApplied} kayıt uyguladın, bununla birlikte ${threshold} ve üstü ikinci onay gerektirir. “Uygula” kayıtları değiştirmez; başka bir yöneticinin onayına gönderir.`;
+}
+/** Talep açıldığında gösterilen sonuç mesajı. */
+export const pendingMessage = (approval: BulkApprovalRecord): string =>
+  `${approval.itemCount} kayıt için ikinci onay talebi açıldı; başka bir yönetici onaylayana kadar hiçbir şey değişmez. Talep ${new Date(approval.expiresAt).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })} tarihine kadar geçerli.`;
+/** Kullanıcı, talep sahibine göre hangi kararı verebilir. */
+export function approvalActions(approval: Pick<BulkApprovalRecord, "status" | "initiator">, viewerId: string | null, isAdmin: boolean): { approve: boolean; reject: boolean; cancel: boolean } {
+  const open = approval.status === "PENDING";
+  const own = viewerId !== null && approval.initiator.id === viewerId;
+  return { approve: open && isAdmin && !own, reject: open && isAdmin && !own, cancel: open && own };
 }
 
 // ── Güvenli geri alma (#183) ──

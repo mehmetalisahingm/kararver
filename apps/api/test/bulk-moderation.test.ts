@@ -358,9 +358,11 @@ describe("toplu moderasyon (postgres)", { skip: backend ? false : "TEST_DATABASE
   test("yarış: aynı partinin iki eşzamanlı onayı — her kayıt tam bir kez uygulanır (ikinci onay stale veya unchanged)", async () => {
     const author = await signUp();
     const ids = [await poll(author), await poll(author), await poll(author)];
-    const pv = await preview("polls", admin.cookie, ids);
+    // Taze yönetici: dosyadaki önceki testlerin onaysız hacmi bu aktörün ikinci onay penceresine sayılmasın (KV-37 §8).
+    const racer = await staff("ADMIN");
+    const pv = await preview("polls", racer.cookie, ids);
     const digest = pv.json().data.digest as string;
-    const [x, y] = await Promise.all([apply("polls", admin.cookie, ids, "HIDE", digest), apply("polls", superAdmin.cookie, ids, "HIDE", digest)]);
+    const [x, y] = await Promise.all([apply("polls", racer.cookie, ids, "HIDE", digest), apply("polls", superAdmin.cookie, ids, "HIDE", digest)]);
     assert.ok([200, 409].includes(x.statusCode) && [200, 409].includes(y.statusCode), x.body + y.body);
     for (const id of ids) {
       assert.equal(await actionsOf(id), 1, "tek karar kaydı");

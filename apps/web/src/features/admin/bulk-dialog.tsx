@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import type { AdminClient, BulkPreviewView, ContentKind } from "./admin-client.ts";
 import { ActionDialog, errorMessage } from "./admin-ui";
-import { blockedLabels, bulkActionLabels, canApply, outcomeLabels, previewSummary, resultSummary, type BulkAction } from "./bulk-model.ts";
+import { approvalNotice, blockedLabels, bulkActionLabels, canApply, outcomeLabels, pendingMessage, previewSummary, resultSummary, type BulkAction } from "./bulk-model.ts";
 import styles from "./admin-shell.module.css";
 
 type Props = { admin: AdminClient; kind: ContentKind; ids: string[]; open: boolean; onClose: () => void; onDone: (message: string) => void };
@@ -38,13 +38,14 @@ export function BulkDialog({ admin, kind, ids, open, onClose, onDone }: Props) {
       open={open}
       title={`Seçilen ${ids.length} ${noun} için toplu işlem`}
       description="Önce önizleme al: her kaydın ne olacağı görünür. Yetkin olmayan topluluklardaki kayıtlar uygulanmaz. Her kayıt ayrı işlenir ve audit kaydına yazılır; biri başarısız olursa diğerleri etkilenmez."
-      submitLabel="Uygula"
       onClose={onClose}
+      submitLabel={approvalNotice(preview) ? "Onaya gönder" : "Uygula"}
       validate={() => (!canApply(preview) ? "Uygulanacak kayıt yok: önce önizleme al." : null)}
       onSubmit={async (reason) => {
         try {
-          const result = await admin.bulkApply(kind, { ids, action, reason, digest: preview!.digest });
-          onDone(resultSummary(result));
+          const outcome = await admin.bulkApply(kind, { ids, action, reason, digest: preview!.digest });
+          // Eşik aşıldıysa içerik değişmedi; ikinci onay talebi açıldı (KV-37 §8).
+          onDone(outcome.kind === "pending" ? pendingMessage(outcome.approval) : resultSummary(outcome.result));
         } catch (cause) {
           // Kayıtlar önizlemeden sonra değiştiyse önizleme eskidir: gizle, yeniden alınsın.
           setPreview(null);
@@ -65,6 +66,7 @@ export function BulkDialog({ admin, kind, ids, open, onClose, onDone }: Props) {
       {preview ? (
         <>
           <p role="status">{previewSummary(preview)}</p>
+          {approvalNotice(preview) ? <p role="note"><strong>İkinci onay gerekir.</strong> {approvalNotice(preview)}</p> : null}
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <caption className="sr-only">Toplu işlem önizlemesi</caption>

@@ -53,7 +53,7 @@ const TABLE = /^[a-z_][a-z0-9_]{0,62}.[a-z_][a-z0-9_]{0,62}$/;
 
 export function createPrismaOpsProbe(
   prisma: PrismaClient,
-  options: { schema?: string; contentJobsTable?: string; erasuresTable?: string } = {},
+  options: { schema?: string; contentJobsTable?: string; erasuresTable?: string; batchesTable?: string } = {},
 ): OpsProbe {
   const schema = options.schema ?? "pgboss";
   const contentJobsTable = options.contentJobsTable ?? "public.content_jobs";
@@ -62,6 +62,8 @@ export function createPrismaOpsProbe(
   const erasuresTable = options.erasuresTable ?? "public.account_erasures";
   if (!TABLE.test(contentJobsTable)) throw new Error(`geçersiz tablo: ${contentJobsTable}`);
   if (!TABLE.test(erasuresTable)) throw new Error(`geçersiz tablo: ${erasuresTable}`);
+  const batchesTable = options.batchesTable ?? "public.moderation_batches";
+  if (!TABLE.test(batchesTable)) throw new Error(`geçersiz tablo: ${batchesTable}`);
   const job = `"${schema}".job`;
   const queue = `"${schema}".queue`;
 
@@ -112,7 +114,7 @@ export function createPrismaOpsProbe(
          FROM ${queue} q LEFT JOIN ${job} j ON j.name = q.name
          GROUP BY q.name ORDER BY q.name`,
       );
-      const extra = [await contentJobsQueue(prisma, contentJobsTable), await erasureStorageQueue(prisma, erasuresTable)].filter((q) => q !== null);
+      const extra = [await contentJobsQueue(prisma, contentJobsTable), await erasureStorageQueue(prisma, erasuresTable), await moderationBatchesQueue(prisma, batchesTable)].filter((q) => q !== null);
       return [...rows, ...extra].map((r) => ({
         name: r.name,
         waiting: r.waiting,
@@ -154,6 +156,32 @@ async function contentJobsQueue(prisma: PrismaClient, table: string) {
     FROM ${table}
     WHERE status IN ('QUEUED', 'PROCESSING') OR finished_at > now() - interval '24 hours'`);
   return { name: CONTENT_JOBS_QUEUE, ...row! };
+}
+
+/** Toplu moderasyon partileri (#183): ikinci onaydan sonra başlatan adına, onaylayanın isteği içinde işlenir; sunucu yarıda kapanırsa parti bitmemiş kalır. */
+export const MODERATION_BATCHES_QUEUE = "moderation.batches";
+/** Bitmemiş partinin "süren" sayıldığı süre; aşan parti takılmış (bekleyen) sayılır ve kuyruğu `degraded` yapar. */
+const MODERATION_BATCH_STUCK_SECONDS = 300;
+
+/**
+ * Tablo yoksa null. Çalışan: son 5 dakikada açılmış bitmemiş parti; bekleyen: 5 dakikadan eski bitmemiş parti (yarıda kalmış, kalan
+ * kayıtlar uygulanmadı; oldest = yaşı); tamamlanan: son 24 saatte biten parti. Başarısız sayısı yoktur (kısmi başarısızlık parti sonucudur).
+ */
+async function moderationBatchesQueue(prisma: PrismaClient, table: string) {
+  const [exists] = await prisma.$queryRaw<Array<{ ok: boolean }>>`SELECT to_regclass(${table}) IS NOT NULL AS ok`;
+  if (!exists?.ok) return null;
+  const [row] = await prisma.$queryRawUnsafe<
+    Array<{ waiting: number; active: number; failed24h: number; completed24h: number; oldest: number | null }>
+  >(`
+    SELECT
+      count(*) FILTER (WHERE finished_at IS NULL AND created_at < now() - interval '${MODERATION_BATCH_STUCK_SECONDS} seconds')::int AS waiting,
+      count(*) FILTER (WHERE finished_at IS NULL AND created_at >= now() - interval '${MODERATION_BATCH_STUCK_SECONDS} seconds')::int AS active,
+      0::int AS "failed24h",
+      count(*) FILTER (WHERE finished_at > now() - interval '24 hours')::int AS "completed24h",
+      floor(EXTRACT(EPOCH FROM now() - min(created_at) FILTER (WHERE finished_at IS NULL AND created_at < now() - interval '${MODERATION_BATCH_STUCK_SECONDS} seconds')))::float8 AS oldest
+    FROM ${table}
+    WHERE finished_at IS NULL OR finished_at > now() - interval '24 hours'`);
+  return { name: MODERATION_BATCHES_QUEUE, ...row! };
 }
 
 /** Anonimleştirilen hesapların depo temizliği (#228): pg-boss'taki `account-erasure.cleanup` cron'u turları, bu satır ise işi gösterir. */

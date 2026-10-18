@@ -9,6 +9,17 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.36.0 — 2026-10-16 (Mert, #183 yüksek hacimli toplu işlemde ikinci onay)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, yeni yetki/audit işlemleri; `admin.moderation.{polls,comments}.bulk` yeni bir başarı durumu (202) ve `BulkPreview` yeni bir zorunlu `approval` alanı alır (web ile birlikte yayınlanır).
+
+- **Eklendi:** `admin.moderation.bulkApprovals.list` / `.get` / `.approve` / `.reject` / `.cancel`. Eşik aşılınca `bulk` hiçbir şey uygulamaz, bekleyen bir onay talebi açar (**202**, `BulkApprovalView`). Başlatandan farklı bir ADMIN+ kayıt listesini görerek taze MFA step-up ile onaylar; parti başlatan adına, başlatanın yetkisiyle yeniden hesaplanarak uygulanır. Eşik: başlatanın son 60 dakikadaki ONAYSIZ uygulanan kayıt sayısı + bu işlemin değişecek kayıt sayısı >= 20 (`BULK_APPROVAL_THRESHOLD`); talep 30 dakika geçerli, başlatan başına en çok 3 bekleyen.
+- **Değişti:** `BulkPreview.approval` (`required`, `threshold`, `windowMinutes`, `windowApplied`); `bulk` 409 `too_many_pending`.
+- Şemalar/sabitler: `BulkApprovalView`, `BulkApprovalDetail`, `BulkApprovalDecision`, `BulkApprovalStatus`, `BulkApprovalListQuery`, `BULK_APPROVAL_THRESHOLD`, `BULK_APPROVAL_WINDOW_MINUTES`, `BULK_APPROVAL_TTL_MINUTES`, `BULK_APPROVAL_PENDING_MAX`.
+- **Yetki/audit:** yeni işlemler `moderation.bulk.approve` (admin: onay, ret) ve `moderation.bulk.cancel` (moderatör: kendi talebini geri çekme); audit işlemleri `request`, `approve`, `reject`, `cancel`; yeni audit hedef türü `BULK_APPROVAL`.
+- **Sistem audit:** `moderation.bulk.expire` (worker, aktörsüz): süresi dolan talepler kalıcı `EXPIRED` olur; `BulkApprovalView.status = EXPIRED` artık hem okunurken hem kalıcıdır.
+- **İnceleme düzeltmeleri:** eşik kontrolü ve parti açılışı atomik (rezervasyonlu pencere); onay transaction'ında başlatanın yetkisi yeniden doğrulanır (`409 initiator_changed` artık transaction içinden de döner); hata ayrıntı kodu istemciye `UiError.detail` olarak iletilir.
+
 ## 1.35.0 — 2026-10-16 (Mert, #183 kullanıcı birleşik geçmişi)
 
 Kırıcı değişiklik yok: yeni salt okuma endpoint'leri ve şemalar; yeni yetki veya audit işlemi yok (mevcut `user.read`, ADMIN+).
