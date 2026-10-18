@@ -85,7 +85,9 @@ test("an expired verification reopens the code field so the reviewer can verify 
   await expect(dialog.getByLabel("Doğrulayıcı kodun")).toHaveValue("");
   await dialog.getByLabel("Doğrulayıcı kodun").fill("222222");
   await dialog.getByRole("button", { name: "Onayla ve uygula", exact: true }).click();
-  await expect(page.getByText(/Onaylandı ve uygulandı/)).toBeVisible();
+  // Success is rendered in both the inline status and global notification.
+  // Narrow to one visible occurrence rather than Playwright's strict multi-match error.
+  await expect(page.getByText(/Onaylandı ve uygulandı/).first()).toBeVisible();
   expect(codes).toEqual(["111111", "222222"]);
   expect(mock.unexpected).toEqual([]);
 });
