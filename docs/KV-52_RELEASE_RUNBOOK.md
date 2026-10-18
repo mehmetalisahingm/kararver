@@ -40,16 +40,18 @@ Geri alma tetikleyicisi: §5'teki ölçütler · Geri alma sorumlusu: Faruk
 - [ ] Harici uptime izleme production `/health` ve web ana sayfasını yokluyor; bildirim sorumluya düşüyor. `/health` DB ve worker kesintisinde 503 döner (#263).
 - [ ] Acil durum anahtarları ve bakım modu production'da denendi (aç → yayılma süresi → kapat; panelde "Acil durum anahtarları").
 - [ ] Aday SHA donduruldu: yayın bitene kadar main'e yalnız yayını engelleyen düzeltme girer.
+- [ ] **Staging'de kuru çalıştırma** (aday SHA ile, §4'ün aynısı): bakım modu aç → smoke → bakım kapat → önceki deployment'a rollback → aday SHA'ya dönüş. Süreler ve sonuç #54'e yazılır. Bu sırada staging `STAGING_PINNED_SHA` ile sabitlenir (#257).
 
 **T−1 saat:**
 - [ ] Aday SHA'nın Foundation CI'ı yeşil; staging bu SHA'da (`/health` → `release.sha`) ve staging smoke PASS.
 - [ ] Mehmet'in GO kaydı #54'te (§2 şablonu).
+- [ ] Production izleme değişkenleri tanımlı (#267): `PROD_API_URL`, `PROD_WEB_URL` ve **`PROD_RELEASE_SHA` = aday SHA**. Boş kalırsa onaysız deploy alarm vermez.
 
 ## 4. Yayın adımları
 
 | # | Adım | Komut / yer | Doğrulama |
 |---|---|---|---|
-| 1 | Bakım modu açık (kayıt ve yazma kapalı) | Panel → Acil durum (SUPER_ADMIN, gerekçe) | `/v1/config` → `maintenance: true` |
+| 1 | Bakım modu açık: GET dışındaki istekler 503 `MAINTENANCE` (kayıt, oy, yorum, yayın kapalı). **Okuma, giriş/çıkış ve `/admin` açık kalır** | Panel → Acil durum (SUPER_ADMIN, gerekçe) | `/v1/config` → `maintenance: true`; bir yazma isteği 503 |
 | 2 | Yayın öncesi yedek | Worker yedek işi elle ya da `apps/worker/scripts/scheduled-backup.ts` | `ops_backup_runs`'ta yeni satır; bucket'ta iki dosya |
 | 3 | Aday SHA'yı production'a deploy | Railway: onaylı SHA (yalnız main'den) | `preDeployCommand` migration'ları uyguladı; `/health` 200 ve `release.sha` = aday |
 | 4 | Web'i aynı SHA'dan yayınla | Vercel production | Ana sayfa 200, `"demo":false` |
@@ -59,6 +61,14 @@ Geri alma tetikleyicisi: §5'teki ölçütler · Geri alma sorumlusu: Faruk
 | 8 | Duyuru | Mehmet | — |
 
 Adımlardan biri başarısızsa yayın durur, bakım modu açık kalır, §5 uygulanır.
+
+**Doğrulama sırası (7. adımdan sonra ve her geri dönüşten sonra), sırayla:**
+1. `GET /health` → 200, `status: ok`, `database: ok`, `worker: ready`, `release.sha` beklenen SHA.
+2. `GET /v1/config` → `maintenance` beklenen değerde; özellik anahtarları beklenen değerde.
+3. `GET /v1/categories` ve `GET /v1/feed` → 200 (okuma yolu).
+4. Web ana sayfası → 200, `"demo":false`.
+5. Gerçek hesapla giriş → bir oy → oyu geri değiştirme (yazma yolu; bakım kapalıyken).
+6. Operasyon paneli: 5xx oranı ve P95 olağan, kuyrukta birikme yok, alarm yok.
 
 ## 5. Geri dönüş tetikleyicileri ve eylem
 
