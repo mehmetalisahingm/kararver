@@ -32,6 +32,8 @@ jobs:
       TARGET: ${{ matrix.target }}
       TARGET_TITLE: ${{ matrix.target == 'staging' && 'Staging' || 'Production' }}
       ALARM_LABEL: ${{ matrix.target }}-alarm
+      # Production alarmı yedek sorumluya da gider (ilk sorumlu ulaşılamazsa).
+      RESPONDERS: ${{ matrix.target == 'production' && '@farukkemree · yedek: @mehmetalisahingm' || '@farukkemree' }}
       API_URL: ${{ matrix.target == 'staging' && (vars.STAGING_API_URL || 'https://api-staging-45cb.up.railway.app') || vars.PROD_API_URL }}
       WEB_URL: ${{ matrix.target == 'staging' && (vars.STAGING_WEB_URL || 'https://kararver-staging.vercel.app') || vars.PROD_WEB_URL }}
       # Worker heartbeat'i 10 sn'de bir yazılır; 2 dakikadan eskiyse worker durmuş sayılır.
@@ -174,7 +176,8 @@ jobs:
               problems+=("staging sabitlenen SHA'da değil: beklenen ${pinned:0:12}, çalışan ${STAGING_SHA} (kabul testi sırasında beklenmeyen deploy)")
             fi
           elif [ "$TARGET" = "production" ]; then
-            echo "- Production: onaylı sürüm değişkeni (PROD_RELEASE_SHA) yok; sürüm denetimi atlandı" >> "$GITHUB_STEP_SUMMARY"
+            # Production izleniyorsa yayındadır: onaylı sürüm tanımsızsa onaysız bir deploy alarm vermez (KV-52 T−1 sa).
+            problems+=("production izleniyor ama PROD_RELEASE_SHA tanımlı değil: onaysız deploy fark edilmez (KV-52 karar kaydındaki SHA girilmeli)")
           elif [[ "$STAGING_SHA" =~ ^[0-9a-f]{12}$ ]] && [[ "$green_sha" =~ ^[0-9a-f]{40}$ ]] && [ "${green_sha:0:12}" != "$STAGING_SHA" ]; then
             # "ahead": yeşil commit staging'in ilerisinde. "behind"/"identical": staging daha yeni ya da aynı (alarm yok).
             # Yalnız API/worker'ı etkileyen değişiklik sayılır: web (Vercel), doküman ve workflow değişikliği API deploy'u gerektirmez.
@@ -221,7 +224,7 @@ jobs:
             if [ -n "$open" ]; then gh issue close "$open" -R "$GITHUB_REPOSITORY" --comment "✅ $TARGET_TITLE yeniden sağlıklı ($RUN_URL)."; fi
             exit 0
           fi
-          msg=$(printf '**%s sağlık kontrolü başarısız** (%s)\n\n%s\n\nRunbook: docs/KV-49_OPERATIONS.md "Olay müdahalesi". Sorumlu: @farukkemree' "$TARGET_TITLE" "$RUN_URL" "$(grep -v '^$' problems.txt | sed 's/^/- /')")
+          msg=$(printf '**%s sağlık kontrolü başarısız** (%s)\n\n%s\n\nRunbook: docs/KV-49_OPERATIONS.md "Olay müdahalesi". Sorumlu: %s' "$TARGET_TITLE" "$RUN_URL" "$(grep -v '^$' problems.txt | sed 's/^/- /')" "$RESPONDERS")
           if [ -n "$open" ]; then
             gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$msg"
           else
