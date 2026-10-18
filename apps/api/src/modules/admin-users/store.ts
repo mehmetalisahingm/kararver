@@ -114,7 +114,7 @@ export type PasswordResetResult =
   | { kind: "limited"; retryAfterMs: number };
 
 export interface AdminUserStore {
-  listSessions(userId: string, afterId: string | null, limit: number, now: Date): Promise<Array<{ id: string; createdAt: Date; expiresAt: Date; lastSeenAt: Date | null; ipAddress: string | null; userAgent: string | null }>>;
+  listSessions(userId: string, afterId: string | null, limit: number, now: Date, status: "active" | "revoked" | "expired"): Promise<Array<{ id: string; createdAt: Date; expiresAt: Date; revokedAt: Date | null; lastSeenAt: Date | null; ipAddress: string | null; userAgent: string | null }>>;
   revokeSessions(input: Mutation & { userId: string; sessionId?: string; reason: string }): Promise<number | null>;
   list(filter: UserListFilter, limit: number): Promise<AdminUserRow[]>;
   get(id: string, now: Date): Promise<AdminUserDetailRow | null>;

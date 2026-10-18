@@ -405,9 +405,12 @@ export function createPrismaAdminUserStore(prisma: PrismaClient, options: { enfo
       }, { maxWait: 10_000, timeout: 30_000 });
     },
 
-    async listSessions(userId, afterId, limit, now) {
-      return prisma.session.findMany({ where: { userId, revokedAt: null, expiresAt: { gt: now }, ...(afterId ? { id: { lt: afterId } } : {}) }, orderBy: { id: "desc" }, take: limit,
-        select: { id: true, createdAt: true, expiresAt: true, lastSeenAt: true, ipAddress: true, userAgent: true } });
+    async listSessions(userId, afterId, limit, now, status) {
+      const state = status === "revoked" ? { revokedAt: { not: null } } :
+        status === "expired" ? { revokedAt: null, expiresAt: { lte: now } } :
+        { revokedAt: null, expiresAt: { gt: now } };
+      return prisma.session.findMany({ where: { userId, ...state, ...(afterId ? { id: { lt: afterId } } : {}) }, orderBy: { id: "desc" }, take: limit,
+        select: { id: true, createdAt: true, expiresAt: true, revokedAt: true, lastSeenAt: true, ipAddress: true, userAgent: true } });
     },
     async revokeSessions(input) {
       return prisma.$transaction(async tx => {

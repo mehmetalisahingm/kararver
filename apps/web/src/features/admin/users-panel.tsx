@@ -265,19 +265,25 @@ function DataExports({ id, admin }: { id: string; admin: AdminClient }) {
 }
 
 function UserSessions({ id, admin }: { id: string; admin: AdminClient }) {
-  const sessions = useRemoteList(useCallback((cursor, signal) => admin.userSessions(id, cursor, signal), [admin, id]));
+  const [status, setStatus] = useState<"active" | "revoked" | "expired">("active");
+  const sessions = useRemoteList(useCallback((cursor, signal) => admin.userSessions(id, cursor, signal, status), [admin, id, status]));
   const [selection, setSelection] = useState<string | null>(null);
-  return <section className="kv-stack" aria-label="Aktif oturumlar">
-    <h3>Aktif oturumlar</h3>
-    <p className="kv-muted">Kapatılan oturumda kullanıcı yeniden giriş yapmalıdır.</p>
-    <button className="kv-button" disabled={!sessions.items.length} onClick={() => setSelection("all")}>Tüm oturumları kapat</button>
+  return <section className="kv-stack" aria-label="Kullanıcı oturumları">
+    <h3>Oturum güvenliği</h3>
+    <p className="kv-muted">Ağlar ve cihazlar gizlilik için maskelenir. İptal edilen bir oturumla yeniden giriş gerekir.</p>
+    <label>Oturum durumu
+      <select className="kv-input" value={status} onChange={e => { setSelection(null); setStatus(e.target.value as typeof status); }}>
+        <option value="active">Aktif</option><option value="revoked">İptal edilmiş</option><option value="expired">Süresi dolmuş</option>
+      </select>
+    </label>
+    {status === "active" ? <button className="kv-button" disabled={!sessions.items.length} onClick={() => setSelection("all")}>Tüm aktif oturumları kapat</button> : null}
     {sessions.items.map(session => <article className="kv-card" key={session.id}>
-      <p>{session.userAgent ?? "Bilinmeyen cihaz"}</p>
-      <p>Ağ (maskeli): {session.ipAddress ?? "Kaydedilmedi"} · Son etkinlik: {formatDate(session.lastSeenAt)} · Bitiş: {formatDate(session.expiresAt)}</p>
-      <button className="kv-button kv-button--secondary" onClick={() => setSelection(session.id)}>Bu oturumu kapat</button>
+      <p>{session.userAgent ?? "Bilinmeyen cihaz"} · {session.status === "REVOKED" ? "İptal edildi" : session.status === "EXPIRED" ? "Süresi doldu" : "Aktif"}</p>
+      <p>Ağ (maskeli): {session.ipAddress ?? "Kaydedilmedi"} · Son etkinlik: {formatDate(session.lastSeenAt)} · Bitiş: {formatDate(session.expiresAt)}{session.revokedAt ? " · İptal: " + formatDate(session.revokedAt) : ""}</p>
+      {session.status === "ACTIVE" && status === "active" ? <button className="kv-button kv-button--secondary" onClick={() => setSelection(session.id)}>Bu oturumu kapat</button> : null}
     </article>)}
-    <ListState remote={sessions} empty="Aktif oturum bulunmuyor." />
-    <ActionDialog open={selection !== null} title={selection === "all" ? "Tüm oturumları kapat" : "Oturumu kapat"} submitLabel="Oturumu kapat" onClose={() => setSelection(null)} onSubmit={async reason => {
+    <ListState remote={sessions} empty={status === "active" ? "Aktif oturum bulunmuyor." : status === "revoked" ? "İptal edilmiş oturum yok." : "Süresi dolmuş oturum yok."} />
+    <ActionDialog open={selection !== null && status === "active"} title={selection === "all" ? "Tüm oturumları kapat" : "Oturumu kapat"} submitLabel="Oturumu kapat" onClose={() => setSelection(null)} onSubmit={async reason => {
       await admin.revokeUserSessions(id, reason, selection === "all" ? undefined : selection ?? undefined);
       sessions.reload();
     }}><p>Kullanıcının erişimi kesilecek. İşlem gerekçesi yönetim geçmişine kaydedilir.</p></ActionDialog>
