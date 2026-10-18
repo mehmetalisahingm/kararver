@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
-import { buildHealth, HEALTH_DB_TIMEOUT_MS, WORKER_STARTUP_GRACE_MS, type HealthDeps } from "../src/modules/ops/health.ts";
+import { buildHealth, cachedDatabaseCheck, HEALTH_DB_TIMEOUT_MS, WORKER_STARTUP_GRACE_MS, type HealthDeps } from "../src/modules/ops/health.ts";
 import { createHarness, memoryBackend, type Harness } from "./support/harness.ts";
 
 const NOW = new Date("2026-10-18T10:00:00.000Z");
@@ -77,6 +77,35 @@ describe("/health kuralları", () => {
     const separate = await buildHealth(deps({ readHeartbeat: none, workerExpected: false }));
     assert.equal(separate.httpStatus, 200);
     assert.equal(separate.body.status, "ok");
+  });
+
+  test("önbellekli DB denetimi: eşzamanlı istekler tek sorgu, süre içinde yeniden kullanım, süre sonunda yeni sorgu", async () => {
+    let calls = 0;
+    let release!: () => void;
+    const probe = {
+      database: () =>
+        new Promise<{ latencyMs: number; version: string }>((resolve) => {
+          calls++;
+          release = () => resolve({ latencyMs: 1, version: "17" });
+        }),
+    };
+    let clock = 0;
+    const check = cachedDatabaseCheck(probe, { cacheMs: 5_000, nowMs: () => clock });
+    const pending = [check(), check(), check()];
+    release();
+    const results = await Promise.all(pending);
+    assert.equal(calls, 1, "eşzamanlı üç istek tek sorgu");
+    assert.ok(results.every((r) => r.status === "ok"));
+    clock = 4_000;
+    await check();
+    assert.equal(calls, 1, "5 sn içinde önbellekten");
+    clock = 6_000;
+    const next = check();
+    release();
+    await next;
+    assert.equal(calls, 2, "süre dolunca yeni sorgu");
+    const { body } = await buildHealth(deps({ databaseCheck: check }));
+    assert.equal(body.database.status, "ok");
   });
 
   test("DB yoklaması verilmemişse bilinmiyor ve 200 (testler, yalnız API süreci)", async () => {

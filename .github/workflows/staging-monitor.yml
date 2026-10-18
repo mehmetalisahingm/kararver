@@ -23,8 +23,8 @@ jobs:
     timeout-minutes: 5
     env:
       API_URL: ${{ vars.STAGING_API_URL || 'https://api-staging-45cb.up.railway.app' }}
-      # Worker heartbeat'i 10 sn'de bir yazılır; 2 dakikadan eskiyse worker durmuş sayılır.
-      MAX_WORKER_AGE_MS: "120000"
+      # Worker heartbeat'i 10 sn'de bir yazılır; 3 dakikadan eskiyse durmuş sayılır (/health ile aynı eşik, WORKER_OK_SECONDS).
+      MAX_WORKER_AGE_MS: "180000"
     steps:
       - name: Sağlık kontrolü
         id: health

@@ -95,7 +95,7 @@ import { registerMetricsRoutes } from "./modules/metrics/routes.ts";
 import type { MetricsStore } from "./modules/metrics/store.ts";
 import type { OpsProbe } from "./modules/ops/probe.ts";
 import { registerOpsRoutes } from "./modules/ops/routes.ts";
-import { buildHealth } from "./modules/ops/health.ts";
+import { buildHealth, cachedDatabaseCheck } from "./modules/ops/health.ts";
 import { emergencySwitchesView } from "./modules/ops/switches.ts";
 import { createOpsTelemetry, type OpsTelemetry } from "./modules/ops/telemetry.ts";
 
@@ -496,9 +496,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   // KV-49 (#51): DB ve worker gerçekten sağlıklı mı (#262); 503 yalnız "down"da. Kurallar: modules/ops/health.ts.
   // Sürüm (deploy SHA): Railway GitHub entegrasyonu RAILWAY_GIT_COMMIT_SHA verir. Saat gerçek zamandır (uptime izleme).
   const healthStartedAt = new Date();
+  const healthDatabase = cachedDatabaseCheck(deps.opsProbe);
   app.get("/health", async (_request, reply) => {
     const { httpStatus, body } = await buildHealth({
       probe: deps.opsProbe,
+      databaseCheck: healthDatabase,
       now: () => new Date(),
       startedAt: healthStartedAt,
       env: config.appEnv,

@@ -10,6 +10,8 @@ import { classifyWorker, readHeartbeatFile } from "./status.ts";
 import type { OpsProbe } from "./probe.ts";
 
 export const HEALTH_DB_TIMEOUT_MS = 2_000;
+/** /health herkese açık: DB yoklaması bu süre boyunca paylaşılır, eşzamanlı istekler tek sorguyu bekler (havuz dolmasın). */
+export const HEALTH_DB_CACHE_MS = 5_000;
 /** Worker'ın aynı serviste ilk heartbeat'i yazması için tanınan süre (launcher 2 sn'de yeniden başlatır, heartbeat 10 sn'de bir). */
 export const WORKER_STARTUP_GRACE_MS = 120_000;
 
@@ -22,6 +24,8 @@ export type HealthDeps = {
   workerExpected: boolean;
   readHeartbeat?: () => { status: string; at: string } | null;
   dbTimeoutMs?: number;
+  /** Verilirse DB durumu buradan okunur (uygulama önbellekli denetimi verir, bkz. cachedDatabaseCheck). */
+  databaseCheck?: () => Promise<HealthBody["database"]>;
 };
 
 export type HealthBody = {
@@ -33,7 +37,7 @@ export type HealthBody = {
   release: { sha: string | null; env: string };
 };
 
-async function databaseState(deps: HealthDeps): Promise<HealthBody["database"]> {
+async function databaseState(deps: Pick<HealthDeps, "probe" | "dbTimeoutMs">): Promise<HealthBody["database"]> {
   if (!deps.probe) return { status: "unknown" };
   let timer: NodeJS.Timeout | undefined;
   try {
@@ -50,6 +54,29 @@ async function databaseState(deps: HealthDeps): Promise<HealthBody["database"]> 
   }
 }
 
+/**
+ * Önbellekli ve birleştirilmiş DB denetimi: sonuç HEALTH_DB_CACHE_MS boyunca yeniden kullanılır; yoklama sürerken gelen
+ * istekler aynı sözü bekler. Kesintide her /health isteği yeni bir sorgu açıp bağlantı havuzunu doldurmaz.
+ */
+export function cachedDatabaseCheck(
+  probe: Pick<OpsProbe, "database"> | undefined,
+  options: { cacheMs?: number; timeoutMs?: number; nowMs?: () => number } = {},
+): () => Promise<HealthBody["database"]> {
+  const cacheMs = options.cacheMs ?? HEALTH_DB_CACHE_MS;
+  const nowMs = options.nowMs ?? Date.now;
+  let last: { at: number; value: HealthBody["database"] } | null = null;
+  let inflight: Promise<HealthBody["database"]> | null = null;
+  return () => {
+    if (last && nowMs() - last.at < cacheMs) return Promise.resolve(last.value);
+    inflight ??= databaseState({ probe, dbTimeoutMs: options.timeoutMs }).then((value) => {
+      last = { at: nowMs(), value };
+      inflight = null;
+      return value;
+    });
+    return inflight;
+  };
+}
+
 function workerState(deps: HealthDeps): HealthBody["worker"] {
   const now = deps.now();
   const beat = (deps.readHeartbeat ?? readHeartbeatFile)();
@@ -64,7 +91,7 @@ function workerState(deps: HealthDeps): HealthBody["worker"] {
 }
 
 export async function buildHealth(deps: HealthDeps): Promise<{ httpStatus: 200 | 503; body: HealthBody }> {
-  const database = await databaseState(deps);
+  const database = deps.databaseCheck ? await deps.databaseCheck() : await databaseState(deps);
   const worker = workerState(deps);
   const down = database.status === "down" || worker.health === "down";
   const status = down ? "down" : worker.health === "degraded" ? "degraded" : "ok";
