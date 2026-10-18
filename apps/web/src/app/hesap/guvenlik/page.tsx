@@ -139,7 +139,7 @@ function SecuritySettings({ userId }: { userId: string }) {
           <button className="kv-button" disabled={busy}>Kurtarma kodunu kullan</button>
         </form>}
       </>}
-      <p className="kv-help">Yeniden doğrulama, kritik işlemde bir kez kullanılır. Rol değişimi ikinci bir süper adminin bağımsız onayını da gerektirir; koruma sunucudaki etkinleştirme ayarına bağlıdır.</p>
+      <p className="kv-help">Yeniden doğrulama kritik işlemde bir kez kullanılır. Yeni SUPER_ADMIN ataması normal API üzerinden yasaktır. Mevcut SUPER_ADMIN rolünün düşürülmesi ayrıca yürürlükteki MFA/bağımsız onay kurallarına ve son yönetici korumasına tabidir.</p>
       <Link href="/hesap">Hesabıma dön</Link>
     </section>
     {isSuperAdmin && <RoleApprovals api={api} userId={userId} />}
@@ -149,7 +149,7 @@ function SecuritySettings({ userId }: { userId: string }) {
 type Approval = { id: string; userId: string; initiatorId: string; role: string; expectedRole: string; reason: string; status: string; expiresAt: string };
 function RoleApprovals({ api, userId }: { api: HttpClient; userId: string }) {
   const [target, setTarget] = useState("");
-  const [role, setRole] = useState("SUPER_ADMIN");
+  const [role, setRole] = useState("ADMIN");
   const [reason, setReason] = useState("");
   const [approvalId, setApprovalId] = useState("");
   const [approval, setApproval] = useState<Approval | null>(null);
@@ -162,6 +162,12 @@ function RoleApprovals({ api, userId }: { api: HttpClient; userId: string }) {
     try {
       let id = approvalId.trim();
       if (action === "request") {
+        // A second SUPER_ADMIN may never be created from the HTTP API.
+        // Only existing SUPER_ADMIN demotions are meaningful approval requests.
+        if (target.trim() === userId) throw new Error("Kendi SUPER_ADMIN rolün için ikinci onay talebi açamazsın.");
+        const current = await api.request("admin.users.get", { params: { id: target.trim() } }) as Envelope<{ roles: string[] }>;
+        if (!current.data.roles.includes("SUPER_ADMIN"))
+          throw new Error("İkinci onay yalnız mevcut bir SUPER_ADMIN rolünü düşürmek için kullanılabilir.");
         const result = await api.request("admin.roleApprovals.request", { body: { userId: target.trim(), role, reason } }) as Envelope<{ id: string }>;
         id = result.data.id; setApprovalId(id);
       } else if (action === "approve") {
@@ -175,11 +181,11 @@ function RoleApprovals({ api, userId }: { api: HttpClient; userId: string }) {
   }
   return <section className="kv-card screen-stack" aria-label="Kritik rol onayları">
     <h2>Kritik rol onayları</h2>
-    <p>Önce MFA ile yeniden doğrula. Talebi ikinci bir süper admin inceler ve kendi MFA doğrulamasıyla onaylar. Talep 10 dakika geçerlidir.</p>
+    <p>Yeni SUPER_ADMIN ataması kapalıdır. Bu bölüm yalnız önceden SUPER_ADMIN olan başka bir hesabın rolünü azaltma içindir. Talep 10 dakika geçerlidir ve bağımsız bir SUPER_ADMIN onayı gerekir; tek süper admin politikasında onay akışı bloke kalır.</p>
     {error && <p role="alert">{error}</p>}
     <form className="screen-stack" onSubmit={e => void act(e, "request")}>
       <label>Hedef kullanıcı numarası<input className="kv-input" required value={target} onChange={e => setTarget(e.target.value)} /></label>
-      <label>İstenen rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value)}>{["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"].map(value => <option key={value}>{value}</option>)}</select></label>
+      <label>İstenen rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value)}>{["USER", "MODERATOR", "ADMIN"].map(value => <option key={value}>{value}</option>)}</select></label>
       <label>Rol değişimi gerekçesi<textarea className="kv-input" required minLength={3} maxLength={500} value={reason} onChange={e => setReason(e.target.value)} /></label>
       <button className="kv-button" disabled={busy}>İkinci yöneticiye onay talebi oluştur</button>
     </form>
@@ -193,7 +199,8 @@ function RoleApprovals({ api, userId }: { api: HttpClient; userId: string }) {
       <p>Talep eden: <code>{approval.initiatorId}</code></p>
       <p>Gerekçe: {approval.reason}</p>
       <p role="status">Durum: {approval.status} · Son geçerlilik: {new Date(approval.expiresAt).toLocaleString("tr-TR")}</p>
-      {approval.status === "PENDING" && approval.initiatorId !== userId && approval.userId !== userId && <form onSubmit={e => void act(e, "approve")}><button className="kv-button" disabled={busy}>Bağımsız incelemeyi MFA ile onayla</button></form>}
+      {approval.role === "SUPER_ADMIN" && approval.expectedRole !== "SUPER_ADMIN" ? <p role="alert">Eski bir SUPER_ADMIN yükseltme talebi. Tek süper admin politikası nedeniyle onaylanamaz.</p> : null}
+      {approval.status === "PENDING" && approval.role !== "SUPER_ADMIN" && approval.expectedRole === "SUPER_ADMIN" && approval.initiatorId !== userId && approval.userId !== userId && <form onSubmit={e => void act(e, "approve")}><button className="kv-button" disabled={busy}>Bağımsız incelemeyi MFA ile onayla</button></form>}
       {approval.status === "APPROVED" && approval.initiatorId === userId && <p>Yeniden MFA doğrulaması yap; kullanıcı yönetiminde aynı hedef, rol ve gerekçeyle bu onay numarasını kullan.</p>}
     </div>}
   </section>;
