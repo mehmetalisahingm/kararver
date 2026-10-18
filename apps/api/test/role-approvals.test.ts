@@ -169,11 +169,11 @@ test("single-super-admin policy blocks legacy or new promotion approvals before 
     body: { userId: "target", role: "SUPER_ADMIN", reason: "Yetki verme girişimi" },
     viewer: { id: "actor", sessionId: "session" }, request: { id: "request" }, authorize,
   }), (error: unknown) => error instanceof ApiError && error.code === "FORBIDDEN"
-    && error.details?.[0]?.code === "super_admin_reserved");
+    && error.details.some(detail => typeof detail === "object" && detail !== null && "code" in detail && detail.code === "super_admin_reserved"));
   await assert.rejects(handlers.get("admin.roleApprovals.approve")({
     params: { id: "old-approval" }, body: { reason: "Eski onayı işleme denemesi" },
     viewer: { id: "actor", sessionId: "session" }, request: { id: "request" }, authorize,
   }), (error: unknown) => error instanceof ApiError && error.code === "FORBIDDEN"
-    && error.details?.[0]?.code === "super_admin_reserved");
+    && error.details.some(detail => typeof detail === "object" && detail !== null && "code" in detail && detail.code === "super_admin_reserved"));
   assert.equal(writes, 0);
 });
