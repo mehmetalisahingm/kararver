@@ -100,6 +100,25 @@ describe("admin rol ataması (postgres)", { skip: backend ? false : "TEST_DATABA
     assert.equal(trail[2]!.requestId, revoked.headers[headers.requestId.toLowerCase()]);
   });
 
+  test("tek SUPER_ADMIN: HTTP rol API'si eşzamanlı yeni SUPER_ADMIN atamalarını 403 ile reddeder; diğer roller çalışır", async () => {
+    const first = await signUp();
+    const second = await signUp();
+    const before = await db.userRole.count({ where: { role: "SUPER_ADMIN" } });
+    const [a, b] = await Promise.all([put(first.id, "SUPER_ADMIN"), put(second.id, "SUPER_ADMIN")]);
+    for (const response of [a, b]) {
+      assertError(response, 403, "FORBIDDEN");
+      assert.equal(response.json().error.details?.[0]?.code, "super_admin_reserved");
+    }
+    assert.equal(await roleOf(first.id), null);
+    assert.equal(await roleOf(second.id), null);
+    assert.equal(await db.userRole.count({ where: { role: "SUPER_ADMIN" } }), before);
+    assert.deepEqual(await audits(first.id), []);
+    assert.deepEqual(await audits(second.id), []);
+    assert.equal((await put(first.id, "ADMIN")).statusCode, 200, "normal ADMIN yetkisi çalışmaya devam eder");
+    assertError(await put(first.id, "SUPER_ADMIN"), 403, "FORBIDDEN");
+    assert.equal((await roleOf(first.id))?.role, "ADMIN");
+  });
+
   test("yetki: ADMIN rol atayamaz (403), kendi rolünü değiştirmek 409, olmayan kullanıcı 404, gerekçe zorunlu", async () => {
     const admin = await signUp();
     await db.userRole.create({ data: { userId: admin.id, role: "ADMIN", grantedById: root.id } });
