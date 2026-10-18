@@ -150,3 +150,30 @@ test("approval route checks resource authorization before any store mutation", a
   }), (error: unknown) => error instanceof ApiError && error.code === "FORBIDDEN");
   assert.equal(writes, 0);
 });
+
+
+test("single-super-admin policy blocks legacy or new promotion approvals before store mutations", async () => {
+  const handlers = new Map<string, any>();
+  let writes = 0;
+  registerRoleApprovalRoutes(((id: string, handler: any) => handlers.set(id, handler)) as any, {
+    store: {
+      request: async () => { writes++; throw new Error("must not request"); },
+      target: async () => ({ targetUserId: "target", requestedRole: "SUPER_ADMIN" }),
+      approve: async () => { writes++; throw new Error("must not approve"); },
+    } as any,
+    users: { target: async () => ({ id: "target", role: "USER", status: "ACTIVE", deleted: false }), activeSuperAdminCount: async () => 1 } as any,
+    now: () => new Date(),
+  });
+  const authorize = async () => {};
+  await assert.rejects(handlers.get("admin.roleApprovals.request")({
+    body: { userId: "target", role: "SUPER_ADMIN", reason: "Yetki verme girişimi" },
+    viewer: { id: "actor", sessionId: "session" }, request: { id: "request" }, authorize,
+  }), (error: unknown) => error instanceof ApiError && error.code === "FORBIDDEN"
+    && error.details?.[0]?.code === "super_admin_reserved");
+  await assert.rejects(handlers.get("admin.roleApprovals.approve")({
+    params: { id: "old-approval" }, body: { reason: "Eski onayı işleme denemesi" },
+    viewer: { id: "actor", sessionId: "session" }, request: { id: "request" }, authorize,
+  }), (error: unknown) => error instanceof ApiError && error.code === "FORBIDDEN"
+    && error.details?.[0]?.code === "super_admin_reserved");
+  assert.equal(writes, 0);
+});
