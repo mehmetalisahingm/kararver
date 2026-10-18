@@ -1,6 +1,6 @@
-# KV-37 §bulk — Toplu moderasyon, güvenli geri alma ve ikinci onay (#183, dilim 1–2 ve 4)
+# KV-37 §bulk — Toplu moderasyon, güvenli geri alma ve ikinci onay (#183, dilim 1–2, 4 ve 5)
 
-Seçilen anket veya yorumlara **tek gerekçeyle** `HIDE` / `REMOVE` / `RESTORE`. Bu belge #183'ün ilk iki dilimini anlatır: kapsamlı (scoped) toplu işlem, önizleme, kısmi başarısızlık, parti geçmişi (§1–4) **güvenli geri alma** (§5) ve **yüksek hacimli işlemde ikinci onay** (§8). Kullanıcı bazlı birleşik geçmiş [KV-33 §13](./KV-33_ADMIN_USERS.md#13-birleşik-kullanıcı-geçmişi-183)'tedir; spam puanı sonraki dilimdir (§7).
+Seçilen anket veya yorumlara **tek gerekçeyle** `HIDE` / `REMOVE` / `RESTORE`. Bu belge #183'ün ilk iki dilimini anlatır: kapsamlı (scoped) toplu işlem, önizleme, kısmi başarısızlık, parti geçmişi (§1–4) **güvenli geri alma** (§5) ve **yüksek hacimli işlemde ikinci onay** (§8) ve **tekil kararın geri alınması** (§10). Kullanıcı bazlı birleşik geçmiş [KV-33 §13](./KV-33_ADMIN_USERS.md#13-birleşik-kullanıcı-geçmişi-183)'tedir; spam puanı sonraki dilimdir (§7).
 
 Tekil moderasyon kuralları değişmedi: `docs/DATA_MODEL.md` §7.1 (geçiş tablosu), `docs/KV-04_ROLES_EVENTS.md` (`moderation.poll.apply` / `moderation.comment.apply`), `docs/KV-17_COMMENTS.md` (sayaçlar).
 
@@ -12,6 +12,7 @@ Tekil moderasyon kuralları değişmedi: `docs/DATA_MODEL.md` §7.1 (geçiş tab
 | `admin.moderation.polls.bulk` / `.comments.bulk` | `POST /admin/moderation/{polls,comments}/bulk` `{ ids, action, reason, digest }` | aynı; gerekçe zorunlu |
 | `admin.moderation.batches.list` | `GET /admin/moderation/batches` | `moderation.content.search` (moderatör kendi partilerini, ADMIN+ hepsini görür) |
 | `admin.moderation.bulkApprovals.list` / `.get` / `.approve` / `.reject` / `.cancel` | `GET/POST /admin/moderation/bulk-approvals[/:id[/approve|reject|cancel]]` | liste/ayrıntı `moderation.content.search`; onay ve ret `moderation.bulk.approve` (ADMIN+, başlatandan farklı, MFA step-up); geri çekme `moderation.bulk.cancel` (yalnız başlatan) — §8 |
+| `admin.moderation.actions.undoPreview` / `.undo` | `GET /admin/moderation/actions/:id/undo/preview`, `POST …/undo` `{ reason, digest }` | `moderation.poll.apply` (+ yorumda `moderation.comment.apply`); moderatör yalnız kendi kararını, ADMIN+ herhangi birini — §10 |
 | `admin.moderation.batches.undoPreview` / `.undo` | `GET /admin/moderation/batches/:id/undo/preview`, `POST …/undo` `{ reason, digest }` | `moderation.poll.apply` (uç nokta kapısı) + kayıt başına `moderation.{poll,comment}.apply`; moderatör yalnız kendi partisini, ADMIN+ herhangi birini |
 
 Yeni yetki veya audit işlemi **yoktur**: mevcut KV-04 işlemleri kullanılır.
@@ -73,7 +74,7 @@ Yönetici anket ve yorum listelerinde satır onay kutusu; seçim varken "Seçile
 
 ## 7. Kapsam dışı (sonraki dilimler, #183)
 
-- Tekil (toplu olmayan) moderasyon kararlarının geri alınması: bu dilim yalnız toplu partileri hedefler.
+- ~~Tekil (toplu olmayan) moderasyon kararlarının geri alınması~~ — yapıldı: §10.
 - ~~Kullanıcının anket, yorum, rapor, medya ve moderasyon geçmişini tek ekranda birleştirme~~ — yapıldı: KV-33 §13 (tür, topluluk, içerik ve tarih süzgeçleri). IP süzgeci veri politikası gereği eklenmedi.
 - Tekrarlı/spam içerik **uyarı puanı**, operatör incelemesi ve yanlış pozitif itiraz yolu (otomatik kalıcı ban yok).
 - ~~İkinci onay/MFA (#182) gerektiren eşik~~ — yapıldı: §8. Büyük partilerin geri alınması ve tekil kararlar eşiğe tabi değildir.
@@ -125,4 +126,50 @@ Başlatanın **son 60 dakikada ONAYSIZ uygulanan kayıt sayısı + bu işlemin d
 
 ## 9. Test
 
-`apps/api/test/bulk-approval.test.ts` (eşik ve pencere bölünmesi; talebin içerik değiştirmemesi; başlatan adına uygulama ve audit; self-approval, step-up eksikliği ve tek kullanımlık step-up; moderatör/kullanıcı reddi; başlatan kapsamının aşılmaması; preview_stale; başlatanın rol/hesap/kapsam kaybı; süre dolumu ve bekleyen sınırı; ret ve geri çekme; görünürlük ve imleç bağlama; yarışlar; DB kısıtları; paralel eşik ve yarıda kalan parti, onay transaction'ında başlatan/onaylayan yetkisi, step-up süresi ve oturumu, kalıcı EXPIRED), `apps/worker/test/bulk-approvals-expire.test.ts`, `apps/api/test/ops-status.test.ts` (`moderation.batches` kuyruğu), `apps/web/test/bulk-approval.test.ts` ve `apps/web/test/states/bulk-approval.spec.ts` (onaya gönderme, kayıtları görerek MFA ile onay, kodun korunması, eski talep), `apps/api/test/bulk-undo.test.ts` (telafi çiftleri ve özet; yetki ve başkasının partisi 404; HIDE partisinin geri alınması ve append-only kayıtlar; yorum sayaçları; REMOVE için ADMIN şartı ve RESTORE partisinin geri alınması; tek geri alma, geri almanın geri alınamaması, bitmemiş parti; **superseded / status_changed**; **preview_stale**; **kilit altında sürüm koşulu (apply doğrudan)**; **author_erased**; kapsam (taşınmış içerik); **iki eşzamanlı geri alma** ve **geri alma ile yeni karar yarışı**), `apps/api/test/bulk-moderation.test.ts` (özet işlevi; yetki; gövde doğrulaması; önizlemenin salt okunurluğu ve kayıt başına sonucu; geçiş tablosu ve ADMIN şartı; **moderatör kapsam yalıtımı**; ADMIN çok topluluklu parti; kayıt başına moderation_actions/audit/olay ve parti bağları; yorum sayaçları; kısmi başarısızlık; **önizleme sonrası durum/topluluk değişince `preview_stale`**; idempotency; **iki eşzamanlı onay** ve **toplu ile tekil eşzamanlı işlem**; saatlik sınır; parti geçmişi görünürlüğü ve sayfalama), `apps/web/test/bulk-moderation.test.ts` ve `apps/web/test/states/bulk-moderation.spec.ts` (tarayıcıda önizleme zorunluluğu, digest bağı, kısmi başarısızlık özeti, eskiyen önizleme).
+`apps/api/test/bulk-approval.test.ts` (eşik ve pencere bölünmesi; talebin içerik değiştirmemesi; başlatan adına uygulama ve audit; self-approval, step-up eksikliği ve tek kullanımlık step-up; moderatör/kullanıcı reddi; başlatan kapsamının aşılmaması; preview_stale; başlatanın rol/hesap/kapsam kaybı; süre dolumu ve bekleyen sınırı; ret ve geri çekme; görünürlük ve imleç bağlama; yarışlar; DB kısıtları; paralel eşik ve yarıda kalan parti, onay transaction'ında başlatan/onaylayan yetkisi, step-up süresi ve oturumu, kalıcı EXPIRED), `apps/worker/test/bulk-approvals-expire.test.ts`, `apps/api/test/ops-status.test.ts` (`moderation.batches` kuyruğu), `apps/web/test/bulk-approval.test.ts` ve `apps/web/test/states/bulk-approval.spec.ts` (onaya gönderme, kayıtları görerek MFA ile onay, kodun korunması, eski talep), `apps/api/test/single-undo.test.ts`, `apps/web/test/action-undo.test.ts` ve `apps/web/test/states/action-undo.spec.ts` (§10), `apps/api/test/bulk-undo.test.ts` (telafi çiftleri ve özet; yetki ve başkasının partisi 404; HIDE partisinin geri alınması ve append-only kayıtlar; yorum sayaçları; REMOVE için ADMIN şartı ve RESTORE partisinin geri alınması; tek geri alma, geri almanın geri alınamaması, bitmemiş parti; **superseded / status_changed**; **preview_stale**; **kilit altında sürüm koşulu (apply doğrudan)**; **author_erased**; kapsam (taşınmış içerik); **iki eşzamanlı geri alma** ve **geri alma ile yeni karar yarışı**), `apps/api/test/bulk-moderation.test.ts` (özet işlevi; yetki; gövde doğrulaması; önizlemenin salt okunurluğu ve kayıt başına sonucu; geçiş tablosu ve ADMIN şartı; **moderatör kapsam yalıtımı**; ADMIN çok topluluklu parti; kayıt başına moderation_actions/audit/olay ve parti bağları; yorum sayaçları; kısmi başarısızlık; **önizleme sonrası durum/topluluk değişince `preview_stale`**; idempotency; **iki eşzamanlı onay** ve **toplu ile tekil eşzamanlı işlem**; saatlik sınır; parti geçmişi görünürlüğü ve sayfalama), `apps/web/test/bulk-moderation.test.ts` ve `apps/web/test/states/bulk-moderation.spec.ts` (tarayıcıda önizleme zorunluluğu, digest bağı, kısmi başarısızlık özeti, eskiyen önizleme).
+
+## 10. Tekil kararın geri alınması (dilim 5)
+
+Toplu partiler (§5) dışındaki **tek moderasyon kararı** (anket/yorum) için aynı güvenli geri alma. Telafi kararı `moderation_actions`'a **yeni satır** olarak eklenir ve geri aldığı kararı gösterir (`undo_of_id`); eski satır ve audit değişmez (tablo append-only, UPDATE/DELETE tetikleyicisi yerinde).
+
+### 10.1 Uç noktalar ve yetki
+
+| Uç nokta | İstek | Yetki |
+|---|---|---|
+| `admin.moderation.actions.undoPreview` | `GET /admin/moderation/actions/:id/undo/preview` | `moderation.poll.apply` (+ yorum kararında `moderation.comment.apply`) ve içeriğin topluluğu için `authorize` |
+| `admin.moderation.actions.undo` | `POST /admin/moderation/actions/:id/undo` `{ reason, digest }` | aynı; gerekçe zorunlu |
+
+**Moderatör yalnız KENDİ kararını** geri alır (başkasınınki 404, varlığı gizli); ADMIN+ herhangi birini. Kaldırılmış içeriği geri yüklemek ADMIN+ ister (`admin_required`). Karar verildikten sonra moderatör topluluktan çıkarıldıysa kendi kararını bile geri alamaz (`forbidden`, içerik etiketi görünmez).
+
+### 10.2 Geri alınabilenler (`inverseDecision`)
+
+| Karar (önceki durum) | Telafi |
+|---|---|
+| `HIDE` / `REMOVE` (ACTIVE) | `RESTORE` |
+| `RESTORE` (HIDDEN) / (REMOVED) | `HIDE` / `REMOVE` |
+| `LOCK` (ACTIVE) ↔ `UNLOCK` (LOCKED) — yalnız anket | birbirinin tersi |
+| `EXCLUDE_FROM_TRENDS` ↔ `INCLUDE_IN_TRENDS` — yalnız anket | birbirinin tersi |
+| `CLOSE_COMMENTS` ↔ `OPEN_COMMENTS` — yalnız anket | birbirinin tersi |
+
+Geri alınmaz: uyarı/yaptırım (`WARN_USER`, `SANCTION_USER`), rapor reddi, kategori/topluluk taşıma, görsel kararları, tek işlemle önceki duruma dönemeyenler (ör. `REMOVE` öncesi HIDDEN, `RESTORE` öncesi LOCKED). Bunlar `not_reversible` veya (kullanıcı/görsel hedefli) 404'tür.
+
+### 10.3 Güvenceler
+
+- **Sürüm koşulu (kilit altında):** içeriğin şimdiki durumu kararın bıraktığı durum VE hedefin son kararı bu karar olmalı; araya daha yeni karar girdiyse `superseded`, durum değiştiyse `status_changed`. Koşul ile yazma aynı transaction'dadır.
+- **Bir karar en çok bir kez geri alınır:** `moderation_actions.undo_of_id` UNIQUE; eşzamanlı ikinci istek 409 (`superseded`), tek telafi satırı kalır. Zaten geri alınmış karar `already_undone`.
+- **Geri almanın geri alması yok (`is_undo`):** telafi satırı ve toplu geri alma partisinin ürettiği kararlar geri alınmaz.
+- **Silinmiş içerik sahibi:** `author_erased`; içerik geri getirilmez.
+- **Önizleme özeti (digest):** karar, içeriğin durumu/topluluğu, hedefin son kararı ve geri alınma durumu; önizlemeden sonra değiştiyse 409 `preview_stale`.
+- **Audit:** telafi kararı normal `moderation.{poll,comment}.apply` kaydıdır (`operation`: restore/hide/…); `after.undoOfActionId` geri alınan kararı gösterir. Kararın kapattığı raporlar **yeniden açılmaz** (rapor geçmişi değişmez).
+- **Toplu işlemle ilişki:** toplu partinin bir kararı tekil geri alınırsa o kaydın durumu değiştiğinden toplu geri alma onu `status_changed` ile atlar, kalanları geri alır.
+
+### 10.4 Arayüz
+
+İçerik listesinde satırın "Geçmiş" penceresi: moderasyon kararı satırında (geri alınmamış, geri alma olmayan, geri alınabilir türde ve moderatör için kendi kararı) **"Geri al…"**. Pencere önizlemeyi otomatik yükler (şimdiki durum, telafi kararı veya neden uygulanamadığı), gerekçe ister. Geri alınan karar "geri alındı", telafi satırı "Geri alma:" ile işaretlenir.
+
+### 10.5 Bilinen sınırlar
+
+- Eşik/ikinci onay yoktur: tek karar, tek içerik; hacim kontrolü §8'deki toplu yoldadır.
+- Rapor kuyruğunda kararla kapanan rapor yeniden açılmaz; gerekirse içerik yeniden raporlanır.
+- Uyarı/yaptırım geri alma (`user.sanction.lift`) ve taşıma geri alma ayrı akışlardır, bu dilimin dışındadır.
+- Geri alma gerekçesi 3–500 karakterdir (normal moderasyonla aynı).

@@ -179,7 +179,7 @@ test("yorum araması ve içerik geçmişi sözleşme şemasıyla okunur", async 
   const history = client(() => reply("admin.moderation.history.polls", "ok"));
   const timeline = await history.admin.history("polls", "01998b9a-0000-7000-8000-000000000020");
   assert.ok(new URL(history.calls[0].url).pathname.endsWith("/moderation-history"));
-  assert.deepEqual(timeline.items.map((item) => item.kind), ["ACTION", "REPORT"]);
+  assert.deepEqual(timeline.items.map((item) => item.kind), ["ACTION", "ACTION", "REPORT"]);
 });
 
 test("taşıma: yalnız verilen alanlar PATCH gövdesinde; gerekçe zorunlu; topluluktan çıkarma null gönderir", async () => {

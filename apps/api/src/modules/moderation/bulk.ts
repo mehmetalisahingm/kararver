@@ -69,6 +69,20 @@ export type UndoBatch = {
   items: Array<{ targetId: string; communityId: string | null; fromStatus: string | null; toStatus: string | null; moderationActionId: string; undoneByBatchId: string | null }>;
 };
 
+/** Tekil geri alma için okunan karar. `undoneByActionId`: bu kararın telafisi varsa onun kimliği; `viaUndoBatch`: karar bir geri alma partisinin ürünü. */
+export type ActionRecord = {
+  id: string;
+  kind: ContentKind;
+  targetId: string;
+  action: string;
+  actorId: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  undoOfId: string | null;
+  undoneByActionId: string | null;
+  viaUndoBatch: boolean;
+};
+
 export type BatchItemRecord = {
   targetId: string;
   communityId: string | null;
@@ -86,6 +100,8 @@ export interface BulkModerationStore {
   startBatch(input: { actorId: string; kind: ContentKind; action: BulkAction; reason: string; digest: string; requestId: string | null; total: number; now: Date; undoOfId?: string | null }): Promise<string>;
   /** Geri alma önizlemesi/uygulaması için parti ve uygulanmış öğeleri; yoksa null. */
   loadBatch(id: string): Promise<UndoBatch | null>;
+  /** Tek karar (tekil geri alma): anket/yorum hedefli moderation_actions kaydı; başka hedefte (görsel, kullanıcı) veya yoksa null. */
+  loadAction(id: string): Promise<ActionRecord | null>;
   /** Hedef başına SON moderasyon kararının kimliği (sürüm koşulu önizlemesi; kesin karar apply içinde kilit altındadır). */
   latestActions(kind: ContentKind, ids: string[]): Promise<Map<string, string>>;
   /** İçerik sahibi silinmiş/anonimleştirilmiş hedefler: bunların içeriği asla geri getirilmez. */
@@ -191,6 +207,38 @@ export function createPrismaBulkModerationStore(prisma: PrismaClient): BulkModer
         select: { id: true },
       });
       return row.id;
+    },
+
+    async loadAction(id) {
+      const a = await prisma.moderationAction.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          action: true,
+          actorId: true,
+          pollId: true,
+          commentId: true,
+          fromStatus: true,
+          toStatus: true,
+          undoOfId: true,
+          undoneBy: { select: { id: true } },
+          batchItems: { where: { batch: { undoOfId: { not: null } } }, select: { batchId: true }, take: 1 },
+        },
+      });
+      const targetId = a?.pollId ?? a?.commentId;
+      if (!a || !targetId) return null;
+      return {
+        id: a.id,
+        kind: a.pollId ? "polls" : "comments",
+        targetId,
+        action: a.action,
+        actorId: a.actorId,
+        fromStatus: a.fromStatus,
+        toStatus: a.toStatus,
+        undoOfId: a.undoOfId,
+        undoneByActionId: a.undoneBy?.id ?? null,
+        viaUndoBatch: a.batchItems.length > 0,
+      };
     },
 
     async loadBatch(id) {

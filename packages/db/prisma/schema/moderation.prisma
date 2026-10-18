@@ -110,7 +110,11 @@ model ModerationAction {
   toStatus     String?              @map("to_status") @db.VarChar(20)
   reason       String               @db.VarChar(1000)
   createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  // #183: dolu ise bu satır başka bir kararın telafisidir (geri alma); bir karar en çok bir kez geri alınır (UNIQUE). Geri alınan satır değişmez.
+  undoOfId     String?              @unique @map("undo_of_id") @db.Uuid
 
+  undoOf     ModerationAction? @relation("ModerationActionUndo", fields: [undoOfId], references: [id], onDelete: Restrict)
+  undoneBy   ModerationAction? @relation("ModerationActionUndo")
   actor      User        @relation("ModerationActor", fields: [actorId], references: [id], onDelete: Restrict)
   poll       Poll?       @relation(fields: [pollId], references: [id], onDelete: Restrict)
   comment    Comment?    @relation(fields: [commentId], references: [id], onDelete: Restrict)
