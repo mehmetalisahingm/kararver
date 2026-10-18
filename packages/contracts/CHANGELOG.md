@@ -9,6 +9,15 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.38.0 — 2026-10-18 (Mert, #183 spam puanı gölge modu, S1)
+
+Kırıcı değişiklik yok: yeni endpoint, yeni ayar, yeni yetki. Kullanıcıya hiçbir etkisi yoktur; ayar varsayılan **kapalıdır** ve canlıda açılması [karar 13](../../docs/KV-37_SPAM_SCORE_DECISIONS.md)'ün (hukuk/KVKK) kapanmasına bağlıdır.
+
+- **Eklendi:** `admin.spamScores.list` (GET `/admin/spam-scores`, yalnız ADMIN+; en yüksek puan önce; `minScore` süzgeci). Ayar kapalıyken liste boştur.
+- **Eklendi:** ayar `spam.shadowScoring.enabled` (varsayılan false). Kapalıyken worker puan hesaplamaz ve saklanan satırları siler.
+- **Yetki:** yeni işlem `moderation.spamScore.read` (admin). Audit işlemi yok (salt okuma).
+- Şemalar/sabitler: `SpamSignals`, `SpamScoreView`, `SpamScoreListQuery`, `SPAM_SCORE_RETENTION_DAYS` (90).
+
 ## 1.37.0 — 2026-10-16 (Mert, #183 tekil kararın geri alınması)
 
 Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; `ContentHistoryItem` ACTION satırına `undoOfId` ve `undone` alanları eklendi (web ile birlikte yayınlanır). Yeni yetki veya audit işlemi yok (telafi kararı mevcut `moderation.poll.apply` / `moderation.comment.apply` yolundan geçer).

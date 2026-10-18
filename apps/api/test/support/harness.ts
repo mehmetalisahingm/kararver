@@ -48,6 +48,7 @@ import { DEFAULT_POLL_SETTINGS, type PollSettings } from "../../src/modules/poll
 import { createPrismaRbacStore } from "../../src/modules/rbac/prisma-store.ts";
 import type { RbacStore } from "../../src/modules/rbac/store.ts";
 import { createPrismaBulkModerationStore } from "../../src/modules/moderation/bulk.ts";
+import { createPrismaSpamScoreStore } from "../../src/modules/spam-score/routes.ts";
 import { createPrismaBulkApprovalStore } from "../../src/modules/moderation/bulk-approval.ts";
 import { createPrismaModerationStore } from "../../src/modules/moderation/prisma-store.ts";
 import { createPrismaReportStore } from "../../src/modules/reports/prisma-store.ts";
@@ -272,6 +273,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     moderationStore: backend.prisma ? createPrismaModerationStore(backend.prisma) : undefined,
     bulkModerationStore: backend.prisma ? createPrismaBulkModerationStore(backend.prisma) : undefined,
     bulkApprovalStore: backend.prisma ? createPrismaBulkApprovalStore(backend.prisma) : undefined,
+    spamScoreStore: backend.prisma ? createPrismaSpamScoreStore(backend.prisma) : undefined,
     adminUserStore: backend.prisma ? createPrismaAdminUserStore(backend.prisma) : undefined,
     dataExportStore: backend.prisma ? createPrismaDataExportStore(backend.prisma) : undefined,
     accountErasureStore: backend.prisma ? createPrismaAccountErasureStore(backend.prisma) : undefined,

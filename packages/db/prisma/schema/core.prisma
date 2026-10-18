@@ -104,6 +104,8 @@ model User {
   moderationBatches    ModerationBatch[] @relation("ModerationBatchActor")
   bulkApprovalsRequested ModerationBulkApproval[] @relation("BulkApprovalInitiator")
   bulkApprovalsDecided   ModerationBulkApproval[] @relation("BulkApprovalDecider")
+  // #183 spam gölge puanı (moderation.prisma)
+  spamScore        SpamAccountScore?
   idempotencyKeys  IdempotencyKey[]
   polls            Poll[]
   votes            Vote[]

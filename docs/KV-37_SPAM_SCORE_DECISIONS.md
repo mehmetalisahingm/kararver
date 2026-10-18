@@ -54,6 +54,21 @@ Her satırda **önerilen** seçenek ve gerekçesi vardır. Kabul için "Karar" s
 | 14 | Topluluk sahibi puanı görür mü? | **Hayır.** Yalnız operatörler görür (sahip kullanıcıyı profilleyemez). | ☐ |
 | 15 | Yayına alma | **Gölge mod önce:** puan hesaplanır, **hiçbir kullanıcıya etkisi yoktur**, yalnız ADMIN görür. ~2 hafta sonra eşik gerçek veriye göre ayarlanır, sonra operatör kuyruğu **bayrakla** (varsayılan kapalı) açılır. 40 kişilik pilotta istatistik anlamsız olacağından ilk eşikler elle belirlenir. | ☐ |
 
+## 2.1 S1 gölge mod: uygulama durumu (18 Ekim 2026, PR taslağı)
+
+Karar tablosu hâlâ boştur; S1 **önerilen** seçeneklerle (1, 2, 3, 15) ve karar 13'ün önerisiyle (90 gün) **bayrak arkasında, varsayılan kapalı** uygulandı. Bayrak açılmadıkça hiçbir veri yazılmaz ve hiçbir kullanıcıya etkisi yoktur. Bayrağın canlıda açılması karar 13'ün (hukuk) kapanmasına bağlıdır; farklı bir karar çıkarsa aşağıdaki sabitler değişir.
+
+| Parça | Yer |
+|---|---|
+| Ayar `spam.shadowScoring.enabled` (varsayılan **false**) | `packages/contracts/src/settings.ts` |
+| Tablo `spam_account_scores` (hesap başına tek satır: puan, sayaç sinyalleri, hesaplanma anı; kullanıcı silinince CASCADE) | `moderation.prisma`, migration `20261018150000_mert_sa183_spam_shadow_score` |
+| Sinyaller (kural tabanlı, 30 gün; IP/cihaz/metin yok): aynı başlıklı gönderi tekrarı, son 24 saatte yorum sayısı (ilk 10 serbest), 7 günden yeni hesap + ≥10 içerik, "işlem uygulandı" raporları, geri alınmamış HIDE/REMOVE kararları | `apps/worker/src/jobs/spam-score/{score,job}.ts` |
+| Ağırlıklar: 15 / 2 / 20 / 20 / 15; tavan 100; **10 puanın altı saklanmaz** | `score.ts` (karar 1: ayara taşınacak) |
+| Job `spam-score.refresh`, 15 dakikada bir. Bayrak kapalıyken hesaplamaz ve **tüm satırları siler**; açıkken yenilenmeyen satırı (puanı düştü, hesap silindi) siler | `job.ts`, `main.ts` |
+| Yönetici görünümü `admin.spamScores.list` (`GET /admin/spam-scores`, yalnız ADMIN+, yetki `moderation.spamScore.read`; bayrak kapalıyken boş; 90 günden eski satır gizli) | `apps/api/src/modules/spam-score/routes.ts` |
+
+**Bilerek yapılmayanlar:** yönetici arayüzü sayfası (S1'in UI kısmı, Utku), görsel hash sinyali, operatör kuyruğu (S2), itiraz (S3), kalibrasyon (S4), ayara taşınmış ağırlıklar. Puan kullanıcı yüzeylerinde (profil, oturum, herkese açık profil) görünmez; bu testle doğrulanır. Hesap anonimleştirme/silme: `deleted_at` dolu hesabın satırı sonraki turda silinir, listede görünmez; KVKK veri paketine dahil edilmesi (karar 13 önerisi) henüz **yapılmadı**.
+
 ## 3. Bağımlılıklar ve dilimleme
 
 | Dilim | Gerekli kararlar | Not |
