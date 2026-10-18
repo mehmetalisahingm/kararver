@@ -139,7 +139,7 @@ Pilot (KV-45) **staging'de gerçek kullanıcılarla** yapılır; bu yüzden stag
 - [ ] **Web CSP:** Script ve görsel kısıtlayan sıkı CSP (nonce/SRI). Bu PR yalnız çerçeveleme ve temel başlıkları ekliyor.
 - [ ] **Zamanlanmış yedek ve ayrı yedek bucket'ı** (KV-48 politikası); sağlayıcı PITR'ının doğrulanması. Kod hazır (#51: `apps/worker/scripts/scheduled-backup.ts`, şifreli, yalnız-yazma anahtar); kurulum adımları KV-48 "Zamanlanmış yedek: uygulama". Gereken karar: bucket, anahtar çifti sahipleri, saklama süresi.
 - [ ] **Production smoke:** `pnpm smoke --api … --web … --strict` ve e-posta doğrulama uçtan uca (gerçek kutu).
-- [ ] **İzleme:** `staging-monitor`'ün production kopyası (`PROD_API_URL`); alarm sorumlusu.
+- [ ] **İzleme:** `staging-monitor` production'ı da kapsıyor (hazır): repo değişkenleri `PROD_API_URL`, `PROD_WEB_URL` (ve onaylı sürüm `PROD_RELEASE_SHA`, KV-52 karar kaydından) girilince aynı kontroller `production-alarm` etiketiyle çalışır; production'da gecikme alarmı yoktur, onaylı sürüm dışı ya da main dışı deploy alarmdır. Harici uptime servisi ayrıca gerekir (#51 kararı). Alarm sorumlusu Faruk.
 
 ## Staging doğrulaması (2026-10-09)
 
