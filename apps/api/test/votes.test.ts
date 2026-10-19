@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { ErrorBody, PollDetail, VoteResult } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
+import { checkVoteInvariants, violated, VOTE_INVARIANT_NAMES } from "@kararver/db/ops/vote-invariants";
 import { mapDbError } from "../src/modules/polls/routes.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
@@ -198,6 +199,80 @@ describe("oylar (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok (C
     await Promise.all(voters.flatMap((v, i) => [vote(poll.id, ids[(i + 1) % 3]!, v.cookie), vote(poll.id, ids[(i + 2) % 3]!, v.cookie)]));
     const { total } = await assertConsistent(poll.id);
     assert.equal(total, 12);
+  });
+
+  test("20 hesap eşzamanlı oy + değişim: anket bazlı invariant'lar (oy satırı, CAST/CHANGE, seçenek sayaçları, toplam)", async () => {
+    const owner = await signUp();
+    const voters: Awaited<ReturnType<typeof signUp>>[] = [];
+    for (let i = 0; i < 20; i++) voters.push(await signUp());
+    const poll = await createPoll(owner.cookie);
+    const ids = poll.options.map((o) => o.id);
+
+    const burst = (pick: (i: number) => number[]) =>
+      Promise.all(voters.flatMap((v, i) => pick(i).map((o) => vote(poll.id, ids[o % 3]!, v.cookie).then((res) => ({ i, res })))));
+    // Tur 1: her hesap aynı anda iki seçeneğe (ilk oy ile değişim yarışır). Tur 2: her hesap aynı anda iki değişim.
+    const first = await burst((i) => [i, i + 1]);
+    const second = await burst((i) => [i + 1, i + 2]);
+
+    const perVoter = voters.map(() => ({ created: 0, maxChange: -1, optionAtMax: new Set<string>() }));
+    for (const { i, res } of [...first, ...second]) {
+      assert.ok(res.statusCode === 200 || res.statusCode === 201, `${res.statusCode} ${res.body}`);
+      const { vote: v, results } = VoteResult.parse(res.json().data);
+      const p = perVoter[i]!;
+      if (res.statusCode === 201) p.created++;
+      if (v.changeCount > p.maxChange) [p.maxChange, p.optionAtMax] = [v.changeCount, new Set()];
+      if (v.changeCount === p.maxChange) p.optionAtMax.add(v.optionId);
+      assert.ok(results.visible, "oy veren sonucu görür");
+    }
+    for (const { res } of second) assert.equal(res.json().data.results.total, 20, "ikinci turda toplam sabit 20");
+
+    const rows = await db.vote.findMany({ where: { pollId: poll.id }, select: { userId: true, optionId: true, changeCount: true } });
+    assert.equal(rows.length, 20, "hesap başına tek oy satırı");
+    const byUser = new Map(rows.map((r) => [r.userId, r]));
+    voters.forEach((v, i) => {
+      const p = perVoter[i]!;
+      const row = byUser.get(v.id)!;
+      assert.equal(p.created, 1, `hesap ${i}: tam bir 201`);
+      assert.equal(row.changeCount, p.maxChange, `hesap ${i}: change_count = cevaplardaki en büyük changeCount`);
+      assert.deepEqual([...p.optionAtMax], [row.optionId], `hesap ${i}: son seçenek = en büyük changeCount'lu cevabın seçeneği`);
+    });
+
+    const report = await checkVoteInvariants(db, [poll.id]);
+    assert.deepEqual(violated(report), []);
+    const changes = rows.reduce((s, r) => s + r.changeCount, 0);
+    assert.deepEqual(report.summary, { polls: 1, votes: 20, validVotes: 20, castEvents: 20, changeEvents: changes });
+    const detail = PollDetail.parse((await get(`/polls/${poll.id}`, voters[0]!.cookie)).json().data);
+    assert.equal(detail.results?.visible && detail.results.total, 20, "API toplamı (votes.total) 20");
+  });
+
+  test("anket bazlı invariant kontrolü bozulmayı yakalar (sayaç ve change_count, geri alınan transaction'da)", async () => {
+    const owner = await signUp();
+    const voter = await signUp();
+    const poll = await createPoll(owner.cookie);
+    const [a, b] = poll.options.map((o) => o.id);
+    await vote(poll.id, a!, voter.cookie);
+    await vote(poll.id, b!, voter.cookie);
+    assert.deepEqual(violated(await checkVoteInvariants(db, [poll.id])), []);
+
+    const rollback = new Error("rollback");
+    let seen: Record<string, number> = {};
+    await assert.rejects(
+      db.$transaction(async (tx) => {
+        await tx.pollOption.update({ where: { id: a! }, data: { voteCount: { increment: 1 } } });
+        await tx.vote.updateMany({ where: { pollId: poll.id }, data: { changeCount: { increment: 1 } } });
+        const report = await checkVoteInvariants(tx, [poll.id, randomUUID()]);
+        seen = Object.fromEntries(report.invariants.filter((i) => i.violations).map((i) => [i.name, i.violations]));
+        throw rollback;
+      }),
+      (err) => err === rollback,
+    );
+    assert.deepEqual(seen, {
+      [VOTE_INVARIANT_NAMES.missing_poll]: 1,
+      [VOTE_INVARIANT_NAMES.option_counts]: 1,
+      [VOTE_INVARIANT_NAMES.total_vs_options]: 1,
+      [VOTE_INVARIANT_NAMES.change_count]: 1,
+    });
+    assert.deepEqual(violated(await checkVoteInvariants(db, [poll.id])), [], "geri alındı");
   });
 
   // ─── Reddedilen oylar ───────────────────────────────────────
