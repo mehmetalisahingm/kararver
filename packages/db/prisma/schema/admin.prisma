@@ -115,6 +115,7 @@ model AuditLog {
   actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
 
   // Hedefin geçmişi, aktörün işlemleri, işlem/tür filtresi ve zaman sıralı liste (admin.audit.list).
+  // İstek kimliği süzgeci (#185): kısmi index audit_logs_request_id_idx (request_id IS NOT NULL) migration'da elle.
   @@index([targetType, targetId, createdAt])
   @@index([actorId, createdAt])
   @@index([action, operation, createdAt])

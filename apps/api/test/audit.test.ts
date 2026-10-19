@@ -138,6 +138,28 @@ function scenarios(name: string, setup: () => Promise<Backend>, teardown: () => 
       const [row] = await b.store.list({ targetId: target, source: "WORKER", after: null }, 10);
       assert.deepEqual([row?.actorId, row?.requestId, row?.operation, row?.reason, row?.before], [null, null, "sync", null, null]);
     });
+
+    test("#185 requestId tam eşleşir; reasonContains harf duyarsız alt dize, % _ \\ joker değil düz karakter", async () => {
+      const actor = await b.actor();
+      const target = randomUUID();
+      const tag = randomUUID().slice(0, 8);
+      const reasons = ["İndirim %50 SPAM", "İndirim 50 spam", "kural a_b ihlali", "kural axb ihlali", "ters \\ eğik çizgi"];
+      for (const [i, reason] of reasons.entries())
+        await b.run((tx) => writeAudit(tx, sanctionAudit(actor, target, { reason, requestId: `req_${tag}_${i}`, at: at(i) })));
+      const reasonsOf = async (q: { requestId?: string; reasonContains?: string }) =>
+        (await b.store.list({ targetId: target, ...q, after: null }, 10)).map((r) => r.reason).sort();
+
+      assert.deepEqual(await reasonsOf({ requestId: `req_${tag}_2` }), ["kural a_b ihlali"]);
+      assert.deepEqual(await reasonsOf({ requestId: `req_${tag}_2x` }), []);
+      assert.deepEqual(await reasonsOf({ requestId: `REQ_${tag}_2` }), [], "requestId büyük/küçük harf duyarlı tam eşleşme");
+      assert.deepEqual(await reasonsOf({ reasonContains: "spam" }), ["İndirim %50 SPAM", "İndirim 50 spam"]);
+      assert.deepEqual(await reasonsOf({ reasonContains: "yok-boyle-gerekce" }), []);
+      assert.deepEqual(await reasonsOf({ reasonContains: "%" }), ["İndirim %50 SPAM"], "% bütün kayıtları döndürmez");
+      assert.deepEqual(await reasonsOf({ reasonContains: "%50" }), ["İndirim %50 SPAM"]);
+      assert.deepEqual(await reasonsOf({ reasonContains: "a_b" }), ["kural a_b ihlali"], "_ tek karakter jokeri değil");
+      assert.deepEqual(await reasonsOf({ reasonContains: "\\" }), ["ters \\ eğik çizgi"]);
+      assert.deepEqual(await reasonsOf({ reasonContains: "spam", requestId: `req_${tag}_1` }), ["İndirim 50 spam"], "süzgeçler birleşir");
+    });
   });
 }
 

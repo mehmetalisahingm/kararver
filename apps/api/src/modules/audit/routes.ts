@@ -1,8 +1,10 @@
 // Audit okuma — KV-39 (#41). Sözleşme: contracts/domains/admin.ts (admin.audit.list). Yetki ADMIN+ (router kapısı).
 // Yazma/silme endpoint'i yoktur; kayıtlar append-only (trigger audit_logs_append_only). Sıra created_at ↓, id ↓.
 // Cursor filtrelere bağlıdır: başka süzgeçle verilen cursor INVALID_CURSOR olur.
+// before/after yanıtta redact.ts'ten geçer (#185): hassas adlı alanların değeri "[gizli]"; kayıt değişmez.
 import { decodeCursor, encodeCursor, invalidCursor } from "../../http/cursor.ts";
 import type { Route } from "../../http/route.ts";
+import { redactAuditSummary } from "./redact.ts";
 import type { AuditQuery, AuditStore } from "./store.ts";
 
 export type AuditRouteDeps = { store: AuditStore; mediaPublicBaseUrl: string };
@@ -18,8 +20,10 @@ export function registerAuditRoutes(route: Route, deps: AuditRouteDeps): void {
       source: query.source as AuditQuery["source"],
       from: query.from ? new Date(query.from as string) : undefined,
       to: query.to ? new Date(query.to as string) : undefined,
+      requestId: query.requestId as string | undefined,
+      reasonContains: query.reasonContains as string | undefined,
     };
-    const filter = `audit:${JSON.stringify([filters.actorId, filters.targetType, filters.targetId, filters.action, filters.operation, filters.source, query.from, query.to])}`;
+    const filter = `audit:${JSON.stringify([filters.actorId, filters.targetType, filters.targetId, filters.action, filters.operation, filters.source, query.from, query.to, filters.requestId, filters.reasonContains])}`;
     const cursor = decodeCursor(query.cursor, filter);
     let after: AuditQuery["after"] = null;
     if (cursor) {
@@ -46,8 +50,8 @@ export function registerAuditRoutes(route: Route, deps: AuditRouteDeps): void {
       action: r.action,
       operation: r.operation,
       target: r.target,
-      before: r.before,
-      after: r.after,
+      before: redactAuditSummary(r.before),
+      after: redactAuditSummary(r.after),
       reason: r.reason,
       requestId: r.requestId,
       createdAt: r.createdAt.toISOString(),

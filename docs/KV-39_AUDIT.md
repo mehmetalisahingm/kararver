@@ -15,14 +15,16 @@
 
 - **Yetki:** Yalnız ADMIN+. Misafir 401, kullanıcı ve moderatör 403.
 - **Sıra ve süzgeçler:** `created_at` ↓, `id` ↓. Süzgeçler: `actorId`, `targetType`, `targetId`, `action`, `operation`, `source` (`API` / `CLI` / `WORKER`), `from` (dahil), `to` (hariç).
-- **Cursor:** Süzgeçlere bağlı. Başka süzgeçle verilen cursor `400 INVALID_CURSOR` döner.
+- **Ek süzgeçler (#185):** `requestId` (X-Request-Id, tam eşleşme) ve `reasonContains` (gerekçede büyük/küçük harf duyarsız arama; `%`, `_`, `\` joker değil düz karakter). `reasonContains` verilirse `from` ve `to` zorunlu ve aralık en çok 31 gündür; tam tablo taraması yerine `created_at` index'inden okunur. Kural sözleşmede, aksi `400 VALIDATION_ERROR`.
+- **Cursor:** Süzgeçlere (yeniler dahil) bağlı. Başka süzgeçle verilen cursor `400 INVALID_CURSOR` döner.
+- **Özet temizliği (#185, savunma katmanı):** Yanıtta `before`/`after` içindeki hassas adlı anahtarların değeri `"[gizli]"` olur (`apps/api/src/modules/audit/redact.ts`): password, hash, token, secret, mfa, totp, otp, recovery, apiKey, cookie, session, email, ip, userAgent. Eşleşme anahtarın kelimelerine göredir (camelCase/snake_case bölünür, büyük/küçük harf duyarsız, iç içe nesne ve dizilerde de); `ip` gibi kısa adlar `description`, `recipient` alanlarını gizlemez. Yazma yolu (`assertAuditEntry`) hassas anahtarı zaten reddeder; bu katman eski veya elle eklenmiş kayıtlar içindir. Kayıt değişmez.
 - **Aktör:** `PublicUser` olarak döner. Silinmiş hesap da gösterilir, çünkü hesap verebilirlik için işlemi kimin yaptığı bilinmeli. Bu görünüm yalnız ADMIN+'a açık.
 
 ## Ekran (`/admin/audit`)
 
-- Süzgeçler: işlem, hedef türü, hedef kimliği, kaynak, gün aralığı.
+- Süzgeçler: işlem, hedef türü, hedef kimliği, kaynak, gün aralığı, istek kimliği, gerekçede ara (#185; tarih aralığı yoksa veya 31 günü aşarsa istek gönderilmeden uyarı verir, sunucu da reddeder).
 - Liste: zaman, yapan, işlem ve tür, hedef, gerekçe.
-- "Göster" ile önce/sonra özeti, istek kimliği ve kayıt kimliği açılır.
+- "Göster" ile alan alan fark tablosu (Alan / Değişim / Önce / Sonra; "Eklendi", "Kaldırıldı", "Değişti" metinle ve işaretle, renk tek başına anlam taşımaz), kapalı bir bölümde ham önce/sonra JSON'u, istek kimliği ve kayıt kimliği açılır. Bütün kayıt alanları metin olarak basılır (`dangerouslySetInnerHTML` yok); XSS yükleri `apps/web/test/states/audit-panel.spec.ts` ile sınanır.
 - Yükleniyor, boş ve hata durumlarında tekrar deneme ile "daha fazla göster" var; diğer yönetim panelleriyle aynı kalıp (`useRemoteList`).
 - Yazma işlemi yok.
 - Erişilebilirlik ve taşma denetimi: durum matrisi (`apps/web/test/states/matrix.spec.ts`) `/admin/audit`'i açık/koyu tema ve üç tarayıcıda denetliyor.
