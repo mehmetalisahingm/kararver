@@ -26,6 +26,7 @@
     "smoke": "node scripts/smoke.mjs",
     "beta:test": "node --test scripts/beta-report.test.mjs",
     "security:test": "node --test scripts/security-acceptance.test.mjs scripts/staging-session-acceptance.test.mjs scripts/staging-write-acceptance.test.mjs",
-    "beta:report": "node scripts/beta-report.mjs"
+    "beta:report": "node scripts/beta-report.mjs",
+    "outage:test": "node scripts/outage-acceptance.mjs"
   }
 }
