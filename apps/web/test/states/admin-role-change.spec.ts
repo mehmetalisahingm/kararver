@@ -32,7 +32,7 @@ test("role change shows the exact target and stops on MFA failure; pending input
   await dialog.getByLabel("Gerekçe", { exact: true }).fill("İkinci yönetici tarafından onaylandı");
   await dialog.getByLabel("Doğrulayıcı kodun", { exact: true }).fill("111111");
   await dialog.getByRole("button", { name: "Uygula", exact: true }).click();
-  await expect(dialog.getByRole("alert")).toBeVisible();
+  await expect(dialog.getByRole("alert").filter({ hasText: "Bu işlem için yetkin yok." })).toBeVisible();
   expect(mutations).toBe(0);
   await expect(dialog.getByLabel("Doğrulayıcı kodun", { exact: true })).toHaveValue("");
   denyMfa = false;
@@ -44,7 +44,7 @@ test("role change shows the exact target and stops on MFA failure; pending input
   await expect(dialog).toBeVisible();
   expect(mutations).toBe(1);
   release();
-  await expect(dialog.getByRole("alert")).toBeVisible();
+  await expect(dialog.getByRole("alert").filter({ hasText: "Bu işlem için yetkin yok." })).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: /^Rol/ })).toBeEnabled();
   expect(mock.unexpected).toEqual([]);
 });
