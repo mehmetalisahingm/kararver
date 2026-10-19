@@ -84,12 +84,15 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       else await admin.moderate(kind, target, action === "restore" ? "RESTORE" : "REMOVE", reason);
       refresh();
     }}>
-      {action === "role" ? <><label>Rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value as AdminRole)}>{["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"].map(r => <option key={r}>{r}</option>)}</select></label>
-        <p role="status">Mevcut roller: {user?.roles.join(", ")} → Yeni rol: {role}</p>
-        {(role === "SUPER_ADMIN" || user?.roles.includes("SUPER_ADMIN")) ? <p>Bu işlem en yüksek yönetim yetkisini değiştirir. İkinci yönetici onayı sunucuda etkinse onay numarası ve tek kullanımlık, güncel MFA doğrulaması gerekir.</p> : null}
-        <label>İkinci yönetici onay numarası<input className="kv-input" value={approvalId} onChange={e => setApprovalId(e.target.value)} /></label>
-        <label>Doğrulayıcı kodun<input className="kv-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={mfaCode} onChange={e => setMfaCode(e.target.value.replace(/\D/g, ""))} /></label>
-        <p>SUPER_ADMIN değişimi için <a href="/hesap/guvenlik">hesap güvenliği ekranından</a> onay talebi oluştur. Onaylanan hedef, rol ve gerekçe burada aynı olmalı; uygulamadan önce yeniden MFA doğrulaması gerekir.</p>
+      {action === "role" ? <><label>Rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value as AdminRole)}>{(user?.roles.includes("SUPER_ADMIN") ? ["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"] : ["USER", "MODERATOR", "ADMIN"]).map(r => <option key={r}>{r}</option>)}</select></label>
+        <p role="status">Hedef: @{user?.username} · Mevcut rol: {user?.roles.join(", ")} → İstenen rol: {role}. Gerekçen ve işlem sonucu denetim kaydına alınır.</p>
+        {!user?.roles.includes("SUPER_ADMIN") ? <p role="note">Tek süper admin politikası: normal API'den yeni SUPER_ADMIN atanamaz. Bu seçenek güvenlik nedeniyle sunulmaz.</p> : null}
+        {user?.roles.includes("SUPER_ADMIN") ? <p role="alert">Kritik işlem: mevcut SUPER_ADMIN rolünü değiştirmek son yetkiliyi kaybetmeye neden olabilir. Sunucu son aktif SUPER_ADMIN korumasını, gerekiyorsa MFA ve bağımsız onayı uygular.</p> : null}
+        {user?.roles.includes("SUPER_ADMIN") ? <>
+          <label>İkinci yönetici onay numarası<input className="kv-input" value={approvalId} onChange={e => setApprovalId(e.target.value)} /></label>
+          <label>Doğrulayıcı kodun<input className="kv-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={mfaCode} onChange={e => setMfaCode(e.target.value.replace(/\D/g, ""))} /></label>
+          <p>Kritik yetki değişiminde <a href="/hesap/guvenlik">hesap güvenliği ekranında</a> MFA doğrula; ikinci onay etkinse sunucuda bağlamı doğrulanmış bir onay numarası gereklidir.</p>
+        </> : null}
       </> : null}
       {action === "sanction" ? <><label>Yaptırım<select className="kv-input" value={sanction} onChange={e => setSanction(e.target.value as typeof sanction)}>{["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING", "SUSPEND", "BAN"].map(s => <option key={s}>{s}</option>)}</select></label>{sanction === "SUSPEND" ? <label>Bitiş<input className="kv-input" type="datetime-local" value={endsAt} onChange={e => setEndsAt(e.target.value)} /></label> : null}</> : null}
     </ActionDialog>
