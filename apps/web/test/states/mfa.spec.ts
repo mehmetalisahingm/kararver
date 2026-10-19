@@ -80,7 +80,7 @@ test("single SUPER_ADMIN: approval form cannot request promotion or approve a le
   const rolePanel = page.getByRole("region", { name: "Kritik rol onayları" });
   await expect(rolePanel.getByRole("option", { name: "SUPER_ADMIN" })).toHaveCount(0);
   await expect(rolePanel.getByRole("option", { name: "ADMIN" })).toHaveCount(1);
-  await rolePanel.getByLabel("Hedef kullanıcı numarası").fill(target.id);
+  await rolePanel.getByLabel("Hedef kullanıcı numarası").fill(old.data.userId);
   await rolePanel.getByLabel("Rol değişimi gerekçesi").fill("Gerekçeli yetki talebi");
   await rolePanel.getByRole("button", { name: "İkinci yöneticiye onay talebi oluştur" }).click();
   await expect(rolePanel.getByRole("alert")).toContainText("yalnız mevcut bir SUPER_ADMIN rolünü düşürmek");
