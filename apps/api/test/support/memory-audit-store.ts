@@ -56,6 +56,8 @@ export function createMemoryAuditStore(now: () => Date = () => new Date()): Memo
             (q.action === undefined || r.action === q.action) &&
             (q.operation === undefined || r.operation === q.operation) &&
             (q.source === undefined || r.source === q.source) &&
+            (q.requestId === undefined || r.requestId === q.requestId) &&
+            (q.reasonContains === undefined || (r.reason ?? "").toLocaleLowerCase("tr").includes(q.reasonContains.toLocaleLowerCase("tr"))) &&
             (q.from === undefined || r.createdAt >= q.from) &&
             (q.to === undefined || r.createdAt < q.to) &&
             (q.after === null ||

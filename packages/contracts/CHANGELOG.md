@@ -9,6 +9,13 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.38.0 — 2026-10-19 (Utku, #185 audit süzgeçleri ve özet temizliği, dilim 1)
+
+Kırıcı değişiklik yok: `admin.audit.list` yeni isteğe bağlı süzgeçler alır; yanıt şeması aynı.
+
+- **Eklendi:** `admin.audit.list` query → `requestId` (tam eşleşme, 1..128) ve `reasonContains` (gerekçede büyük/küçük harf duyarsız alt dize, 3..100; `%` `_` `\` düz karakter). `reasonContains` verilirse `from` ve `to` zorunlu, aralık en çok 31 gün (`AUDIT_REASON_SEARCH_MAX_DAYS`); aksi 400 `VALIDATION_ERROR`.
+- **Değişti (davranış):** cursor yeni süzgeçlere de bağlı; süzgeç değişince `INVALID_CURSOR`. Yanıtta `before`/`after` içindeki hassas adlı anahtarların (password, hash, token, secret, mfa, totp, otp, recovery, apiKey, cookie, session, email, ip, userAgent; kelime eşleşmesi, iç içe dahil) değeri `"[gizli]"` olur. Yazma yolu ve kayıtlar değişmez (append-only).
+
 ## 1.37.0 — 2026-10-16 (Mert, #183 tekil kararın geri alınması)
 
 Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; `ContentHistoryItem` ACTION satırına `undoOfId` ve `undone` alanları eklendi (web ile birlikte yayınlanır). Yeni yetki veya audit işlemi yok (telafi kararı mevcut `moderation.poll.apply` / `moderation.comment.apply` yolundan geçer).
