@@ -69,6 +69,10 @@ Karar tablosu hâlâ boştur; S1 **önerilen** seçeneklerle (1, 2, 3, 15) ve ka
 
 **Bilerek yapılmayanlar:** yönetici arayüzü sayfası (S1'in UI kısmı, Utku), görsel hash sinyali, operatör kuyruğu (S2), itiraz (S3), kalibrasyon (S4), ayara taşınmış ağırlıklar. Puan kullanıcı yüzeylerinde (profil, oturum, herkese açık profil) görünmez; bu testle doğrulanır. Hesap anonimleştirme/silme: `deleted_at` dolu hesabın satırı sonraki turda silinir, listede görünmez; KVKK veri paketine dahil edilmesi (karar 13 önerisi) henüz **yapılmadı**.
 
+**Karar 13'e not (Faruk'un incelemesi, #269):**
+- "90 gün" sınırı pratikte işlemez: satırlar her 15 dakikada yeniden hesaplanır, yenilenmeyen silinir. Gerçek saklama sınırları 30 günlük sinyal penceresi ve **yedeklerdir**: KV-48 yedekleri 35 gün tutulur, bayrak kapatılıp satırlar silinse bile yedeklerde kalır. Hukuk değerlendirmesi bunu bilerek verilmelidir. Yedekten geri yükleme sonrası bayrak kapalıysa satırlar bir sonraki turda (en çok 15 dk) yeniden silinir (KV-48 restore adımına not).
+- Ölçek: her tur son 30 günün tüm anket, yorum, rapor ve moderasyon kayıtlarını toplar. Beta ölçeğinde sorun yoktur; büyüyünce artımlı hesaplama (yalnız son turdan beri değişen hesaplar) gerekir.
+
 ## 3. Bağımlılıklar ve dilimleme
 
 | Dilim | Gerekli kararlar | Not |
