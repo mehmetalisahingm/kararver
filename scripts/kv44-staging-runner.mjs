@@ -7,6 +7,7 @@
  * Evidence: %USERPROFILE%\kv44-evidence\<runId>\<role>.jsonl (outside the repo, masked). Matrix: docs/KV-44_STAGING_RUNNER.md.
  *
  *   --new-run                                    offline: prints a run id
+ *   --check-env [--as <role>] [--window-start <ISO>]   offline: missing env names (never values) and window times
  *   --preflight                                  GET /health + GET /v1/config only, no credentials
  *   --as initiator      --phase open|cleanup     R0, author account, R2 requests (T0), self_approval; R4 cleanup
  *   --as owner          --target <8> --marker <m> [--legacy-approval <id>]    R1
@@ -146,6 +147,29 @@ export function createWindow(startIso, now) {
     t0(step) { const m = minute(); if (m < 0 || m > WINDOW.t0LatestMinute) throw new Halt("BLOCKED-window", step); },
     cutoff: () => new Date(start + WINDOW.writeCutoffMinute * MIN),
   };
+}
+
+/** Env each role needs on its own machine. The approver's TOTP is prompted at the step, never read from env. */
+export const ROLE_ENV = Object.freeze({
+  initiator: ["KV44_EXPECTED_SHA", "KV44_EMAIL", "KV44_PASSWORD"],
+  owner: ["KV44_EXPECTED_SHA", "KV44_EMAIL", "KV44_PASSWORD"],
+  "media-operator": ["KV44_EXPECTED_SHA", "KV44_EMAIL", "KV44_PASSWORD", "KV44_MEDIA_HOST"],
+  approver: ["KV44_EXPECTED_SHA", "KV44_EMAIL", "KV44_PASSWORD"],
+});
+const ENV_FORMAT = { KV44_EXPECTED_SHA: v => /^[a-f0-9]{40}$/.test(v), KV44_MEDIA_HOST: v => { try { validateMediaHost(v); return true; } catch { return false; } } };
+/** Offline: names only, each as ok | missing | invalid. No value, length or prefix ever leaves this function. */
+export function checkEnv(env, roles = ROLES) {
+  return roles.map(role => ({ role, vars: ROLE_ENV[role].map(name => {
+    const v = env[name];
+    return { name, status: !v ? "missing" : ENV_FORMAT[name] && !ENV_FORMAT[name](v) ? "invalid" : "ok" };
+  }) }));
+}
+/** Window milestones from --window-start (UTC). */
+export function windowTimes(startIso) {
+  const start = Date.parse(startIso ?? "");
+  if (!Number.isFinite(start)) throw new Error("--window-start must be an ISO time");
+  const at = m => new Date(start + m * MIN).toISOString();
+  return { start: at(0), t0Latest: at(WINDOW.t0LatestMinute), writeCutoff: at(WINDOW.writeCutoffMinute), end: at(WINDOW.minutes) };
 }
 
 // --- runner core ---------------------------------------------------------------------------------------------------
@@ -595,12 +619,24 @@ const RUNNERS = { initiator, owner, "media-operator": mediaOperator, approver };
 
 export async function main(argv, deps = {}) {
   const { values: args } = parseArgs({ args: argv, strict: true, options: {
-    "new-run": { type: "boolean" }, preflight: { type: "boolean" }, merge: { type: "boolean" },
+    "new-run": { type: "boolean" }, "check-env": { type: "boolean" }, preflight: { type: "boolean" }, merge: { type: "boolean" },
     as: { type: "string" }, phase: { type: "string" }, run: { type: "string" }, "window-start": { type: "string" },
     approval: { type: "string" }, target: { type: "string" }, marker: { type: "string" }, "legacy-approval": { type: "string" },
   } });
   const log = deps.log ?? console.log;
   if (args["new-run"]) { log(newRunId()); return 0; }
+  if (args["check-env"]) {
+    if (args.as && !ROLE_ENV[args.as]) throw new Error(`--as ${ROLES.join("|")}`);
+    const rows = checkEnv(deps.env ?? process.env, args.as ? [args.as] : ROLES);
+    for (const { role, vars } of rows) log(`${role.padEnd(15)} ${vars.map(v => `${v.name}=${v.status}`).join("  ")}`);
+    const bad = [...new Set(rows.flatMap(r => r.vars.filter(v => v.status !== "ok").map(v => `${v.name} (${v.status})`)))];
+    log(bad.length ? `eksik/geçersiz: ${bad.join(", ")}` : "env tamam");
+    if (args["window-start"]) {
+      const w = windowTimes(args["window-start"]);
+      log(`pencere (UTC)  başlangıç ${w.start}  T0 en geç ${w.t0Latest}  yazma sınırı ${w.writeCutoff}  bitiş ${w.end}`);
+    } else log("pencere: --window-start verilmedi");
+    return bad.length ? 1 : 0;
+  }
   if (args.preflight) { const r = await preflight(deps.http); log(JSON.stringify(r, null, 2)); return r.pass ? 0 : 1; }
   if (args.merge) {
     if (!RUN_ID.test(args.run ?? "")) throw new Error("--merge needs --run");

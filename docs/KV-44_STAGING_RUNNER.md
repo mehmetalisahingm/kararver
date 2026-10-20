@@ -30,6 +30,12 @@ Initiator için **MODERATOR yetmez**: toplu onay endpoint'i ADMIN kapısındadı
 node scripts/kv44-staging-runner.mjs --new-run
 ```
 
+Her kişi koşudan önce kendi env'ini ağsız olarak kontrol eder. Çıktıda yalnız değişken adları ve durumları (`ok`, `missing`, `invalid`) bulunur, değerler hiç basılmaz. `--window-start` verilirse pencerenin başlangıç, T0 en geç (dk 19), yazma sınırı (dk 50) ve bitiş (dk 60) zamanları UTC olarak basılır. `--as` verilmezse dört rolün hepsi listelenir. Eksik ya da geçersiz değişken varsa çıkış kodu 1 olur.
+
+```bash
+node scripts/kv44-staging-runner.mjs --check-env --as media-operator --window-start <iso>
+```
+
 ```bash
 node scripts/kv44-staging-runner.mjs --preflight
 ```

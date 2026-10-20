@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { API, MATRIX, WEB, combine, main, maskUrl, mediaHostMatches, mergeEvidence, newRunId, preflight, redact, syntheticPng, validateMediaHost } from "./kv44-staging-runner.mjs";
+import { API, MATRIX, WEB, checkEnv, combine, main, maskUrl, mediaHostMatches, mergeEvidence, newRunId, preflight, redact, syntheticPng, validateMediaHost } from "./kv44-staging-runner.mjs";
 
 const SHA = "a".repeat(40);
 const MEDIA_HOST = "kv-staging-private.example-bucket.test";
@@ -132,6 +132,25 @@ test("media host: exact match only", () => {
   assert.throws(() => validateMediaHost("https://x.test"));
   assert.throws(() => validateMediaHost(undefined));
   assert.equal(syntheticPng().subarray(1, 4).toString(), "PNG");
+});
+
+test("check-env: offline, names and status only, window milestones", async () => {
+  const secret = "hunter2-do-not-print", email = "mert@staff.test";
+  const lines = [];
+  const http = () => assert.fail("check-env must not touch the network");
+  const env = { KV44_EMAIL: email, KV44_PASSWORD: secret, KV44_EXPECTED_SHA: "abc", KV44_MEDIA_HOST: "" };
+  const code = await main(["--check-env", "--as", "media-operator", "--window-start", "2026-10-20T10:00:00Z"], { env, http, log: l => lines.push(l) });
+  assert.equal(code, 1);
+  const out = lines.join("\n");
+  assert.match(out, /KV44_EXPECTED_SHA=invalid/);
+  assert.match(out, /KV44_MEDIA_HOST=missing/);
+  assert.match(out, /KV44_PASSWORD=ok/);
+  assert.match(out, /T0 en geç 2026-10-20T10:19:00\.000Z  yazma sınırı 2026-10-20T10:50:00\.000Z  bitiş 2026-10-20T11:00:00\.000Z/);
+  assert.ok(!out.includes(secret) && !out.includes(email) && !out.includes("abc"));
+  const ok = { KV44_EMAIL: email, KV44_PASSWORD: secret, KV44_EXPECTED_SHA: SHA, KV44_MEDIA_HOST: MEDIA_HOST };
+  assert.equal(await main(["--check-env", "--as", "approver"], { env: ok, http, log: () => {} }), 0);
+  assert.deepEqual(checkEnv({}, ["approver"])[0].vars.map(v => v.status), ["missing", "missing", "missing"]);
+  await assert.rejects(main(["--check-env", "--as", "nobody"], { env: ok, http, log: () => {} }));
 });
 
 test("preflight: only two GETs, no credentials", async () => {
