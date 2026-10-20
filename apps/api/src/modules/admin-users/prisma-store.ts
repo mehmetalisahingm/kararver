@@ -489,6 +489,11 @@ export function createPrismaAdminUserStore(prisma: PrismaClient, options: { enfo
         }
 
         const before: Role = current ?? "USER";
+        // SA #180 / single-owner policy: normal HTTP role changes may not create another SUPER_ADMIN.
+        // The initial owner is established by the one-time, guarded admin:bootstrap CLI only.
+        // This check is inside the locked transaction, regardless of optional role approval settings.
+        if (role === "SUPER_ADMIN" && before !== "SUPER_ADMIN")
+          return { kind: "rejected", reason: "super_admin_reserved" } as const;
         if (before === role) return { kind: "unchanged", role } as const;
         // SA #182: Transaction-bound second approval for SUPER_ADMIN promotions/revocations.
         // The flag is activated only after two distinct enrolled SUPER_ADMIN accounts exist.

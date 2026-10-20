@@ -4,6 +4,9 @@ import type { AuditAction, AuditSummary, AuditTargetType } from "@kararver/contr
 import type { Prisma, PrismaClient } from "@kararver/db";
 import type { AuditRecord, AuditStore } from "./store.ts";
 
+/** LIKE/ILIKE joker karakterlerini düz karaktere çevirir (PostgreSQL varsayılan kaçış karakteri \). */
+export const escapeLike = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
+
 export function createPrismaAuditStore(prisma: PrismaClient): AuditStore {
   return {
     async list(q, limit) {
@@ -14,6 +17,9 @@ export function createPrismaAuditStore(prisma: PrismaClient): AuditStore {
         action: q.action,
         operation: q.operation,
         source: q.source,
+        requestId: q.requestId,
+        // ILIKE; aralık sözleşmede ≤ 31 gün olduğundan created_at index'inden okunur.
+        reason: q.reasonContains !== undefined ? { contains: escapeLike(q.reasonContains), mode: "insensitive" } : undefined,
         createdAt: q.from || q.to ? { gte: q.from, lt: q.to } : undefined,
         ...(q.after
           ? { OR: [{ createdAt: { lt: q.after.createdAt } }, { createdAt: q.after.createdAt, id: { lt: q.after.id } }] }

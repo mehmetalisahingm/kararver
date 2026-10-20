@@ -45,3 +45,6 @@ output/playwright/
 *.pem
 *.dump
 *.dump.enc
+
+# KV-44 (#46): yerel kesinti kabul testi çıktıları (pnpm outage:test -- --out ...)
+outage-sonuc*.json

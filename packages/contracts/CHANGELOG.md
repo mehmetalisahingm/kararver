@@ -9,7 +9,7 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
-## 1.38.0 — 2026-10-18 (Mert, #183 spam puanı gölge modu, S1)
+## 1.39.0 — 2026-10-20 (Mert, #183 spam puanı gölge modu, S1)
 
 Kırıcı değişiklik yok: yeni endpoint, yeni ayar, yeni yetki. Kullanıcıya hiçbir etkisi yoktur; ayar varsayılan **kapalıdır** ve canlıda açılması [karar 13](../../docs/KV-37_SPAM_SCORE_DECISIONS.md)'ün (hukuk/KVKK) kapanmasına bağlıdır.
 
@@ -17,6 +17,13 @@ Kırıcı değişiklik yok: yeni endpoint, yeni ayar, yeni yetki. Kullanıcıya 
 - **Eklendi:** ayar `spam.shadowScoring.enabled` (varsayılan false). Kapalıyken worker puan hesaplamaz ve saklanan satırları siler.
 - **Yetki:** yeni işlem `moderation.spamScore.read` (admin). Audit işlemi yok (salt okuma).
 - Şemalar/sabitler: `SpamSignals`, `SpamScoreView`, `SpamScoreListQuery`, `SPAM_SCORE_RETENTION_DAYS` (90).
+
+## 1.38.0 — 2026-10-19 (Utku, #185 audit süzgeçleri ve özet temizliği, dilim 1)
+
+Kırıcı değişiklik yok: `admin.audit.list` yeni isteğe bağlı süzgeçler alır; yanıt şeması aynı.
+
+- **Eklendi:** `admin.audit.list` query → `requestId` (tam eşleşme, 1..128) ve `reasonContains` (gerekçede büyük/küçük harf duyarsız alt dize, 3..100; `%` `_` `\` düz karakter). `reasonContains` verilirse `from` ve `to` zorunlu, aralık en çok 31 gün (`AUDIT_REASON_SEARCH_MAX_DAYS`); aksi 400 `VALIDATION_ERROR`.
+- **Değişti (davranış):** cursor yeni süzgeçlere de bağlı; süzgeç değişince `INVALID_CURSOR`. Yanıtta `before`/`after` içindeki hassas adlı anahtarların (password, hash, token, secret, mfa, totp, otp, recovery, apiKey, cookie, session, email, ip, userAgent; kelime eşleşmesi, iç içe dahil) değeri `"[gizli]"` olur. Yazma yolu ve kayıtlar değişmez (append-only).
 
 ## 1.37.0 — 2026-10-16 (Mert, #183 tekil kararın geri alınması)
 

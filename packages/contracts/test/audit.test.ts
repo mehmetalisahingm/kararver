@@ -6,11 +6,13 @@ import {
   actions,
   allowedAuditOperations,
   assertAuditEntry,
+  AUDIT_REASON_SEARCH_MAX_DAYS,
   AUDIT_SUMMARY_MAX_CHARS,
   auditOperations,
   AuditEntry,
   endpointPermissions,
   endpoints,
+  getEndpoint,
   isAuditAction,
   ModerationAction,
   reasonRequiredActions,
@@ -202,5 +204,34 @@ describe("assertAuditEntry", () => {
       createdAt: "2026-10-01T09:00:00.000Z",
     };
     assert.ok(AuditEntry.safeParse(row).success);
+  });
+});
+
+// #185: admin.audit.list yeni süzgeçleri. reasonContains tam tablo taramasın diye from/to (≤ 31 gün) ister.
+describe("admin.audit.list sorgusu (#185)", () => {
+  const query = getEndpoint("admin.audit.list").request.query!;
+  const day = (d: number) => new Date(Date.UTC(2026, 9, 1) + d * 86_400_000).toISOString();
+  const ok = (q: Record<string, unknown>) => query.safeParse({ limit: 30, ...q }).success;
+  const fields = (q: Record<string, unknown>) => (query.safeParse({ limit: 30, ...q }).error?.issues ?? []).map((i) => i.path.join("."));
+
+  test("requestId: 1..128 karakter", () => {
+    assert.ok(ok({ requestId: "req-1" }));
+    assert.ok(ok({ requestId: "r".repeat(128) }));
+    assert.deepEqual(fields({ requestId: "r".repeat(129) }), ["requestId"]);
+    assert.deepEqual(fields({ requestId: "" }), ["requestId"]);
+  });
+
+  test("reasonContains: 3..100 karakter, from ve to zorunlu, aralık en çok 31 gün", () => {
+    assert.equal(AUDIT_REASON_SEARCH_MAX_DAYS, 31);
+    assert.ok(ok({ reasonContains: "spam", from: day(0), to: day(31) }), "tam 31 gün");
+    assert.deepEqual(fields({ reasonContains: "spam", from: day(0), to: day(32) }), ["to"]);
+    assert.deepEqual(fields({ reasonContains: "spam" }), ["from"]);
+    assert.deepEqual(fields({ reasonContains: "spam", from: day(0) }), ["to"]);
+    assert.deepEqual(fields({ reasonContains: "spam", to: day(1) }), ["from"]);
+    assert.deepEqual(fields({ reasonContains: "spam", from: day(2), to: day(1) }), ["to"]);
+    assert.deepEqual(fields({ reasonContains: "ab", from: day(0), to: day(1) }), ["reasonContains"]);
+    assert.deepEqual(fields({ reasonContains: "  ab  ", from: day(0), to: day(1) }), ["reasonContains"], "boşluklar sayılmaz");
+    assert.deepEqual(fields({ reasonContains: "x".repeat(101), from: day(0), to: day(1) }), ["reasonContains"]);
+    assert.ok(ok({ from: day(0), to: day(400) }), "gerekçe araması yoksa aralık sınırı yok");
   });
 });
