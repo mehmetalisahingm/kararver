@@ -3,7 +3,7 @@
 Mert'in sahip olduğu açık işleri kod tarafında bloke eden kararlar. Ayrıntı ilgili belgelerde.
 
 ## Mehmet
-- **#183** `docs/KV-37_SPAM_SCORE_DECISIONS.md`: karar 1–8, 14, 15. Gölge mod için 1, 2, 3, 15 öncelikli.
+- **#183** `docs/KV-37_SPAM_SCORE_DECISIONS.md`: karar 4–8 ve 14 bekliyor. Mehmet 21 Ekim'de 1, 2, 3 ve 15 önerilerini, yalnız kapalı bayrakla birleştirme için onayladı. Karar 13 ve canlı kabul tamamlanmadan gölge mod açılmaz.
 - **#184** `docs/KV-54_*` §11: sahiplik talebi eşikleri, uygunluk ve bayrak kararları.
 - **#56** üniversite doğrulama: 8 karar.
 - **#47** staging feed'indeki E2E/test hesap içeriğinin envanteri ve kapatılması (SUPER_ADMIN işi). Beta raporu artık QA kimliği görürse iptal olur (PR #268), ama hesapları kapatmak yine sende.
