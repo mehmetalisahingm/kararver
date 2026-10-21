@@ -1,6 +1,9 @@
 # KV-49 (#51) staging izleme ve alarm. 30 dakikada bir (ve elle): API sağlığı, worker heartbeat'i, çalışan sürüm.
 # Sorun varsa "staging-alarm" etiketli tek bir açık issue açılır/güncellenir; düzelince kapatılır. Secret gerekmez
 # (yalnız public /health okunur). Ayrıntı: docs/KV-49_OPERATIONS.md "İzleme ve alarm".
+# Production: repo değişkeni PROD_API_URL (ve PROD_WEB_URL) tanımlanınca aynı kontroller "production-alarm" etiketiyle çalışır;
+# tanımlı değilken production işi hiçbir şey yapmadan geçer. Production bilerek onaylı sürümde durduğu için gecikme alarmı
+# yoktur; PROD_RELEASE_SHA verilirse "production onaylı sürümde mi" denetlenir.
 name: staging-monitor
 
 on:
@@ -21,13 +24,35 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [staging, production]
     env:
-      API_URL: ${{ vars.STAGING_API_URL || 'https://api-staging-45cb.up.railway.app' }}
+      TARGET: ${{ matrix.target }}
+      TARGET_TITLE: ${{ matrix.target == 'staging' && 'Staging' || 'Production' }}
+      ALARM_LABEL: ${{ matrix.target }}-alarm
+      # Production alarmı yedek sorumluya da gider (ilk sorumlu ulaşılamazsa).
+      RESPONDERS: "${{ matrix.target == 'production' && '@farukkemree · yedek: @mehmetalisahingm' || '@farukkemree' }}"
+      API_URL: ${{ matrix.target == 'staging' && (vars.STAGING_API_URL || 'https://api-staging-45cb.up.railway.app') || vars.PROD_API_URL }}
+      WEB_URL: ${{ matrix.target == 'staging' && (vars.STAGING_WEB_URL || 'https://kararver-staging.vercel.app') || vars.PROD_WEB_URL }}
       # Worker heartbeat'i 10 sn'de bir yazılır; 3 dakikadan eskiyse durmuş sayılır (/health ile aynı eşik, WORKER_OK_SECONDS).
       MAX_WORKER_AGE_MS: "180000"
     steps:
+      - name: Hedef tanımlı mı
+        id: target
+        shell: bash
+        run: |
+          if [ -z "${API_URL:-}" ] || [ -z "${WEB_URL:-}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "- $TARGET_TITLE izlemesi kapalı: adres değişkeni tanımlı değil (PROD_API_URL / PROD_WEB_URL)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Sağlık kontrolü
         id: health
+        if: steps.target.outputs.skip != 'true'
         shell: bash
         run: |
           set -u
@@ -63,7 +88,7 @@ jobs:
             echo "sha=$sha" >> "$GITHUB_OUTPUT"
           fi
           {
-            echo "## Staging sağlığı"
+            echo "## $TARGET_TITLE sağlığı"
             echo "- API: \`$API_URL\` → HTTP $code"
             echo "- Çalışan sürüm: \`${sha:-?}\`"
             if [ ${#problems[@]} -eq 0 ]; then echo "- Sonuç: ✅ sorun yok"; else printf -- '- ✖ %s\n' "${problems[@]}"; fi
@@ -75,8 +100,7 @@ jobs:
       # Ana sayfa 200 dönmeli ve sayfa api modunda olmalı: demo modu RSC payload'ında "demo":true olarak görünür.
       - name: Web kontrolü
         id: web
-        env:
-          WEB_URL: ${{ vars.STAGING_WEB_URL || 'https://kararver-staging.vercel.app' }}
+        if: steps.target.outputs.skip != 'true'
         shell: bash
         run: |
           set -u
@@ -100,10 +124,12 @@ jobs:
       # (2) main CI'ı MAIN_RED_MAX_HOURS saattir kırmızı (staging bu sürede yeni sürüm alamaz).
       - name: Deploy gecikmesi ve main CI
         id: lag
-        if: steps.health.outputs.sha != ''
+        if: steps.target.outputs.skip != 'true' && steps.health.outputs.sha != ''
         env:
           GH_TOKEN: ${{ github.token }}
           STAGING_SHA: ${{ steps.health.outputs.sha }}
+          # Production için onaylı yayın sürümü (KV-52 karar kaydı); doluyken "production bu SHA'da mı" denetlenir.
+          PROD_RELEASE_SHA: ${{ vars.PROD_RELEASE_SHA }}
           # Kabul testi için staging bilerek bir SHA'da tutuluyorsa (#46/#47 "aynı SHA" kuralı) repo değişkeni olarak verilir.
           # Doluyken gecikme alarmı yerine "staging sabitlenen SHA'da mı" denetlenir; iş bitince değişken silinir.
           STAGING_PINNED_SHA: ${{ vars.STAGING_PINNED_SHA }}
@@ -125,8 +151,8 @@ jobs:
             exit 0
           fi
 
-          # (2) main uzun süredir kırmızı mı?
-          if [ "${latest%% *}" = "failure" ]; then
+          # (2) main uzun süredir kırmızı mı? (yalnız staging: production onaylı sürümle ilerler)
+          if [ "$TARGET" = "staging" ] && [ "${latest%% *}" = "failure" ]; then
             last_green_at=$(printf '%s' "$green" | awk '{ print $3 }')
             red_hours=$(( (now - $(date -u -d "${last_green_at:-1970-01-01T00:00:00Z}" +%s)) / 3600 ))
             if [ "$red_hours" -ge "$MAIN_RED_MAX_HOURS" ]; then
@@ -137,19 +163,28 @@ jobs:
           # (1) staging, CI'ı yeşil son main commit'inin gerisinde mi? Sabitlenmişse yerine sabit SHA'da mı?
           green_sha=$(printf '%s' "$green" | awk '{ print $2 }')
           green_at=$(printf '%s' "$green" | awk '{ print $3 }')
-          pinned="${STAGING_PINNED_SHA:-}"
+          if [ "$TARGET" = "production" ]; then pinned="${PROD_RELEASE_SHA:-}"; pin_name="PROD_RELEASE_SHA"; else pinned="${STAGING_PINNED_SHA:-}"; pin_name="STAGING_PINNED_SHA"; fi
           if [ -n "$pinned" ] && ! [[ "$pinned" =~ ^[0-9a-f]{7,40}$ ]]; then
-            problems+=("STAGING_PINNED_SHA geçersiz (7–40 haneli küçük harf hex olmalı)")
+            problems+=("$pin_name geçersiz (7–40 haneli küçük harf hex olmalı)")
             pinned=""
           fi
           if [ -n "$pinned" ]; then
             # Kısa ya da uzun SHA: ortak önek karşılaştırılır.
             n=$(( ${#pinned} < 12 ? ${#pinned} : 12 ))
             if [ "${STAGING_SHA:0:$n}" = "${pinned:0:$n}" ]; then
-              echo "- Staging bilerek sabitlendi: \`${pinned:0:12}\` (gecikme alarmı kapalı; değişken silinince açılır)" >> "$GITHUB_STEP_SUMMARY"
+              if [ "$TARGET" = "production" ]; then
+                echo "- Production onaylı sürümde: \`${pinned:0:12}\`" >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo "- Staging bilerek sabitlendi: \`${pinned:0:12}\` (gecikme alarmı kapalı; değişken silinince açılır)" >> "$GITHUB_STEP_SUMMARY"
+              fi
+            elif [ "$TARGET" = "production" ]; then
+              problems+=("production onaylı sürümde değil: beklenen ${pinned:0:12}, çalışan ${STAGING_SHA} (onaysız deploy ya da geri dönüş)")
             else
               problems+=("staging sabitlenen SHA'da değil: beklenen ${pinned:0:12}, çalışan ${STAGING_SHA} (kabul testi sırasında beklenmeyen deploy)")
             fi
+          elif [ "$TARGET" = "production" ]; then
+            # Production izleniyorsa yayındadır: onaylı sürüm tanımsızsa onaysız bir deploy alarm vermez (KV-52 T−1 sa).
+            problems+=("production izleniyor ama PROD_RELEASE_SHA tanımlı değil: onaysız deploy fark edilmez (KV-52 karar kaydındaki SHA girilmeli)")
           elif [[ "$STAGING_SHA" =~ ^[0-9a-f]{12}$ ]] && [[ "$green_sha" =~ ^[0-9a-f]{40}$ ]] && [ "${green_sha:0:12}" != "$STAGING_SHA" ]; then
             # "ahead": yeşil commit staging'in ilerisinde. "behind"/"identical": staging daha yeni ya da aynı (alarm yok).
             # Yalnız API/worker'ı etkileyen değişiklik sayılır: web (Vercel), doküman ve workflow değişikliği API deploy'u gerektirmez.
@@ -171,7 +206,7 @@ jobs:
             off_by=${off_main##* }
             if [ "$off_status" = "ahead" ] || [ "$off_status" = "diverged" ]; then
               migrations=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$STAGING_SHA" --jq '[.files[].filename | select(startswith("packages/db/prisma/migrations/"))] | length' 2>/dev/null || echo "?")
-              problems+=("staging main dışı commit çalıştırıyor: ${STAGING_SHA} main'de değil (${off_by} commit, ${migrations} migration dosyası); staging main'den deploy edilmeli")
+              problems+=("$TARGET main dışı commit çalıştırıyor: ${STAGING_SHA} main'de değil (${off_by} commit, ${migrations} migration dosyası); $TARGET main'den deploy edilmeli")
             fi
           fi
 
@@ -183,22 +218,23 @@ jobs:
           [ ${#problems[@]} -eq 0 ] && echo "ok=true" >> "$GITHUB_OUTPUT" || echo "ok=false" >> "$GITHUB_OUTPUT"
 
       - name: Alarm issue'sunu aç / güncelle / kapat
+        if: steps.target.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           OK: ${{ steps.health.outputs.ok == 'true' && steps.web.outputs.ok == 'true' && steps.lag.outputs.ok != 'false' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         shell: bash
         run: |
-          gh label create staging-alarm --color B60205 --description "KV-49 staging izleme alarmı" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
-          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label staging-alarm --state open --json number --jq '.[0].number // empty')
+          gh label create "$ALARM_LABEL" --color B60205 --description "KV-49 $TARGET izleme alarmı" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label "$ALARM_LABEL" --state open --json number --jq '.[0].number // empty')
           if [ "$OK" = "true" ]; then
-            if [ -n "$open" ]; then gh issue close "$open" -R "$GITHUB_REPOSITORY" --comment "✅ Staging yeniden sağlıklı ($RUN_URL)."; fi
+            if [ -n "$open" ]; then gh issue close "$open" -R "$GITHUB_REPOSITORY" --comment "✅ $TARGET_TITLE yeniden sağlıklı ($RUN_URL)."; fi
             exit 0
           fi
-          msg=$(printf '**Staging sağlık kontrolü başarısız** (%s)\n\n%s\n\nRunbook: docs/KV-49_OPERATIONS.md "Olay müdahalesi". Sorumlu: @farukkemree' "$RUN_URL" "$(grep -v '^$' problems.txt | sed 's/^/- /')")
+          msg=$(printf '**%s sağlık kontrolü başarısız** (%s)\n\n%s\n\nRunbook: docs/KV-49_OPERATIONS.md "Olay müdahalesi". Sorumlu: %s' "$TARGET_TITLE" "$RUN_URL" "$(grep -v '^$' problems.txt | sed 's/^/- /')" "$RESPONDERS")
           if [ -n "$open" ]; then
             gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$msg"
           else
-            gh issue create -R "$GITHUB_REPOSITORY" --label staging-alarm --title "Staging alarmı: sağlık kontrolü başarısız" --body "$msg"
+            gh issue create -R "$GITHUB_REPOSITORY" --label "$ALARM_LABEL" --title "$TARGET_TITLE alarmı: sağlık kontrolü başarısız" --body "$msg"
           fi
           exit 1

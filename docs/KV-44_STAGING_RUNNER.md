@@ -70,8 +70,8 @@ Kaynak sütunu gerçek kod satırıdır; `kv44-staging-runner.test.mjs` her sat�
 
 | ID | R | Rol | Sev | Beklenen | Kaynak | K |
 |---|---|---|---|---|---|---|
-| R0.pinned | R0 | hepsi (R4 hariç) | P0 | STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification | `.github/workflows/staging-monitor.yml:102` | |
-| R0.release | R0 | hepsi | P0 | 200 status=ok env=staging, sha = KV44_EXPECTED_SHA | `apps/api/src/app.ts:496` | |
+| R0.pinned | R0 | hepsi (R4 hariç) | P0 | STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification | `.github/workflows/staging-monitor.yml:135` | |
+| R0.release | R0 | hepsi | P0 | 200 status=ok env=staging, sha = KV44_EXPECTED_SHA | `apps/api/src/app.ts:500` | |
 | R0.login | R0 | hepsi | P0 | 200 + kv_session | `packages/contracts/src/domains/auth.ts:87` | |
 | R0.role | R0 | hepsi | P0 | /me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN) | `packages/contracts/src/domains/auth.ts:240` | |
 | ACC.register | R0 | initiator, media-operator | P1 | 202; 429 → BLOCKED-ratelimit (5/IP/saat) | `docs/KV-19_RATE_LIMIT.md:21` | |
