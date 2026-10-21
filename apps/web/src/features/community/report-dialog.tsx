@@ -35,13 +35,20 @@ export function ReportButton({ target, label }: { target: ReportTarget; label: s
     const element = dialog.current;
     if (!element) return;
     if (open && !element.open) element.showModal();
-    if (!open && element.open) element.close();
+    if (!open && element.open) {
+      element.close();
+      // Background controls are inert until the modal has actually closed.
+      trigger.current?.focus();
+    }
   }, [open]);
 
   // Demo adapter'da rapor yoktur: düğme hiç görünmez (ölü düğme göstermeyiz).
   if (!api) return null;
 
   function show() {
+    // WebKit pointer clicks do not focus buttons. Capture the real invoker for
+    // both this dialog and the sign-in gate before either modal opens.
+    trigger.current?.focus();
     if (!requireUser(typeof window === "undefined" ? "/" : window.location.pathname)) return;
     setReason("SPAM");
     setNote("");
@@ -50,7 +57,6 @@ export function ReportButton({ target, label }: { target: ReportTarget; label: s
   }
   function close() {
     setOpen(false);
-    trigger.current?.focus();
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -77,16 +83,16 @@ export function ReportButton({ target, label }: { target: ReportTarget; label: s
         <form className="kv-stack" onSubmit={submit}>
           <h2 id={titleId}>İçeriği raporla</h2>
           <p className="kv-muted">Raporun içeriği silmez; moderatörler inceler. Aynı içeriği tekrar raporlaman gerekmez.</p>
-          <label>
-            Neden
-            <select className="kv-input" value={reason} onChange={(event) => setReason(event.target.value as ReportReasonId)}>
+          <div className="kv-field">
+            <label htmlFor={`${titleId}-reason`}>Neden</label>
+            <select id={`${titleId}-reason`} className="kv-input" value={reason} onChange={(event) => setReason(event.target.value as ReportReasonId)}>
               {reportReasons.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
             </select>
-          </label>
-          <label>
-            Not (isteğe bağlı)
-            <textarea className="kv-input" rows={3} maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} />
-          </label>
+          </div>
+          <div className="kv-field">
+            <label htmlFor={`${titleId}-note`}>Not (isteğe bağlı)</label>
+            <textarea id={`${titleId}-note`} className="kv-input" rows={3} maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} />
+          </div>
           <ErrorMessage message={error} />
           <div className="kv-row">
             <button type="button" className="kv-button kv-button--secondary" onClick={close} disabled={busy}>Vazgeç</button>
