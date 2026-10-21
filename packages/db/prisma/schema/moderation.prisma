@@ -318,3 +318,19 @@ model ModerationBatchItem {
   @@index([targetId, createdAt])
   @@map("moderation_batch_items")
 }
+
+// #183 / KV-37 S1 (gölge mod): hesap başına spam uyarı puanı. Yalnız `spam.shadowScoring.enabled` açıkken worker yazar;
+// kullanıcıya hiçbir etkisi yoktur, yalnız yöneticiler okur. Satır kişi başına tekdir ve her turda yeniden hesaplanır;
+// sinyaller yalnız sayaçtır (metin, IP, cihaz yok). Saklama: puan eşiğin altına inerse, hesap silinirse ya da 90 günden eski
+// kalırsa worker siler (KV-37_SPAM_SCORE_DECISIONS karar 13 önerisi; hukuk onayı bekliyor).
+model SpamAccountScore {
+  userId     String   @id @map("user_id") @db.Uuid
+  score      Int
+  signals    Json
+  computedAt DateTime @map("computed_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([score(sort: Desc), userId])
+  @@map("spam_account_scores")
+}

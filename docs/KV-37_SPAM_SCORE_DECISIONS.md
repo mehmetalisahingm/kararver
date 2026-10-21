@@ -1,6 +1,6 @@
 # KV-37 — Spam uyarı puanı, operatör incelemesi ve yanlış pozitif itirazı: karar listesi (#183)
 
-> **Durum: karar bekliyor. Bu belgede kod, migration veya sözleşme değişikliği yoktur.** #183'ün kalan son işi budur; ürün ve hukuk kararları verilmeden uygulanmamalıdır. Sahipler: ürün **Mehmet**, itiraz kanalı ve admin arayüzü **Utku**, KVKK değerlendirmesi **hukuk**. Uygulama Mert'te.
+> **Durum: S1 için ürün kararları 1, 2, 3 ve 15 onaylandı (Mehmet, 21 Ekim 2026); diğer kararlar bekliyor.** #269 yalnız varsayılan kapalı kod olarak birleştirilir. Karar 13 ve ilgili kabul işleri tamamlanmadan gölge mod dahil canlıda açılmaz. Sahipler: ürün **Mehmet**, itiraz kanalı ve admin arayüzü **Utku**, KVKK değerlendirmesi **hukuk**. Uygulama Mert'te.
 >
 > İlke (mevcut, [KV-37 §7](./KV-37_BULK_MODERATION.md)): **otomatik kalıcı ban yoktur.** Aşağıdaki öneriler bu ilkeyi bir adım ileri taşır: V1'de puan hiçbir kullanıcıya otomatik bir etki yapmaz.
 
@@ -23,9 +23,9 @@ Her satırda **önerilen** seçenek ve gerekçesi vardır. Kabul için "Karar" s
 
 | # | Karar | Seçenekler | Öneri | Karar |
 |---|---|---|---|---|
-| 1 | Puan hangi sinyallerden çıkar? | Kural tabanlı ve açıklanabilir / istatistiksel-ML | **Kural tabanlı.** Sinyaller: aynı veya benzer metni tekrar gönderme, yorum patlaması, hesap yaşı, aynı görsel hash'i, hakkındaki raporların işleme dönüşme oranı, kısa sürede çok içeriğin gizlenmesi. **IP ve cihaz bilgisi kullanılmaz** (veri minimizasyonu, [KV-33 §13.3](./KV-33_ADMIN_USERS.md)). Ağırlıklar ayar olarak tutulur. Beta örneklemi ML için yetersizdir. | ☐ |
-| 2 | Puan neye ait, ne zaman hesaplanır? | Hesap / içerik; istekte / worker'da | **Hesap başına**, olaylar üzerinden **worker** hesaplar (istek süresini etkilemez). **30 günlük kayan pencere:** eski sinyal puandan düşer. | ☐ |
-| 3 | Eşik aşılınca ne olur? | (a) yalnız operatör kuyruğu, (b) içerik otomatik gizlenir, (c) yayın sınırı sıkılaşır | **(a)** V1'de **yalnız kuyruğa düşer.** Otomatik gizleme, yaptırım veya sınır değişikliği yok. İnsan kararı olmadan kullanıcıya hiçbir etkisi olmaz; bu aynı zamanda KVKK'daki yalnız otomatik işlemeye dayalı karar riskini ortadan kaldırır (bkz. 13). | ☐ |
+| 1 | Puan hangi sinyallerden çıkar? | Kural tabanlı ve açıklanabilir / istatistiksel-ML | **Kural tabanlı.** Sinyaller: aynı veya benzer metni tekrar gönderme, yorum patlaması, hesap yaşı, aynı görsel hash'i, hakkındaki raporların işleme dönüşme oranı, kısa sürede çok içeriğin gizlenmesi. **IP ve cihaz bilgisi kullanılmaz** (veri minimizasyonu, [KV-33 §13.3](./KV-33_ADMIN_USERS.md)). Ağırlıklar ayar olarak tutulur. Beta örneklemi ML için yetersizdir. | Öneri onaylandı — Mehmet, 21 Ekim 2026; bayrak kapalı kalır. |
+| 2 | Puan neye ait, ne zaman hesaplanır? | Hesap / içerik; istekte / worker'da | **Hesap başına**, olaylar üzerinden **worker** hesaplar (istek süresini etkilemez). **30 günlük kayan pencere:** eski sinyal puandan düşer. | Öneri onaylandı — Mehmet, 21 Ekim 2026; bayrak kapalı kalır. |
+| 3 | Eşik aşılınca ne olur? | (a) yalnız operatör kuyruğu, (b) içerik otomatik gizlenir, (c) yayın sınırı sıkılaşır | **(a)** V1'de **yalnız kuyruğa düşer.** Otomatik gizleme, yaptırım veya sınır değişikliği yok. İnsan kararı olmadan kullanıcıya hiçbir etkisi olmaz; bu aynı zamanda KVKK'daki yalnız otomatik işlemeye dayalı karar riskini ortadan kaldırır (bkz. 13). | Öneri onaylandı — Mehmet, 21 Ekim 2026; bayrak kapalı kalır. |
 | 4 | Kullanıcı puanı veya sinyalleri görür mü? | Gösterilir / gösterilmez | **Gösterilmez.** Sinyal ve eşik açıklanırsa aşılması kolaylaşır. İnsan karar verince **gerekçe** kullanıcıya yazılır (mevcut moderasyon/yaptırım bildirimi). | ☐ |
 
 ### B. Operatör incelemesi
@@ -52,7 +52,26 @@ Her satırda **önerilen** seçenek ve gerekçesi vardır. Kabul için "Karar" s
 |---|---|---|---|
 | 13 | Puan ve sinyaller kişisel veri/profilleme sayılır mı? Saklama? | **Hukuk değerlendirmesi gerekir.** Öneri: **90 gün** saklama, **KVKK veri paketine dahil**, hesap anonimleştirilince temizlenir. İnsan kararı olmadan etki olmadığından (3) otomatik karar itirazı hakkı doğmaz; yine de hukuk onaylamalı. **Bu karar canlıya çıkışı bloklar** (gölge modda puan saklanıyorsa dahil). | ☐ |
 | 14 | Topluluk sahibi puanı görür mü? | **Hayır.** Yalnız operatörler görür (sahip kullanıcıyı profilleyemez). | ☐ |
-| 15 | Yayına alma | **Gölge mod önce:** puan hesaplanır, **hiçbir kullanıcıya etkisi yoktur**, yalnız ADMIN görür. ~2 hafta sonra eşik gerçek veriye göre ayarlanır, sonra operatör kuyruğu **bayrakla** (varsayılan kapalı) açılır. 40 kişilik pilotta istatistik anlamsız olacağından ilk eşikler elle belirlenir. | ☐ |
+| 15 | Yayına alma | **Gölge mod önce:** puan hesaplanır, **hiçbir kullanıcıya etkisi yoktur**, yalnız ADMIN görür. ~2 hafta sonra eşik gerçek veriye göre ayarlanır, sonra operatör kuyruğu **bayrakla** (varsayılan kapalı) açılır. 40 kişilik pilotta istatistik anlamsız olacağından ilk eşikler elle belirlenir. | Öneri onaylandı — Mehmet, 21 Ekim 2026; bayrak kapalı kalır. |
+
+## 2.1 S1 gölge mod: uygulama durumu (18 Ekim 2026, PR taslağı)
+
+Mehmet 21 Ekim 2026 tarihinde 1, 2, 3 ve 15 için önerileri ve kapalı bayrakla birleştirmeyi onayladı. S1 bu seçeneklerle ve henüz onaylanmamış karar 13'ün önerisiyle (90 gün) **bayrak arkasında, varsayılan kapalı** uygulandı. Bayrak açılmadıkça hiçbir veri yazılmaz ve hiçbir kullanıcıya etkisi yoktur. Bayrağın canlıda açılması karar 13'ün (hukuk) kapanmasına bağlıdır; farklı bir karar çıkarsa aşağıdaki sabitler değişir.
+
+| Parça | Yer |
+|---|---|
+| Ayar `spam.shadowScoring.enabled` (varsayılan **false**) | `packages/contracts/src/settings.ts` |
+| Tablo `spam_account_scores` (hesap başına tek satır: puan, sayaç sinyalleri, hesaplanma anı; kullanıcı silinince CASCADE) | `moderation.prisma`, migration `20261018150000_mert_sa183_spam_shadow_score` |
+| Sinyaller (kural tabanlı, 30 gün; IP/cihaz/metin yok): aynı başlıklı gönderi tekrarı, son 24 saatte yorum sayısı (ilk 10 serbest), 7 günden yeni hesap + ≥10 içerik, "işlem uygulandı" raporları, geri alınmamış HIDE/REMOVE kararları | `apps/worker/src/jobs/spam-score/{score,job}.ts` |
+| Ağırlıklar: 15 / 2 / 20 / 20 / 15; tavan 100; **10 puanın altı saklanmaz** | `score.ts` (karar 1: ayara taşınacak) |
+| Job `spam-score.refresh`, 15 dakikada bir. Bayrak kapalıyken hesaplamaz ve **tüm satırları siler**; açıkken yenilenmeyen satırı (puanı düştü, hesap silindi) siler | `job.ts`, `main.ts` |
+| Yönetici görünümü `admin.spamScores.list` (`GET /admin/spam-scores`, yalnız ADMIN+, yetki `moderation.spamScore.read`; bayrak kapalıyken boş; 90 günden eski satır gizli) | `apps/api/src/modules/spam-score/routes.ts` |
+
+**Bilerek yapılmayanlar:** yönetici arayüzü sayfası (S1'in UI kısmı, Utku), görsel hash sinyali, operatör kuyruğu (S2), itiraz (S3), kalibrasyon (S4), ayara taşınmış ağırlıklar. Puan kullanıcı yüzeylerinde (profil, oturum, herkese açık profil) görünmez; bu testle doğrulanır. Hesap anonimleştirme/silme: `deleted_at` dolu hesabın satırı sonraki turda silinir, listede görünmez; KVKK veri paketine dahil edilmesi (karar 13 önerisi) henüz **yapılmadı**.
+
+**Karar 13'e not (Faruk'un incelemesi, #269):**
+- "90 gün" sınırı pratikte işlemez: satırlar her 15 dakikada yeniden hesaplanır, yenilenmeyen silinir. Gerçek saklama sınırları 30 günlük sinyal penceresi ve **yedeklerdir**: KV-48 yedekleri 35 gün tutulur, bayrak kapatılıp satırlar silinse bile yedeklerde kalır. Hukuk değerlendirmesi bunu bilerek verilmelidir. Yedekten geri yükleme sonrası bayrak kapalıysa satırlar bir sonraki turda (en çok 15 dk) yeniden silinir (KV-48 restore adımına not).
+- Ölçek: her tur son 30 günün tüm anket, yorum, rapor ve moderasyon kayıtlarını toplar. Beta ölçeğinde sorun yoktur; büyüyünce artımlı hesaplama (yalnız son turdan beri değişen hesaplar) gerekir.
 
 ## 3. Bağımlılıklar ve dilimleme
 

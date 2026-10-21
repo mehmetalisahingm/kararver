@@ -64,6 +64,7 @@ import type { ModerationStore } from "./modules/moderation/store.ts";
 import { registerNotificationRoutes } from "./modules/notifications/routes.ts";
 import type { NotificationStore } from "./modules/notifications/store.ts";
 import { registerReportRoutes } from "./modules/reports/routes.ts";
+import { registerSpamScoreRoutes, type SpamScoreStore } from "./modules/spam-score/routes.ts";
 import { registerSettingsRoutes } from "./modules/settings/routes.ts";
 import type { SettingsService } from "./modules/settings/service.ts";
 import type { ReportStore } from "./modules/reports/store.ts";
@@ -185,6 +186,10 @@ export type AppDeps = {
   isEmailChangeEnabled?: () => Promise<boolean>;
   /** account.selfDeletionEnabled (#181); verilmezse ayar servisinden, o da yoksa kapalı. */
   isSelfDeletionEnabled?: () => Promise<boolean>;
+  /** #183 spam puanı gölge modu (salt okuma, yalnız ADMIN+); ayar kapalıyken liste boştur. */
+  spamScoreStore?: SpamScoreStore;
+  /** spam.shadowScoring.enabled (#183); verilmezse ayar servisinden, o da yoksa kapalı. */
+  isSpamShadowEnabled?: () => Promise<boolean>;
   /** #181 kullanıcının kendi hesabını silme talebi; accountErasureStore ile birlikte kaydedilir (silmeyi o yapar). */
   accountDeletionStore?: AccountDeletionStore;
   /** #181 e-posta değişimi; adminUserStore ile birlikte kaydedilir (destek yolunda hedef rolü okunur). */
@@ -269,6 +274,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const isOwnershipEnabled = deps.isOwnershipEnabled ?? (settings ? () => settings.isOwnershipEnabled() : async () => false);
   const isEmailChangeEnabled = deps.isEmailChangeEnabled ?? (settings ? () => settings.isEmailChangeEnabled() : async () => false);
   const isSelfDeletionEnabled = deps.isSelfDeletionEnabled ?? (settings ? () => settings.isSelfDeletionEnabled() : async () => false);
+  const isSpamShadowEnabled = deps.isSpamShadowEnabled ?? (settings ? () => settings.isSpamShadowEnabled() : async () => false);
   const isCommentsEnabled = deps.isCommentsEnabled ?? (settings ? () => settings.isCommentsEnabled() : async () => true);
 
   const rateLimitSettings =
@@ -399,6 +405,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   if (deps.moderationStore && deps.bulkModerationStore && deps.bulkApprovalStore) {
     registerBulkModerationRoutes(route, { store: deps.moderationStore, batches: deps.bulkModerationStore, approvals: deps.bulkApprovalStore, rbac: deps.rbacStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
+  if (deps.spamScoreStore) registerSpamScoreRoutes(route, { store: deps.spamScoreStore, isEnabled: isSpamShadowEnabled, now });
   if (deps.notificationStore) {
     registerNotificationRoutes(route, { store: deps.notificationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }

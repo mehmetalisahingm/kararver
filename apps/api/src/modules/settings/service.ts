@@ -77,6 +77,8 @@ export type SettingsService = {
   isEmailChangeEnabled(): Promise<boolean>;
   /** account.selfDeletionEnabled (#181): varsayılan kapalı. */
   isSelfDeletionEnabled(): Promise<boolean>;
+  /** spam.shadowScoring.enabled (#183, KV-37 S1): varsayılan kapalı. */
+  isSpamShadowEnabled(): Promise<boolean>;
   isMaintenance(): Promise<boolean>;
   /** Yorum üst sınırı (comments.bodyMaxLength); sözleşme şeması 2000 karakterle üst sınırdır, ayar yalnız daraltır. */
   commentMaxLength(): Promise<number>;
@@ -218,6 +220,9 @@ export function createSettingsService(store: SettingsStore, options: SettingsSer
     },
     async isSelfDeletionEnabled() {
       return bool(await service.values(), "account.selfDeletionEnabled");
+    },
+    async isSpamShadowEnabled() {
+      return bool(await service.values(), "spam.shadowScoring.enabled");
     },
     async isMaintenance() {
       return bool(await service.values(), "maintenance.enabled");

@@ -365,6 +365,28 @@ export const ModerationBatchView = z.strictObject({
   undoable: z.boolean(),
 });
 
+/**
+ * #183 / KV-37 S1 (gölge mod): hesap başına spam uyarı puanı. Kullanıcıya hiçbir etkisi yoktur; yalnız yöneticiler okur
+ * (docs/KV-37_SPAM_SCORE_DECISIONS.md karar 3, 4, 14). Sinyaller yalnız sayaçtır; metin, IP ve cihaz bilgisi yoktur.
+ */
+export const SPAM_SCORE_RETENTION_DAYS = 90;
+export const SpamSignals = z.strictObject({
+  duplicatePosts: z.number().int().min(0),
+  comments24h: z.number().int().min(0),
+  youngBurst: z.union([z.literal(0), z.literal(1)]),
+  actionedReports: z.number().int().min(0),
+  hiddenContent: z.number().int().min(0),
+});
+export type SpamSignals = z.infer<typeof SpamSignals>;
+export const SpamScoreView = z.strictObject({
+  userId: Id,
+  username: z.string(),
+  score: z.number().int().min(0).max(100),
+  signals: SpamSignals,
+  computedAt: Timestamp,
+});
+export const SpamScoreListQuery = z.strictObject({ ...CursorQuery.shape, minScore: z.coerce.number().int().min(0).max(100).optional() });
+
 const moderation = { owner: "Mert", module: "moderation" } as const;
 const reports = { owner: "Mert", module: "reports" } as const;
 const media = { owner: "Mert", module: "media" } as const;
@@ -1029,5 +1051,26 @@ export const moderationEndpoints = [
     idempotency: "none",
     cache: "private",
     notes: ["Moderatör yalnız kendi partilerini, ADMIN+ hepsini görür."],
+  }),
+  defineEndpoint({
+    id: "admin.spamScores.list",
+    domain: "moderation",
+    method: "GET",
+    path: "/admin/spam-scores",
+    summary: "Spam uyarı puanları, gölge mod (en yüksek puan önce; yalnız ADMIN+)",
+    auth: "admin",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#183"],
+    availability: { status: "ready" },
+    request: { query: SpamScoreListQuery },
+    responses: { 200: pageOf(SpamScoreView) },
+    errors: ["INVALID_CURSOR"],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "Salt okuma ve gölge mod: puan hiçbir kullanıcıya etki etmez, bildirim/yaptırım/gizleme üretmez. Ayar spam.shadowScoring.enabled kapalıyken (varsayılan) liste boştur; worker kapalıyken saklanan satırları da siler.",
+      "Yalnız eşiğin (10 puan) üstündeki ve son 90 günde yenilenmiş satırlar döner. Sıralama: puan azalan, kullanıcı kimliği. `minScore` süzgeci; süzgeç değişince eski imleç INVALID_CURSOR olur. Canlı kullanım karar 13'e (KVKK/saklama, hukuk onayı) bağlıdır.",
+    ],
   }),
 ];

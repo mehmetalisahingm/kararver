@@ -243,6 +243,14 @@ export const settingsRegistry = Object.freeze({
     false,
     "docs/KV-33_ADMIN_USERS.md §12 (#181 teslim koşulu): kendi silme akışı posta altyapısı ve silme kapsamı onayı olmadan açılmaz",
   ),
+  // #183 / KV-37 S1: spam uyarı puanı gölge modu. Varsayılan kapalı: kapalıyken worker puan hesaplamaz ve saklamaz.
+  // Açıkken puan yalnız yöneticilere görünür; hiçbir kullanıcıya etkisi yoktur (docs/KV-37_SPAM_SCORE_DECISIONS.md karar 3, 15).
+  // Canlıda açılması karar 13'ün (saklama/KVKK, hukuk onayı) kapanmasına bağlıdır.
+  "spam.shadowScoring.enabled": boolSetting(
+    "Spam puanı gölge modu (puan hesaplanır ve yalnız yöneticilere görünür; kullanıcıya etkisi yoktur)",
+    false,
+    "docs/KV-37_SPAM_SCORE_DECISIONS.md karar 15: gölge mod varsayılan kapalı; açılışı karar 13 (hukuk) onayına bağlı",
+  ),
   "features.registration": flag("Yeni kayıt açık", ["features", "registration"], NO_SWITCH_DEFAULT),
   "features.pollCreation": flag("Anket oluşturma açık", ["features", "pollCreation"], NO_SWITCH_DEFAULT),
   "features.comments": flag("Yorumlar açık", ["features", "comments"], NO_SWITCH_DEFAULT),
