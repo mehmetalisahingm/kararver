@@ -24,6 +24,7 @@ import { MEDIA_PROCESS_QUEUE, MEDIA_QUEUE_OPTIONS, processMedia } from "./jobs/m
 import { createSubprocessModerator } from "./jobs/media/moderator.ts";
 import { thresholdsFromPercent } from "./jobs/media/policy.ts";
 import { EMAIL_CHANGE_EXPIRE_CRON, EMAIL_CHANGE_EXPIRE_QUEUE, expireEmailChanges } from "./jobs/email-change/expire.ts";
+import { BULK_APPROVALS_EXPIRE_CRON, BULK_APPROVALS_EXPIRE_QUEUE, expireBulkApprovals } from "./jobs/moderation/expire-approvals.ts";
 import { ACCOUNT_ERASURE_CRON, ACCOUNT_ERASURE_QUEUE, cleanupAccountErasures } from "./jobs/account-erasure/cleanup.ts";
 import { DATA_EXPORTS_CRON, DATA_EXPORTS_QUEUE, runDataExports } from "./jobs/data-exports/job.ts";
 import { createS3WorkerStorage } from "./jobs/media/storage.ts";
@@ -182,9 +183,16 @@ await boss.work(EMAIL_CHANGE_EXPIRE_QUEUE, { batchSize: 1 }, async () => {
   const result = await expireEmailChanges({ prisma, now: () => new Date() });
   if (result.expired) log("info", "email-change.expire", result);
 });
+// moderation.bulk-approvals.expire: 10 dakikada bir; süresi geçen toplu moderasyon onay taleplerini kalıcı EXPIRED yapar ve sistem audit'i yazar (jobs/moderation/expire-approvals.ts).
+await boss.createQueue(BULK_APPROVALS_EXPIRE_QUEUE, { policy: "singleton", retryLimit: 0 });
+await boss.schedule(BULK_APPROVALS_EXPIRE_QUEUE, BULK_APPROVALS_EXPIRE_CRON, null, { tz: "Europe/Istanbul" });
+await boss.work(BULK_APPROVALS_EXPIRE_QUEUE, { batchSize: 1 }, async () => {
+  const result = await expireBulkApprovals({ prisma, now: () => new Date(), log });
+  if (result.expired || result.failed) log(result.failed ? "warn" : "info", "moderation.bulk-approvals.expire", result);
+});
 log("info", "worker hazır", {
   backupEnabled,
-  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_QUEUE, DATA_EXPORTS_QUEUE, ACCOUNT_ERASURE_QUEUE, EMAIL_CHANGE_EXPIRE_QUEUE],
+  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_QUEUE, DATA_EXPORTS_QUEUE, ACCOUNT_ERASURE_QUEUE, EMAIL_CHANGE_EXPIRE_QUEUE, BULK_APPROVALS_EXPIRE_QUEUE],
   concurrency: config.mediaConcurrency,
   ...(backupEnabled ? { backupQueue: BACKUP_QUEUE } : {}),
 });

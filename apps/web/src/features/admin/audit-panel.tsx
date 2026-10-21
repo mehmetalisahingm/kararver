@@ -2,26 +2,24 @@
 
 // Değiştirilemez yönetim geçmişi (KV-39, #41). Yalnız okuma: audit için yazma/silme yoktur (sunucuda append-only).
 // Süzgeçler admin.audit.list'e gider; önce/sonra özeti sunucuda hassas alandan arındırılmış küçük bir nesnedir.
+// Yetki sunucudadır (ADMIN+); buradaki kontroller yalnız yardımdır. Bütün kayıt alanları metin olarak basılır.
+import { AUDIT_REASON_SEARCH_MAX_DAYS } from "@kararver/contracts";
 import { useCallback, useState } from "react";
 import type { AdminClient, AuditRecord, AuditSearch } from "./admin-client.ts";
 import { ListState, formatDate, shortId, useRemoteList } from "./admin-ui";
 import styles from "./admin-shell.module.css";
+import { diffAuditSummary, diffKindLabels } from "./audit-diff";
+import { dayStart, reasonSearchProblem } from "./audit-filters";
 import { buildAuditExport, MAX_AUDIT_EXPORT_ROWS, type AuditExportFormat } from "./audit-export";
 
 const sourceLabels: Record<AuditRecord["source"], string> = { API: "Yönetici", CLI: "Komut satırı", WORKER: "Sistem işi" };
 const targetTypes = ["USER", "POLL", "COMMENT", "MEDIA", "COMMUNITY", "CATEGORY", "REPORT", "VOTE", "SETTING", "ANNOUNCEMENT", "FEATURED"];
 
-/** Gün seçimi (yyyy-mm-dd) → yerel gün başı ISO; "bitiş" günü dahil olsun diye ertesi gün başı. */
-const dayStart = (day: string, plus = 0) => {
-  const d = new Date(`${day}T00:00:00`);
-  d.setDate(d.getDate() + plus);
-  return d.toISOString();
-};
-
 const summary = (value: unknown) => (value === null || value === undefined ? "—" : JSON.stringify(value, null, 2));
 
 export function AuditPanel({ admin }: { admin: AdminClient }) {
-  const [draft, setDraft] = useState({ actorId: "", operation: "", action: "", targetType: "", targetId: "", source: "", from: "", to: "" });
+  const [draft, setDraft] = useState({ actorId: "", operation: "", action: "", targetType: "", targetId: "", source: "", from: "", to: "", requestId: "", reasonContains: "" });
+  const [problem, setProblem] = useState<string | null>(null);
   const [search, setSearch] = useState<AuditSearch>({});
   const [open, setOpen] = useState<string | null>(null);
 
@@ -40,6 +38,9 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
 
   const apply = (event: React.FormEvent) => {
     event.preventDefault();
+    const issue = reasonSearchProblem(draft);
+    setProblem(issue);
+    if (issue) return;
     setOpen(null);
     setSearch({
       actorId: draft.actorId.trim() || undefined,
@@ -50,6 +51,8 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
       source: (draft.source || undefined) as AuditSearch["source"],
       from: draft.from ? dayStart(draft.from) : undefined,
       to: draft.to ? dayStart(draft.to, 1) : undefined,
+      requestId: draft.requestId.trim() || undefined,
+      reasonContains: draft.reasonContains.trim() || undefined,
     });
   };
 
@@ -88,7 +91,27 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
           Bitiş
           <input className="kv-input" type="date" value={draft.to} min={draft.from || undefined} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
         </label>
+        <label>
+          İstek kimliği
+          <input className="kv-input" value={draft.requestId} maxLength={128} onChange={(e) => setDraft({ ...draft, requestId: e.target.value })} />
+        </label>
+        <label>
+          Gerekçede ara
+          <input
+            className="kv-input"
+            type="search"
+            value={draft.reasonContains}
+            minLength={3}
+            maxLength={100}
+            aria-describedby="audit-reason-help"
+            aria-invalid={problem ? true : undefined}
+            onChange={(e) => setDraft({ ...draft, reasonContains: e.target.value })}
+          />
+        </label>
         <button className="kv-button kv-button--secondary" type="submit">Süz</button>
+        <p id="audit-reason-help" className="kv-help">
+          {problem ? <span role="alert">{problem}</span> : `Gerekçe araması için başlangıç ve bitiş tarihi gerekir (en çok ${AUDIT_REASON_SEARCH_MAX_DAYS} gün).`}
+        </p>
       </form>
       <p className="kv-help">Kayıtlar değiştirilemez ve silinemez. Önce/sonra özetinde parola, e-posta, oturum ve oy seçimi bulunmaz.</p>
       <div className={styles.toolbar} role="group" aria-label="Audit dışa aktarma">
@@ -137,8 +160,19 @@ function AuditRow({ entry, open, onToggle }: { entry: AuditRecord; open: boolean
         <tr id={detailsId}>
           <td colSpan={6}>
             <dl className="kv-stack">
-              <div><dt>Önce</dt><dd><pre>{summary(entry.before)}</pre></dd></div>
-              <div><dt>Sonra</dt><dd><pre>{summary(entry.after)}</pre></dd></div>
+              <div><dt>Değişen alanlar</dt><dd><AuditDiff entry={entry} /></dd></div>
+              <div>
+                <dt>Ham özet</dt>
+                <dd>
+                  <details>
+                    <summary>Önce/sonra JSON</summary>
+                    <p>Önce</p>
+                    <pre>{summary(entry.before)}</pre>
+                    <p>Sonra</p>
+                    <pre>{summary(entry.after)}</pre>
+                  </details>
+                </dd>
+              </div>
               <div><dt>İstek kimliği</dt><dd><code>{entry.requestId ?? "—"}</code></dd></div>
               <div><dt>Kayıt</dt><dd><code>{entry.id}</code></dd></div>
             </dl>
@@ -146,5 +180,29 @@ function AuditRow({ entry, open, onToggle }: { entry: AuditRecord; open: boolean
         </tr>
       ) : null}
     </>
+  );
+}
+
+/** Alan alan fark. Değişim türü metinle ve işaretle yazılır; renk tek başına anlam taşımaz. */
+function AuditDiff({ entry }: { entry: AuditRecord }) {
+  const rows = diffAuditSummary(entry.before, entry.after);
+  if (rows.length === 0) return <p className="kv-muted">Alan farkı yok.</p>;
+  return (
+    <table className={styles.table}>
+      <caption className="sr-only">Önce ve sonra arasındaki alan farkları</caption>
+      <thead>
+        <tr><th scope="col">Alan</th><th scope="col">Değişim</th><th scope="col">Önce</th><th scope="col">Sonra</th></tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.path} data-diff={row.kind}>
+            <th scope="row"><code>{row.path}</code></th>
+            <td><span aria-hidden="true">{diffKindLabels[row.kind].mark} </span>{diffKindLabels[row.kind].label}</td>
+            <td>{row.before ?? <span className="kv-muted">—</span>}</td>
+            <td>{row.after ?? <span className="kv-muted">—</span>}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

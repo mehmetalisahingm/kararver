@@ -109,11 +109,14 @@ export type FieldErrors = Record<string, string>;
 export class UiError extends Error {
   code: string;
   fields: FieldErrors;
-  constructor(code: string, message: string, fields: FieldErrors = {}) {
+  /** Sunucunun ayrıntı kodu (`details[0].code`, ör. `stepup_required`); aynı `code` altındaki durumları ayırt eder. */
+  detail?: string;
+  constructor(code: string, message: string, fields: FieldErrors = {}, detail?: string) {
     super(message);
     this.name = "UiError";
     this.code = code;
     this.fields = fields;
+    this.detail = detail;
   }
 }
 export function validateDraft(draft: Draft): FieldErrors {

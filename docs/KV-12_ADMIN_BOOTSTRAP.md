@@ -3,7 +3,7 @@
 > Sahip: **Utku** · Kod: `apps/api/src/modules/rbac/bootstrap.ts` (mantık), `bootstrap-cli.ts` (giriş noktası) · Test: `apps/api/test/admin-bootstrap.test.ts`
 > Karar: [`DATA_MODEL.md` §11.4 açık konu 6](./DATA_MODEL.md) · Rol kuralları: [`DATA_MODEL.md` §9.1](./DATA_MODEL.md)
 
-Bir ortamda hiç SUPER_ADMIN yokken ilk SUPER_ADMIN'i tek seferlik olarak atar. Sonraki bütün rol atamaları admin panelinden (`admin.roles.put`, KV-33) yapılır. Ortam değişkeniyle açılışta yükseltme ve seed migration bilerek kullanılmaz (§11.4/6).
+Bir ortamda hiç SUPER_ADMIN yokken ilk SUPER_ADMIN'i tek seferlik olarak atar. Sonraki **USER/MODERATOR/ADMIN** rol atamaları admin panelinden (`admin.roles.put`, KV-33) yapılır; **normal HTTP API'de yeni SUPER_ADMIN ataması yasaktır** (`403 super_admin_reserved`, #180). Ortam değişkeniyle açılışta yükseltme ve seed migration bilerek kullanılmaz (§11.4/6).
 
 ## Önkoşullar
 
@@ -58,6 +58,14 @@ Uygunluk kontrolü "zaten" kontrolünden önce yapılır: SUPER_ADMIN olup sonra
 **Neden kural DB'de değil:** `user_roles_bootstrap_check` verensiz satırı her SUPER_ADMIN'e izin verir (ilk satırı yazabilmek için). "Hiç SUPER_ADMIN yokken, tek bir kez" kuralını yalnız bu CLI korur. `user_roles`'a elle `granted_by_id = NULL` ile yazmak bu korumayı atlar; yapmayın (aşağıdaki kurtarma dışında).
 
 ## Kurtarma
+
+
+### Tek süper admin politikası (#180, #194; 18 Ekim 2026)
+
+- Normal `PUT /v1/admin/users/:id/role` yolu yeni `SUPER_ADMIN` rolüne yükseltmeyi **transaction içinde** reddeder. Ayrı onay nesnesi/MFA bu yasağı kaldırmaz; `admin.roleApprovals.request` ve `approve` eski talepler için de bu değişikliği reddeder. `ROLE_APPROVALS_REQUIRED=false` olması güvenlik açığına dönüşmemelidir.
+- Mevcut tek `SUPER_ADMIN` normal hesap yönetiminde rol atamaya devam edebilir: hedef roller `USER`, `MODERATOR`, `ADMIN`. Son aktif `SUPER_ADMIN` öz-rol düşürme, ban ve son oturum güvenliği kuralları aynen geçerli.
+- `admin:bootstrap` yalnız **hiç SUPER_ADMIN rol satırı olmayan** ortamda, operatörün manuel onaylı ilk kurulumudur. Mevcut sahibin kurtarılması gerektiğinde aşağıdaki **yedek + iki insan + değişiklik kaydı** prosedürü kullanılır; normal API geçici olarak açılmaz.
+- Yayın kabulü: tek-SUPER_ADMIN sayısını salt-okuma DB sorgusuyla ayrıca doğrula; SUPER_ADMIN dışındaki iki hedefte eşzamanlı terfi denemesi 403 ve audit/rol değişikliği yok; eski approval nesnesinden terfi imkânsız; normal ADMIN terfisi çalışır. Canlı kabul #180 / #194 / #46 ile ilişkilidir.
 
 ### SUPER_ADMIN parolasını unuttu
 

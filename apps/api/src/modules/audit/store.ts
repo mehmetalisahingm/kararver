@@ -23,6 +23,10 @@ export type AuditQuery = {
   from?: Date;
   /** Hariç */
   to?: Date;
+  /** X-Request-Id, tam eşleşme. */
+  requestId?: string;
+  /** Gerekçede büyük/küçük harf duyarsız alt dize; % _ \ düz karakterdir. Sözleşme from/to'yu (≤ 31 gün) zorunlu kılar. */
+  reasonContains?: string;
   /** Keyset: en yeni önce (created_at, id) azalan. */
   after: { createdAt: Date; id: string } | null;
 };

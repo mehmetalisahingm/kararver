@@ -405,9 +405,12 @@ export function createPrismaAdminUserStore(prisma: PrismaClient, options: { enfo
       }, { maxWait: 10_000, timeout: 30_000 });
     },
 
-    async listSessions(userId, afterId, limit, now) {
-      return prisma.session.findMany({ where: { userId, revokedAt: null, expiresAt: { gt: now }, ...(afterId ? { id: { lt: afterId } } : {}) }, orderBy: { id: "desc" }, take: limit,
-        select: { id: true, createdAt: true, expiresAt: true, lastSeenAt: true, ipAddress: true, userAgent: true } });
+    async listSessions(userId, afterId, limit, now, status) {
+      const state = status === "revoked" ? { revokedAt: { not: null } } :
+        status === "expired" ? { revokedAt: null, expiresAt: { lte: now } } :
+        { revokedAt: null, expiresAt: { gt: now } };
+      return prisma.session.findMany({ where: { userId, ...state, ...(afterId ? { id: { lt: afterId } } : {}) }, orderBy: { id: "desc" }, take: limit,
+        select: { id: true, createdAt: true, expiresAt: true, revokedAt: true, lastSeenAt: true, ipAddress: true, userAgent: true } });
     },
     async revokeSessions(input) {
       return prisma.$transaction(async tx => {
@@ -486,6 +489,11 @@ export function createPrismaAdminUserStore(prisma: PrismaClient, options: { enfo
         }
 
         const before: Role = current ?? "USER";
+        // SA #180 / single-owner policy: normal HTTP role changes may not create another SUPER_ADMIN.
+        // The initial owner is established by the one-time, guarded admin:bootstrap CLI only.
+        // This check is inside the locked transaction, regardless of optional role approval settings.
+        if (role === "SUPER_ADMIN" && before !== "SUPER_ADMIN")
+          return { kind: "rejected", reason: "super_admin_reserved" } as const;
         if (before === role) return { kind: "unchanged", role } as const;
         // SA #182: Transaction-bound second approval for SUPER_ADMIN promotions/revocations.
         // The flag is activated only after two distinct enrolled SUPER_ADMIN accounts exist.

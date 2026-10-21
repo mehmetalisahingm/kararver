@@ -66,7 +66,7 @@ jobs:
         run: pnpm --filter @kararver/web test
       - run: pnpm mock:test
       # #51 SMTP hazırlık kontrolü: DNS değerlendirmeleri ve sahte SMTP (ağ gerekmez).
-      - run: node --test scripts/mail-readiness.test.mjs
+      - run: node --test scripts/mail-readiness.test.mjs scripts/release-status.test.mjs
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 20

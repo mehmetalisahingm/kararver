@@ -58,6 +58,9 @@ suite("SA #182 two distinct approvers and atomic role gate", () => {
     a = await register(); b = await register(); subject = await register();
     await h.prisma!.userRole.create({ data: { userId: a.id, role: "SUPER_ADMIN" } });
     await h.prisma!.userRole.create({ data: { userId: b.id, role: "SUPER_ADMIN", grantedById: a.id } });
+    // Legacy dual-approver authorization is still exercised by DEMOTING an existing SUPER_ADMIN;
+    // new promotions through the normal API are prohibited by the single-owner policy.
+    await h.prisma!.userRole.create({ data: { userId: subject.id, role: "SUPER_ADMIN", grantedById: a.id } });
     aSecret = await enroll(a);
     bSecret = await enroll(b);
   });
@@ -68,13 +71,13 @@ suite("SA #182 two distinct approvers and atomic role gate", () => {
     const approvals = createPrismaRoleApprovalStore(h.prisma!);
     const reason = "İkinci yönetici ile gözden geçirilen görev devri";
     const opts = { actorId: a.id, actorSessionId: a.sessionId, userId: subject.id,
-      role: "SUPER_ADMIN" as const, reason, requestId: "role_req_12345678", now: h.clock.now };
+      role: "ADMIN" as const, reason, requestId: "role_req_12345678", now: h.clock.now };
 
     assert.deepEqual(await admin.setRole(opts), { kind: "rejected", reason: "approval_required" });
     h.clock.advance(30000);
     await stepup(a, aSecret);
     const created = await approvals.request({ actorId: a.id, sessionId: a.sessionId,
-      targetUserId: subject.id, role: "SUPER_ADMIN", reason, requestId: "role_request_123", now: h.clock.now });
+      targetUserId: subject.id, role: "ADMIN", reason, requestId: "role_request_123", now: h.clock.now });
     assert.equal(created.kind, "ok", JSON.stringify(created));
     if (created.kind !== "ok") return;
 
@@ -93,14 +96,14 @@ suite("SA #182 two distinct approvers and atomic role gate", () => {
     h.clock.advance(30000);
     await stepup(a, aSecret);
     assert.deepEqual(await admin.setRole({ ...opts, approvalId: created.data.id, now: h.clock.now }),
-      { kind: "changed", role: "SUPER_ADMIN" });
+      { kind: "changed", role: "ADMIN" });
     const approval = await h.prisma!.roleChangeApproval.findUniqueOrThrow({ where: { id: created.data.id } });
     assert.equal(approval.status, "CONSUMED");
-    assert.equal((await h.prisma!.userRole.findUniqueOrThrow({ where: { userId: subject.id } })).role, "SUPER_ADMIN");
+    assert.equal((await h.prisma!.userRole.findUniqueOrThrow({ where: { userId: subject.id } })).role, "ADMIN");
     const audit = await h.prisma!.auditLog.findMany({ where: { targetType: "USER", targetId: subject.id, action: "user.role.assign" } });
     assert.ok(audit.some(x => x.operation === "request"));
     assert.ok(audit.some(x => x.operation === "approve"));
-    assert.ok(audit.some(x => x.operation === "grant"));
+    assert.ok(audit.some(x => x.operation === "change"));
   });
 
   test("deleted, changed-role and changed-revision targets reject without spending approval or MFA", async () => {
@@ -145,5 +148,32 @@ test("approval route checks resource authorization before any store mutation", a
     params: { id: "approval" }, body: { reason: "Denied scope" }, viewer: { id: "actor", sessionId: "session" },
     request: { id: "req" }, authorize: async () => { throw new ApiError("FORBIDDEN", "denied"); },
   }), (error: unknown) => error instanceof ApiError && error.code === "FORBIDDEN");
+  assert.equal(writes, 0);
+});
+
+
+test("single-super-admin policy blocks legacy or new promotion approvals before store mutations", async () => {
+  const handlers = new Map<string, any>();
+  let writes = 0;
+  registerRoleApprovalRoutes(((id: string, handler: any) => handlers.set(id, handler)) as any, {
+    store: {
+      request: async () => { writes++; throw new Error("must not request"); },
+      target: async () => ({ targetUserId: "target", requestedRole: "SUPER_ADMIN" }),
+      approve: async () => { writes++; throw new Error("must not approve"); },
+    } as any,
+    users: { target: async () => ({ id: "target", role: "USER", status: "ACTIVE", deleted: false }), activeSuperAdminCount: async () => 1 } as any,
+    now: () => new Date(),
+  });
+  const authorize = async () => {};
+  await assert.rejects(handlers.get("admin.roleApprovals.request")({
+    body: { userId: "target", role: "SUPER_ADMIN", reason: "Yetki verme girişimi" },
+    viewer: { id: "actor", sessionId: "session" }, request: { id: "request" }, authorize,
+  }), (error: unknown) => error instanceof ApiError && error.code === "FORBIDDEN"
+    && error.details.some(detail => typeof detail === "object" && detail !== null && "code" in detail && detail.code === "super_admin_reserved"));
+  await assert.rejects(handlers.get("admin.roleApprovals.approve")({
+    params: { id: "old-approval" }, body: { reason: "Eski onayı işleme denemesi" },
+    viewer: { id: "actor", sessionId: "session" }, request: { id: "request" }, authorize,
+  }), (error: unknown) => error instanceof ApiError && error.code === "FORBIDDEN"
+    && error.details.some(detail => typeof detail === "object" && detail !== null && "code" in detail && detail.code === "super_admin_reserved"));
   assert.equal(writes, 0);
 });

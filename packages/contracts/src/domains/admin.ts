@@ -154,6 +154,8 @@ export const Setting = z.strictObject({
   updatedBy: PublicUser.nullable(),
 });
 
+/** admin.audit.list `reasonContains` için from–to aralığının üst sınırı (gün); tam tablo taramasını önler. #185 */
+export const AUDIT_REASON_SEARCH_MAX_DAYS = 31;
 /** Audit kaydını kim üretti: API isteği (aktör dolu), CLI veya worker (aktör null). KV-39 */
 export const AuditSource = z.enum(["API", "CLI", "WORKER"]);
 export const AuditEntry = z.strictObject({
@@ -321,6 +323,7 @@ export const AdminSession = z.strictObject({
   id: Id, createdAt: Timestamp, expiresAt: Timestamp, lastSeenAt: Timestamp.nullable(),
   // Compatibility names: masked network (/24 or /48) and coarse browser/OS only; never raw identifiers.
   ipAddress: z.string().nullable(), userAgent: z.string().nullable(),
+  status: z.enum(["ACTIVE", "REVOKED", "EXPIRED"]), revokedAt: Timestamp.nullable(),
 });
 
 /** KVKK veri dışa aktarma talebi (#181). Paketin kendisi hiçbir admin yanıtında yoktur. */
@@ -585,8 +588,8 @@ export const adminEndpoints = [
   }),
   defineEndpoint({
     id: "admin.users.sessions.list", domain: "admin", method: "GET", path: "/admin/users/:id/sessions",
-    summary: "Aktif kullanıcı oturumları", auth: "super_admin", provider: adminUsers, consumers: utkuUi, unblocks: ["#35"],
-    availability: { status: "ready" }, request: { params: IdParams, query: CursorQuery },
+    summary: "Aktif, iptal edilmiş veya süresi dolmuş kullanıcı oturumları", auth: "super_admin", provider: adminUsers, consumers: utkuUi, unblocks: ["#35"],
+    availability: { status: "ready" }, request: { params: IdParams, query: CursorQuery.extend({ status: z.enum(["active", "revoked", "expired"]).optional() }) },
     responses: { 200: pageOf(AdminSession) }, errors: ["INVALID_CURSOR"], idempotency: "none", cache: "private",
   }),
   defineEndpoint({
@@ -1005,23 +1008,42 @@ export const adminEndpoints = [
     unblocks: ["#41"],
     availability: { status: "ready" },
     request: {
-      query: z.strictObject({
-        ...CursorQuery.shape,
-        actorId: Id.optional(),
-        targetType: z.string().max(40).optional(),
-        targetId: z.string().max(64).optional(),
-        action: z.string().max(80).optional(),
-        operation: z.string().max(40).optional(),
-        source: AuditSource.optional(),
-        from: Timestamp.optional(),
-        to: Timestamp.optional(),
-      }),
+      query: z
+        .strictObject({
+          ...CursorQuery.shape,
+          actorId: Id.optional(),
+          targetType: z.string().max(40).optional(),
+          targetId: z.string().max(64).optional(),
+          action: z.string().max(80).optional(),
+          operation: z.string().max(40).optional(),
+          source: AuditSource.optional(),
+          from: Timestamp.optional(),
+          to: Timestamp.optional(),
+          requestId: z.string().min(1).max(128).optional(),
+          reasonContains: z.string().trim().min(3).max(100).optional(),
+        })
+        .superRefine((q, ctx) => {
+          if (q.reasonContains === undefined) return;
+          if (!q.from || !q.to) {
+            ctx.addIssue({ code: "custom", message: "Gerekçede aramak için from ve to zorunlu", path: [q.from ? "to" : "from"] });
+            return;
+          }
+          const span = Date.parse(q.to) - Date.parse(q.from);
+          if (span <= 0) ctx.addIssue({ code: "custom", message: "to, from'dan sonra olmalı", path: ["to"] });
+          else if (span > AUDIT_REASON_SEARCH_MAX_DAYS * 86_400_000)
+            ctx.addIssue({ code: "custom", message: `Gerekçe araması en çok ${AUDIT_REASON_SEARCH_MAX_DAYS} günlük aralıkta yapılır`, path: ["to"] });
+        }),
     },
     responses: { 200: pageOf(AuditEntry) },
     errors: ["INVALID_CURSOR"],
     idempotency: "none",
     cache: "private",
-    notes: ["Audit için yazma/silme endpoint'i yoktur."],
+    notes: [
+      "Audit için yazma/silme endpoint'i yoktur.",
+      "requestId tam eşleşir (X-Request-Id). reasonContains gerekçede büyük/küçük harf duyarsız arar; % _ \\ düz karakterdir. reasonContains verilirse from ve to zorunludur, aralık en çok 31 gün (yoksa 400 VALIDATION_ERROR).",
+      "Cursor bütün süzgeçlere (requestId ve reasonContains dahil) bağlıdır; süzgeç değişince INVALID_CURSOR.",
+      "Savunma katmanı: before/after içinde hassas adlı anahtarların (password, hash, token, secret, mfa, totp, otp, recovery, apiKey, cookie, session, email, ip, userAgent) değeri yanıtta \"[gizli]\" olur; kayıt değişmez.",
+    ],
   }),
   defineEndpoint({
     id: "admin.points.adjust",

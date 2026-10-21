@@ -35,6 +35,7 @@ export const targetLabels: Record<string, string> = { POLL: "Anket", COMMENT: "Y
 
 export function errorMessage(error: unknown): string {
   if (error instanceof UiError) {
+    if (error.code === "FORBIDDEN" && error.detail === "stepup_required") return "Önce doğrulayıcı kodunla kimliğini doğrula.";
     if (error.code === "FORBIDDEN") return "Bu işlem için yetkin yok.";
     if (error.code === "UNAUTHENTICATED") return "Oturumun sona ermiş. Tekrar giriş yap.";
     return error.message;

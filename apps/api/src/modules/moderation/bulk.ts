@@ -4,7 +4,8 @@
 // mevcut `ModerationStore.apply` yoludur (satır kilidi, geçiş tablosu, sayaçlar, moderation_actions, audit, olay outbox'ı):
 // toplu işlem yeni bir yazma yolu AÇMAZ, yetki ve geçiş kuralları tekil moderasyonla aynıdır.
 import { createHash } from "node:crypto";
-import type { Prisma, PrismaClient } from "@kararver/db";
+import { BULK_APPROVAL_THRESHOLD } from "@kararver/contracts";
+import { Prisma, type PrismaClient } from "@kararver/db";
 import { communityOfTarget } from "./community-of.ts";
 import type { ContentKind, ContentStatus, ListAfter } from "./store.ts";
 
@@ -12,6 +13,28 @@ import type { ContentKind, ContentStatus, ListAfter } from "./store.ts";
 export const BATCH_HOURLY_LIMIT = 20;
 
 export type BulkAction = "HIDE" | "REMOVE" | "RESTORE";
+
+/** Pencere toplamı (onaysız uygulanan + rezerve) + bu işlemin değişecek kayıt sayısı eşiğe ulaşıyorsa ikinci onay gerekir (KV-37 §8). */
+export const approvalRequired = (willChange: number, windowApplied: number): boolean => willChange > 0 && windowApplied + willChange >= BULK_APPROVAL_THRESHOLD;
+
+export type BeginBatchInput = {
+  actorId: string;
+  kind: ContentKind;
+  action: BulkAction;
+  reason: string;
+  digest: string;
+  requestId: string | null;
+  total: number;
+  /** Değişecek kayıt sayısı: parti açılırken rezerve edilir ve bitene kadar ikinci onay penceresinde sayılır. */
+  willChange: number;
+  now: Date;
+  /** Saatlik parti sınırı: `hourlySince` sonrası açılan parti sayısı `hourlyLimit`'e ulaştıysa rate_limited. */
+  hourlySince: Date;
+  hourlyLimit: number;
+  /** İkinci onay penceresinin başlangıcı. */
+  windowSince: Date;
+};
+export type BeginBatchResult = { kind: "started"; batchId: string } | { kind: "rate_limited" } | { kind: "approval_required"; windowApplied: number };
 
 /** Önizleme/özet için okunan durum. `label` yalnız yetkili kayıtta kullanılır (içerik sızmaz). */
 export type BulkItemState = { id: string; label: string; status: ContentStatus; communityId: string | null };
@@ -46,6 +69,20 @@ export type UndoBatch = {
   items: Array<{ targetId: string; communityId: string | null; fromStatus: string | null; toStatus: string | null; moderationActionId: string; undoneByBatchId: string | null }>;
 };
 
+/** Tekil geri alma için okunan karar. `undoneByActionId`: bu kararın telafisi varsa onun kimliği; `viaUndoBatch`: karar bir geri alma partisinin ürünü. */
+export type ActionRecord = {
+  id: string;
+  kind: ContentKind;
+  targetId: string;
+  action: string;
+  actorId: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  undoOfId: string | null;
+  undoneByActionId: string | null;
+  viaUndoBatch: boolean;
+};
+
 export type BatchItemRecord = {
   targetId: string;
   communityId: string | null;
@@ -63,6 +100,8 @@ export interface BulkModerationStore {
   startBatch(input: { actorId: string; kind: ContentKind; action: BulkAction; reason: string; digest: string; requestId: string | null; total: number; now: Date; undoOfId?: string | null }): Promise<string>;
   /** Geri alma önizlemesi/uygulaması için parti ve uygulanmış öğeleri; yoksa null. */
   loadBatch(id: string): Promise<UndoBatch | null>;
+  /** Tek karar (tekil geri alma): anket/yorum hedefli moderation_actions kaydı; başka hedefte (görsel, kullanıcı) veya yoksa null. */
+  loadAction(id: string): Promise<ActionRecord | null>;
   /** Hedef başına SON moderasyon kararının kimliği (sürüm koşulu önizlemesi; kesin karar apply içinde kilit altındadır). */
   latestActions(kind: ContentKind, ids: string[]): Promise<Map<string, string>>;
   /** İçerik sahibi silinmiş/anonimleştirilmiş hedefler: bunların içeriği asla geri getirilmez. */
@@ -73,6 +112,17 @@ export interface BulkModerationStore {
   finishBatch(batchId: string, counts: { applied: number; unchanged: number; failed: number }, now: Date): Promise<void>;
   /** Aktörün `since` sonrası açtığı parti sayısı (saatlik sınır). */
   recentBatchCount(actorId: string, since: Date): Promise<number>;
+  /**
+   * Aktörün `since` sonrası ONAYSIZ uygulanan kayıt sayısı (geri alma partileri ve ikinci onaydan geçen partiler hariç):
+   * ikinci onay eşiğinin pencere toplamı. Bitmiş partide `applied`, bitmemiş (süren veya yarıda kesilen) partide rezerve edilen
+   * `reserved` sayılır; böylece paralel istekler ve çökmüş partiler pencereden kaçamaz (KV-37 §8).
+   */
+  unapprovedAppliedSince(actorId: string, since: Date): Promise<number>;
+  /**
+   * Saatlik sınır + ikinci onay penceresi + parti açılışı TEK transaction'da, aktörün kullanıcı satırı kilidi altında: aynı aktörün
+   * paralel istekleri sıraya girer, her biri öncekinin rezervasyonunu görür. Eşik aşılırsa parti açılmaz (çağıran talep açar).
+   */
+  beginBatch(input: BeginBatchInput): Promise<BeginBatchResult>;
   listBatches(filter: { actorId?: string; after: ListAfter }, limit: number): Promise<BatchRow[]>;
 }
 
@@ -107,6 +157,16 @@ export function undoDigest(batchId: string, rows: Array<{ id: string; status: st
 }
 
 type Db = Prisma.TransactionClient | PrismaClient;
+
+/** Onaysız hacim: bitmiş partide uygulanan, bitmemişte rezerve edilen kayıt sayısı (geri alma ve ikinci onaydan geçen partiler hariç). */
+async function windowSum(db: Prisma.TransactionClient | PrismaClient, actorId: string, since: Date): Promise<number> {
+  const [row] = await db.$queryRaw<Array<{ n: number }>>`
+    SELECT coalesce(sum(CASE WHEN b.finished_at IS NULL THEN b.reserved ELSE b.applied END), 0)::int AS n
+      FROM moderation_batches b
+     WHERE b.actor_id = ${actorId}::uuid AND b.undo_of_id IS NULL AND b.created_at > ${since}::timestamptz
+       AND NOT EXISTS (SELECT 1 FROM moderation_bulk_approvals a WHERE a.batch_id = b.id)`;
+  return row?.n ?? 0;
+}
 
 export function createPrismaBulkModerationStore(prisma: PrismaClient): BulkModerationStore {
   const ref = (u: { id: string; username: string; displayName: string; avatarMedia: { status: string; publicObjectKey: string | null } | null }) => ({
@@ -147,6 +207,38 @@ export function createPrismaBulkModerationStore(prisma: PrismaClient): BulkModer
         select: { id: true },
       });
       return row.id;
+    },
+
+    async loadAction(id) {
+      const a = await prisma.moderationAction.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          action: true,
+          actorId: true,
+          pollId: true,
+          commentId: true,
+          fromStatus: true,
+          toStatus: true,
+          undoOfId: true,
+          undoneBy: { select: { id: true } },
+          batchItems: { where: { batch: { undoOfId: { not: null } } }, select: { batchId: true }, take: 1 },
+        },
+      });
+      const targetId = a?.pollId ?? a?.commentId;
+      if (!a || !targetId) return null;
+      return {
+        id: a.id,
+        kind: a.pollId ? "polls" : "comments",
+        targetId,
+        action: a.action,
+        actorId: a.actorId,
+        fromStatus: a.fromStatus,
+        toStatus: a.toStatus,
+        undoOfId: a.undoOfId,
+        undoneByActionId: a.undoneBy?.id ?? null,
+        viaUndoBatch: a.batchItems.length > 0,
+      };
     },
 
     async loadBatch(id) {
@@ -226,6 +318,32 @@ export function createPrismaBulkModerationStore(prisma: PrismaClient): BulkModer
     },
 
     recentBatchCount: (actorId, since) => prisma.moderationBatch.count({ where: { actorId, createdAt: { gt: since } } }),
+
+    unapprovedAppliedSince: (actorId, since) => windowSum(prisma, actorId, since),
+
+    async beginBatch(input) {
+      return prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${input.actorId}::uuid FOR NO KEY UPDATE`;
+        if ((await tx.moderationBatch.count({ where: { actorId: input.actorId, createdAt: { gt: input.hourlySince } } })) >= input.hourlyLimit) return { kind: "rate_limited" as const };
+        const windowApplied = await windowSum(tx, input.actorId, input.windowSince);
+        if (approvalRequired(input.willChange, windowApplied)) return { kind: "approval_required" as const, windowApplied };
+        const row = await tx.moderationBatch.create({
+          data: {
+            actorId: input.actorId,
+            kind: input.kind === "polls" ? "POLLS" : "COMMENTS",
+            action: input.action,
+            reason: input.reason,
+            digest: input.digest,
+            requestId: input.requestId,
+            total: input.total,
+            reserved: Math.min(input.willChange, input.total),
+            createdAt: input.now,
+          },
+          select: { id: true },
+        });
+        return { kind: "started" as const, batchId: row.id };
+      });
+    },
 
     async listBatches(filter, limit) {
       const after = filter.after;

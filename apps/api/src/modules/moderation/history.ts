@@ -20,6 +20,8 @@ type Raw = {
   to_status: string | null;
   report_id: string | null;
   resolution_note: string | null;
+  undo_of_id: string | null;
+  undone: boolean;
 };
 
 export async function history(prisma: PrismaClient, kind: ContentKind, id: string, after: ListAfter, limit: number): Promise<HistoryRow[]> {
@@ -33,11 +35,12 @@ export async function history(prisma: PrismaClient, kind: ContentKind, id: strin
       SELECT 'REPORT' AS kind, r.id::text AS id, r.created_at AS at, r.reason::text AS reason, r.details AS note,
              r.status::text AS status, r.resolved_at, r.resolved_by_id::text AS resolved_by_id, NULL::text AS actor_id,
              NULL::text AS action, NULL::text AS from_status, NULL::text AS to_status, NULL::text AS report_id,
-             r.resolution_note AS resolution_note
+             r.resolution_note AS resolution_note, NULL::text AS undo_of_id, false AS undone
         FROM reports r WHERE ${reportColumn} = ${id}::uuid
       UNION ALL
       SELECT 'ACTION', m.id::text, m.created_at, m.reason, NULL, NULL, NULL, NULL, m.actor_id::text,
-             m.action::text, m.from_status, m.to_status, m.report_id::text, NULL
+             m.action::text, m.from_status, m.to_status, m.report_id::text, NULL,
+             m.undo_of_id::text, EXISTS (SELECT 1 FROM moderation_actions u WHERE u.undo_of_id = m.id)
         FROM moderation_actions m
        WHERE ${actionColumn} = ${id}::uuid
           -- Kullanıcıya yazılan uyarı/yaptırım (WARN_USER, SANCTION_USER) içeriğe değil kullanıcıya bağlıdır; rapor üzerinden içeriğe ulaşır.
@@ -75,6 +78,8 @@ export async function history(prisma: PrismaClient, kind: ContentKind, id: strin
       toStatus: r.to_status,
       reason: r.reason,
       reportId: r.report_id,
+      undoOfId: r.undo_of_id,
+      undone: r.undone,
     };
   });
 }

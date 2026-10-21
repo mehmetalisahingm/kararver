@@ -49,6 +49,15 @@ describe("admin session security (postgres)", { skip: backend ? false : "TEST_DA
       assert.equal((await send("GET", "/admin/metrics", denied.cookie)).statusCode, role === "ADMIN" ? 200 : 403);
       assert.equal((await send("POST", `${path}/revoke`, denied.cookie, { reason: "Security test" })).statusCode, 403);
     }
+    // #180: history respects SUPER_ADMIN scope and keeps terminated sessions separate.
+    for (const state of ["revoked", "expired"] as const) {
+      const history = await send("GET", `${path}?status=${state}`, root.cookie);
+      assert.equal(history.statusCode, 200, history.body);
+      assert.equal(history.json().data.length, 1);
+      assert.equal(history.json().data[0].status, state === "revoked" ? "REVOKED" : "EXPIRED");
+      assert.equal((await send("GET", `${path}?status=${state}`, user.cookie)).statusCode, 403);
+    }
+    assert.equal((await send("GET", `${path}?status=invalid`, root.cookie)).statusCode, 400);
     const first = await send("GET", `${path}?limit=1`, root.cookie);
     assert.equal(first.statusCode, 200, first.body);
     assert.equal(first.json().page.hasMore, true);

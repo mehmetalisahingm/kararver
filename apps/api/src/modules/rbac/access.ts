@@ -69,7 +69,10 @@ export type Access = {
   readonly resourceChecked: boolean;
 };
 
-export function createAccess(store: RbacStore, viewer: SessionUser | null, endpointAction: ActionId, now: Date): Access {
+/** Yetki kararı için gereken asgari kimlik: oturum yoksa (ör. ikinci onayda başlatanın yetkisini yeniden kurarken) yalnız bu alanlar. */
+export type AccessViewer = Pick<SessionUser, "id" | "status" | "emailVerified">;
+
+export function createAccess(store: RbacStore, viewer: AccessViewer | null, endpointAction: ActionId, now: Date): Access {
   let grants: Promise<ActorGrants> | undefined;
   let communities: Promise<string[]> | undefined;
   let resourceChecked = false;

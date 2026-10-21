@@ -8,6 +8,11 @@ import type {
   LegalHold,
   UserTimelineItem,
   UserTimelineSummary,
+  BulkApprovalDecision,
+  UndoActionPreview,
+  UndoActionResult,
+  BulkApprovalDetail,
+  BulkApprovalView,
   UndoPreview,
   UndoResult,
   BulkPreview,
@@ -52,12 +57,21 @@ export type BulkPreviewView = ReturnType<typeof BulkPreview.parse>;
 export type BulkResultView = ReturnType<typeof BulkResult.parse>;
 export type UserTimelineItemView = ReturnType<typeof UserTimelineItem.parse>;
 export type UserTimelineSummaryView = ReturnType<typeof UserTimelineSummary.parse>;
+export type BulkApprovalRecord = ReturnType<typeof BulkApprovalView.parse>;
+export type BulkApprovalDetailView = ReturnType<typeof BulkApprovalDetail.parse>;
+export type BulkApprovalDecisionView = ReturnType<typeof BulkApprovalDecision.parse>;
+/** `bulkApply` sonucu: eşik altında uygulanır (200), eşik aşılırsa ikinci onay talebi açılır (202, içerik değişmez). */
+export type BulkApplyOutcome = { kind: "applied"; result: BulkResultView } | { kind: "pending"; approval: BulkApprovalRecord };
+export type BulkApprovalFilter = "PENDING" | "APPROVED" | "REJECTED" | "CANCELED" | "EXPIRED";
 export type UndoPreviewView = ReturnType<typeof UndoPreview.parse>;
 export type UndoResultView = ReturnType<typeof UndoResult.parse>;
 export type ModerationBatch = ReturnType<typeof WireBatch.parse>;
 export type AdminPoll = ReturnType<typeof AdminPollItem.parse>;
 export type AdminComment = ReturnType<typeof AdminCommentItem.parse>;
 export type HistoryItem = ReturnType<typeof ContentHistoryItem.parse>;
+export type HistoryAction = Extract<HistoryItem, { kind: "ACTION" }>;
+export type UndoActionPreviewView = ReturnType<typeof UndoActionPreview.parse>;
+export type UndoActionResultView = ReturnType<typeof UndoActionResult.parse>;
 export type Featured = ReturnType<typeof FeaturedPlacement.parse>;
 export type AnnouncementView = ReturnType<typeof Announcement.parse>;
 export type AuditRecord = ReturnType<typeof AuditEntry.parse>;
@@ -83,8 +97,8 @@ export type UserSanction = ReturnType<typeof Sanction.parse>;
 export type MetricsView = ReturnType<typeof Metrics.parse>;
 export type OpsView = ReturnType<typeof OpsStatus.parse>;
 export type EmergencyState = { registration: boolean; pollCreation: boolean; comments: boolean; uploads: boolean; maintenance: boolean };
-/** admin.audit.list süzgeçleri (KV-39). from dahil, to hariç (ISO zaman). */
-export type AuditSearch = { action?: string; operation?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string };
+/** admin.audit.list süzgeçleri (KV-39, #185). from dahil, to hariç (ISO zaman). reasonContains from/to (≤ 31 gün) ister. */
+export type AuditSearch = { action?: string; operation?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string; requestId?: string; reasonContains?: string };
 
 export type Page<T> = { items: T[]; next: string | null };
 type Wire<T> = { data: T[]; page: { nextCursor: string | null } };
@@ -154,8 +168,8 @@ export class AdminClient {
   async users(q?: string, cursor?: string, signal?: AbortSignal) {
     return page<UserSummary>(await this.http.request("admin.users.list", { query: { q: q || undefined, cursor, limit: "20" }, signal }));
   }
-  async userSessions(id: string, cursor?: string, signal?: AbortSignal) {
-    return page<ReturnType<typeof AdminSession.parse>>(await this.http.request("admin.users.sessions.list", { params: { id }, query: { cursor, limit: "20" }, signal }));
+  async userSessions(id: string, cursor?: string, signal?: AbortSignal, status: "active" | "revoked" | "expired" = "active") {
+    return page<ReturnType<typeof AdminSession.parse>>(await this.http.request("admin.users.sessions.list", { params: { id }, query: { cursor, limit: "20", status }, signal }));
   }
   async revokeUserSessions(id: string, reason: string, sessionId?: string) {
     return this.http.request("admin.users.sessions.revoke", { params: { id }, body: { reason, ...(sessionId ? { sessionId } : {}) } });
@@ -276,8 +290,31 @@ export class AdminClient {
     return data<BulkPreviewView>(await this.http.request(`admin.moderation.${kind}.bulkPreview`, { query: { ids: ids.join(","), action } }));
   }
   /** Önizlenen durumda uygular; durum değiştiyse 409 preview_stale. Kayıt başına sonuç (kısmi başarısızlık dahil) döner. */
-  async bulkApply(kind: ContentKind, input: { ids: string[]; action: "HIDE" | "REMOVE" | "RESTORE"; reason: string; digest: string }) {
-    return data<BulkResultView>(await this.http.request(`admin.moderation.${kind}.bulk`, { body: input }));
+  async bulkApply(kind: ContentKind, input: { ids: string[]; action: "HIDE" | "REMOVE" | "RESTORE"; reason: string; digest: string }): Promise<BulkApplyOutcome> {
+    const wire = data<BulkResultView | BulkApprovalRecord>(await this.http.request(`admin.moderation.${kind}.bulk`, { body: input }));
+    // 200 sonuç partisi (batchId), 202 bekleyen onay talebi (status): gövde şekli ayırt eder.
+    return "batchId" in wire && "summary" in wire ? { kind: "applied", result: wire } : { kind: "pending", approval: wire as BulkApprovalRecord };
+  }
+  /** #183 ikinci onay: talepler (moderatör kendi taleplerini, ADMIN+ hepsini görür). */
+  async bulkApprovals(status: BulkApprovalFilter | undefined, cursor?: string, signal?: AbortSignal) {
+    return page<BulkApprovalRecord>(await this.http.request("admin.moderation.bulkApprovals.list", { query: { status, cursor, limit: "20" }, signal }));
+  }
+  async bulkApproval(id: string, signal?: AbortSignal) {
+    return data<BulkApprovalDetailView>(await this.http.request("admin.moderation.bulkApprovals.get", { params: { id }, signal }));
+  }
+  /** Başlatandan farklı ADMIN+; oturumda taze MFA step-up gerekir (`stepUp`). Onay partiyi başlatan adına uygular. */
+  async approveBulk(id: string, reason: string) {
+    return data<BulkApprovalDecisionView>(await this.http.request("admin.moderation.bulkApprovals.approve", { params: { id }, body: { reason } }));
+  }
+  async rejectBulk(id: string, reason: string) {
+    return data<BulkApprovalRecord>(await this.http.request("admin.moderation.bulkApprovals.reject", { params: { id }, body: { reason } }));
+  }
+  async cancelBulk(id: string, reason: string) {
+    return data<BulkApprovalRecord>(await this.http.request("admin.moderation.bulkApprovals.cancel", { params: { id }, body: { reason } }));
+  }
+  /** Oturum için 5 dakikalık, tek kullanımlık MFA doğrulaması (me.mfa.stepup). */
+  async stepUp(code: string) {
+    await this.http.request("me.mfa.stepup", { body: { code } });
   }
   /** #183 kullanıcı birleşik geçmişi (salt okuma, ADMIN+): süzgeçler API sorgusu olarak verilir (timeline-model.toQuery). */
   async userTimeline(id: string, query: Record<string, string>, cursor?: string, signal?: AbortSignal) {
@@ -307,6 +344,14 @@ export class AdminClient {
   }
   async history(kind: ContentKind, id: string, cursor?: string, signal?: AbortSignal) {
     return page<HistoryItem>(await this.http.request(`admin.moderation.history.${kind}`, { params: { id }, query: { cursor, limit: "20" }, signal }));
+  }
+  /** #183 tek kararın güvenli geri alma önizlemesi (salt okuma). */
+  async actionUndoPreview(actionId: string, signal?: AbortSignal) {
+    return data<UndoActionPreviewView>(await this.http.request("admin.moderation.actions.undoPreview", { params: { id: actionId }, signal }));
+  }
+  /** Telafi kararını uygular (sürüm koşullu); durum değiştiyse 409. */
+  async undoAction(actionId: string, reason: string, digest: string) {
+    return data<UndoActionResultView>(await this.http.request("admin.moderation.actions.undo", { params: { id: actionId }, body: { reason, digest } }));
   }
   async movePoll(id: string, placement: PollPlacement, reason: string) {
     return data<AdminPoll>(await this.http.request("admin.moderation.polls.move", { params: { id }, body: { ...placement, reason } }));

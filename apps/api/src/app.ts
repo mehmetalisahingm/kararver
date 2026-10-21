@@ -58,6 +58,7 @@ import { registerProfileRoutes } from "./modules/profiles/routes.ts";
 import type { ProfileStore } from "./modules/profiles/store.ts";
 import { registerBulkModerationRoutes } from "./modules/moderation/bulk-routes.ts";
 import type { BulkModerationStore } from "./modules/moderation/bulk.ts";
+import type { BulkApprovalStore } from "./modules/moderation/bulk-approval.ts";
 import { registerModerationRoutes } from "./modules/moderation/routes.ts";
 import type { ModerationStore } from "./modules/moderation/store.ts";
 import { registerNotificationRoutes } from "./modules/notifications/routes.ts";
@@ -94,7 +95,7 @@ import { registerMetricsRoutes } from "./modules/metrics/routes.ts";
 import type { MetricsStore } from "./modules/metrics/store.ts";
 import type { OpsProbe } from "./modules/ops/probe.ts";
 import { registerOpsRoutes } from "./modules/ops/routes.ts";
-import { readHeartbeatFile } from "./modules/ops/status.ts";
+import { buildHealth, cachedDatabaseCheck } from "./modules/ops/health.ts";
 import { emergencySwitchesView } from "./modules/ops/switches.ts";
 import { createOpsTelemetry, type OpsTelemetry } from "./modules/ops/telemetry.ts";
 
@@ -171,6 +172,7 @@ export type AppDeps = {
   moderationStore?: ModerationStore;
   /** #183 toplu moderasyon parti kaydı; moderationStore ile birlikte kaydedilir. */
   bulkModerationStore?: BulkModerationStore;
+  bulkApprovalStore?: BulkApprovalStore;
   /** Verilmezse bildirim okuma route'ları (notifications.*; KV-21) kaydedilmez. */
   notificationStore?: NotificationStore;
   /** Verilmezse yorum route'u kaydedilmez. */
@@ -394,8 +396,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
   if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
-  if (deps.moderationStore && deps.bulkModerationStore) {
-    registerBulkModerationRoutes(route, { store: deps.moderationStore, batches: deps.bulkModerationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
+  if (deps.moderationStore && deps.bulkModerationStore && deps.bulkApprovalStore) {
+    registerBulkModerationRoutes(route, { store: deps.moderationStore, batches: deps.bulkModerationStore, approvals: deps.bulkApprovalStore, rbac: deps.rbacStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }
   if (deps.notificationStore) {
     registerNotificationRoutes(route, { store: deps.notificationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
@@ -491,14 +493,21 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   if (settings) registerSettingsRoutes(route, { service: settings, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
 
+  // KV-49 (#51): DB ve worker gerçekten sağlıklı mı (#262); 503 yalnız "down"da. Kurallar: modules/ops/health.ts.
+  // Sürüm (deploy SHA): Railway GitHub entegrasyonu RAILWAY_GIT_COMMIT_SHA verir. Saat gerçek zamandır (uptime izleme).
+  const healthStartedAt = new Date();
+  const healthDatabase = cachedDatabaseCheck(deps.opsProbe);
   app.get("/health", async (_request, reply) => {
-    let worker: { status: string; at: string; ageMs: number } | { status: "unknown" } = { status: "unknown" };
-    // Worker kapalı ya da ayrı serviste olabilir: dosya yoksa "unknown".
-    const beat = readHeartbeatFile();
-    if (beat) worker = { status: beat.status, at: beat.at, ageMs: Date.now() - Date.parse(beat.at) };
-    // KV-49 (#51): hangi sürümün çalıştığı (deploy SHA). Railway GitHub entegrasyonu RAILWAY_GIT_COMMIT_SHA verir.
-    const sha = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null;
-    return reply.header("Cache-Control", "no-store").send({ status: "ok", worker, release: { sha: sha ? sha.slice(0, 12) : null, env: config.appEnv } });
+    const { httpStatus, body } = await buildHealth({
+      probe: deps.opsProbe,
+      databaseCheck: healthDatabase,
+      now: () => new Date(),
+      startedAt: healthStartedAt,
+      env: config.appEnv,
+      sha: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null,
+      workerExpected: process.env.WORKER_HEARTBEAT_EXPECTED === "true",
+    });
+    return reply.code(httpStatus).header("Cache-Control", "no-store").send(body);
   });
   return app;
 }

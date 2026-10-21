@@ -15,6 +15,9 @@ const TASKS = Object.freeze(Array.from({ length: 13 }, (_, i) => "B" + String(i 
 const ACTIONS = Object.freeze(["poll", "discussion", "vote", "comment", "reaction", "communityJoin"]);
 const PSEUDONYM = /^BETA-[A-Z0-9]{3,12}$/;
 const DAY_MS = 86_400_000;
+// QA/E2E identities must never reach beta denominators (#47). Matched against every string value.
+const QA_IDENTITY = /@example\.test|(^|[^a-z0-9])(e2e|wk_a|wk_b|sec)_/i;
+const QA_PATTERNS = Object.freeze(["@example.test", "e2e_*", "wk_a_*", "wk_b_*", "sec_*"]);
 const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/;
 
 function fail(message) { throw new Error("beta-report: " + message); }
@@ -36,6 +39,12 @@ function date(value, label) {
     fail(label + ": YYYY-MM-DD UTC date required");
   }
   return value;
+}
+function qaIdentityHits(value) {
+  if (typeof value === "string") return QA_IDENTITY.test(value) ? 1 : 0;
+  if (Array.isArray(value)) return value.reduce((n, v) => n + qaIdentityHits(v), 0);
+  if (value && typeof value === "object") return Object.values(value).reduce((n, v) => n + qaIdentityHits(v), 0);
+  return 0;
 }
 function percentage(num, den) { return den ? Math.round((1000 * num) / den) / 10 : null; }
 function count(arr, pred) { return arr.filter(pred).length; }
@@ -111,6 +120,7 @@ export function aggregateBeta(participants, tasks, bugs, asOf) {
     if (typeof b.issueUrl !== "string" || !/^https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/\d+$/.test(b.issueUrl)) fail("bug issueUrl must be a GitHub issue, no query string");
     if (b.state !== "VERIFIED") issueCounts[b.severity]++;
   }
+  if (qaIdentityHits([participants, tasks, bugs]) > 0) fail("QA/E2E identity found in input; QA accounts must be excluded before reporting");
   const active = [...users.values()].filter(p => p.activated !== null);
   const invited = count([...users.values()], p => p.invited !== null);
   const accepted = count([...users.values()], p => p.accepted !== null);
@@ -132,6 +142,13 @@ export function aggregateBeta(participants, tasks, bugs, asOf) {
     actual: { invited, accepted, activated, withdrawn: count([...users.values()], p => p.withdrawn !== null) },
     funnel: { acceptanceRate: percentage(accepted, invited), activationRate: percentage(activated, accepted) },
     segments, firstActions,
+    qaExclusion: {
+      patterns: QA_PATTERNS,
+      scanned: { participants: participants.length, tasks: tasks.length, bugs: bugs.length },
+      qaIdentityHits: 0,
+      verdict: "NO_QA_IDENTITY_IN_INPUT",
+      note: "Input was scanned for QA/E2E identity patterns; any hit aborts the report. Excluding QA accounts upstream is still a human/SUPER_ADMIN step.",
+    },
     retention: {
       D1: { mature: day1.length, returned: count(day1,p => retained(p,1)), rate: percentage(count(day1,p => retained(p,1)),day1.length) },
       D7: { mature: day7.length, returned: count(day7,p => retained(p,7)), rate: percentage(count(day7,p => retained(p,7)),day7.length) },
@@ -162,6 +179,9 @@ function render(r) {
     "Tasks: " + r.tasks.completed + "/" + r.tasks.attempted + " pass, assistance rate " + p(r.tasks.assistanceRate),
     "Open/unverified findings: " + JSON.stringify(r.bugs.openOrUnverified),
     "First actions: " + JSON.stringify(r.firstActions),
+    "QA exclusion: " + r.qaExclusion.verdict + " (" + r.qaExclusion.qaIdentityHits + " hits; scanned " +
+      r.qaExclusion.scanned.participants + " participants, " + r.qaExclusion.scanned.tasks + " tasks, " +
+      r.qaExclusion.scanned.bugs + " bugs; patterns " + r.qaExclusion.patterns.join(", ") + ")",
     "", "| Scenario | Passed | Attempted | Blocked | Assisted |", "|---|---:|---:|---:|---:|",
     ...Object.entries(r.tasks.scenarios).map(([k,s]) => "| " + k + " | " + s.passed + " | " + s.attempted + " | " + s.blocked + " | " + s.assisted + " |"),
     "", "Not a release authorization. #46, #51, #53 and owner sign-off are required.",

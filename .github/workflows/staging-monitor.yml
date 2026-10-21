@@ -23,8 +23,8 @@ jobs:
     timeout-minutes: 5
     env:
       API_URL: ${{ vars.STAGING_API_URL || 'https://api-staging-45cb.up.railway.app' }}
-      # Worker heartbeat'i 10 sn'de bir yazılır; 2 dakikadan eskiyse worker durmuş sayılır.
-      MAX_WORKER_AGE_MS: "120000"
+      # Worker heartbeat'i 10 sn'de bir yazılır; 3 dakikadan eskiyse durmuş sayılır (/health ile aynı eşik, WORKER_OK_SECONDS).
+      MAX_WORKER_AGE_MS: "180000"
     steps:
       - name: Sağlık kontrolü
         id: health
@@ -35,7 +35,14 @@ jobs:
           body=$(curl -sS --max-time 20 -w '\n%{http_code}' "$API_URL/health" || true)
           code=$(printf '%s' "$body" | tail -n1)
           json=$(printf '%s' "$body" | sed '$d')
-          if [ "$code" != "200" ]; then
+          if [ "$code" = "503" ]; then
+            # /health "down": DB yoklaması başarısız ya da worker ölü (#51). Gövde yalnız durum adlarını taşır.
+            db=$(printf '%s' "$json" | jq -r '.database.status // "?"' 2>/dev/null || echo "?")
+            wk=$(printf '%s' "$json" | jq -r '.worker.status // "?"' 2>/dev/null || echo "?")
+            [[ "$db" =~ ^[a-z]{1,12}$ ]] || db="?"
+            [[ "$wk" =~ ^[a-z]{1,12}$ ]] || wk="?"
+            problems+=("API /health 503 down: veritabanı=$db, worker=$wk")
+          elif [ "$code" != "200" ]; then
             problems+=("API /health HTTP $code")
           else
             status=$(printf '%s' "$json" | jq -r '.status // "?"')

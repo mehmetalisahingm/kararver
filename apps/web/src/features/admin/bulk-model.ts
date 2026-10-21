@@ -1,6 +1,6 @@
 // Toplu moderasyon ekranının saf kuralları (#183, KV-37 §bulk): seçim sınırı, etiketler ve sonuç özeti.
 // Karar sunucudadır (kapsam, geçiş tablosu, digest); buradakiler yalnız kullanıcıyı yönlendirir.
-import type { BulkPreviewView, BulkResultView, UndoPreviewView, UndoResultView } from "./admin-client.ts";
+import type { BulkApprovalRecord, HistoryAction, UndoActionPreviewView, BulkPreviewView, BulkResultView, UndoPreviewView, UndoResultView } from "./admin-client.ts";
 
 /** Sunucu sınırı (contracts BULK_MAX_ITEMS) ile aynı; aşımı sunucu zaten reddeder. */
 export const BULK_MAX = 50;
@@ -44,6 +44,54 @@ export function resultSummary(result: BulkResultView): string {
   return `${applied} uygulandı, ${unchanged} değişmedi, ${failed} başarısız${why ? ` (${why})` : ""}.`;
 }
 
+// ── İkinci onay (#183, KV-37 §8) ──
+export const approvalStatusLabels: Record<BulkApprovalRecord["status"], string> = {
+  PENDING: "Onay bekliyor",
+  APPROVED: "Onaylandı ve uygulandı",
+  REJECTED: "Reddedildi",
+  CANCELED: "Geri çekildi",
+  EXPIRED: "Süresi doldu",
+};
+/** Önizlemede eşik uyarısı; gerekli değilse null. */
+export function approvalNotice(preview: BulkPreviewView | null): string | null {
+  if (!preview?.approval.required) return null;
+  const { threshold, windowMinutes, windowApplied } = preview.approval;
+  return `Bu işlem yüksek hacimli: son ${windowMinutes} dakikada onaysız ${windowApplied} kayıt uyguladın, bununla birlikte ${threshold} ve üstü ikinci onay gerektirir. “Uygula” kayıtları değiştirmez; başka bir yöneticinin onayına gönderir.`;
+}
+/** Talep açıldığında gösterilen sonuç mesajı. */
+export const pendingMessage = (approval: BulkApprovalRecord): string =>
+  `${approval.itemCount} kayıt için ikinci onay talebi açıldı; başka bir yönetici onaylayana kadar hiçbir şey değişmez. Talep ${new Date(approval.expiresAt).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })} tarihine kadar geçerli.`;
+/** Kullanıcı, talep sahibine göre hangi kararı verebilir. */
+export function approvalActions(approval: Pick<BulkApprovalRecord, "status" | "initiator">, viewerId: string | null, isAdmin: boolean): { approve: boolean; reject: boolean; cancel: boolean } {
+  const open = approval.status === "PENDING";
+  const own = viewerId !== null && approval.initiator.id === viewerId;
+  return { approve: open && isAdmin && !own, reject: open && isAdmin && !own, cancel: open && own };
+}
+
+// ── Tek kararın geri alınması (#183, KV-37 §10) ──
+/** Geçmişte "Geri al…" önerilen karar türleri (yalnız ipucu; geri alınabilirliğe sunucu karar verir). */
+const UNDOABLE_ACTIONS = new Set(["HIDE", "REMOVE", "RESTORE", "LOCK", "UNLOCK", "EXCLUDE_FROM_TRENDS", "INCLUDE_IN_TRENDS", "CLOSE_COMMENTS", "OPEN_COMMENTS"]);
+/** Geri alınmamış, geri alma olmayan ve geri alınabilir türde karar; moderatör yalnız kendi kararını görür/geri alır, ADMIN+ hepsini. */
+export function canOfferActionUndo(item: Pick<HistoryAction, "action" | "undone" | "undoOfId" | "actor">, viewerId: string | null, isAdmin: boolean): boolean {
+  if (item.undone || item.undoOfId !== null || !UNDOABLE_ACTIONS.has(item.action)) return false;
+  return isAdmin || (viewerId !== null && item.actor.id === viewerId);
+}
+export const actionUndoBlockedLabels: Record<string, string> = {
+  forbidden: "Bu içerik için yetkin yok (kapsam dışı).",
+  admin_required: "Kaldırılmış içeriği yalnız yönetici geri yükler.",
+  not_reversible: "Bu karar tek işlemle önceki duruma döndürülemez.",
+  is_undo: "Geri alma kararı tekrar geri alınamaz; gerekirse yeni bir karar ver.",
+  status_changed: "İçeriğin durumu karardan sonra değişti.",
+  superseded: "Araya daha yeni bir karar girdi.",
+  author_erased: "İçerik sahibinin hesabı silinmiş: içerik geri getirilmez.",
+};
+export function actionUndoSummary(preview: UndoActionPreviewView): string {
+  const label = preview.label ? `“${preview.label}” ` : "";
+  if (preview.outcome === "ALREADY_UNDONE") return `${label}Bu karar zaten geri alınmış.`;
+  if (preview.outcome === "BLOCKED" || !preview.undoAction) return `${label}Bu karar şimdi geri alınamaz.`;
+  return `${label}Şimdiki durum ${preview.currentStatus}; telafi kararı: ${undoActionLabels[preview.undoAction] ?? preview.undoAction}.`;
+}
+
 // ── Güvenli geri alma (#183) ──
 export const undoBlockedLabels: Record<string, string> = {
   not_found: "Bulunamadı",
@@ -56,7 +104,17 @@ export const undoBlockedLabels: Record<string, string> = {
   community_changed: "İçerik başka topluluğa taşındı",
 };
 export const undoOutcomeLabels = { WILL_UNDO: "Geri alınacak", BLOCKED: "Geri alınamaz", ALREADY_UNDONE: "Zaten geri alındı" } as const;
-export const undoActionLabels: Record<string, string> = { RESTORE: "Geri yükle", HIDE: "Gizle", REMOVE: "Kaldır" };
+export const undoActionLabels: Record<string, string> = {
+  RESTORE: "Geri yükle",
+  HIDE: "Gizle",
+  REMOVE: "Kaldır",
+  LOCK: "Kilitle",
+  UNLOCK: "Kilidi aç",
+  EXCLUDE_FROM_TRENDS: "Trendlerden çıkar",
+  INCLUDE_IN_TRENDS: "Trendlere geri al",
+  CLOSE_COMMENTS: "Yorumları kapat",
+  OPEN_COMMENTS: "Yorumları aç",
+};
 
 export const canUndo = (preview: UndoPreviewView | null): boolean => !!preview && preview.summary.willUndo > 0;
 

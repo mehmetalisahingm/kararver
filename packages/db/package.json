@@ -16,6 +16,7 @@
     "db:backup": "node ops/backup.ts",
     "db:restore": "node ops/restore.ts",
     "db:verify": "node ops/verify.ts",
+    "db:verify-votes": "node ops/verify-votes.ts",
     "db:check-migrations": "node ops/check-migrations.ts",
     "test:ops": "node --test --test-concurrency=1 test/ops.test.ts"
   },
@@ -30,6 +31,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./ops/backup": "./ops/backup.ts"
+    "./ops/backup": "./ops/backup.ts",
+    "./ops/vote-invariants": "./ops/vote-invariants.ts"
   }
 }

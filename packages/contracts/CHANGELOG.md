@@ -9,6 +9,32 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.38.0 — 2026-10-19 (Utku, #185 audit süzgeçleri ve özet temizliği, dilim 1)
+
+Kırıcı değişiklik yok: `admin.audit.list` yeni isteğe bağlı süzgeçler alır; yanıt şeması aynı.
+
+- **Eklendi:** `admin.audit.list` query → `requestId` (tam eşleşme, 1..128) ve `reasonContains` (gerekçede büyük/küçük harf duyarsız alt dize, 3..100; `%` `_` `\` düz karakter). `reasonContains` verilirse `from` ve `to` zorunlu, aralık en çok 31 gün (`AUDIT_REASON_SEARCH_MAX_DAYS`); aksi 400 `VALIDATION_ERROR`.
+- **Değişti (davranış):** cursor yeni süzgeçlere de bağlı; süzgeç değişince `INVALID_CURSOR`. Yanıtta `before`/`after` içindeki hassas adlı anahtarların (password, hash, token, secret, mfa, totp, otp, recovery, apiKey, cookie, session, email, ip, userAgent; kelime eşleşmesi, iç içe dahil) değeri `"[gizli]"` olur. Yazma yolu ve kayıtlar değişmez (append-only).
+
+## 1.37.0 — 2026-10-16 (Mert, #183 tekil kararın geri alınması)
+
+Kırıcı değişiklik yok: yeni endpoint'ler ve şemalar; `ContentHistoryItem` ACTION satırına `undoOfId` ve `undone` alanları eklendi (web ile birlikte yayınlanır). Yeni yetki veya audit işlemi yok (telafi kararı mevcut `moderation.poll.apply` / `moderation.comment.apply` yolundan geçer).
+
+- **Eklendi:** `admin.moderation.actions.undoPreview` (GET, salt okuma) ve `admin.moderation.actions.undo` (POST: gerekçe + digest). Geri alınabilir karar çiftleri: HIDE/REMOVE → RESTORE, RESTORE → HIDE/REMOVE, LOCK ↔ UNLOCK, EXCLUDE_FROM_TRENDS ↔ INCLUDE_IN_TRENDS, CLOSE_COMMENTS ↔ OPEN_COMMENTS; sürüm koşulu, bir karar en çok bir kez, geri almanın geri alması yok. Moderatör yalnız kendi kararını geri alır.
+- Şemalar: `UndoActionPreview`, `UndoActionResult`, `UndoActionBlockedCode`.
+- **Değişti:** `ContentHistoryItem` (kind=ACTION) → `undoOfId` (telafi satırı geri aldığı kararı gösterir), `undone` (karar geri alındı mı).
+
+## 1.36.0 — 2026-10-16 (Mert, #183 yüksek hacimli toplu işlemde ikinci onay)
+
+Kırıcı değişiklik yok: yeni endpoint'ler, yeni yetki/audit işlemleri; `admin.moderation.{polls,comments}.bulk` yeni bir başarı durumu (202) ve `BulkPreview` yeni bir zorunlu `approval` alanı alır (web ile birlikte yayınlanır).
+
+- **Eklendi:** `admin.moderation.bulkApprovals.list` / `.get` / `.approve` / `.reject` / `.cancel`. Eşik aşılınca `bulk` hiçbir şey uygulamaz, bekleyen bir onay talebi açar (**202**, `BulkApprovalView`). Başlatandan farklı bir ADMIN+ kayıt listesini görerek taze MFA step-up ile onaylar; parti başlatan adına, başlatanın yetkisiyle yeniden hesaplanarak uygulanır. Eşik: başlatanın son 60 dakikadaki ONAYSIZ uygulanan kayıt sayısı + bu işlemin değişecek kayıt sayısı >= 20 (`BULK_APPROVAL_THRESHOLD`); talep 30 dakika geçerli, başlatan başına en çok 3 bekleyen.
+- **Değişti:** `BulkPreview.approval` (`required`, `threshold`, `windowMinutes`, `windowApplied`); `bulk` 409 `too_many_pending`.
+- Şemalar/sabitler: `BulkApprovalView`, `BulkApprovalDetail`, `BulkApprovalDecision`, `BulkApprovalStatus`, `BulkApprovalListQuery`, `BULK_APPROVAL_THRESHOLD`, `BULK_APPROVAL_WINDOW_MINUTES`, `BULK_APPROVAL_TTL_MINUTES`, `BULK_APPROVAL_PENDING_MAX`.
+- **Yetki/audit:** yeni işlemler `moderation.bulk.approve` (admin: onay, ret) ve `moderation.bulk.cancel` (moderatör: kendi talebini geri çekme); audit işlemleri `request`, `approve`, `reject`, `cancel`; yeni audit hedef türü `BULK_APPROVAL`.
+- **Sistem audit:** `moderation.bulk.expire` (worker, aktörsüz): süresi dolan talepler kalıcı `EXPIRED` olur; `BulkApprovalView.status = EXPIRED` artık hem okunurken hem kalıcıdır.
+- **İnceleme düzeltmeleri:** eşik kontrolü ve parti açılışı atomik (rezervasyonlu pencere); onay transaction'ında başlatanın yetkisi yeniden doğrulanır (`409 initiator_changed` artık transaction içinden de döner); hata ayrıntı kodu istemciye `UiError.detail` olarak iletilir.
+
 ## 1.35.0 — 2026-10-16 (Mert, #183 kullanıcı birleşik geçmişi)
 
 Kırıcı değişiklik yok: yeni salt okuma endpoint'leri ve şemalar; yeni yetki veya audit işlemi yok (mevcut `user.read`, ADMIN+).

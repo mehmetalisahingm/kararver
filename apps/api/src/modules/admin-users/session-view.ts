@@ -22,9 +22,11 @@ export function sessionDevice(agent: string | null): string | null {
   return `${browser} · ${os}`;
 }
 
-export function sessionView(session: { id: string; createdAt: Date; expiresAt: Date; lastSeenAt: Date | null; ipAddress: string | null; userAgent: string | null }) {
+export function sessionView(session: { id: string; createdAt: Date; expiresAt: Date; revokedAt: Date | null; lastSeenAt: Date | null; ipAddress: string | null; userAgent: string | null }, now: Date) {
+  const status = session.revokedAt ? "REVOKED" : session.expiresAt <= now ? "EXPIRED" : "ACTIVE";
   return {
     id: session.id, createdAt: session.createdAt.toISOString(), expiresAt: session.expiresAt.toISOString(), lastSeenAt: session.lastSeenAt?.toISOString() ?? null,
+    status, revokedAt: session.revokedAt?.toISOString() ?? null,
     ipAddress: sessionNetwork(session.ipAddress), userAgent: sessionDevice(session.userAgent),
   };
 }
