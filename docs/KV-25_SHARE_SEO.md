@@ -49,3 +49,21 @@ Ham URL, e-posta, IP, cookie veya session kimliği analitik kaynağı olarak kul
 - URL testi: tek query parametresi `src`; kullanıcı ID/e-posta bulunmaz.
 - Web build/typecheck: metadata, robots, sitemap ve paylaşım UI tip kontrolünden geçmelidir.
 - Production/staging preview kabulü #52 kapsamında gerçek sosyal preview yüzeylerinde ayrıca doğrulanır.
+
+
+## #52 — Gerçek HTTP paylaşım önizlemesi kabulü (X / WhatsApp)
+
+`node scripts/share-preview-acceptance.mjs` **yalnız anonim GET** yapar. Gerçek web dağıtımından X (`Twitterbot/1.0`) ve WhatsApp (`WhatsApp/2.24.0`) User-Agent ile dönen HTML'de canonical, OG/X başlık ve açıklaması, resim kartı, staging `noindex` durumunu doğrular. Kaldırılmış içeriğin 404/410 veya noindex olması ve içerik özelindeki sosyal metadata'nın sızmaması da kontrol edilir. Redirect, ağ kesintisi ve geçersiz HTML FAIL olur.
+
+```bash
+# Gerçek ve kişisel veri içermeyen aktif/kaldırılmış iki sayfanın slug'ı operatör tarafından girilir.
+node scripts/share-preview-acceptance.mjs \
+  --live https://kararver-staging.vercel.app/karar/GERCEK-AKTIF-PUBLIC-ID \
+  --removed https://kararver-staging.vercel.app/karar/GERCEK-KALDIRILMIS-PUBLIC-ID \
+  --environment staging --json
+node --test scripts/share-preview-acceptance.test.mjs
+```
+
+Kabul raporuna UTC zaman, aynı web/API SHA, maskeli slug ve gerçek sonuçlar eklenir. `--removed` parametresi CLI için isteğe bağlı, #52 son kabulü için **zorunludur**. `--environment production` ancak gerçek yayın alan adı aktifleştikten sonra kullanılır.
+
+**Sınır:** `externalCacheVerified: false` bilerek sabittir. Bot User-Agent taklidi X ve WhatsApp'ın **dış cache/preview** davranışını ispatlamaz. Gerçek platformlarda paylaşım, eski görüntünün önbellekten temizlenmesi ve kaldırılmış içerik kontrolü ayrıca insan kabulü gerektirir. Test davet göndermez, üretim verisi yazmaz ve beta GO üretmez.
