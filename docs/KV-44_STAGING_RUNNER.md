@@ -71,7 +71,7 @@ Kaynak sütunu gerçek kod satırıdır; `kv44-staging-runner.test.mjs` her sat�
 | ID | R | Rol | Sev | Beklenen | Kaynak | K |
 |---|---|---|---|---|---|---|
 | R0.pinned | R0 | hepsi (R4 hariç) | P0 | STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification | `.github/workflows/staging-monitor.yml:135` | |
-| R0.release | R0 | hepsi | P0 | 200 status=ok env=staging, sha = KV44_EXPECTED_SHA | `apps/api/src/app.ts:500` | |
+| R0.release | R0 | hepsi | P0 | 200 status=ok env=staging, sha = KV44_EXPECTED_SHA | `apps/api/src/app.ts:507` | |
 | R0.login | R0 | hepsi | P0 | 200 + kv_session | `packages/contracts/src/domains/auth.ts:87` | |
 | R0.role | R0 | hepsi | P0 | /me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN) | `packages/contracts/src/domains/auth.ts:240` | |
 | ACC.register | R0 | initiator, media-operator | P1 | 202; 429 → BLOCKED-ratelimit (5/IP/saat) | `docs/KV-19_RATE_LIMIT.md:21` | |
@@ -96,19 +96,19 @@ Kaynak sütunu gerçek kod satırıdır; `kv44-staging-runner.test.mjs` her sat�
 | R3.complete | R3 | media-operator | P1 | 202 MediaView | `packages/contracts/src/domains/media.ts:70` | |
 | R3.private-url | R3 | media-operator | P0 | APPROVED değilken url=null | `packages/contracts/src/domains/media.ts:12` | |
 | R3.not-public | R3 | media-operator | P0 | anonim /media-public 404, imza sızıntısı yok | `apps/api/src/modules/media/public-routes.ts:12` | |
-| R2.resolve | R2 | approver | P1 | 8 karakter → tek talep, başlatan ben değilim | `packages/contracts/src/domains/moderation.ts:833` | |
+| R2.resolve | R2 | approver | P1 | 8 karakter → tek talep, başlatan ben değilim | `packages/contracts/src/domains/moderation.ts:855` | |
 | R2.stepup_required | R2 | approver | P0 | **403 FORBIDDEN `stepup_required`** | `apps/api/src/modules/moderation/bulk-approval-routes.ts:121` | |
 | R2.stepup | R2 | approver | P1 | 200 stepUpExpiresAt (kod kanıtta `******`) | `packages/contracts/src/domains/auth.ts:231` | |
 | R2.approve | R2 | approver | P0 | 200 APPROVED | `apps/api/src/modules/moderation/bulk-approval-routes.ts:138` | |
 | R2.closed.reapprove | R2 | approver | P0 | **409 CONFLICT `closed`** | `apps/api/src/modules/moderation/bulk-approval-routes.ts:111` | |
 | R2.expired.view | R2 | approver | P1 | T+31'de status EXPIRED | `apps/api/src/modules/moderation/bulk-approval-routes.ts:22` | |
 | R2.closed.expired | R2 | approver | P0 | T+31'de **409 CONFLICT `closed`** (TTL 30 dk: `packages/contracts/src/domains/moderation.ts:237`) | `apps/api/src/modules/moderation/bulk-approval-routes.ts:111` | |
-| R4.cancel | R4 | initiator | P1 | açık kalan talepler geri çekilir | `packages/contracts/src/domains/moderation.ts:913` | |
-| R4.comment | R4 | initiator | P1 | 200 REMOVE | `packages/contracts/src/domains/moderation.ts:378` | |
-| R4.poll | R4 | initiator | P1 | 200 REMOVE | `packages/contracts/src/domains/moderation.ts:378` | |
+| R4.cancel | R4 | initiator | P1 | açık kalan talepler geri çekilir | `packages/contracts/src/domains/moderation.ts:935` | |
+| R4.comment | R4 | initiator | P1 | 200 REMOVE | `packages/contracts/src/domains/moderation.ts:400` | |
+| R4.poll | R4 | initiator | P1 | 200 REMOVE | `packages/contracts/src/domains/moderation.ts:400` | |
 | R4.ban | R4 | initiator, media-operator | P1 | 201 BAN veya 409 already_active | `packages/contracts/src/domains/admin.ts:828` | |
-| R4.media.reject | R4 | media-operator | P1 | 200 REJECT | `packages/contracts/src/domains/moderation.ts:669` | |
-| R4.residue | R4 | initiator, media-operator | P1 | kalan kayıt yok; varsa TEMİZLİK EKSİK + maskeli liste | `packages/contracts/src/domains/moderation.ts:378` | |
+| R4.media.reject | R4 | media-operator | P1 | 200 REJECT | `packages/contracts/src/domains/moderation.ts:691` | |
+| R4.residue | R4 | initiator, media-operator | P1 | kalan kayıt yok; varsa TEMİZLİK EKSİK + maskeli liste | `packages/contracts/src/domains/moderation.ts:400` | |
 | R5.merge | R5 | initiator | P1 | tüm rol dosyalarında aynı run id ve release | `docs/KV-44_SECURITY_ACCEPTANCE.md:31` | |
 
 Sonuç değerleri: PASS, FAIL, BLOCKED-role, BLOCKED-window, BLOCKED-ratelimit, BLOCKED-verification, UYGULANAMAZ-staging, INFO, TEMİZLİK EKSİK. R5 kararı şöyle verilir: R4 dışında bir FAIL varsa **NO-GO**. Zorunlu satırların hepsi PASS ise (yalnız `R1.last_super_admin` ve `R1.legacy_approval` UYGULANAMAZ-staging olabilir) **PASS**. Diğer her durum **BLOCKED** olur. Temizlik ayrıca TAMAM ya da TEMİZLİK EKSİK diye raporlanır.
