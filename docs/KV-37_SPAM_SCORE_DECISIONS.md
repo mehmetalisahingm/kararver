@@ -56,7 +56,7 @@ Her satırda **önerilen** seçenek ve gerekçesi vardır. Kabul için "Karar" s
 
 ## 2.1 S1 gölge mod: uygulama durumu (18 Ekim 2026, PR taslağı)
 
-Karar tablosu hâlâ boştur; S1 **önerilen** seçeneklerle (1, 2, 3, 15) ve karar 13'ün önerisiyle (90 gün) **bayrak arkasında, varsayılan kapalı** uygulandı. Bayrak açılmadıkça hiçbir veri yazılmaz ve hiçbir kullanıcıya etkisi yoktur. Bayrağın canlıda açılması karar 13'ün (hukuk) kapanmasına bağlıdır; farklı bir karar çıkarsa aşağıdaki sabitler değişir.
+Mehmet 21 Ekim 2026 tarihinde 1, 2, 3 ve 15 için önerileri ve kapalı bayrakla birleştirmeyi onayladı. S1 bu seçeneklerle ve henüz onaylanmamış karar 13'ün önerisiyle (90 gün) **bayrak arkasında, varsayılan kapalı** uygulandı. Bayrak açılmadıkça hiçbir veri yazılmaz ve hiçbir kullanıcıya etkisi yoktur. Bayrağın canlıda açılması karar 13'ün (hukuk) kapanmasına bağlıdır; farklı bir karar çıkarsa aşağıdaki sabitler değişir.
 
 | Parça | Yer |
 |---|---|
