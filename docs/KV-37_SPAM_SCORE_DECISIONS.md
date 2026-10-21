@@ -23,9 +23,9 @@ Her satırda **önerilen** seçenek ve gerekçesi vardır. Kabul için "Karar" s
 
 | # | Karar | Seçenekler | Öneri | Karar |
 |---|---|---|---|---|
-| 1 | Puan hangi sinyallerden çıkar? | Kural tabanlı ve açıklanabilir / istatistiksel-ML | **Kural tabanlı.** Sinyaller: aynı veya benzer metni tekrar gönderme, yorum patlaması, hesap yaşı, aynı görsel hash'i, hakkındaki raporların işleme dönüşme oranı, kısa sürede çok içeriğin gizlenmesi. **IP ve cihaz bilgisi kullanılmaz** (veri minimizasyonu, [KV-33 §13.3](./KV-33_ADMIN_USERS.md)). Ağırlıklar ayar olarak tutulur. Beta örneklemi ML için yetersizdir. | ☐ |
-| 2 | Puan neye ait, ne zaman hesaplanır? | Hesap / içerik; istekte / worker'da | **Hesap başına**, olaylar üzerinden **worker** hesaplar (istek süresini etkilemez). **30 günlük kayan pencere:** eski sinyal puandan düşer. | ☐ |
-| 3 | Eşik aşılınca ne olur? | (a) yalnız operatör kuyruğu, (b) içerik otomatik gizlenir, (c) yayın sınırı sıkılaşır | **(a)** V1'de **yalnız kuyruğa düşer.** Otomatik gizleme, yaptırım veya sınır değişikliği yok. İnsan kararı olmadan kullanıcıya hiçbir etkisi olmaz; bu aynı zamanda KVKK'daki yalnız otomatik işlemeye dayalı karar riskini ortadan kaldırır (bkz. 13). | ☐ |
+| 1 | Puan hangi sinyallerden çıkar? | Kural tabanlı ve açıklanabilir / istatistiksel-ML | **Kural tabanlı.** Sinyaller: aynı veya benzer metni tekrar gönderme, yorum patlaması, hesap yaşı, aynı görsel hash'i, hakkındaki raporların işleme dönüşme oranı, kısa sürede çok içeriğin gizlenmesi. **IP ve cihaz bilgisi kullanılmaz** (veri minimizasyonu, [KV-33 §13.3](./KV-33_ADMIN_USERS.md)). Ağırlıklar ayar olarak tutulur. Beta örneklemi ML için yetersizdir. | Öneri onaylandı — Mehmet, 21 Ekim 2026; bayrak kapalı kalır. |
+| 2 | Puan neye ait, ne zaman hesaplanır? | Hesap / içerik; istekte / worker'da | **Hesap başına**, olaylar üzerinden **worker** hesaplar (istek süresini etkilemez). **30 günlük kayan pencere:** eski sinyal puandan düşer. | Öneri onaylandı — Mehmet, 21 Ekim 2026; bayrak kapalı kalır. |
+| 3 | Eşik aşılınca ne olur? | (a) yalnız operatör kuyruğu, (b) içerik otomatik gizlenir, (c) yayın sınırı sıkılaşır | **(a)** V1'de **yalnız kuyruğa düşer.** Otomatik gizleme, yaptırım veya sınır değişikliği yok. İnsan kararı olmadan kullanıcıya hiçbir etkisi olmaz; bu aynı zamanda KVKK'daki yalnız otomatik işlemeye dayalı karar riskini ortadan kaldırır (bkz. 13). | Öneri onaylandı — Mehmet, 21 Ekim 2026; bayrak kapalı kalır. |
 | 4 | Kullanıcı puanı veya sinyalleri görür mü? | Gösterilir / gösterilmez | **Gösterilmez.** Sinyal ve eşik açıklanırsa aşılması kolaylaşır. İnsan karar verince **gerekçe** kullanıcıya yazılır (mevcut moderasyon/yaptırım bildirimi). | ☐ |
 
 ### B. Operatör incelemesi
@@ -52,7 +52,7 @@ Her satırda **önerilen** seçenek ve gerekçesi vardır. Kabul için "Karar" s
 |---|---|---|---|
 | 13 | Puan ve sinyaller kişisel veri/profilleme sayılır mı? Saklama? | **Hukuk değerlendirmesi gerekir.** Öneri: **90 gün** saklama, **KVKK veri paketine dahil**, hesap anonimleştirilince temizlenir. İnsan kararı olmadan etki olmadığından (3) otomatik karar itirazı hakkı doğmaz; yine de hukuk onaylamalı. **Bu karar canlıya çıkışı bloklar** (gölge modda puan saklanıyorsa dahil). | ☐ |
 | 14 | Topluluk sahibi puanı görür mü? | **Hayır.** Yalnız operatörler görür (sahip kullanıcıyı profilleyemez). | ☐ |
-| 15 | Yayına alma | **Gölge mod önce:** puan hesaplanır, **hiçbir kullanıcıya etkisi yoktur**, yalnız ADMIN görür. ~2 hafta sonra eşik gerçek veriye göre ayarlanır, sonra operatör kuyruğu **bayrakla** (varsayılan kapalı) açılır. 40 kişilik pilotta istatistik anlamsız olacağından ilk eşikler elle belirlenir. | ☐ |
+| 15 | Yayına alma | **Gölge mod önce:** puan hesaplanır, **hiçbir kullanıcıya etkisi yoktur**, yalnız ADMIN görür. ~2 hafta sonra eşik gerçek veriye göre ayarlanır, sonra operatör kuyruğu **bayrakla** (varsayılan kapalı) açılır. 40 kişilik pilotta istatistik anlamsız olacağından ilk eşikler elle belirlenir. | Öneri onaylandı — Mehmet, 21 Ekim 2026; bayrak kapalı kalır. |
 
 ## 2.1 S1 gölge mod: uygulama durumu (18 Ekim 2026, PR taslağı)
 
