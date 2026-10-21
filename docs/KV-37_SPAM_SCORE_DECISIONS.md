@@ -1,6 +1,6 @@
 # KV-37 — Spam uyarı puanı, operatör incelemesi ve yanlış pozitif itirazı: karar listesi (#183)
 
-> **Durum: karar bekliyor. Bu belgede kod, migration veya sözleşme değişikliği yoktur.** #183'ün kalan son işi budur; ürün ve hukuk kararları verilmeden uygulanmamalıdır. Sahipler: ürün **Mehmet**, itiraz kanalı ve admin arayüzü **Utku**, KVKK değerlendirmesi **hukuk**. Uygulama Mert'te.
+> **Durum: S1 için ürün kararları 1, 2, 3 ve 15 onaylandı (Mehmet, 21 Ekim 2026); diğer kararlar bekliyor.** #269 yalnız varsayılan kapalı kod olarak birleştirilir. Karar 13 ve ilgili kabul işleri tamamlanmadan gölge mod dahil canlıda açılmaz. Sahipler: ürün **Mehmet**, itiraz kanalı ve admin arayüzü **Utku**, KVKK değerlendirmesi **hukuk**. Uygulama Mert'te.
 >
 > İlke (mevcut, [KV-37 §7](./KV-37_BULK_MODERATION.md)): **otomatik kalıcı ban yoktur.** Aşağıdaki öneriler bu ilkeyi bir adım ileri taşır: V1'de puan hiçbir kullanıcıya otomatik bir etki yapmaz.
 
