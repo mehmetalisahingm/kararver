@@ -67,6 +67,8 @@ Uygunluk kontrolü "zaten" kontrolünden önce yapılır: SUPER_ADMIN olup sonra
 - `admin:bootstrap` yalnız **hiç SUPER_ADMIN rol satırı olmayan** ortamda, operatörün manuel onaylı ilk kurulumudur. Mevcut sahibin kurtarılması gerektiğinde aşağıdaki **yedek + iki insan + değişiklik kaydı** prosedürü kullanılır; normal API geçici olarak açılmaz.
 - Yayın kabulü: tek-SUPER_ADMIN sayısını salt-okuma DB sorgusuyla ayrıca doğrula; SUPER_ADMIN dışındaki iki hedefte eşzamanlı terfi denemesi 403 ve audit/rol değişikliği yok; eski approval nesnesinden terfi imkânsız; normal ADMIN terfisi çalışır. Canlı kabul #180 / #194 / #46 ile ilişkilidir.
 
+**MFA cihazı ve kurtarma kodları birlikte kaybolduysa:** [SA-180 tam MFA kilitlenmesi prosedürüne](./SA180_SUPER_ADMIN_MFA_LOCKOUT.md) bakın. Parola sıfırlama tek başına MFA gereğini kaldırmaz; başka bir SUPER_ADMIN oluşturmak, normal API rol kurallarını gevşetmek veya TOTP sırrını elle silmek kurtarma yöntemi değildir.
+
 ### SUPER_ADMIN parolasını unuttu
 
 CLI gerekmez. Normal şifre sıfırlama akışı kullanılır (`auth.password.forgot` → e-postadaki bağlantı → `auth.password.reset`, KV-09). Rol satırı değişmez.
