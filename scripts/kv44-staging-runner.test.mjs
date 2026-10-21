@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { API, MATRIX, WEB, checkEnv, combine, main, maskUrl, mediaHostMatches, mergeEvidence, newRunId, preflight, redact, syntheticPng, validateMediaHost } from "./kv44-staging-runner.mjs";
+import { API, MATRIX, WEB, checkEnv, combine, main, maskUrl, mediaHostMatches, mergeEvidence, newRunId, preflight, readPinnedSha, redact, syntheticPng, validateMediaHost } from "./kv44-staging-runner.mjs";
 
 const SHA = "a".repeat(40);
 const MEDIA_HOST = "kv-staging-private.example-bucket.test";
@@ -90,17 +90,20 @@ function fakeStaging(over = {}) {
   return s;
 }
 
-function harness(over) {
+/** `pin` stands in for the STAGING_PINNED_SHA read (gh, GitHub); default: pinned to the expected release. */
+function harness(over, { pin = async () => SHA.slice(0, 12) } = {}) {
   const s = fakeStaging(over);
+  const pins = { calls: 0, read: pin };
   const root = mkdtempSync(join(tmpdir(), "kv44-"));
   const lines = [];
   const prompts = [];
   const run = (role, staffName, argv) => main(argv, {
     http: s.fetch, root, now: () => new Date(s.now), pause: async ms => { s.now += ms; }, log: l => lines.push(String(l)),
     promptSecret: async label => { prompts.push(label); return "123456"; },
+    pinnedSha: async () => { pins.calls++; return pins.read(); },
     env: { KV44_EXPECTED_SHA: SHA, KV44_EMAIL: `${staffName}@staff.test`, KV44_PASSWORD: `pw-${staffName}`, KV44_MEDIA_HOST: MEDIA_HOST },
   });
-  return { s, root, lines, prompts, run };
+  return { s, root, lines, prompts, pins, run };
 }
 const evidence = (root, runId, role) => readFileSync(join(root, runId, `${role}.jsonl`), "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l));
 const handoff = (lines, key) => lines.join("\n").match(new RegExp(`${key} ([0-9a-f]{8}|sec_kv44_[0-9a-f]{10})`))[1];
@@ -182,6 +185,8 @@ test("full run in order R0 → T0 → R1/R3 → R2 → T+31 → R4 → R5: PASS,
   assert.equal(report.verdict, "PASS");
   assert.equal(report.cleanup, "TAMAM");
   const row = id => report.matrix.find(m => m.id === id);
+  assert.equal(row("R0.pinned").result, "PASS");
+  assert.equal(h.pins.calls, 5, "every non-cleanup phase checks the pin, cleanup does not");
   assert.equal(row("R1.last_super_admin").result, "UYGULANAMAZ-staging");
   assert.match(row("R1.legacy_approval").note, /role-approvals\.test\.ts/);
   assert.match(row("R1.self").note, /details=boş/);
@@ -256,4 +261,44 @@ test("P0 FAIL (self approval accepted): R4 runs anyway; failed cleanup → TEMİ
   assert.equal(report.verdict, "NO-GO");
   assert.equal(report.cleanup, "TEMİZLİK EKSİK");
   assert.match(md, /## TEMİZLİK EKSİK/);
+});
+
+test("pin: unset, other commit, invalid → R0.pinned FAIL (NO-GO); unreadable → BLOCKED-verification; staging untouched", async () => {
+  const cases = [
+    [async () => null, "FAIL", /sabitlenmemiş/],
+    [async () => "b".repeat(12), "FAIL", /pinned bbbbbbbbbbbb/],
+    [async () => "not-a-sha", "FAIL", /geçersiz/],
+    [async () => { throw new Error("gh api failed"); }, "BLOCKED-verification", /okunamadı/],
+  ];
+  for (const [pin, result, note] of cases) {
+    const h = harness(undefined, { pin });
+    const runId = newRunId(new Date(START));
+    assert.equal(await h.run("initiator", "initiator", ["--as", "initiator", "--phase", "open", "--run", runId, "--window-start", new Date(START).toISOString()]), 1);
+    const row = evidence(h.root, runId, "initiator").find(r => r.step === "R0.pinned");
+    assert.equal(row.result, result);
+    assert.match(row.note, note);
+    assert.deepEqual(h.s.requests, [], "no staging request before the pin is verified");
+    if (result === "FAIL") assert.equal(mergeEvidence(join(h.root, runId)).report.verdict, "NO-GO");
+  }
+});
+
+test("pin: removed at window end, cleanup still runs without reading it", async () => {
+  const h = harness();
+  const runId = newRunId(new Date(START));
+  const common = ["--run", runId, "--window-start", new Date(START).toISOString()];
+  assert.equal(await h.run("initiator", "initiator", ["--as", "initiator", "--phase", "open", ...common]), 0);
+  h.pins.read = async () => { throw new Error("gh api failed"); };
+  const calls = h.pins.calls;
+  assert.equal(await h.run("initiator", "initiator", ["--as", "initiator", "--phase", "cleanup", ...common]), 0);
+  assert.equal(h.pins.calls, calls);
+  assert.equal(evidence(h.root, runId, "initiator").at(-1).step, "R4.residue");
+});
+
+test("readPinnedSha: list endpoint via gh; empty → null; gh error → reject", async () => {
+  const seen = [];
+  const exec = out => (cmd, args, opts, cb) => { seen.push([cmd, ...args]); out instanceof Error ? cb(out) : cb(null, out); };
+  assert.equal(await readPinnedSha({ exec: exec("abc1234def56\n") }), "abc1234def56");
+  assert.equal(await readPinnedSha({ exec: exec("") }), null);
+  await assert.rejects(readPinnedSha({ exec: exec(new Error("HTTP 403")) }), /gh api failed/);
+  assert.deepEqual(seen[0].slice(0, 3), ["gh", "api", "repos/mehmetalisahingm/kararver/actions/variables"]);
 });

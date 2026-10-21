@@ -22,11 +22,13 @@
 
 Initiator için **MODERATOR yetmez**: toplu onay endpoint'i ADMIN kapısındadır. MOD hesabı `self_approval` yerine kodsuz 403 alır. Topluluksuz yorumlar da `needsAdmin` olur. Rol uymazsa araç `BLOCKED-role` yazar.
 
+Her kişinin makinesinde `gh` kurulu ve repo okuma erişimiyle oturum açık olmalıdır (`gh auth status`). `--check-env` bunu denetlemez (ağsızdır).
+
 ## 3. Koşu sırası ve komutlar
 
 **Akış:** Faruk: pencere başında `STAGING_PINNED_SHA` sabitler → R0 … R5 → pencere sonunda kaldırır.
 
-Sabitleme R0'dan önce yapılır ve `KV44_EXPECTED_SHA` sabitlenen SHA'nın kendisidir. Sabitleme yapılmamışsa koşu **NO-GO** sayılır. Araç repo değişkenini okumaz; R0 yalnız `/health` sürümünü `KV44_EXPECTED_SHA` ile karşılaştırır. Sabitleme yokken pencerede deploy olursa sonraki R0 `R0.release` FAIL (P0) verir, R5 de rol dosyalarındaki sürüm farkını yakalar. Deploy olmazsa R0 kendiliğinden fark etmez, kontrol Faruk'tadır.
+Sabitleme R0'dan önce yapılır ve `KV44_EXPECTED_SHA` sabitlenen SHA'nın kendisidir. R0 her fazın başında (temizlik hariç) staging'e hiç istek atmadan önce `STAGING_PINNED_SHA` repo değişkenini kişinin kendi `gh` oturumuyla okur (`gh api repos/mehmetalisahingm/kararver/actions/variables`; yalnız GitHub, staging değil). Değişken yoksa, 7–40 haneli küçük harf hex değilse ya da `KV44_EXPECTED_SHA`'nın öneki değilse `R0.pinned` **FAIL (P0) → NO-GO** olur ve faz durur. `gh` kurulu değilse, oturum açık değilse ya da repo erişimi yoksa sonuç **BLOCKED-verification** olur. Temizlik fazı (`--phase cleanup`) sabitlemeyi okumaz, çünkü değişken pencere sonunda kaldırılır ve R4 her zaman koşmalıdır. Sabitleme koşu sırasında değişirse ya da deploy olursa sonraki R0 `R0.pinned`/`R0.release` FAIL verir, R5 de rol dosyalarındaki sürüm farkını yakalar.
 
 Önce ortak değerler belirlenir: `--new-run` (ağsız) bir run id üretir; pencerenin başlangıcı (ISO, UTC) herkese aynı verilir.
 
@@ -68,6 +70,7 @@ Kaynak sütunu gerçek kod satırıdır; `kv44-staging-runner.test.mjs` her sat�
 
 | ID | R | Rol | Sev | Beklenen | Kaynak | K |
 |---|---|---|---|---|---|---|
+| R0.pinned | R0 | hepsi (R4 hariç) | P0 | STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification | `.github/workflows/staging-monitor.yml:102` | |
 | R0.release | R0 | hepsi | P0 | 200 status=ok env=staging, sha = KV44_EXPECTED_SHA | `apps/api/src/app.ts:496` | |
 | R0.login | R0 | hepsi | P0 | 200 + kv_session | `packages/contracts/src/domains/auth.ts:87` | |
 | R0.role | R0 | hepsi | P0 | /me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN) | `packages/contracts/src/domains/auth.ts:240` | |

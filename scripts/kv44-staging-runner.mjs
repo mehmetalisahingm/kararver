@@ -15,7 +15,9 @@
  *   --as approver       --phase approve|expiry --approval <8>                 remaining R2 steps, T+31
  *   --merge                                      R5: merges every role JSONL in the run directory
  * Write phases need --run <id> --window-start <ISO>. Env: KV44_EXPECTED_SHA, KV44_EMAIL, KV44_PASSWORD, KV44_MEDIA_HOST.
+ * R0 (except cleanup) reads the repo variable STAGING_PINNED_SHA with the local `gh` login; it must equal KV44_EXPECTED_SHA.
  */
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -26,6 +28,7 @@ import { crc32, deflateSync } from "node:zlib";
 
 export const WEB = "https://kararver-staging.vercel.app";
 export const API = "https://api-staging-45cb.up.railway.app";
+export const REPO = "mehmetalisahingm/kararver";
 export const ROLES = Object.freeze(["initiator", "owner", "media-operator", "approver"]);
 const MIN = 60_000;
 /** 60 minute window; the last 10 minutes are cleanup only. T0 must leave room for T+31 before the write cutoff. */
@@ -42,6 +45,7 @@ const MD = "packages/contracts/src/domains/media.ts";
  * `na` = may close as UYGULANAMAZ-staging; `k` = KV44 plan mapping (empty until kv44-plan.md is found).
  */
 export const MATRIX = Object.freeze([
+  { id: "R0.pinned", r: "R0", role: "all", sev: "P0", expect: "STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification", ref: ".github/workflows/staging-monitor.yml:102", needle: "STAGING_PINNED_SHA: ${{ vars.STAGING_PINNED_SHA }}" },
   { id: "R0.release", r: "R0", role: "all", sev: "P0", expect: "200 status=ok env=staging, sha = KV44_EXPECTED_SHA", ref: "apps/api/src/app.ts:496", needle: 'app.get("/health"' },
   { id: "R0.login", r: "R0", role: "all", sev: "P0", expect: "200 + kv_session", ref: "packages/contracts/src/domains/auth.ts:87", needle: 'id: "auth.login"' },
   { id: "R0.role", r: "R0", role: "all", sev: "P0", expect: "/me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN)", ref: "packages/contracts/src/domains/auth.ts:240", needle: 'id: "me.get"' },
@@ -219,10 +223,29 @@ function createContext({ role, phase, runId, deps }) {
   return { dir, file, rows, record, expect, call, login, loadState, saveState, setRelease, now };
 }
 
-/** R0: release, login, role. Every write phase starts with it. */
-async function r0(ctx, { http = fetch, env }, roleOk) {
+/**
+ * STAGING_PINNED_SHA repo variable via the local `gh` login (GitHub only, never staging).
+ * The list endpoint separates "not set" (200 without the name) from "no access" (error); a single-variable GET is 404 for both.
+ */
+export function readPinnedSha({ exec = execFile } = {}) {
+  return new Promise((resolve, reject) => {
+    exec("gh", ["api", `repos/${REPO}/actions/variables`, "--paginate", "--jq", '.variables[] | select(.name == "STAGING_PINNED_SHA") | .value'],
+      { timeout: 15_000, windowsHide: true }, (err, stdout) => (err ? reject(new Error("gh api failed")) : resolve(String(stdout).trim() || null)));
+  });
+}
+
+/** R0: pin (skipped in cleanup, the pin is removed at window end), release, login, role. Every phase starts with it. */
+async function r0(ctx, { http = fetch, env, pinnedSha = readPinnedSha }, roleOk, { pin = true } = {}) {
   const sha = env.KV44_EXPECTED_SHA ?? "";
   if (!/^[a-f0-9]{40}$/.test(sha) || !env.KV44_EMAIL || !env.KV44_PASSWORD) throw new Error("KV44_EXPECTED_SHA (40 hex), KV44_EMAIL and KV44_PASSWORD are required");
+  if (pin) {
+    let pinned;
+    try { pinned = await pinnedSha(); }
+    catch { ctx.record("R0.pinned", "BLOCKED-verification", null, "STAGING_PINNED_SHA okunamadı (gh kurulu, oturum açık ve repo erişimi var mı?)"); throw new Halt("BLOCKED-verification", "R0.pinned"); }
+    const valid = typeof pinned === "string" && /^[0-9a-f]{7,40}$/.test(pinned);
+    ctx.expect("R0.pinned", null, valid && sha.startsWith(pinned),
+      { note: !pinned ? "STAGING_PINNED_SHA sabitlenmemiş" : !valid ? "STAGING_PINNED_SHA geçersiz" : `pinned ${pinned.slice(0, 12)}` });
+  }
   const health = await http(API + "/health", { redirect: "manual", credentials: "omit", signal: AbortSignal.timeout(15_000) });
   let state = null; try { state = await health.json(); } catch {}
   const release = state?.release?.sha ?? null;
@@ -322,7 +345,7 @@ async function initiator(ctx, deps, args, win) {
   const state = ctx.loadState();
   let op = null, author = null;
   if (args.phase === "cleanup") {
-    try { op = await r0(ctx, deps, isAdmin); await cleanup(ctx, op, state); }
+    try { op = await r0(ctx, deps, isAdmin, { pin: false }); await cleanup(ctx, op, state); }
     finally { await logout(ctx, op?.cookie); }
     return;
   }
@@ -440,7 +463,7 @@ async function mediaOperator(ctx, deps, args, win) {
   const state = ctx.loadState();
   let op = null, user = null;
   if (args.phase === "cleanup") {
-    try { op = await r0(ctx, deps, isAdmin); await cleanup(ctx, op, state); }
+    try { op = await r0(ctx, deps, isAdmin, { pin: false }); await cleanup(ctx, op, state); }
     finally { await logout(ctx, op?.cookie); }
     return;
   }
