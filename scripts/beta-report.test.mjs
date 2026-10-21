@@ -102,3 +102,15 @@ test("reject invalid task association, duplicate case and unsafe bug URL", () =>
   assert.throws(() => aggregateBeta([user()], [task(), task()], [], TODAY), /duplicate participant-case/);
   assert.throws(() => aggregateBeta([user()], [], [bug({ issueUrl: "https://example.com/?email=person@example.com" })], TODAY), /GitHub issue/);
 });
+
+test("QA/E2E identities abort the report and a clean input carries exclusion evidence", () => {
+  const clean = aggregateBeta([user()], [task()], [bug()], TODAY);
+  assert.equal(clean.qaExclusion.verdict, "NO_QA_IDENTITY_IN_INPUT");
+  assert.equal(clean.qaExclusion.qaIdentityHits, 0);
+  assert.deepEqual(clean.qaExclusion.scanned, { participants: 1, tasks: 1, bugs: 1 });
+  for (const owner of ["e2e_runner", "wk_a_bot", "wk_b_bot", "sec_probe"]) {
+    assert.throws(() => aggregateBeta([user()], [], [bug({ owner })], TODAY), /QA\/E2E identity/);
+  }
+  assert.throws(() => aggregateBeta([user()], [], [bug({ issueUrl: "https://github.com/a/b/issues/1", owner: "ok-user" }), bug({ id: "BETA-BUG-002", owner: "SEC_probe" })], TODAY), /QA\/E2E identity/);
+  assert.doesNotThrow(() => aggregateBeta([user()], [], [bug({ owner: "second-user" })], TODAY));
+});

@@ -32,6 +32,8 @@ export function registerRoleRoutes(route: Route, deps: RoleRouteDeps): void {
           throw new ApiError("NOT_FOUND", "Kullanıcı bulunamadı.");
         case "approval_required":
           throw new ApiError("FORBIDDEN", "Kritik rol değişikliği için geçerli ikinci yönetici onayı ve MFA gerekiyor.");
+        case "super_admin_reserved":
+          throw new ApiError("FORBIDDEN", "Tek süper admin politikası: bu rol normal API üzerinden başka hesaba atanamaz.", [{ code: "super_admin_reserved" }]);
         case "user_deleted":
           throw new ApiError("CONFLICT", "Silinmiş hesaba rol atanamaz.", [{ code: "user_deleted" }]);
         case "forbidden":

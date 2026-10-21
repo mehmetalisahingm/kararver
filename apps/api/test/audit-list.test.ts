@@ -1,7 +1,7 @@
 /**
  * KV-39 (#41) audit okuma (admin.audit.list) ve kabul: gerçek yönetici işlemleri kayıt üretir, liste filtrelenir ve
  * sayfalanır, yalnız ADMIN+ okur, kayıt değiştirilemez/silinemez, sırlar ve kişisel veri görünmez, içerik geçmişi
- * okuması da izlenir (revision.read).
+ * okuması da izlenir (revision.read). #185: requestId / reasonContains süzgeçleri ve yanıttaki hassas alan temizliği.
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -130,12 +130,90 @@ describe("audit okuma (postgres)", { skip: backend ? false : "TEST_DATABASE_URL 
     assert.ok((await list(`?source=API&limit=50`)).items.every((e) => e.source === "API"));
   });
 
+  test("#185 requestId ve reasonContains süzgeçleri; cursor bu süzgeçlere de bağlı", async () => {
+    const tag = randomUUID().slice(0, 8);
+    const targets = [await signUp(), await signUp(), await signUp()];
+    const responses = [];
+    for (const [i, t] of targets.entries()) {
+      const reason = i === 2 ? `Başka gerekçe ${tag}` : `Kampanya %${tag} spam ${i}`;
+      const r = await send("POST", `/admin/users/${t.id}/sanctions`, { type: "WARNING", reason }, admin.cookie);
+      assert.equal(r.statusCode, 201, r.body);
+      responses.push(r);
+    }
+    const requestId = responses[1]!.headers["x-request-id"] as string;
+    const byRequest = await list(`?requestId=${encodeURIComponent(requestId)}`);
+    assert.deepEqual(byRequest.items.map((e) => [e.target.id, e.requestId]), [[targets[1]!.id, requestId]]);
+    assert.equal((await list(`?requestId=${encodeURIComponent(`${requestId}-yok`)}`)).items.length, 0);
+
+    const range = `&from=${encodeURIComponent(new Date(h.clock.now.getTime() - 3600_000).toISOString())}&to=${encodeURIComponent(new Date(h.clock.now.getTime() + 3600_000).toISOString())}`;
+    const reasons = async (text: string, extra = "") =>
+      (await list(`?reasonContains=${encodeURIComponent(text)}${range}${extra}`)).items.map((e) => e.reason).sort();
+    assert.deepEqual(await reasons(`%${tag} SPAM`), [`Kampanya %${tag} spam 0`, `Kampanya %${tag} spam 1`], "harf duyarsız");
+    assert.deepEqual(await reasons(`gerekçe ${tag}`), [`Başka gerekçe ${tag}`]);
+    assert.deepEqual(await reasons(`yok ${tag}`), []);
+    // "%" ve "_" joker olsaydı bu aralıktaki bütün kayıtlar dönerdi; düz karakter olarak yalnız "%" içerenler döner.
+    const percent = await list(`?reasonContains=${encodeURIComponent("%" + tag.slice(0, 2))}${range}&limit=100`);
+    assert.ok(percent.items.length >= 2 && percent.items.every((e) => e.reason?.includes(`%${tag.slice(0, 2)}`)), "% düz karakter");
+    assert.ok((await list(`?reasonContains=${encodeURIComponent("___")}${range}&limit=100`)).items.every((e) => e.reason?.includes("___")), "_ düz karakter");
+
+    const page1 = await list(`?reasonContains=${encodeURIComponent(`%${tag}`)}${range}&limit=1`);
+    assert.equal(page1.items.length, 1);
+    assert.ok(page1.next);
+    const page2 = await list(`?reasonContains=${encodeURIComponent(`%${tag}`)}${range}&limit=1&cursor=${encodeURIComponent(page1.next!)}`);
+    assert.notEqual(page2.items[0]?.id, page1.items[0]!.id);
+    const cursor = `&limit=1&cursor=${encodeURIComponent(page1.next!)}`;
+    assertError(await send("GET", `/admin/audit?reasonContains=${encodeURIComponent(`spam ${tag}`)}${range}${cursor}`, undefined, admin.cookie), 400, "INVALID_CURSOR");
+    assertError(await send("GET", `/admin/audit?reasonContains=${encodeURIComponent(`%${tag}`)}${range}&requestId=${encodeURIComponent(requestId)}${cursor}`, undefined, admin.cookie), 400, "INVALID_CURSOR");
+    const byRequestPage = await list(`?requestId=${encodeURIComponent(requestId)}&limit=1`);
+    assert.equal(byRequestPage.next, null);
+  });
+
+  test("#185 reasonContains sınırları: from/to zorunlu, en çok 31 gün, 3..100 karakter; requestId en çok 128", async () => {
+    const from = h.clock.now.getTime();
+    const iso = (days: number) => encodeURIComponent(new Date(from + days * 86_400_000).toISOString());
+    const get = (q: string) => send("GET", `/admin/audit?${q}`, undefined, admin.cookie);
+    for (const q of [
+      "reasonContains=spam",
+      `reasonContains=spam&from=${iso(0)}`,
+      `reasonContains=spam&to=${iso(1)}`,
+      `reasonContains=spam&from=${iso(0)}&to=${iso(32)}`,
+      `reasonContains=spam&from=${iso(1)}&to=${iso(0)}`,
+      `reasonContains=ab&from=${iso(0)}&to=${iso(1)}`,
+      `reasonContains=${"x".repeat(101)}&from=${iso(0)}&to=${iso(1)}`,
+      `requestId=${"r".repeat(129)}`,
+    ])
+      assertError(await get(q), 400, "VALIDATION_ERROR");
+    assert.equal((await get(`reasonContains=spam&from=${iso(0)}&to=${iso(31)}`)).statusCode, 200, "tam 31 gün");
+  });
+
+  test("#185 yanıtta hassas anahtarların değeri [gizli] (iç içe dahil); kayıt değişmez", async () => {
+    const targetId = randomUUID();
+    // Yazma yolu (assertAuditEntry) hassas anahtarı reddeder; eski/elle eklenmiş kaydı taklit etmek için doğrudan yazılır.
+    // Zaman çok eski: "en yeni" listelerine (ör. aşağıdaki sır taraması) girmez.
+    const before = { status: "ACTIVE", passwordHash: "$argon2id$gizli", profile: { Email: "x@example.test", security: { totpSecret: "JBSW", recoveryCodes: ["a"] } } };
+    const after = { status: "SUSPENDED", sessions: [{ sessionToken: "tok" }], devices: [{ ipAddress: "203.0.113.7", userAgent: "Mozilla", label: "telefon" }], description: "kalır" };
+    await db.auditLog.create({
+      data: { source: "CLI", action: "user.status.sync", operation: "sync", targetType: "USER", targetId, before, after, createdAt: new Date("2000-01-01T00:00:00.000Z") },
+    });
+    const [entry] = (await list(`?targetId=${targetId}`)).items;
+    assert.deepEqual(entry!.before, { status: "ACTIVE", passwordHash: "[gizli]", profile: { Email: "[gizli]", security: { totpSecret: "[gizli]", recoveryCodes: "[gizli]" } } });
+    assert.deepEqual(entry!.after, { status: "SUSPENDED", sessions: "[gizli]", devices: [{ ipAddress: "[gizli]", userAgent: "[gizli]", label: "telefon" }], description: "kalır" });
+    const stored = await db.auditLog.findFirstOrThrow({ where: { targetId }, select: { before: true, after: true } });
+    assert.deepEqual([stored.before, stored.after], [before, after], "DB'deki kayıt değişmedi");
+  });
+
   test("yalnız ADMIN+ okur: misafir 401, kullanıcı ve moderatör 403; yazma/silme endpoint'i yok", async () => {
     const user = await signUp();
     assertError(await send("GET", "/admin/audit"), 401, "UNAUTHENTICATED");
     assertError(await send("GET", "/admin/audit", undefined, user.cookie), 403, "FORBIDDEN");
     assertError(await send("GET", "/admin/audit", undefined, moderator.cookie), 403, "FORBIDDEN");
     assert.equal((await send("GET", "/admin/audit", undefined, root.cookie)).statusCode, 200);
+    // #185: yeni süzgeçler yetkiyi değiştirmez; geçerli sorgu da olsa ADMIN olmayan 403 alır.
+    const now = h.clock.now.getTime();
+    const filtered = `/admin/audit?requestId=req-1&reasonContains=spam&from=${encodeURIComponent(new Date(now).toISOString())}&to=${encodeURIComponent(new Date(now + 86_400_000).toISOString())}`;
+    assertError(await send("GET", filtered), 401, "UNAUTHENTICATED");
+    assertError(await send("GET", filtered, undefined, user.cookie), 403, "FORBIDDEN");
+    assertError(await send("GET", filtered, undefined, moderator.cookie), 403, "FORBIDDEN");
     for (const method of ["POST", "PUT"] as const) {
       assert.equal((await send(method, "/admin/audit", {}, admin.cookie)).statusCode, 404, `${method} /admin/audit yok`);
     }

@@ -180,6 +180,17 @@ test("admin: connection failure differs from permission denial; modal names, Esc
   await page.getByRole("button",{name:"Vazgeç",exact:true}).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(trigger).toBeFocused();
+  for (const name of ["Düzenle", "Pasife al"]) {
+    const rowTrigger = page.getByRole("button", { name, exact: true }).first();
+    for (const closeWith of ["escape", "cancel"]) {
+      await rowTrigger.click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      if (closeWith === "escape") await page.keyboard.press("Escape");
+      else await page.getByRole("button", { name: "Vazgeç", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(rowTrigger).toBeFocused();
+    }
+  }
 });
 
 test("session outage retry and anonymous permission states",async({page})=>{

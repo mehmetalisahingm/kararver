@@ -84,12 +84,15 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       else await admin.moderate(kind, target, action === "restore" ? "RESTORE" : "REMOVE", reason);
       refresh();
     }}>
-      {action === "role" ? <><label>Rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value as AdminRole)}>{["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"].map(r => <option key={r}>{r}</option>)}</select></label>
-        <p role="status">Mevcut roller: {user?.roles.join(", ")} → Yeni rol: {role}</p>
-        {(role === "SUPER_ADMIN" || user?.roles.includes("SUPER_ADMIN")) ? <p>Bu işlem en yüksek yönetim yetkisini değiştirir. İkinci yönetici onayı sunucuda etkinse onay numarası ve tek kullanımlık, güncel MFA doğrulaması gerekir.</p> : null}
-        <label>İkinci yönetici onay numarası<input className="kv-input" value={approvalId} onChange={e => setApprovalId(e.target.value)} /></label>
-        <label>Doğrulayıcı kodun<input className="kv-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={mfaCode} onChange={e => setMfaCode(e.target.value.replace(/\D/g, ""))} /></label>
-        <p>SUPER_ADMIN değişimi için <a href="/hesap/guvenlik">hesap güvenliği ekranından</a> onay talebi oluştur. Onaylanan hedef, rol ve gerekçe burada aynı olmalı; uygulamadan önce yeniden MFA doğrulaması gerekir.</p>
+      {action === "role" ? <><label>Rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value as AdminRole)}>{(user?.roles.includes("SUPER_ADMIN") ? ["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"] : ["USER", "MODERATOR", "ADMIN"]).map(r => <option key={r}>{r}</option>)}</select></label>
+        <p role="status">Hedef: @{user?.username} · Mevcut rol: {user?.roles.join(", ")} → İstenen rol: {role}. Gerekçen ve işlem sonucu denetim kaydına alınır.</p>
+        {!user?.roles.includes("SUPER_ADMIN") ? <p role="note">Tek süper admin politikası: normal API'den yeni SUPER_ADMIN atanamaz. Bu seçenek güvenlik nedeniyle sunulmaz.</p> : null}
+        {user?.roles.includes("SUPER_ADMIN") ? <p role="alert">Kritik işlem: mevcut SUPER_ADMIN rolünü değiştirmek son yetkiliyi kaybetmeye neden olabilir. Sunucu son aktif SUPER_ADMIN korumasını, gerekiyorsa MFA ve bağımsız onayı uygular.</p> : null}
+        {user?.roles.includes("SUPER_ADMIN") ? <>
+          <label>İkinci yönetici onay numarası<input className="kv-input" value={approvalId} onChange={e => setApprovalId(e.target.value)} /></label>
+          <label>Doğrulayıcı kodun<input className="kv-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={mfaCode} onChange={e => setMfaCode(e.target.value.replace(/\D/g, ""))} /></label>
+          <p>Kritik yetki değişiminde <a href="/hesap/guvenlik">hesap güvenliği ekranında</a> MFA doğrula; ikinci onay etkinse sunucuda bağlamı doğrulanmış bir onay numarası gereklidir.</p>
+        </> : null}
       </> : null}
       {action === "sanction" ? <><label>Yaptırım<select className="kv-input" value={sanction} onChange={e => setSanction(e.target.value as typeof sanction)}>{["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING", "SUSPEND", "BAN"].map(s => <option key={s}>{s}</option>)}</select></label>{sanction === "SUSPEND" ? <label>Bitiş<input className="kv-input" type="datetime-local" value={endsAt} onChange={e => setEndsAt(e.target.value)} /></label> : null}</> : null}
     </ActionDialog>
@@ -266,17 +269,25 @@ function DataExports({ id, admin }: { id: string; admin: AdminClient }) {
 
 function UserSessions({ id, admin }: { id: string; admin: AdminClient }) {
   const [status, setStatus] = useState<"active" | "revoked" | "expired">("active");
-  const sessions = useRemoteList(useCallback((cursor, signal) => admin.userSessions(id, cursor, signal, status), [admin, id, status]));
-  const [selection, setSelection] = useState<string | null>(null);
   return <section className="kv-stack" aria-label="Kullanıcı oturumları">
     <h3>Oturum güvenliği</h3>
     <p className="kv-muted">Ağlar ve cihazlar gizlilik için maskelenir. İptal edilen bir oturumla yeniden giriş gerekir.</p>
     <label>Oturum durumu
-      <select className="kv-input" value={status} onChange={e => { setSelection(null); setStatus(e.target.value as typeof status); }}>
+      <select className="kv-input" value={status} onChange={e => setStatus(e.target.value as typeof status)}>
         <option value="active">Aktif</option><option value="revoked">İptal edilmiş</option><option value="expired">Süresi dolmuş</option>
       </select>
     </label>
-    {status === "active" ? <button className="kv-button" disabled={!sessions.items.length} onClick={() => setSelection("all")}>Tüm aktif oturumları kapat</button> : null}
+    {/* Key by filter: the old page, cursor and revoke selection must disappear synchronously.
+        useRemoteList aborts the old request; a new component starts from empty state. */}
+    <SessionResults key={status} id={id} admin={admin} status={status} />
+  </section>;
+}
+
+function SessionResults({ id, admin, status }: { id: string; admin: AdminClient; status: "active" | "revoked" | "expired" }) {
+  const sessions = useRemoteList(useCallback((cursor, signal) => admin.userSessions(id, cursor, signal, status), [admin, id, status]));
+  const [selection, setSelection] = useState<string | null>(null);
+  return <div className="kv-stack">
+    {status === "active" ? <button className="kv-button" disabled={sessions.loading || !sessions.items.length} onClick={() => setSelection("all")}>Tüm aktif oturumları kapat</button> : null}
     {sessions.items.map(session => <article className="kv-card" key={session.id}>
       <p>{session.userAgent ?? "Bilinmeyen cihaz"} · {session.status === "REVOKED" ? "İptal edildi" : session.status === "EXPIRED" ? "Süresi doldu" : "Aktif"}</p>
       <p>Ağ (maskeli): {session.ipAddress ?? "Kaydedilmedi"} · Son etkinlik: {formatDate(session.lastSeenAt)} · Bitiş: {formatDate(session.expiresAt)}{session.revokedAt ? " · İptal: " + formatDate(session.revokedAt) : ""}</p>
@@ -287,5 +298,5 @@ function UserSessions({ id, admin }: { id: string; admin: AdminClient }) {
       await admin.revokeUserSessions(id, reason, selection === "all" ? undefined : selection ?? undefined);
       sessions.reload();
     }}><p>Kullanıcının erişimi kesilecek. İşlem gerekçesi yönetim geçmişine kaydedilir.</p></ActionDialog>
-  </section>;
+  </div>;
 }

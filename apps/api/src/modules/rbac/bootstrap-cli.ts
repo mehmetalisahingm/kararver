@@ -14,7 +14,7 @@ const REJECTIONS: Record<BootstrapRejection, string> = {
   USER_DELETED: "Kullanıcı silinmiş.",
   EMAIL_NOT_VERIFIED: "Kullanıcının e-postası doğrulanmamış.",
   USER_NOT_ACTIVE: "Kullanıcının durumu ACTIVE değil.",
-  SUPER_ADMIN_EXISTS: "Zaten bir SUPER_ADMIN var; bootstrap yalnız hiç SUPER_ADMIN yokken çalışır. Rol ataması admin panelinden yapılır.",
+  SUPER_ADMIN_EXISTS: "Zaten bir SUPER_ADMIN var; bootstrap yalnız hiç SUPER_ADMIN yokken çalışır. Tek süper admin politikası gereği normal yönetim API'si yeni SUPER_ADMIN atamaz.",
 };
 
 function usageError(message: string): never {

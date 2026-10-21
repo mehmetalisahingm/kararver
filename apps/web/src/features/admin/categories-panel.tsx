@@ -38,13 +38,17 @@ export function CategoriesPanel({ admin }: { admin: AdminClient }) {
   };
   const field = (key: keyof Form, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
 
-  function openCreate() {
+  function openCreate(event: React.MouseEvent<HTMLButtonElement>) {
+    // WebKit does not focus buttons on pointer click. Native dialog focus return
+    // needs the actual invoker focused before showModal(), including touch input.
+    event.currentTarget.focus();
     setForm(emptyForm());
     createKey.current = `kategori-${crypto.randomUUID()}`;
     setDialog({ kind: "create" });
   }
 
-  function openEdit(category: Category) {
+  function openEdit(event: React.MouseEvent<HTMLButtonElement>, category: Category) {
+    event.currentTarget.focus();
     setForm({
       slug: category.slug,
       name: category.name,
@@ -98,8 +102,8 @@ export function CategoriesPanel({ admin }: { admin: AdminClient }) {
                   <td>{category.isActive ? "Aktif" : "Pasif"}</td>
                   <td>
                     <div className={styles.rowActions}>
-                      <button className="kv-button kv-button--ghost" onClick={() => openEdit(category)}>Düzenle</button>
-                      <button className="kv-button kv-button--ghost" onClick={() => setDialog({ kind: "toggle", category })}>
+                      <button className="kv-button kv-button--ghost" onClick={(event) => openEdit(event, category)}>Düzenle</button>
+                      <button className="kv-button kv-button--ghost" onClick={(event) => { event.currentTarget.focus(); setDialog({ kind: "toggle", category }); }}>
                         {category.isActive ? "Pasife al" : "Aktifleştir"}
                       </button>
                     </div>
