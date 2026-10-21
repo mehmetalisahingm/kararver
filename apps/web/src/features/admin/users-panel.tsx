@@ -269,17 +269,25 @@ function DataExports({ id, admin }: { id: string; admin: AdminClient }) {
 
 function UserSessions({ id, admin }: { id: string; admin: AdminClient }) {
   const [status, setStatus] = useState<"active" | "revoked" | "expired">("active");
-  const sessions = useRemoteList(useCallback((cursor, signal) => admin.userSessions(id, cursor, signal, status), [admin, id, status]));
-  const [selection, setSelection] = useState<string | null>(null);
   return <section className="kv-stack" aria-label="Kullanıcı oturumları">
     <h3>Oturum güvenliği</h3>
     <p className="kv-muted">Ağlar ve cihazlar gizlilik için maskelenir. İptal edilen bir oturumla yeniden giriş gerekir.</p>
     <label>Oturum durumu
-      <select className="kv-input" value={status} onChange={e => { setSelection(null); setStatus(e.target.value as typeof status); }}>
+      <select className="kv-input" value={status} onChange={e => setStatus(e.target.value as typeof status)}>
         <option value="active">Aktif</option><option value="revoked">İptal edilmiş</option><option value="expired">Süresi dolmuş</option>
       </select>
     </label>
-    {status === "active" ? <button className="kv-button" disabled={!sessions.items.length} onClick={() => setSelection("all")}>Tüm aktif oturumları kapat</button> : null}
+    {/* Key by filter: the old page, cursor and revoke selection must disappear synchronously.
+        useRemoteList aborts the old request; a new component starts from empty state. */}
+    <SessionResults key={status} id={id} admin={admin} status={status} />
+  </section>;
+}
+
+function SessionResults({ id, admin, status }: { id: string; admin: AdminClient; status: "active" | "revoked" | "expired" }) {
+  const sessions = useRemoteList(useCallback((cursor, signal) => admin.userSessions(id, cursor, signal, status), [admin, id, status]));
+  const [selection, setSelection] = useState<string | null>(null);
+  return <div className="kv-stack">
+    {status === "active" ? <button className="kv-button" disabled={sessions.loading || !sessions.items.length} onClick={() => setSelection("all")}>Tüm aktif oturumları kapat</button> : null}
     {sessions.items.map(session => <article className="kv-card" key={session.id}>
       <p>{session.userAgent ?? "Bilinmeyen cihaz"} · {session.status === "REVOKED" ? "İptal edildi" : session.status === "EXPIRED" ? "Süresi doldu" : "Aktif"}</p>
       <p>Ağ (maskeli): {session.ipAddress ?? "Kaydedilmedi"} · Son etkinlik: {formatDate(session.lastSeenAt)} · Bitiş: {formatDate(session.expiresAt)}{session.revokedAt ? " · İptal: " + formatDate(session.revokedAt) : ""}</p>
@@ -290,5 +298,5 @@ function UserSessions({ id, admin }: { id: string; admin: AdminClient }) {
       await admin.revokeUserSessions(id, reason, selection === "all" ? undefined : selection ?? undefined);
       sessions.reload();
     }}><p>Kullanıcının erişimi kesilecek. İşlem gerekçesi yönetim geçmişine kaydedilir.</p></ActionDialog>
-  </section>;
+  </div>;
 }

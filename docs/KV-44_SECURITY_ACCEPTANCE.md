@@ -72,6 +72,8 @@ GitHub Actions: **[Staging security read-only gate](../.github/workflows/securit
 
 ## D. Gerçek staging için yönlendirilmiş kabul adımları
 
+Rollere bölünmüş R0–R5 aracı (iki kişilik onay, tek SUPER_ADMIN retleri, medya host'u, T+31 süresi, zorunlu temizlik): [KV-44_STAGING_RUNNER.md](KV-44_STAGING_RUNNER.md). Araç hazır; staging'de henüz çalıştırılmadı.
+
 1. **Sürüm eşlemesi:** GitHub `main` SHA, Vercel web SHA, Railway API SHA, worker/cron job SHA ve migration versiyonunu yaz; uyumsuzsa FAIL/BLOCKED.
 2. **Auth:** yalnız kontrollü e-posta doğrulanmış iki test hesabı kullan. Çerezleri ve session ID'leri rapora koyma. Oturum aç/yenile/çık ve süresi dolan cookie tekrar kullanımı 401, cookie Secure/HttpOnly/SameSite/Lax koşullarını gör.
 3. **Oy:** iki ayrı kullanıcı, açık/kapalı anket ve seçenekleriyle 20 paralel istek. Tek aktif oy ve gerçek PostgreSQL sayaç/olay uyumu; sonuç görünürlüğü kapalıyken anonim kullanıcıya sızıntı yok.
