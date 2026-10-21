@@ -31,6 +31,16 @@ test("role change shows the exact target and stops on MFA failure; pending input
   await dialog.getByLabel("İkinci yönetici onay numarası").fill("01998b9a-0000-7000-8000-000000000099");
   await dialog.getByLabel("Gerekçe", { exact: true }).fill("İkinci yönetici tarafından onaylandı");
   await dialog.getByLabel("Doğrulayıcı kodun", { exact: true }).fill("111111");
+  // Frontend confirmation must block any MFA or role mutation for the wrong target.
+  await dialog.getByRole("button", { name: "Uygula", exact: true }).click();
+  await expect(dialog.getByRole("alert").filter({ hasText: "Kritik rol değişikliği için kullanıcı adını aynen yaz." })).toBeVisible();
+  expect(mutations).toBe(0);
+  const confirmation = dialog.getByLabel(`Kritik işlem onayı: @${user.username} kullanıcı adını yaz`);
+  await confirmation.fill("not-the-account");
+  await dialog.getByRole("button", { name: "Uygula", exact: true }).click();
+  await expect(dialog.getByRole("alert").filter({ hasText: "Kritik rol değişikliği için kullanıcı adını aynen yaz." })).toBeVisible();
+  expect(mutations).toBe(0);
+  await confirmation.fill(user.username);
   await dialog.getByRole("button", { name: "Uygula", exact: true }).click();
   await expect(dialog.getByRole("alert").filter({ hasText: "Bu işlem için yetkin yok." })).toBeVisible();
   expect(mutations).toBe(0);
@@ -65,6 +75,7 @@ test("single owner: regular user cannot be promoted to SUPER_ADMIN from admin UI
   await expect(dialog).toContainText("Tek süper admin politikası");
   await expect(dialog.getByLabel("İkinci yönetici onay numarası")).toHaveCount(0);
   await expect(dialog.getByLabel("Doğrulayıcı kodun")).toHaveCount(0);
+  await expect(dialog.getByLabel(/Kritik işlem onayı/)).toHaveCount(0);
   expect(attemptedPromotion).toBe(0);
   expect(mock.unexpected).toEqual([]);
 });
