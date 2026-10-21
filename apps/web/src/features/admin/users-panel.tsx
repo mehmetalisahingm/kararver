@@ -39,6 +39,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
   const [role, setRole] = useState<AdminRole>("USER");
   const [approvalId, setApprovalId] = useState("");
   const [mfaCode, setMfaCode] = useState("");
+  const [criticalTargetConfirmation, setCriticalTargetConfirmation] = useState("");
   const [sanction, setSanction] = useState<StrongSanction | "WARNING">("WARNING");
   const [endsAt, setEndsAt] = useState("");
   useEffect(() => {
@@ -58,7 +59,7 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
         {canAssign ? <p>Kullanıcı numarası: <code>{id}</code></p> : null}
       <p>{user.status} · Roller: {user.roles.join(", ")} · Son giriş: {formatDate(user.lastLoginAt)}</p>
       <p>{user.stats.pollCount} gönderi · {user.stats.commentCount} yorum · {user.stats.voteCount} oy</p>
-      {canAssign ? <button className="kv-button" onClick={() => { setApprovalId(""); setMfaCode(""); setAction("role"); }}>Yetkilendir / rolü değiştir</button> : null}
+      {canAssign ? <button className="kv-button" onClick={() => { setApprovalId(""); setMfaCode(""); setCriticalTargetConfirmation(""); setAction("role"); }}>Yetkilendir / rolü değiştir</button> : null}
       <PasswordReset id={id} admin={admin} />
       <ContentJobs id={id} admin={admin} />
       {canAssign ? <DataExports id={id} admin={admin} /> : null}
@@ -72,7 +73,12 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       {activity.items.map(item => <article key={`${item.kind}:${item.id}`}><p>{item.kind} · {item.excerpt} · {item.status}</p><button className="kv-button" onClick={() => { setTarget(item.id); setKind(item.kind === "COMMENT" ? "comments" : "polls"); setAction(item.status === "REMOVED" ? "restore" : "remove"); }}>{item.status === "REMOVED" ? "Geri yükle" : "Kaldır"}</button></article>)}
       <ListState remote={activity} empty="Gönderi veya yorum yok." />
     </> : null}
-    <ActionDialog open={action !== null} title={action === "role" ? "Kullanıcının rolünü değiştir" : "Kullanıcıya işlem uygula"} description={user ? `Hedef: @${user.username} (${user.displayName}) · ${id}` : undefined} submitLabel="Uygula" onClose={() => { setMfaCode(""); setAction(null); }} validate={() => sanction === "SUSPEND" && action === "sanction" && (!endsAt || Date.parse(endsAt) <= Date.now()) ? "Gelecekte bir bitiş zamanı seç." : null} onSubmit={async reason => {
+    <ActionDialog open={action !== null} title={action === "role" ? "Kullanıcının rolünü değiştir" : "Kullanıcıya işlem uygula"} description={user ? `Hedef: @${user.username} (${user.displayName}) · ${id}` : undefined} submitLabel="Uygula" onClose={() => { setMfaCode(""); setCriticalTargetConfirmation(""); setAction(null); }} validate={() => {
+      if (action === "role" && user?.roles.includes("SUPER_ADMIN") && role !== "SUPER_ADMIN" && criticalTargetConfirmation !== user.username) {
+        return "Kritik rol değişikliği için kullanıcı adını aynen yaz.";
+      }
+      return sanction === "SUSPEND" && action === "sanction" && (!endsAt || Date.parse(endsAt) <= Date.now()) ? "Gelecekte bir bitiş zamanı seç." : null;
+    }} onSubmit={async reason => {
       if (action === "role") {
         const code = mfaCode;
         setMfaCode("");
@@ -84,10 +90,11 @@ function UserManagement({ id, admin, canAssign, onClose, onChange }: { id: strin
       else await admin.moderate(kind, target, action === "restore" ? "RESTORE" : "REMOVE", reason);
       refresh();
     }}>
-      {action === "role" ? <><label>Rol<select className="kv-input" value={role} onChange={e => setRole(e.target.value as AdminRole)}>{(user?.roles.includes("SUPER_ADMIN") ? ["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"] : ["USER", "MODERATOR", "ADMIN"]).map(r => <option key={r}>{r}</option>)}</select></label>
+      {action === "role" ? <><label>Rol<select className="kv-input" value={role} onChange={e => { setRole(e.target.value as AdminRole); setCriticalTargetConfirmation(""); }}>{(user?.roles.includes("SUPER_ADMIN") ? ["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"] : ["USER", "MODERATOR", "ADMIN"]).map(r => <option key={r}>{r}</option>)}</select></label>
         <p role="status">Hedef: @{user?.username} · Mevcut rol: {user?.roles.join(", ")} → İstenen rol: {role}. Gerekçen ve işlem sonucu denetim kaydına alınır.</p>
         {!user?.roles.includes("SUPER_ADMIN") ? <p role="note">Tek süper admin politikası: normal API'den yeni SUPER_ADMIN atanamaz. Bu seçenek güvenlik nedeniyle sunulmaz.</p> : null}
         {user?.roles.includes("SUPER_ADMIN") ? <p role="alert">Kritik işlem: mevcut SUPER_ADMIN rolünü değiştirmek son yetkiliyi kaybetmeye neden olabilir. Sunucu son aktif SUPER_ADMIN korumasını, gerekiyorsa MFA ve bağımsız onayı uygular.</p> : null}
+        {user?.roles.includes("SUPER_ADMIN") && role !== "SUPER_ADMIN" ? <label>Kritik işlem onayı: @{user.username} kullanıcı adını yaz<input className="kv-input" autoComplete="off" spellCheck={false} value={criticalTargetConfirmation} onChange={e => setCriticalTargetConfirmation(e.target.value)} /></label> : null}
         {user?.roles.includes("SUPER_ADMIN") ? <>
           <label>İkinci yönetici onay numarası<input className="kv-input" value={approvalId} onChange={e => setApprovalId(e.target.value)} /></label>
           <label>Doğrulayıcı kodun<input className="kv-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={mfaCode} onChange={e => setMfaCode(e.target.value.replace(/\D/g, ""))} /></label>
