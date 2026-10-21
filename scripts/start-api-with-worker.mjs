@@ -3,9 +3,12 @@ import { spawn } from "node:child_process";
 const children = new Set();
 let apiExited = false;
 
+// API, worker'ın aynı serviste çalıştığını bilir: heartbeat açılıştan sonra gelmezse /health worker'ı "down" sayar (#51).
+const childEnv = (name) => (name === "api" ? { ...process.env, WORKER_HEARTBEAT_EXPECTED: "true" } : process.env);
+
 function start(name, args) {
   console.error(`[launcher] starting ${name}`);
-  const child = spawn("pnpm", args, { stdio: "inherit", env: process.env, shell: process.platform === "win32" });
+  const child = spawn("pnpm", args, { stdio: "inherit", env: childEnv(name), shell: process.platform === "win32" });
   children.add(child);
   child.once("error", (error) => {
     console.error(`[${name}] spawn error`, error);
