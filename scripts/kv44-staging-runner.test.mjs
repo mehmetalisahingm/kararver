@@ -103,7 +103,7 @@ function harness(over) {
   return { s, root, lines, prompts, run };
 }
 const evidence = (root, runId, role) => readFileSync(join(root, runId, `${role}.jsonl`), "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l));
-const handoff = (lines, key) => lines.join("\n").match(new RegExp(`${key} ([0-9a-f]{8}|qa44_[0-9a-f]{10})`))[1];
+const handoff = (lines, key) => lines.join("\n").match(new RegExp(`${key} ([0-9a-f]{8}|sec_kv44_[0-9a-f]{10})`))[1];
 
 test("matrix: every row has a file:line ref and the line holds the actual code", () => {
   const repo = join(import.meta.dirname, "..");
@@ -186,8 +186,12 @@ test("full run in order R0 → T0 → R1/R3 → R2 → T+31 → R4 → R5: PASS,
   assert.match(row("R1.legacy_approval").note, /role-approvals\.test\.ts/);
   assert.match(row("R1.self").note, /details=boş/);
   assert.ok([...h.s.comments.values()].every(v => v === "REMOVED") && [...h.s.polls.values()].every(v => v === "REMOVED"));
-  assert.ok([...h.s.users.values()].filter(u => u.username.startsWith("qa44_")).every(u => u.banned && u.roles.join() === "USER"));
+  assert.ok([...h.s.users.values()].filter(u => u.username.startsWith("sec_kv44_")).every(u => u.banned && u.roles.join() === "USER"));
   assert.equal(h.s.registered, 2, "only author and media USER are created");
+  // contracts Username (common.ts) + #268 QA exclusion pattern
+  const synthetic = [...h.s.users.values()].filter(u => u.username.startsWith("sec_kv44_"));
+  assert.equal(synthetic.length, 2);
+  assert.ok(synthetic.every(u => /^[a-z0-9_]{3,30}$/.test(u.username) && /^(e2e|wk_a|wk_b|sec)_/.test(u.username)));
   assert.equal(h.prompts.length, 1);
 
   const all = readdirSync(join(h.root, runId)).filter(f => f.endsWith(".jsonl") || f.startsWith("R5-")).map(f => readFileSync(join(h.root, runId, f), "utf8")).join("\n") + h.lines.join("\n");
@@ -217,7 +221,7 @@ test("window: writes in the last 10 minutes and a late T0 are BLOCKED-window", a
   assert.equal(h.s.registered, 0);
   h.s.now = START + 51 * 60_000;
   const before = h.s.requests.length;
-  assert.equal(await h.run("owner", "owner", ["--as", "owner", "--target", "00000000", "--marker", "qa44_0000000000", "--run", runId, "--window-start", new Date(START).toISOString()]), 1);
+  assert.equal(await h.run("owner", "owner", ["--as", "owner", "--target", "00000000", "--marker", "sec_kv44_0000000000", "--run", runId, "--window-start", new Date(START).toISOString()]), 1);
   assert.ok(!h.s.requests.slice(before).some(q => q.path.endsWith("/role") || q.path.endsWith("/role-approvals")));
 });
 

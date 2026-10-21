@@ -332,7 +332,7 @@ async function initiator(ctx, deps, args, win) {
   try {
     op = await r0(ctx, deps, isAdmin);
     win.t0("R2.open.expiring");
-    state.marker = `qa44_${randomBytes(5).toString("hex")}`;
+    state.marker = `sec_kv44_${randomBytes(5).toString("hex")}`;
     ctx.saveState(state);
     author = await createSyntheticUser(ctx, op, state.marker, "author", state);
     const categories = await ctx.call("/categories");
@@ -397,7 +397,7 @@ async function owner(ctx, deps, args, win) {
   let op = null, promoted = null;
   try {
     op = await r0(ctx, deps, roles => roles.includes("SUPER_ADMIN"));
-    if (!/^[0-9a-f]{8}$/.test(args.target ?? "") || !/^qa44_[0-9a-f]{10}$/.test(args.marker ?? "")) throw new Error("owner: --target <8 hex> --marker qa44_… are required");
+    if (!/^[0-9a-f]{8}$/.test(args.target ?? "") || !/^sec_kv44_[0-9a-f]{10}$/.test(args.marker ?? "")) throw new Error("owner: --target <8 hex> --marker sec_kv44_… are required");
     const found = await ctx.call(`/admin/users?q=${encodeURIComponent(args.marker)}`, { cookie: op.cookie });
     const matches = (found.data?.data ?? []).filter(u => u.username?.startsWith(args.marker) && u.id?.startsWith(args.target));
     const target = matches.length === 1 && (matches[0].roles ?? []).every(r => r === "USER") ? matches[0] : null;
@@ -452,7 +452,7 @@ async function mediaOperator(ctx, deps, args, win) {
   try {
     op = await r0(ctx, deps, isAdmin);
     win.write("ACC.register");
-    state.marker = `qa44_${randomBytes(5).toString("hex")}`;
+    state.marker = `sec_kv44_${randomBytes(5).toString("hex")}`;
     ctx.saveState(state);
     user = await createSyntheticUser(ctx, op, state.marker, "media", state);
     win.write("R3.upload.create");

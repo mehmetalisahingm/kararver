@@ -24,6 +24,10 @@ Initiator için **MODERATOR yetmez**: toplu onay endpoint'i ADMIN kapısındadı
 
 ## 3. Koşu sırası ve komutlar
 
+**Akış:** Faruk: pencere başında `STAGING_PINNED_SHA` sabitler → R0 … R5 → pencere sonunda kaldırır.
+
+Sabitleme R0'dan önce yapılır ve `KV44_EXPECTED_SHA` sabitlenen SHA'nın kendisidir. Sabitleme yapılmamışsa koşu **NO-GO** sayılır. Araç repo değişkenini okumaz; R0 yalnız `/health` sürümünü `KV44_EXPECTED_SHA` ile karşılaştırır. Sabitleme yokken pencerede deploy olursa sonraki R0 `R0.release` FAIL (P0) verir, R5 de rol dosyalarındaki sürüm farkını yakalar. Deploy olmazsa R0 kendiliğinden fark etmez, kontrol Faruk'tadır.
+
 Önce ortak değerler belirlenir: `--new-run` (ağsız) bir run id üretir; pencerenin başlangıcı (ISO, UTC) herkese aynı verilir.
 
 ```bash
@@ -45,7 +49,7 @@ node scripts/kv44-staging-runner.mjs --preflight
 | Sıra | Dakika (tahmini) | Kim | Komut |
 |---|---|---|---|
 | R0 + hesap + R2 açılışı (T0) | 0–~10 (T0 ≤ 19) | initiator | `--as initiator --phase open --run <id> --window-start <iso>` |
-| R1 | T0 sonrası | owner | `--as owner --target <8> --marker <qa44_…> --run <id> --window-start <iso> [--legacy-approval <id>]` |
+| R1 | T0 sonrası | owner | `--as owner --target <8> --marker <sec_kv44_…> --run <id> --window-start <iso> [--legacy-approval <id>]` |
 | R3 | T0 sonrası | media-operator | `--as media-operator --phase run --run <id> --window-start <iso>` |
 | R2 kalan adımlar | R1/R3 sonrası | approver | `--as approver --phase approve --approval <8> --run <id> --window-start <iso>` |
 | T+31 | T0+31 (≤ 50) | approver | `--as approver --phase expiry --approval <8> --run <id> --window-start <iso>` (sunucunun `createdAt` değerine göre bekler) |
@@ -53,6 +57,10 @@ node scripts/kv44-staging-runner.mjs --preflight
 | R5 | sonra | initiator | `--merge --run <id>` |
 
 Yazarın 20 yorumu yeni hesap limiti (3/dk) yüzünden yaklaşık 7 dakika sürer. Araç `Retry-After` kadar bekler; limit değiştirilmez. Açılış fazı sonunda HANDOFF bloğu gerekli argümanları basar. Diğer roller JSONL dosyalarını R5 için initiator'ın aynı run dizinine koyar; `.state-*` dosyaları gönderilmez.
+
+R5'ten sonra Faruk pencere sonunda `STAGING_PINNED_SHA`'yı kaldırır; staging-monitor gecikme alarmına döner.
+
+**Kalıcı izler.** Temizlik hiçbir şey silmez: hesaplara BAN, yorum ve ankete REMOVE, medyaya REJECT uygular. Sentetik kullanıcılar (`sec_kv44_…`), kaldırılan içerik, audit kayıtları ve `domain_events` staging'de kalır. Bu yüzden beta ölçümünde bu kayıtlar dışlanmalıdır (#268 QA deseni `@example.test|(e2e|wk_a|wk_b|sec)_` hem e-postayı hem kullanıcı adını yakalar).
 
 ## 4. Matris
 
