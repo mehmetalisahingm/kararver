@@ -9,6 +9,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.40.0 — 2026-10-23 (Utku, #185 sunucu audit export'u, dilim 2)
+
+Kırıcı değişiklik yok: yeni endpoint, yeni yetki, yeni audit işlemi ve hedef tipi.
+
+- **Eklendi:** `admin.audit.export` (POST `/admin/audit/export`, yalnız SUPER_ADMIN). Gövde: `format` (`csv` | `json`), zorunlu `from`/`to` (en çok `AUDIT_EXPORT_MAX_DAYS` = 31 gün), `admin.audit.list` ile aynı süzgeçler ve zorunlu `reason`. Yanıt `AuditExportFile` (`content` dosyanın metnidir).
+- Bu oturumda taze, kullanılmamış MFA step-up gerekir ve export onu tüketir; yoksa 403 `FORBIDDEN` `stepup_required`. Eşleşme `AUDIT_EXPORT_MAX_ROWS` (10.000) kaydı aşarsa 400 `VALIDATION_ERROR` `too_many_rows`; step-up tüketilmez, kayıt yazılmaz.
+- **Yetki:** yeni işlem `audit.export` (super_admin). **Audit:** `audit.export` / `export`, hedef tipi `AUDIT` (`audit_logs`), gerekçe zorunlu; after özetinde biçim, aralık, süzgeçler ve kayıt sayısı.
+
 ## 1.39.0 — 2026-10-20 (Mert, #183 spam puanı gölge modu, S1)
 
 Kırıcı değişiklik yok: yeni endpoint, yeni ayar, yeni yetki. Kullanıcıya hiçbir etkisi yoktur; ayar varsayılan **kapalıdır** ve canlıda açılması [karar 13](../../docs/KV-37_SPAM_SCORE_DECISIONS.md)'ün (hukuk/KVKK) kapanmasına bağlıdır.

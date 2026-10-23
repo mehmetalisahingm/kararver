@@ -196,6 +196,7 @@ export const actions = Object.freeze({
   "settings.update": rule("super_admin", "Sistem ayarı değiştirme"),
   "community.owner.assign": rule("super_admin", "Topluluk sahibi atama/kaldırma (yönetici zorunlu atama; #184, KV-54 S1)"),
   "privacy.export.manage": rule("super_admin", "KVKK veri dışa aktarma talebi ve teslimi (#181)"),
+  "audit.export": rule("super_admin", "Audit tarihçesini sunucuda dışa aktarma; taze MFA step-up ve gerekçe zorunlu, her export audit'e yazılır (#185)"),
   "user.sessions.manage": rule("super_admin", "Kullanıcı oturumlarını yönetme"),
   "user.anonymize": rule("super_admin", "Hesabı geri alınamaz biçimde anonimleştirme (KVKK silme, #181); kendi hesabı için kullanılamaz", {
     guard: "sanctionTarget",
@@ -387,6 +388,7 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.settings.update": "settings.update",
   "admin.emergency.put": "emergency.update",
   "admin.audit.list": "audit.read",
+  "admin.audit.export": "audit.export",
   "admin.points.adjust": "points.adjust",
   "admin.metrics.get": "metrics.read",
   "admin.ops.status": "ops.read",
