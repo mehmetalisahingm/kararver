@@ -61,7 +61,9 @@ JSON çıktısı `loaded_records` kapsamı, kayıt sayısı, uygulanan süzgeçl
 - **Denetim:** her başarılı export okumayla aynı transaction'da audit'e yazılır: `audit.export` / `export`, hedef `AUDIT` / `audit_logs`, zorunlu gerekçe, istek kimliği; after özetinde biçim, aralık, süzgeçler ve kayıt sayısı. Export kaydı kendi dosyasına girmez.
 - **Testler:** `apps/api/test/audit-export.test.ts` (yetki, sınırlar, step-up tüketimi, redaksiyon, CSV formül koruması, 10.001 kayıtla sınır ve geri alma).
 
-Kalan #185 kapsamı: export için erişilebilir SUPER_ADMIN arayüzü, sonuç/zaman dilimi gelişmiş sorgusu, kritik alarm ve sürümlü telafi/undo işlemleri. Undo append-only kayıtları güncellemez; ayrı mutasyon, yetki ve yeni audit ister.
+- **Arayüz:** Audit ekranında yalnız SUPER_ADMIN'e "Süzülen aralığın tamamını sunucudan indir" düğmesi görünür. Uygulanan süzgeçte başlangıç ve bitiş tarihi yoksa ya da aralık 31 günü aşarsa düğme kapalıdır ve nedeni yazılır. Pencere biçim (CSV/JSON), gerekçe ve doğrulayıcı kodu ister; çok kayıtta kod yeniden sorulmaz (step-up harcanmadı), süresi dolmuş step-up'ta yeniden sorulur. Test: `apps/web/test/states/audit-server-export.spec.ts`.
+
+Kalan #185 kapsamı: sonuç/zaman dilimi gelişmiş sorgusu, kritik alarm ve sürümlü telafi/undo işlemleri. Undo append-only kayıtları güncellemez; ayrı mutasyon, yetki ve yeni audit ister.
 
 ## Açık konular
 

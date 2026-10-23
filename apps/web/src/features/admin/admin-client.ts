@@ -28,6 +28,7 @@ import type {
   CommunityThreshold,
   AdminPollItem,
   AuditEntry,
+  AuditExportFile,
   Announcement,
   ContentJob,
   ContentJobPreview,
@@ -75,6 +76,7 @@ export type UndoActionResultView = ReturnType<typeof UndoActionResult.parse>;
 export type Featured = ReturnType<typeof FeaturedPlacement.parse>;
 export type AnnouncementView = ReturnType<typeof Announcement.parse>;
 export type AuditRecord = ReturnType<typeof AuditEntry.parse>;
+export type AuditExportFileView = ReturnType<typeof AuditExportFile.parse>;
 export type SettingView = ReturnType<typeof Setting.parse>;
 export type CommunityRowView = ReturnType<typeof AdminCommunityRow.parse>;
 export type CommunityOverviewView = ReturnType<typeof AdminCommunityOverview.parse>;
@@ -257,6 +259,15 @@ export class AdminClient {
     for (const [k, v] of Object.entries(search)) if (v) query[k] = v;
     if (cursor) query.cursor = cursor;
     return page<AuditRecord>(await this.http.request("admin.audit.list", { query, signal }));
+  }
+  /**
+   * #185 sunucu export'u: yalnız SUPER_ADMIN; oturumda taze MFA step-up gerekir (`stepUp`) ve export onu tüketir.
+   * from/to zorunlu (≤ 31 gün); 10.000 kaydı aşan aralık too_many_rows ile reddedilir. Boş süzgeç gönderilmez.
+   */
+  async exportAudit(search: AuditSearch & { from: string; to: string }, format: "csv" | "json", reason: string) {
+    const body: Record<string, string> = { format, reason };
+    for (const [k, v] of Object.entries(search)) if (v) body[k] = v;
+    return data<AuditExportFileView>(await this.http.request("admin.audit.export", { body }));
   }
 
   private http: HttpClient;

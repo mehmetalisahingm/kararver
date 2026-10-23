@@ -1,3 +1,4 @@
+import { AUDIT_EXPORT_MAX_DAYS } from "@kararver/contracts";
 import type { AuditRecord, AuditSearch } from "./admin-client.ts";
 
 export const MAX_AUDIT_EXPORT_ROWS = 1000;
@@ -8,6 +9,23 @@ export function auditCsvCell(value: unknown): string {
   let text = value == null ? "" : String(value);
   if (/^[\s\uFEFF\u200B-\u200F]*[=+\-@]/u.test(text) || /^[\t\r\n]/.test(text)) text = "'" + text;
   return `"${text.replaceAll('"', '""')}"`;
+}
+
+/** Sunucu export'u (admin.audit.export) uygulanmış süzgeçte tarih aralığı ister; sunucu da aynı kuralla reddeder. */
+export function serverExportProblem(search: AuditSearch): string | null {
+  if (!search.from || !search.to) return `Sunucudan dışa aktarmak için başlangıç ve bitiş tarihiyle süz (en çok ${AUDIT_EXPORT_MAX_DAYS} gün).`;
+  const span = Date.parse(search.to) - Date.parse(search.from);
+  if (!(span > 0) || span > AUDIT_EXPORT_MAX_DAYS * 86_400_000) return `Sunucu export'u en çok ${AUDIT_EXPORT_MAX_DAYS} günlük aralıkta yapılır; aralığı daralt.`;
+  return null;
+}
+
+/** Metni dosya olarak indirir (tarayıcıda üretilen veya sunucudan gelen export). */
+export function saveTextFile(text: string, contentType: string, filename: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: contentType }));
+  const link = document.createElement("a");
+  link.href = url; link.download = filename;
+  document.body.append(link); link.click(); link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function buildAuditExport(records: readonly AuditRecord[], format: AuditExportFormat, filters: AuditSearch, now: Date) {
