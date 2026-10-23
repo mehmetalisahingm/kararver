@@ -1,6 +1,6 @@
 // Audit modülünün veri erişim arayüzü — KV-39 (#41). Yazma: write.ts (çağıranın transaction'ında), okuma: prisma-store.ts.
 // Kurallar: contracts audit.ts (assertAuditEntry), DATA_MODEL §9.2. Okuma endpoint'i: routes.ts (admin.audit.list).
-import type { AuditEntryInput, CheckedAuditEntry } from "@kararver/contracts";
+import type { AuditEntryInput, AuditSummary, CheckedAuditEntry } from "@kararver/contracts";
 import type { Prisma } from "@kararver/db";
 
 /** Mutation'ın transaction'ında yazılacak kayıt. `at` verilmezse DB saati (CLI). */
@@ -31,8 +31,24 @@ export type AuditQuery = {
   after: { createdAt: Date; id: string } | null;
 };
 
+/** admin.audit.export (#185): okuma, step-up tüketimi ve export kaydı tek transaction'dadır. */
+export type AuditExportInput = {
+  query: Omit<AuditQuery, "after">;
+  /** Bundan fazla eşleşme varsa too_many: transaction geri alınır, step-up tüketilmez, kayıt yazılmaz. */
+  maxRows: number;
+  actorId: string;
+  sessionId: string;
+  requestId: string;
+  reason: string;
+  at: Date;
+  /** Export kaydının after özeti; store kayıt sayısını (`count`) ekler. */
+  summary: AuditSummary;
+};
+export type AuditExportResult = { kind: "ok"; rows: AuditRecord[] } | { kind: "too_many" } | { kind: "stepup_required" };
+
 export interface AuditStore {
   list(query: AuditQuery, limit: number): Promise<AuditRecord[]>;
+  exportWithAudit(input: AuditExportInput): Promise<AuditExportResult>;
 }
 
 /**

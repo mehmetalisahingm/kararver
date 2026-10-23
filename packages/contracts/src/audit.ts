@@ -28,6 +28,8 @@ export const auditTargetTypes = Object.freeze([
   "ANNOUNCEMENT",
   "FEATURED",
   "BULK_APPROVAL",
+  // #185 audit export: hedef audit tablosunun kendisidir (target_id "audit_logs").
+  "AUDIT",
 ] as const);
 export type AuditTargetType = (typeof auditTargetTypes)[number];
 
@@ -58,6 +60,8 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   // #181 KVKK: talep ve teslim yönetici işlemidir (gerekçeli); indirme kullanıcının kendi işlemidir.
   "privacy.export.manage": ["request", "deliver"],
   "privacy.export.download": ["download"],
+  // #185 sunucu export'u: dışa aktarılan aralık, süzgeçler ve kayıt sayısı after özetindedir.
+  "audit.export": ["export"],
   // #181 anonimleştirme: geri alınamaz; yasal saklama koyma/kaldırma ayrı işlemdir.
   "user.anonymize": ["anonymize"],
   // #181 e-posta değişimi: adres hiçbir kayıtta yoktur; yalnız talep kimliği ve kaynak. Kullanıcı/token işlemlerinin aktörü hesabın sahibidir.
@@ -124,6 +128,7 @@ export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditActi
   "community.owner.assign",
   "user.content.bulk",
   "privacy.export.manage",
+  "audit.export",
   "user.anonymize",
   "user.emailChange.manage",
   "user.legalHold.manage",

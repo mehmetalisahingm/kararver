@@ -3,9 +3,12 @@
 import { randomUUID } from "node:crypto";
 import type { AuditAction, AuditSummary, AuditTargetType } from "@kararver/contracts";
 import type { AuditRecord, AuditStore, AuditTx } from "../../src/modules/audit/store.ts";
+import { writeAudit } from "../../src/modules/audit/write.ts";
 
 export type MemoryAuditStore = AuditStore & {
   records: AuditRecord[];
+  /** Taze step-up'ı olan oturumlar; exportWithAudit tüketir (Prisma'da session_mfa_stepups). */
+  stepups: Set<string>;
   transaction<T>(fn: (tx: AuditTx) => Promise<T>): Promise<T>;
 };
 
@@ -15,9 +18,11 @@ const summary = (value: unknown): AuditSummary | null =>
 
 export function createMemoryAuditStore(now: () => Date = () => new Date()): MemoryAuditStore {
   const records: AuditRecord[] = [];
+  const stepups = new Set<string>();
 
-  return {
+  const store: MemoryAuditStore = {
     records,
+    stepups,
 
     async transaction(fn) {
       const staged: AuditRecord[] = [];
@@ -71,5 +76,28 @@ export function createMemoryAuditStore(now: () => Date = () => new Date()): Memo
         })
         .slice(0, limit);
     },
+
+    async exportWithAudit(input) {
+      if (!stepups.has(input.sessionId)) return { kind: "stepup_required" };
+      const rows = await store.list({ ...input.query, after: null }, input.maxRows + 1);
+      if (rows.length > input.maxRows) return { kind: "too_many" };
+      stepups.delete(input.sessionId);
+      await store.transaction((tx) =>
+        writeAudit(tx, {
+          actorId: input.actorId,
+          source: "API",
+          action: "audit.export",
+          operation: "export",
+          target: { type: "AUDIT", id: "audit_logs" },
+          reason: input.reason,
+          before: null,
+          after: { ...input.summary, count: rows.length },
+          requestId: input.requestId,
+          at: input.at,
+        }),
+      );
+      return { kind: "ok", rows };
+    },
   };
+  return store;
 }

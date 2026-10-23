@@ -2,12 +2,18 @@
 // Yazma/silme endpoint'i yoktur; kayıtlar append-only (trigger audit_logs_append_only). Sıra created_at ↓, id ↓.
 // Cursor filtrelere bağlıdır: başka süzgeçle verilen cursor INVALID_CURSOR olur.
 // before/after yanıtta redact.ts'ten geçer (#185): hassas adlı alanların değeri "[gizli]"; kayıt değişmez.
+// admin.audit.export (#185): SUPER_ADMIN, taze step-up, ≤ 31 gün / ≤ AUDIT_EXPORT_MAX_ROWS; export'un kendisi audit'e yazılır.
+import { AUDIT_EXPORT_MAX_ROWS } from "@kararver/contracts";
 import { decodeCursor, encodeCursor, invalidCursor } from "../../http/cursor.ts";
+import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
+import { buildAuditExportFile } from "./export.ts";
 import { redactAuditSummary } from "./redact.ts";
 import type { AuditQuery, AuditStore } from "./store.ts";
 
-export type AuditRouteDeps = { store: AuditStore; mediaPublicBaseUrl: string };
+export type AuditRouteDeps = { store: AuditStore; mediaPublicBaseUrl: string; now?: () => Date };
+
+const FILTER_KEYS = ["actorId", "targetType", "targetId", "action", "operation", "source", "requestId", "reasonContains"] as const;
 
 export function registerAuditRoutes(route: Route, deps: AuditRouteDeps): void {
   route("admin.audit.list", async ({ query }) => {
@@ -57,5 +63,24 @@ export function registerAuditRoutes(route: Route, deps: AuditRouteDeps): void {
       createdAt: r.createdAt.toISOString(),
     }));
     return { status: 200, body: { data, page: { nextCursor, hasMore: nextCursor !== null } } };
+  });
+
+  route("admin.audit.export", async ({ body, viewer, request }) => {
+    const at = (deps.now ?? (() => new Date()))();
+    const filters = Object.fromEntries(FILTER_KEYS.filter((k) => body[k] !== undefined).map((k) => [k, body[k]]));
+    const result = await deps.store.exportWithAudit({
+      query: { ...filters, from: new Date(body.from), to: new Date(body.to) },
+      maxRows: AUDIT_EXPORT_MAX_ROWS,
+      actorId: viewer!.id,
+      sessionId: viewer!.sessionId,
+      requestId: request.id,
+      reason: body.reason,
+      at,
+      summary: { format: body.format, from: body.from, to: body.to, filters },
+    });
+    if (result.kind === "stepup_required") throw new ApiError("FORBIDDEN", "Önce doğrulayıcı kodunla kimliğini doğrula.", [{ code: "stepup_required" }]);
+    if (result.kind === "too_many")
+      throw new ApiError("VALIDATION_ERROR", `Bu aralıkta ${AUDIT_EXPORT_MAX_ROWS}'den fazla kayıt var; aralığı daralt.`, [{ code: "too_many_rows" }]);
+    return { status: 200, body: { data: buildAuditExportFile(result.rows, body.format, { from: body.from, to: body.to, filters }, at) } };
   });
 }

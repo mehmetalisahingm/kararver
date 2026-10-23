@@ -50,7 +50,18 @@ Audit ekranındaki API'nin yetkili kullanıcıya döndürdüğü, hassas alanlar
 
 JSON çıktısı `loaded_records` kapsamı, kayıt sayısı, uygulanan süzgeçler ve UTC üretim zamanı taşır. CSV UTF-8 BOM, RFC uyumlu tırnaklama ve formül başlangıçları/boşluk/kontrol karakterleri için apostrof koruması kullanır. Yalnız izinli görünüm alanları seçilir; yanıtın ek alanları ve avatar bağlantıları dışa aktarılmaz. Audit verisi sunucuda değiştirilmez; dosya, daha önce yetkili API okumasıyla yüklenmiş veriden tarayıcıda oluşturulur.
 
-Kalan #185 kapsamı: sunucuda bütün tarihçe export'u ve kayıt/erişim denetimi, requestId/sonuç/zaman dilimi gelişmiş sorgusu, kritik alarm ve sürümlü telafi/undo işlemleri. Undo append-only kayıtları güncellemez; ayrı mutasyon, yetki ve yeni audit ister.
+## Sunucu export'u (#185 ikinci dilim, `admin.audit.export`)
+
+`POST /admin/audit/export` bir tarih aralığındaki bütün eşleşen kayıtları sunucuda okuyup CSV veya JSON dosyası olarak döner (`AuditExportFile.content`). Tarayıcıdaki "yüklenen kayıtlar" export'u (1000 kayıt, yalnız ekrandakiler) yerinde kalır.
+
+- **Yetki:** yalnız SUPER_ADMIN (`audit.export`). ADMIN listeyi okur ama sunucu export'u alamaz.
+- **Step-up:** bu oturumda son 5 dakikada alınmış, kullanılmamış MFA step-up gerekir; export onu tüketir (yoksa 403 `stepup_required`). Her export için yeniden doğrulanır.
+- **Sınırlar:** `from` ve `to` zorunlu, aralık en çok 31 gün; en çok 10.000 kayıt. Aşan istek 400 `too_many_rows` alır; transaction geri alınır, yani step-up tüketilmez ve kayıt yazılmaz. Aralık daraltılıp tekrar istenir.
+- **İçerik:** projeksiyon tarayıcı export'uyla aynıdır (`apps/api/src/modules/audit/export.ts`): yalnız izinli alanlar, avatar bağlantısı ve e-posta yok, before/after `redact.ts`'ten geçer. CSV'de UTF-8 BOM, her alan tırnaklı ve formül/kontrol karakteri başlangıçlarına apostrof. JSON `server_range` kapsamı, aralık, süzgeçler ve kayıt sayısı taşır.
+- **Denetim:** her başarılı export okumayla aynı transaction'da audit'e yazılır: `audit.export` / `export`, hedef `AUDIT` / `audit_logs`, zorunlu gerekçe, istek kimliği; after özetinde biçim, aralık, süzgeçler ve kayıt sayısı. Export kaydı kendi dosyasına girmez.
+- **Testler:** `apps/api/test/audit-export.test.ts` (yetki, sınırlar, step-up tüketimi, redaksiyon, CSV formül koruması, 10.001 kayıtla sınır ve geri alma).
+
+Kalan #185 kapsamı: export için erişilebilir SUPER_ADMIN arayüzü, sonuç/zaman dilimi gelişmiş sorgusu, kritik alarm ve sürümlü telafi/undo işlemleri. Undo append-only kayıtları güncellemez; ayrı mutasyon, yetki ve yeni audit ister.
 
 ## Açık konular
 

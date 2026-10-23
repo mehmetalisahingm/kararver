@@ -143,10 +143,11 @@ describe("endpoint yetki eşlemesi", () => {
     }
   });
 
+  // audit.export (#185) kayıtları okur ve yalnız kendi export kaydını ekler; kayıt güncelleyen/silen işlem yok.
   test("audit için yazma/silme işlemi yok", () => {
     assert.deepEqual(
       actionIds.filter((a) => a.startsWith("audit.")),
-      ["audit.read"],
+      ["audit.read", "audit.export"],
     );
   });
 });

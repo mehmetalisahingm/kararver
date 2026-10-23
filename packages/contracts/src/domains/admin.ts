@@ -156,6 +156,19 @@ export const Setting = z.strictObject({
 
 /** admin.audit.list `reasonContains` için from–to aralığının üst sınırı (gün); tam tablo taramasını önler. #185 */
 export const AUDIT_REASON_SEARCH_MAX_DAYS = 31;
+/** admin.audit.export (#185): tek istekte en çok bu kadar günlük aralık ve kayıt; aşan istek 400 (daha dar aralıkla tekrar). */
+export const AUDIT_EXPORT_MAX_DAYS = 31;
+export const AUDIT_EXPORT_MAX_ROWS = 10_000;
+export const AuditExportFormat = z.enum(["csv", "json"]);
+/** Sunucuda üretilen dosya: `content` dosyanın metnidir (CSV UTF-8 BOM'lu, JSON girintili); istemci olduğu gibi indirir. */
+export const AuditExportFile = z.strictObject({
+  format: AuditExportFormat,
+  filename: z.string().min(1),
+  contentType: z.string().min(1),
+  count: z.number().int().min(0).max(AUDIT_EXPORT_MAX_ROWS),
+  generatedAt: Timestamp,
+  content: z.string(),
+});
 /** Audit kaydını kim üretti: API isteği (aktör dolu), CLI veya worker (aktör null). KV-39 */
 export const AuditSource = z.enum(["API", "CLI", "WORKER"]);
 export const AuditEntry = z.strictObject({
@@ -1043,6 +1056,52 @@ export const adminEndpoints = [
       "requestId tam eşleşir (X-Request-Id). reasonContains gerekçede büyük/küçük harf duyarsız arar; % _ \\ düz karakterdir. reasonContains verilirse from ve to zorunludur, aralık en çok 31 gün (yoksa 400 VALIDATION_ERROR).",
       "Cursor bütün süzgeçlere (requestId ve reasonContains dahil) bağlıdır; süzgeç değişince INVALID_CURSOR.",
       "Savunma katmanı: before/after içinde hassas adlı anahtarların (password, hash, token, secret, mfa, totp, otp, recovery, apiKey, cookie, session, email, ip, userAgent) değeri yanıtta \"[gizli]\" olur; kayıt değişmez.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.audit.export",
+    domain: "admin",
+    method: "POST",
+    path: "/admin/audit/export",
+    summary: "Audit tarihçesini CSV/JSON olarak dışa aktar (step-up MFA)",
+    auth: "super_admin",
+    provider: { owner: "Utku", module: "audit" },
+    consumers: utkuUi,
+    unblocks: ["#185"],
+    availability: { status: "ready" },
+    request: {
+      body: z
+        .strictObject({
+          format: AuditExportFormat,
+          from: Timestamp,
+          to: Timestamp,
+          actorId: Id.optional(),
+          targetType: z.string().max(40).optional(),
+          targetId: z.string().max(64).optional(),
+          action: z.string().max(80).optional(),
+          operation: z.string().max(40).optional(),
+          source: AuditSource.optional(),
+          requestId: z.string().min(1).max(128).optional(),
+          reasonContains: z.string().trim().min(3).max(100).optional(),
+          reason: Reason,
+        })
+        .superRefine((b, ctx) => {
+          const span = Date.parse(b.to) - Date.parse(b.from);
+          if (span <= 0) ctx.addIssue({ code: "custom", message: "to, from'dan sonra olmalı", path: ["to"] });
+          else if (span > AUDIT_EXPORT_MAX_DAYS * 86_400_000)
+            ctx.addIssue({ code: "custom", message: `Export en çok ${AUDIT_EXPORT_MAX_DAYS} günlük aralıkta yapılır`, path: ["to"] });
+        }),
+    },
+    responses: { 200: dataOf(AuditExportFile) },
+    errors: [],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "Yalnız SUPER_ADMIN. Bu oturumda son 5 dakikada alınmış, kullanılmamış MFA step-up gerekir (POST /me/mfa/step-up) ve export onu tüketir; yoksa 403 FORBIDDEN details[0].code: stepup_required.",
+      `from ve to zorunlu, aralık en çok ${AUDIT_EXPORT_MAX_DAYS} gün. Eşleşen kayıt ${AUDIT_EXPORT_MAX_ROWS}'u aşarsa 400 VALIDATION_ERROR details[0].code: too_many_rows (step-up tüketilmez, audit yazılmaz); aralığı daraltıp tekrar dene.`,
+      "Süzgeçler admin.audit.list ile aynıdır. Sıra created_at ↓, id ↓. before/after admin.audit.list gibi temizlenir (hassas adlı anahtarlar \"[gizli]\"); avatar bağlantısı ve e-posta dosyaya girmez.",
+      "CSV: UTF-8 BOM, her alan tırnaklı (RFC 4180), = + - @ ile ya da boşluk/kontrol karakteriyle başlayan değerlere formül koruması için baştan apostrof eklenir; before/after JSON metnidir.",
+      "Her başarılı export, dosyayla aynı transaction'da audit'e yazılır: action audit.export, operation export, hedef AUDIT/audit_logs, gerekçe zorunlu; after özetinde biçim, aralık, süzgeçler ve kayıt sayısı. Export'un kendisi değiştirilemez kayıttır.",
     ],
   }),
   defineEndpoint({

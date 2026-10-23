@@ -254,6 +254,7 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `PATCH /admin/settings/:key`<br>Tek ayarı değiştir (iyimser kilit) · `admin.settings.update` | SA | 200 | doğal | Utku `settings` | Utku (admin UI) | #42 | hazır |
 | `PUT /admin/emergency`<br>Acil durum anahtarları (tek işlemle kapat/aç) · `admin.emergency.put` | SA | 200 | doğal | Utku `settings` | Utku (admin UI) | #42 | hazır |
 | `GET /admin/audit`<br>Değiştirilemez audit kayıtları · `admin.audit.list` | A | 200 | — | Utku `audit` | Utku (admin UI) | #41 | hazır |
+| `POST /admin/audit/export`<br>Audit tarihçesini CSV/JSON olarak dışa aktar (step-up MFA) · `admin.audit.export` | SA | 200 | — | Utku `audit` | Utku (admin UI) | #185 | hazır |
 | `POST /admin/users/:id/point-adjustments`<br>Gerekçeli puan düzeltmesi · `admin.points.adjust` | A | 201 | **key zorunlu** | Mehmet `points` | Utku (admin UI) | #67 | hazır |
 | `GET /admin/metrics`<br>Dashboard metrikleri · `admin.metrics.get` | A | 200 | — | Mehmet `analytics` | Mehmet (admin UI) | #38 | hazır |
 | `GET /admin/ops`<br>Operasyon durumu: bileşenler, kuyruk, hata/gecikme, hız sınırı, yedek · `admin.ops.status` | SA | 200 | — | Faruk `ops` | Faruk (operasyon merkezi UI) | #186 | hazır |
@@ -320,7 +321,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #182 | `GET /me/mfa`, `POST /me/mfa/recover`, `POST /me/mfa/step-up`, `GET /admin/role-approvals/:id`, `POST /admin/role-approvals`, `POST /admin/role-approvals/:id/approve` |
 | #183 | `GET /admin/moderation/polls/bulk/preview`, `POST /admin/moderation/polls/bulk`, `GET /admin/moderation/comments/bulk/preview`, `POST /admin/moderation/comments/bulk`, `GET /admin/moderation/bulk-approvals`, `GET /admin/moderation/bulk-approvals/:id`, `POST /admin/moderation/bulk-approvals/:id/approve`, `POST /admin/moderation/bulk-approvals/:id/reject`, `POST /admin/moderation/bulk-approvals/:id/cancel`, `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `GET /admin/moderation/batches`, `GET /admin/spam-scores`, `GET /admin/users/:id/timeline`, `GET /admin/users/:id/timeline/summary` |
 | #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
-| #185 | `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo` |
+| #185 | `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `POST /admin/audit/export` |
 | #186 | `GET /admin/ops` |
 <!-- END:unblocks -->
 
