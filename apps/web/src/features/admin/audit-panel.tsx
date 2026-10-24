@@ -3,17 +3,19 @@
 // Değiştirilemez yönetim geçmişi (KV-39, #41). Yalnız okuma: audit için yazma/silme yoktur (sunucuda append-only).
 // Süzgeçler admin.audit.list'e gider; önce/sonra özeti sunucuda hassas alandan arındırılmış küçük bir nesnedir.
 // Yetki sunucudadır (ADMIN+); buradaki kontroller yalnız yardımdır. Bütün kayıt alanları metin olarak basılır.
-import { AUDIT_REASON_SEARCH_MAX_DAYS } from "@kararver/contracts";
+// #185 sunucu export'u yalnız SUPER_ADMIN'e görünür; step-up ve gerekçe ister, her export sunucuda audit'e yazılır.
+import { AUDIT_EXPORT_MAX_ROWS, AUDIT_REASON_SEARCH_MAX_DAYS } from "@kararver/contracts";
 import { useCallback, useState } from "react";
+import { UiError } from "../../lib/model.ts";
 import type { AdminClient, AuditRecord, AuditSearch } from "./admin-client.ts";
-import { ListState, formatDate, shortId, useRemoteList } from "./admin-ui";
+import { ActionDialog, ListState, formatDate, shortId, useAdminRoles, useRemoteList } from "./admin-ui";
 import styles from "./admin-shell.module.css";
 import { diffAuditSummary, diffKindLabels } from "./audit-diff";
 import { dayStart, reasonSearchProblem } from "./audit-filters";
-import { buildAuditExport, MAX_AUDIT_EXPORT_ROWS, type AuditExportFormat } from "./audit-export";
+import { buildAuditExport, MAX_AUDIT_EXPORT_ROWS, saveTextFile, serverExportProblem, type AuditExportFormat } from "./audit-export";
 
 const sourceLabels: Record<AuditRecord["source"], string> = { API: "Yönetici", CLI: "Komut satırı", WORKER: "Sistem işi" };
-const targetTypes = ["USER", "POLL", "COMMENT", "MEDIA", "COMMUNITY", "CATEGORY", "REPORT", "VOTE", "SETTING", "ANNOUNCEMENT", "FEATURED"];
+const targetTypes = ["USER", "POLL", "COMMENT", "MEDIA", "COMMUNITY", "CATEGORY", "REPORT", "VOTE", "SETTING", "ANNOUNCEMENT", "FEATURED", "AUDIT"];
 
 const summary = (value: unknown) => (value === null || value === undefined ? "—" : JSON.stringify(value, null, 2));
 
@@ -22,6 +24,10 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
   const [problem, setProblem] = useState<string | null>(null);
   const [search, setSearch] = useState<AuditSearch>({});
   const [open, setOpen] = useState<string | null>(null);
+  const canServerExport = useAdminRoles().includes("SUPER_ADMIN");
+  const [serverExport, setServerExport] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
+  const serverProblem = serverExportProblem(search);
 
   const load = useCallback((cursor: string | undefined, signal: AbortSignal) => admin.audit(search, cursor, signal), [admin, search]);
   const list = useRemoteList(load);
@@ -29,11 +35,7 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
   function download(format: AuditExportFormat) {
     if (exportDisabled) return;
     const file = buildAuditExport(list.items, format, search, new Date());
-    const url = URL.createObjectURL(new Blob([file.text], { type: file.contentType }));
-    const link = document.createElement("a");
-    link.href = url; link.download = file.filename;
-    document.body.append(link); link.click(); link.remove();
-    URL.revokeObjectURL(url);
+    saveTextFile(file.text, file.contentType, file.filename);
   }
 
   const apply = (event: React.FormEvent) => {
@@ -119,6 +121,20 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
         <button className="kv-button kv-button--secondary" disabled={exportDisabled} onClick={() => download("json")}>Yüklenen kayıtları JSON indir</button>
         <p className="kv-help">Dosya yalnız yüklenen {list.items.length} kaydı içerir. En fazla {MAX_AUDIT_EXPORT_ROWS} kayıt indirilebilir; kapsamı tarih ve diğer süzgeçlerle daraltabilirsin.</p>
       </div>
+      {canServerExport ? (
+        <div className={styles.toolbar} role="group" aria-label="Sunucudan audit dışa aktarma">
+          <button className="kv-button kv-button--secondary" disabled={!!serverProblem} aria-describedby="audit-server-export-help" onClick={() => { setExportNotice(""); setServerExport(true); }}>
+            Süzülen aralığın tamamını sunucudan indir
+          </button>
+          <p id="audit-server-export-help" className="kv-help">
+            {serverProblem ?? `Uygulanan süzgeçlerle eşleşen bütün kayıtlar (en çok ${AUDIT_EXPORT_MAX_ROWS}) sunucuda hazırlanır. Doğrulayıcı kodu ve gerekçe istenir; her export audit'e yazılır.`}
+          </p>
+          {exportNotice ? <p role="status">{exportNotice}</p> : null}
+        </div>
+      ) : null}
+      {canServerExport && !serverProblem ? (
+        <ServerExportDialog admin={admin} search={search as AuditSearch & { from: string; to: string }} open={serverExport} onClose={() => setServerExport(false)} onDone={setExportNotice} />
+      ) : null}
 
       {list.items.length > 0 ? (
         <div className={styles.tableWrap}>
@@ -137,6 +153,53 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
       ) : null}
       <ListState remote={list} empty="Bu süzgeçle kayıt yok." />
     </>
+  );
+}
+
+/** #185: SUPER_ADMIN sunucu export'u. Kod doğrulanıp export reddedildiyse (ör. çok kayıt) step-up harcanmamıştır; yeniden sorulmaz. */
+function ServerExportDialog({ admin, search, open, onClose, onDone }: { admin: AdminClient; search: AuditSearch & { from: string; to: string }; open: boolean; onClose: () => void; onDone: (message: string) => void }) {
+  const [format, setFormat] = useState<AuditExportFormat>("csv");
+  const [code, setCode] = useState("");
+  const [verified, setVerified] = useState(false);
+  return (
+    <ActionDialog
+      open={open}
+      title="Audit kayıtlarını sunucudan dışa aktar"
+      description={`${formatDate(search.from)} – ${formatDate(search.to)} aralığında uygulanan süzgeçlerle eşleşen kayıtlar indirilir. Bu işlem audit'e yazılır.`}
+      submitLabel="Doğrula ve indir"
+      onClose={() => { setCode(""); onClose(); }}
+      validate={() => (!verified && !/^\d{6}$/.test(code) ? "Doğrulayıcı kodunu (6 hane) gir." : null)}
+      onSubmit={async (reason) => {
+        if (!verified) {
+          await admin.stepUp(code);
+          setVerified(true);
+        }
+        try {
+          const file = await admin.exportAudit(search, format, reason);
+          // Step-up tüketildi: sonraki export yeni kod ister.
+          setVerified(false); setCode("");
+          saveTextFile(file.content, file.contentType, file.filename);
+          onDone(`${file.count} kayıt indirildi (${file.filename}). Export audit'e yazıldı.`);
+        } catch (cause) {
+          if (cause instanceof UiError && cause.detail === "stepup_required") { setVerified(false); setCode(""); }
+          throw cause;
+        }
+      }}
+    >
+      <label>
+        Biçim
+        <select className="kv-input" value={format} onChange={(e) => setFormat(e.target.value as AuditExportFormat)}>
+          <option value="csv">CSV</option>
+          <option value="json">JSON</option>
+        </select>
+      </label>
+      {verified ? <p role="status" className="kv-muted">Kod doğrulandı; export tekrar denenebilir.</p> : (
+        <label>
+          Doğrulayıcı kodun
+          <input className="kv-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} />
+        </label>
+      )}
+    </ActionDialog>
   );
 }
 
