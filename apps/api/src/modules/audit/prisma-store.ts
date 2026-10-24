@@ -1,6 +1,6 @@
 // AuditStore'un PostgreSQL/Prisma uygulaması. Tablo: audit_logs (DATA_MODEL §9.2); sorgular hedef, aktör,
 // işlem/tür ve zaman index'lerinden okunur.
-import type { AuditAction, AuditSummary, AuditTargetType } from "@kararver/contracts";
+import { auditOutcomePairs, type AuditAction, type AuditSummary, type AuditTargetType } from "@kararver/contracts";
 import type { Prisma, PrismaClient } from "@kararver/db";
 import { consumeFreshStepup } from "../security/stepup-guard.ts";
 import type { AuditQuery, AuditRecord, AuditStore } from "./store.ts";
@@ -13,8 +13,21 @@ const actorSelect = {
   actor: { select: { id: true, username: true, displayName: true, avatarMedia: { select: { status: true, publicObjectKey: true } } } },
 } as const;
 
+/**
+ * #185 sonuç süzgeci: sonucu türetilen (action, operation) çiftlerine çevrilir; APPLIED bunların tümleyenidir.
+ * Çiftler (action, operation, created_at) index'inden okunur.
+ */
+function outcomeWhere(outcome: AuditQuery["outcome"]): Prisma.AuditLogWhereInput | undefined {
+  if (outcome === undefined) return undefined;
+  const pairs = (o: Exclude<typeof outcome, "APPLIED">) => auditOutcomePairs(o).map((p) => ({ action: p.action, operation: { in: p.operations } }));
+  if (outcome !== "APPLIED") return { OR: pairs(outcome) };
+  return { NOT: { OR: [...pairs("DENIED"), ...pairs("REJECTED"), ...pairs("CANCELLED")] } };
+}
+
 function whereOf(q: AuditQuery): Prisma.AuditLogWhereInput {
+  const outcome = outcomeWhere(q.outcome);
   return {
+    ...(outcome ? { AND: [outcome] } : {}),
     actorId: q.actorId,
     targetType: q.targetType,
     targetId: q.targetId,

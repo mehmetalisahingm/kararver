@@ -1,8 +1,8 @@
-// #185 audit önce/sonra alan farkı ve "gerekçede ara" ekran kontrolü. Saf fonksiyonlar; tarayıcı gerektirmez.
+// #185 audit önce/sonra alan farkı, "gerekçede ara" ekran kontrolü ve zaman dilimi gün sınırları. Saf fonksiyonlar; tarayıcı gerektirmez.
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { diffAuditSummary, diffKindLabels } from "../src/features/admin/audit-diff.ts";
-import { reasonSearchProblem } from "../src/features/admin/audit-filters.ts";
+import { dayStart, formatAuditTime, reasonSearchProblem } from "../src/features/admin/audit-filters.ts";
 
 describe("audit önce/sonra farkı", () => {
   test("eklendi, kaldırıldı, değişti; değişmeyen alan listelenmez; yollar sıralı", () => {
@@ -52,5 +52,25 @@ describe("gerekçede ara: tarih aralığı kontrolü", () => {
     assert.match(reasonSearchProblem({ ...base, from: "2026-10-05", to: "2026-10-01" })!, /önce olamaz/);
     assert.match(reasonSearchProblem({ ...base, to: "2026-11-01" })!, /en çok 31/);
     assert.match(reasonSearchProblem({ ...base, reasonContains: "ab" })!, /en az 3/);
+  });
+});
+
+describe("zaman dilimi: gün sınırları ve gösterim", () => {
+  test("gün başı seçilen dilimde; bitiş günü ertesi gün başıyla dahil", () => {
+    assert.equal(dayStart("2026-10-24"), "2026-10-23T21:00:00.000Z", "varsayılan Europe/Istanbul");
+    assert.equal(dayStart("2026-10-24", 1, "Europe/Istanbul"), "2026-10-24T21:00:00.000Z");
+    assert.equal(dayStart("2026-10-24", 0, "UTC"), "2026-10-24T00:00:00.000Z");
+    assert.equal(dayStart("2026-12-31", 1, "UTC"), "2027-01-01T00:00:00.000Z", "ay/yıl taşması");
+  });
+  test("ofset elle yazılmaz: İstanbul'un eski yaz saati (+02 / +03) doğru", () => {
+    assert.equal(dayStart("2015-01-15", 0, "Europe/Istanbul"), "2015-01-14T22:00:00.000Z");
+    assert.equal(dayStart("2015-07-01", 0, "Europe/Istanbul"), "2015-06-30T21:00:00.000Z");
+  });
+  test("saatler seçilen dilimde ve dilim kısaltmasıyla", () => {
+    assert.match(formatAuditTime("2026-10-24T12:00:00.000Z"), /15:00 TR$/);
+    assert.match(formatAuditTime("2026-10-24T12:00:00.000Z", "UTC"), /12:00 UTC$/);
+  });
+  test("gerekçe aralığı kontrolü dilimle aynı sınırları kullanır", () => {
+    assert.equal(reasonSearchProblem({ reasonContains: "spam", from: "2026-10-01", to: "2026-10-31", timeZone: "UTC" }), null);
   });
 });

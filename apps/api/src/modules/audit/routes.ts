@@ -3,7 +3,7 @@
 // Cursor filtrelere bağlıdır: başka süzgeçle verilen cursor INVALID_CURSOR olur.
 // before/after yanıtta redact.ts'ten geçer (#185): hassas adlı alanların değeri "[gizli]"; kayıt değişmez.
 // admin.audit.export (#185): SUPER_ADMIN, taze step-up, ≤ 31 gün / ≤ AUDIT_EXPORT_MAX_ROWS; export'un kendisi audit'e yazılır.
-import { AUDIT_EXPORT_MAX_ROWS } from "@kararver/contracts";
+import { AUDIT_EXPORT_MAX_ROWS, auditOutcomeOf } from "@kararver/contracts";
 import { decodeCursor, encodeCursor, invalidCursor } from "../../http/cursor.ts";
 import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
@@ -13,7 +13,7 @@ import type { AuditQuery, AuditStore } from "./store.ts";
 
 export type AuditRouteDeps = { store: AuditStore; mediaPublicBaseUrl: string; now?: () => Date };
 
-const FILTER_KEYS = ["actorId", "targetType", "targetId", "action", "operation", "source", "requestId", "reasonContains"] as const;
+const FILTER_KEYS = ["actorId", "targetType", "targetId", "action", "operation", "source", "requestId", "reasonContains", "outcome"] as const;
 
 export function registerAuditRoutes(route: Route, deps: AuditRouteDeps): void {
   route("admin.audit.list", async ({ query }) => {
@@ -28,8 +28,9 @@ export function registerAuditRoutes(route: Route, deps: AuditRouteDeps): void {
       to: query.to ? new Date(query.to as string) : undefined,
       requestId: query.requestId as string | undefined,
       reasonContains: query.reasonContains as string | undefined,
+      outcome: query.outcome as AuditQuery["outcome"],
     };
-    const filter = `audit:${JSON.stringify([filters.actorId, filters.targetType, filters.targetId, filters.action, filters.operation, filters.source, query.from, query.to, filters.requestId, filters.reasonContains])}`;
+    const filter = `audit:${JSON.stringify([filters.actorId, filters.targetType, filters.targetId, filters.action, filters.operation, filters.source, query.from, query.to, filters.requestId, filters.reasonContains, filters.outcome])}`;
     const cursor = decodeCursor(query.cursor, filter);
     let after: AuditQuery["after"] = null;
     if (cursor) {
@@ -55,6 +56,7 @@ export function registerAuditRoutes(route: Route, deps: AuditRouteDeps): void {
       source: r.source,
       action: r.action,
       operation: r.operation,
+      outcome: auditOutcomeOf(r.action, r.operation),
       target: r.target,
       before: redactAuditSummary(r.before),
       after: redactAuditSummary(r.after),

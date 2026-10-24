@@ -1,6 +1,6 @@
 // Audit modülünün veri erişim arayüzü — KV-39 (#41). Yazma: write.ts (çağıranın transaction'ında), okuma: prisma-store.ts.
 // Kurallar: contracts audit.ts (assertAuditEntry), DATA_MODEL §9.2. Okuma endpoint'i: routes.ts (admin.audit.list).
-import type { AuditEntryInput, AuditSummary, CheckedAuditEntry } from "@kararver/contracts";
+import type { AuditEntryInput, AuditOutcomeValue, AuditSummary, CheckedAuditEntry } from "@kararver/contracts";
 import type { Prisma } from "@kararver/db";
 
 /** Mutation'ın transaction'ında yazılacak kayıt. `at` verilmezse DB saati (CLI). */
@@ -27,6 +27,8 @@ export type AuditQuery = {
   requestId?: string;
   /** Gerekçede büyük/küçük harf duyarsız alt dize; % _ \ düz karakterdir. Sözleşme from/to'yu (≤ 31 gün) zorunlu kılar. */
   reasonContains?: string;
+  /** #185: (action, operation) çiftinden türetilen sonuç (contracts auditOutcomeOf); ayrı sütun yok. */
+  outcome?: AuditOutcomeValue;
   /** Keyset: en yeni önce (created_at, id) azalan. */
   after: { createdAt: Date; id: string } | null;
 };

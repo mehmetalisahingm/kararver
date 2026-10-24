@@ -4,14 +4,15 @@
 // Süzgeçler admin.audit.list'e gider; önce/sonra özeti sunucuda hassas alandan arındırılmış küçük bir nesnedir.
 // Yetki sunucudadır (ADMIN+); buradaki kontroller yalnız yardımdır. Bütün kayıt alanları metin olarak basılır.
 // #185 sunucu export'u yalnız SUPER_ADMIN'e görünür; step-up ve gerekçe ister, her export sunucuda audit'e yazılır.
+// #185 sonuç süzgeci sunucuda (işlem, tür) çiftinden türetilir; gün sınırları ve saatler seçilen zaman dilimindedir.
 import { AUDIT_EXPORT_MAX_ROWS, AUDIT_REASON_SEARCH_MAX_DAYS } from "@kararver/contracts";
 import { useCallback, useState } from "react";
 import { UiError } from "../../lib/model.ts";
 import type { AdminClient, AuditRecord, AuditSearch } from "./admin-client.ts";
-import { ActionDialog, ListState, formatDate, shortId, useAdminRoles, useRemoteList } from "./admin-ui";
+import { ActionDialog, ListState, shortId, useAdminRoles, useRemoteList } from "./admin-ui";
 import styles from "./admin-shell.module.css";
 import { diffAuditSummary, diffKindLabels } from "./audit-diff";
-import { dayStart, reasonSearchProblem } from "./audit-filters";
+import { AUDIT_TIME_ZONES, auditOutcomeLabels, dayStart, DEFAULT_AUDIT_TIME_ZONE, formatAuditTime, reasonSearchProblem, type AuditTimeZone } from "./audit-filters";
 import { buildAuditExport, MAX_AUDIT_EXPORT_ROWS, saveTextFile, serverExportProblem, type AuditExportFormat } from "./audit-export";
 
 const sourceLabels: Record<AuditRecord["source"], string> = { API: "Yönetici", CLI: "Komut satırı", WORKER: "Sistem işi" };
@@ -20,9 +21,11 @@ const targetTypes = ["USER", "POLL", "COMMENT", "MEDIA", "COMMUNITY", "CATEGORY"
 const summary = (value: unknown) => (value === null || value === undefined ? "—" : JSON.stringify(value, null, 2));
 
 export function AuditPanel({ admin }: { admin: AdminClient }) {
-  const [draft, setDraft] = useState({ actorId: "", operation: "", action: "", targetType: "", targetId: "", source: "", from: "", to: "", requestId: "", reasonContains: "" });
+  const [draft, setDraft] = useState({ actorId: "", operation: "", action: "", targetType: "", targetId: "", source: "", from: "", to: "", requestId: "", reasonContains: "", outcome: "", timeZone: DEFAULT_AUDIT_TIME_ZONE as AuditTimeZone });
   const [problem, setProblem] = useState<string | null>(null);
   const [search, setSearch] = useState<AuditSearch>({});
+  // Uygulanmış süzgecin dilimi: listedeki saatler bununla gösterilir (taslakta değiştirmek "Süz"e kadar etkisiz).
+  const [timeZone, setTimeZone] = useState<AuditTimeZone>(DEFAULT_AUDIT_TIME_ZONE);
   const [open, setOpen] = useState<string | null>(null);
   const canServerExport = useAdminRoles().includes("SUPER_ADMIN");
   const [serverExport, setServerExport] = useState(false);
@@ -44,6 +47,7 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
     setProblem(issue);
     if (issue) return;
     setOpen(null);
+    setTimeZone(draft.timeZone);
     setSearch({
       actorId: draft.actorId.trim() || undefined,
       operation: draft.operation.trim() || undefined,
@@ -51,10 +55,11 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
       targetType: draft.targetType || undefined,
       targetId: draft.targetId.trim() || undefined,
       source: (draft.source || undefined) as AuditSearch["source"],
-      from: draft.from ? dayStart(draft.from) : undefined,
-      to: draft.to ? dayStart(draft.to, 1) : undefined,
+      from: draft.from ? dayStart(draft.from, 0, draft.timeZone) : undefined,
+      to: draft.to ? dayStart(draft.to, 1, draft.timeZone) : undefined,
       requestId: draft.requestId.trim() || undefined,
       reasonContains: draft.reasonContains.trim() || undefined,
+      outcome: (draft.outcome || undefined) as AuditSearch["outcome"],
     });
   };
 
@@ -86,6 +91,19 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
           </select>
         </label>
         <label>
+          Sonuç
+          <select className="kv-input" value={draft.outcome} onChange={(e) => setDraft({ ...draft, outcome: e.target.value })}>
+            <option value="">Tümü</option>
+            {(Object.keys(auditOutcomeLabels) as (keyof typeof auditOutcomeLabels)[]).map((o) => <option key={o} value={o}>{auditOutcomeLabels[o]}</option>)}
+          </select>
+        </label>
+        <label>
+          Zaman dilimi
+          <select className="kv-input" value={draft.timeZone} aria-describedby="audit-tz-help" onChange={(e) => setDraft({ ...draft, timeZone: e.target.value as AuditTimeZone })}>
+            {AUDIT_TIME_ZONES.map((z) => <option key={z.id} value={z.id}>{z.label}</option>)}
+          </select>
+        </label>
+        <label>
           Başlangıç
           <input className="kv-input" type="date" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
         </label>
@@ -111,6 +129,7 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
           />
         </label>
         <button className="kv-button kv-button--secondary" type="submit">Süz</button>
+        <p id="audit-tz-help" className="kv-help">Başlangıç ve bitiş günleri seçilen zaman diliminde gün başından gün sonuna kadardır; listedeki saatler de bu dilimde gösterilir.</p>
         <p id="audit-reason-help" className="kv-help">
           {problem ? <span role="alert">{problem}</span> : `Gerekçe araması için başlangıç ve bitiş tarihi gerekir (en çok ${AUDIT_REASON_SEARCH_MAX_DAYS} gün).`}
         </p>
@@ -133,7 +152,7 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
         </div>
       ) : null}
       {canServerExport && !serverProblem ? (
-        <ServerExportDialog admin={admin} search={search as AuditSearch & { from: string; to: string }} open={serverExport} onClose={() => setServerExport(false)} onDone={setExportNotice} />
+        <ServerExportDialog admin={admin} search={search as AuditSearch & { from: string; to: string }} timeZone={timeZone} open={serverExport} onClose={() => setServerExport(false)} onDone={setExportNotice} />
       ) : null}
 
       {list.items.length > 0 ? (
@@ -141,11 +160,11 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
           <table className={styles.table}>
             <caption className="sr-only">Audit kayıtları, en yeni önce</caption>
             <thead>
-              <tr><th scope="col">Zaman</th><th scope="col">Yapan</th><th scope="col">İşlem</th><th scope="col">Hedef</th><th scope="col">Gerekçe</th><th scope="col">Ayrıntı</th></tr>
+              <tr><th scope="col">Zaman ({AUDIT_TIME_ZONES.find((z) => z.id === timeZone)!.short})</th><th scope="col">Yapan</th><th scope="col">İşlem</th><th scope="col">Hedef</th><th scope="col">Gerekçe</th><th scope="col">Ayrıntı</th></tr>
             </thead>
             <tbody>
               {list.items.map((entry) => (
-                <AuditRow key={entry.id} entry={entry} open={open === entry.id} onToggle={() => setOpen(open === entry.id ? null : entry.id)} />
+                <AuditRow key={entry.id} entry={entry} timeZone={timeZone} open={open === entry.id} onToggle={() => setOpen(open === entry.id ? null : entry.id)} />
               ))}
             </tbody>
           </table>
@@ -157,7 +176,7 @@ export function AuditPanel({ admin }: { admin: AdminClient }) {
 }
 
 /** #185: SUPER_ADMIN sunucu export'u. Kod doğrulanıp export reddedildiyse (ör. çok kayıt) step-up harcanmamıştır; yeniden sorulmaz. */
-function ServerExportDialog({ admin, search, open, onClose, onDone }: { admin: AdminClient; search: AuditSearch & { from: string; to: string }; open: boolean; onClose: () => void; onDone: (message: string) => void }) {
+function ServerExportDialog({ admin, search, timeZone, open, onClose, onDone }: { admin: AdminClient; search: AuditSearch & { from: string; to: string }; timeZone: AuditTimeZone; open: boolean; onClose: () => void; onDone: (message: string) => void }) {
   const [format, setFormat] = useState<AuditExportFormat>("csv");
   const [code, setCode] = useState("");
   const [verified, setVerified] = useState(false);
@@ -165,7 +184,7 @@ function ServerExportDialog({ admin, search, open, onClose, onDone }: { admin: A
     <ActionDialog
       open={open}
       title="Audit kayıtlarını sunucudan dışa aktar"
-      description={`${formatDate(search.from)} – ${formatDate(search.to)} aralığında uygulanan süzgeçlerle eşleşen kayıtlar indirilir. Bu işlem audit'e yazılır.`}
+      description={`${formatAuditTime(search.from, timeZone)} – ${formatAuditTime(search.to, timeZone)} aralığında uygulanan süzgeçlerle eşleşen kayıtlar indirilir. Bu işlem audit'e yazılır.`}
       submitLabel="Doğrula ve indir"
       onClose={() => { setCode(""); onClose(); }}
       validate={() => (!verified && !/^\d{6}$/.test(code) ? "Doğrulayıcı kodunu (6 hane) gir." : null)}
@@ -203,14 +222,14 @@ function ServerExportDialog({ admin, search, open, onClose, onDone }: { admin: A
   );
 }
 
-function AuditRow({ entry, open, onToggle }: { entry: AuditRecord; open: boolean; onToggle: () => void }) {
+function AuditRow({ entry, timeZone, open, onToggle }: { entry: AuditRecord; timeZone: AuditTimeZone; open: boolean; onToggle: () => void }) {
   const detailsId = `audit-${entry.id}`;
   return (
     <>
       <tr>
-        <td>{formatDate(entry.createdAt)}</td>
+        <td><time dateTime={entry.createdAt}>{formatAuditTime(entry.createdAt, timeZone)}</time></td>
         <td>{entry.actor ? <span title={entry.actor.id}>{entry.actor.displayName} <small className="kv-muted">@{entry.actor.username}</small></span> : sourceLabels[entry.source]}</td>
-        <td><code>{entry.action}</code> <small className="kv-muted">{entry.operation}</small></td>
+        <td><code>{entry.action}</code> <small className="kv-muted">{entry.operation}</small><br /><small>{auditOutcomeLabels[entry.outcome]}</small></td>
         <td><small title={entry.target.id}>{entry.target.type} · {shortId(entry.target.id)}</small></td>
         <td>{entry.reason ?? <span className="kv-muted">—</span>}</td>
         <td>
