@@ -37,6 +37,7 @@ export * from "./endpoint.ts";
 export * from "./events.ts";
 export * from "./permissions.ts";
 export * from "./settings.ts";
+export * from "./security-alerts.ts";
 export * from "./domains/admin.ts";
 export * from "./domains/privacy.ts";
 export * from "./domains/auth.ts";

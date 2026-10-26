@@ -99,6 +99,8 @@ export const eventTypes: ReadonlySet<string> = new Set([
   "role.changed",
   "settings.changed",
   "featured.applied",
+  // #185 kritik güvenlik alarmı
+  "security.alert.opened",
 ]);
 
 export type EventEnvelope = {

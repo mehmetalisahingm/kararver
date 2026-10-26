@@ -22,6 +22,7 @@ import {
   UserStatus,
 } from "../common.ts";
 import { defineEndpoint } from "../endpoint.ts";
+import { SecurityAlertRuleId, SecurityAlertSeverity, SecurityAlertStatus } from "../security-alerts.ts";
 
 const Reason = z.string().trim().min(3).max(500);
 
@@ -313,6 +314,27 @@ export const OpsStatus = z.strictObject({
     lockedLogins: z.strictObject({ emails: Count, ips: Count }).nullable().default(null),
     /** Bütün süreçler (DB): son 24 saatteki kritik yönetici işlemleri (audit). Okunamazsa null. */
     adminActions24h: z.array(z.strictObject({ action: z.string().max(80), operation: z.string().max(40), count: Count })).nullable().default(null),
+    /**
+     * #185 kritik güvenlik alarmları (DB): açık olanlar ve son 24 saatte kapananlar, en yeni önce (en çok 50).
+     * Kural ve eşikler contracts `securityAlertRules`. Okunamazsa null.
+     */
+    alerts: z
+      .array(
+        z.strictObject({
+          id: Id,
+          rule: SecurityAlertRuleId,
+          severity: SecurityAlertSeverity,
+          status: SecurityAlertStatus,
+          /** Aktör kapsamlı kuralda işlemleri yapan yönetici; genel kuralda null. */
+          actor: PublicUser.nullable(),
+          peakCount: Count,
+          openedAt: Timestamp,
+          lastSeenAt: Timestamp,
+          resolvedAt: Timestamp.nullable(),
+        }),
+      )
+      .nullable()
+      .default(null),
   }),
   backup: z.strictObject({
     status: OpsHealth,
