@@ -9,6 +9,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.41.0 — 2026-10-24 (Utku, #185 audit sonuç süzgeci, dilim 3)
+
+Kırıcı değişiklik yok: yeni isteğe bağlı süzgeç ve yanıtta yeni alan.
+
+- **Eklendi:** `AuditOutcome` (`APPLIED` | `DENIED` | `REJECTED` | `CANCELLED`). `admin.audit.list` sorgusu ve `admin.audit.export` gövdesi isteğe bağlı `outcome` alır; cursor bu süzgece de bağlıdır.
+- **Eklendi:** `AuditEntry.outcome`. Ayrı sütun değildir; `auditOutcomeOf(action, operation)` ile türetilir. Eşleme `auditOutcomeOverrides`, sorgu için `auditOutcomePairs`.
+- Export dosyalarının sütunları değişmedi.
+
 ## 1.40.0 — 2026-10-23 (Utku, #185 sunucu audit export'u, dilim 2)
 
 Kırıcı değişiklik yok: yeni endpoint, yeni yetki, yeni audit işlemi ve hedef tipi.

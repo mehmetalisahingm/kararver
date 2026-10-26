@@ -171,6 +171,12 @@ export const AuditExportFile = z.strictObject({
 });
 /** Audit kaydını kim üretti: API isteği (aktör dolu), CLI veya worker (aktör null). KV-39 */
 export const AuditSource = z.enum(["API", "CLI", "WORKER"]);
+/**
+ * İşlemin sonucu (#185). Ayrı sütun değildir: (işlem, tür) çiftinden türetilir (contracts `auditOutcomeOf`).
+ * Audit yalnız gerçekleşen işlemi yazar; DENIED doğrulama/kilit/sahibin reddi, REJECTED inceleme sonucu ret,
+ * CANCELLED iptal veya süre dolması, geri kalan her şey APPLIED.
+ */
+export const AuditOutcome = z.enum(["APPLIED", "DENIED", "REJECTED", "CANCELLED"]);
 export const AuditEntry = z.strictObject({
   id: Id,
   actor: PublicUser.nullable(),
@@ -179,6 +185,8 @@ export const AuditEntry = z.strictObject({
   action: z.string(),
   /** İşlemin türü (ör. vote.invalidate → invalidate | restore); izinli değerler `auditOperations`. */
   operation: z.string(),
+  /** (action, operation) çiftinden türetilir (#185); kayıtta ayrı sütun yoktur. */
+  outcome: AuditOutcome,
   target: z.strictObject({ type: z.string(), id: z.string() }),
   before: z.unknown().nullable(),
   after: z.unknown().nullable(),
@@ -1030,6 +1038,7 @@ export const adminEndpoints = [
           action: z.string().max(80).optional(),
           operation: z.string().max(40).optional(),
           source: AuditSource.optional(),
+          outcome: AuditOutcome.optional(),
           from: Timestamp.optional(),
           to: Timestamp.optional(),
           requestId: z.string().min(1).max(128).optional(),
@@ -1053,8 +1062,9 @@ export const adminEndpoints = [
     cache: "private",
     notes: [
       "Audit için yazma/silme endpoint'i yoktur.",
+      "outcome (#185) (action, operation) çiftinden türetilir (auditOutcomeOf): DENIED, REJECTED, CANCELLED veya APPLIED. Ayrı sütun yoktur; yanıttaki her kayıtta da döner.",
       "requestId tam eşleşir (X-Request-Id). reasonContains gerekçede büyük/küçük harf duyarsız arar; % _ \\ düz karakterdir. reasonContains verilirse from ve to zorunludur, aralık en çok 31 gün (yoksa 400 VALIDATION_ERROR).",
-      "Cursor bütün süzgeçlere (requestId ve reasonContains dahil) bağlıdır; süzgeç değişince INVALID_CURSOR.",
+      "Cursor bütün süzgeçlere (requestId, reasonContains ve outcome dahil) bağlıdır; süzgeç değişince INVALID_CURSOR.",
       "Savunma katmanı: before/after içinde hassas adlı anahtarların (password, hash, token, secret, mfa, totp, otp, recovery, apiKey, cookie, session, email, ip, userAgent) değeri yanıtta \"[gizli]\" olur; kayıt değişmez.",
     ],
   }),
@@ -1081,6 +1091,7 @@ export const adminEndpoints = [
           action: z.string().max(80).optional(),
           operation: z.string().max(40).optional(),
           source: AuditSource.optional(),
+          outcome: AuditOutcome.optional(),
           requestId: z.string().min(1).max(128).optional(),
           reasonContains: z.string().trim().min(3).max(100).optional(),
           reason: Reason,

@@ -1,7 +1,7 @@
 /**
  * KV-39 (#41) audit okuma (admin.audit.list) ve kabul: gerçek yönetici işlemleri kayıt üretir, liste filtrelenir ve
  * sayfalanır, yalnız ADMIN+ okur, kayıt değiştirilemez/silinemez, sırlar ve kişisel veri görünmez, içerik geçmişi
- * okuması da izlenir (revision.read). #185: requestId / reasonContains süzgeçleri ve yanıttaki hassas alan temizliği.
+ * okuması da izlenir (revision.read). #185: requestId / reasonContains / outcome süzgeçleri ve yanıttaki hassas alan temizliği.
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -166,6 +166,40 @@ describe("audit okuma (postgres)", { skip: backend ? false : "TEST_DATABASE_URL 
     assertError(await send("GET", `/admin/audit?reasonContains=${encodeURIComponent(`%${tag}`)}${range}&requestId=${encodeURIComponent(requestId)}${cursor}`, undefined, admin.cookie), 400, "INVALID_CURSOR");
     const byRequestPage = await list(`?requestId=${encodeURIComponent(requestId)}&limit=1`);
     assert.equal(byRequestPage.next, null);
+  });
+
+  test("#185 outcome süzgeci (işlem, türden türetilir); yanıtta outcome; cursor outcome'a bağlı", async () => {
+    // Aynı hedefte altı kayıt: tür adı tek başına sonucu belirlemez (moderasyon lock uygulanmış, MFA lock engellenmiş).
+    const targetId = randomUUID();
+    const rows: [string, string, "API" | "WORKER"][] = [
+      ["account.mfa", "deny", "API"],
+      ["account.mfa", "lock", "API"],
+      ["report.resolve", "dismissed", "API"],
+      ["moderation.bulk.expire", "expire", "WORKER"],
+      ["moderation.poll.apply", "lock", "API"],
+      ["account.mfa", "verify", "API"],
+    ];
+    for (const [i, [action, operation, source]] of rows.entries()) {
+      await db.auditLog.create({
+        data: { actorId: source === "API" ? admin.id : null, source, action, operation, targetType: "USER", targetId, reason: null, requestId: source === "API" ? `outcome-${i}` : null },
+      });
+    }
+    const pick = async (outcome: string) =>
+      (await list(`?targetId=${targetId}&outcome=${outcome}`)).items.map((e) => `${e.action}/${e.operation}:${e.outcome}`).sort();
+    assert.deepEqual(await pick("DENIED"), ["account.mfa/deny:DENIED", "account.mfa/lock:DENIED"]);
+    assert.deepEqual(await pick("REJECTED"), ["report.resolve/dismissed:REJECTED"]);
+    assert.deepEqual(await pick("CANCELLED"), ["moderation.bulk.expire/expire:CANCELLED"]);
+    assert.deepEqual(await pick("APPLIED"), ["account.mfa/verify:APPLIED", "moderation.poll.apply/lock:APPLIED"]);
+    // Diğer süzgeçlerle birlikte (AND): aynı işlem içinde yalnız sonucu tutanlar.
+    assert.deepEqual((await list(`?targetId=${targetId}&action=account.mfa&outcome=APPLIED`)).items.map((e) => e.operation), ["verify"]);
+    assert.equal((await list(`?targetId=${targetId}`)).items.length, rows.length, "süzgeçsiz hepsi");
+
+    assertError(await send("GET", `/admin/audit?outcome=FAILED`, undefined, admin.cookie), 400, "VALIDATION_ERROR");
+    const page1 = await list(`?targetId=${targetId}&outcome=DENIED&limit=1`);
+    assert.ok(page1.next);
+    assertError(await send("GET", `/admin/audit?targetId=${targetId}&outcome=APPLIED&limit=1&cursor=${encodeURIComponent(page1.next!)}`, undefined, admin.cookie), 400, "INVALID_CURSOR");
+    const page2 = await list(`?targetId=${targetId}&outcome=DENIED&limit=1&cursor=${encodeURIComponent(page1.next!)}`);
+    assert.deepEqual([...page1.items, ...page2.items].map((e) => e.operation).sort(), ["deny", "lock"]);
   });
 
   test("#185 reasonContains sınırları: from/to zorunlu, en çok 31 gün, 3..100 karakter; requestId en çok 128", async () => {

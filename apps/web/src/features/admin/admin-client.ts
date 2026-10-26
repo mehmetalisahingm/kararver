@@ -100,7 +100,7 @@ export type MetricsView = ReturnType<typeof Metrics.parse>;
 export type OpsView = ReturnType<typeof OpsStatus.parse>;
 export type EmergencyState = { registration: boolean; pollCreation: boolean; comments: boolean; uploads: boolean; maintenance: boolean };
 /** admin.audit.list süzgeçleri (KV-39, #185). from dahil, to hariç (ISO zaman). reasonContains from/to (≤ 31 gün) ister. */
-export type AuditSearch = { action?: string; operation?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string; requestId?: string; reasonContains?: string };
+export type AuditSearch = { action?: string; operation?: string; targetType?: string; targetId?: string; actorId?: string; source?: "API" | "CLI" | "WORKER"; from?: string; to?: string; requestId?: string; reasonContains?: string; outcome?: "APPLIED" | "DENIED" | "REJECTED" | "CANCELLED" };
 
 export type Page<T> = { items: T[]; next: string | null };
 type Wire<T> = { data: T[]; page: { nextCursor: string | null } };

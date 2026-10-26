@@ -1,7 +1,7 @@
 // AuditStore'un bellek içi uygulaması. Sadece test içindir; aynı senaryolar DB varken PrismaAuditStore ile de koşar
 // (test/audit.test.ts). `transaction` Prisma'nınki gibi davranır: fonksiyon hata verirse yazılan kayıtlar atılır.
 import { randomUUID } from "node:crypto";
-import type { AuditAction, AuditSummary, AuditTargetType } from "@kararver/contracts";
+import { auditOutcomeOf, type AuditAction, type AuditSummary, type AuditTargetType } from "@kararver/contracts";
 import type { AuditRecord, AuditStore, AuditTx } from "../../src/modules/audit/store.ts";
 import { writeAudit } from "../../src/modules/audit/write.ts";
 
@@ -62,6 +62,7 @@ export function createMemoryAuditStore(now: () => Date = () => new Date()): Memo
             (q.operation === undefined || r.operation === q.operation) &&
             (q.source === undefined || r.source === q.source) &&
             (q.requestId === undefined || r.requestId === q.requestId) &&
+            (q.outcome === undefined || auditOutcomeOf(r.action, r.operation) === q.outcome) &&
             (q.reasonContains === undefined || (r.reason ?? "").toLocaleLowerCase("tr").includes(q.reasonContains.toLocaleLowerCase("tr"))) &&
             (q.from === undefined || r.createdAt >= q.from) &&
             (q.to === undefined || r.createdAt < q.to) &&

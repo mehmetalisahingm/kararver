@@ -10,7 +10,7 @@
 // - Gerekçe `reasonRequiredActions` için zorunludur. before/after kısa bir özettir; hassas alan içermez.
 import type { z } from "zod";
 import { Id } from "./common.ts";
-import { AuditSource } from "./domains/admin.ts";
+import { AuditOutcome, AuditSource } from "./domains/admin.ts";
 import { ModerationAction } from "./domains/moderation.ts";
 import { actions, type ActionId } from "./permissions.ts";
 
@@ -113,6 +113,47 @@ export function allowedAuditOperations(action: AuditAction): readonly string[] {
   const ops = auditOperations[action as ActionId];
   if (!ops) throw new TypeError(`Audit: ${action} audit'li değil (auditOperations'a eklenmeli)`);
   return ops;
+}
+
+export type AuditOutcomeValue = z.infer<typeof AuditOutcome>;
+
+/**
+ * #185 sonuç süzgeci: APPLIED dışındaki (işlem, tür) çiftleri. Sonuç ayrı sütun değildir, buradan türetilir;
+ * listede olmayan her çift APPLIED'dır. Tür adı tek başına yetmez (moderasyonda `lock` içeriği kilitlemektir,
+ * MFA'da hesabın kilitlenmesidir), bu yüzden eşleme işlem başınadır. Test: her çift izinli bir tür, ve
+ * deny/reject/dismissed/cancel/expire adlı her tür burada (test/audit-outcome.test.ts).
+ */
+export const auditOutcomeOverrides: Readonly<Partial<Record<AuditAction, Readonly<Record<string, Exclude<AuditOutcomeValue, "APPLIED">>>>>> =
+  Object.freeze({
+    // Başarısız doğrulayıcı kodu ve ardından kilit (#206 güvenlik olayı).
+    "account.mfa": { deny: "DENIED", lock: "DENIED" },
+    // Hesap sahibi e-postadaki "ben istemedim" bağlantısıyla talebi reddetti.
+    "account.deletion.confirm": { deny: "DENIED" },
+    "account.emailChange.confirm": { deny: "DENIED" },
+    "media.review": { reject: "REJECTED" },
+    "report.resolve": { dismissed: "REJECTED" },
+    "community.request.review": { reject: "REJECTED" },
+    "moderation.bulk.approve": { reject: "REJECTED" },
+    "user.content.bulk": { cancel: "CANCELLED" },
+    "account.emailChange.manage": { cancel: "CANCELLED" },
+    "account.deletion.manage": { cancel: "CANCELLED" },
+    "user.emailChange.manage": { cancel: "CANCELLED" },
+    "moderation.bulk.cancel": { cancel: "CANCELLED" },
+    "community.request.expire": { expire: "CANCELLED" },
+    "moderation.bulk.expire": { expire: "CANCELLED" },
+  });
+
+/** Kaydın sonucu (admin.audit.list `outcome`). */
+export function auditOutcomeOf(action: string, operation: string): AuditOutcomeValue {
+  const ops = auditOutcomeOverrides[action as AuditAction];
+  return (ops && Object.hasOwn(ops, operation) ? ops[operation] : undefined) ?? "APPLIED";
+}
+
+/** Sonucu `outcome` olan (işlem, türler) grupları; APPLIED için bunların tümleyeni (DB süzgeci). */
+export function auditOutcomePairs(outcome: Exclude<AuditOutcomeValue, "APPLIED">): { action: AuditAction; operations: string[] }[] {
+  return Object.entries(auditOutcomeOverrides)
+    .map(([action, ops]) => ({ action: action as AuditAction, operations: Object.keys(ops!).filter((op) => ops![op] === outcome) }))
+    .filter((p) => p.operations.length > 0);
 }
 
 /**

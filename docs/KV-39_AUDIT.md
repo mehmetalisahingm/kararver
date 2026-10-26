@@ -16,14 +16,17 @@
 - **Yetki:** Yalnız ADMIN+. Misafir 401, kullanıcı ve moderatör 403.
 - **Sıra ve süzgeçler:** `created_at` ↓, `id` ↓. Süzgeçler: `actorId`, `targetType`, `targetId`, `action`, `operation`, `source` (`API` / `CLI` / `WORKER`), `from` (dahil), `to` (hariç).
 - **Ek süzgeçler (#185):** `requestId` (X-Request-Id, tam eşleşme) ve `reasonContains` (gerekçede büyük/küçük harf duyarsız arama; `%`, `_`, `\` joker değil düz karakter). `reasonContains` verilirse `from` ve `to` zorunlu ve aralık en çok 31 gündür; tam tablo taraması yerine `created_at` index'inden okunur. Kural sözleşmede, aksi `400 VALIDATION_ERROR`.
+- **Sonuç süzgeci (#185):** `outcome` = `APPLIED` | `DENIED` | `REJECTED` | `CANCELLED`. Tabloda sütun yoktur: audit yalnız gerçekleşen işlemi yazar ve sonuç (işlem, tür) çiftinden türetilir (`auditOutcomeOverrides`, `packages/contracts/src/audit.ts`). DENIED: başarısız doğrulayıcı kodu ve kilit (`account.mfa` deny/lock), sahibin "ben istemedim" reddi (`account.deletion.confirm`, `account.emailChange.confirm` deny). REJECTED: inceleme sonucu ret (`media.review`, `community.request.review`, `moderation.bulk.approve` reject; `report.resolve` dismissed). CANCELLED: iptal ve süre dolması (`…cancel`, sistem `…expire`). Geri kalan her çift APPLIED. Eşleme işlem başınadır, çünkü tür adı tek başına yetmez: moderasyonda `lock` içeriği kilitlemektir (APPLIED). Süzgeç sunucuda bu çiftlere çevrilir, APPLIED onların tümleyenidir ve (action, operation, created_at) index'inden okunur. Yanıttaki her kayıtta da `outcome` döner. Yeni bir deny/reject/dismissed/cancel/expire türü eklenip eşlemeye yazılmazsa test kırılır (`packages/contracts/test/audit-outcome.test.ts`).
+- **Başarısız erişim denemeleri** (yetkisiz istek, 401/403) audit'e yazılmaz; bu yüzden "başarısız" sonucu yoktur. Onların izi kritik alarm işinde ayrıca ele alınacak (#185 kalan kapsam, #182 sözleşmesi).
 - **Cursor:** Süzgeçlere (yeniler dahil) bağlı. Başka süzgeçle verilen cursor `400 INVALID_CURSOR` döner.
 - **Özet temizliği (#185, savunma katmanı):** Yanıtta `before`/`after` içindeki hassas adlı anahtarların değeri `"[gizli]"` olur (`apps/api/src/modules/audit/redact.ts`): password, hash, token, secret, mfa, totp, otp, recovery, apiKey, cookie, session, email, ip, userAgent. Eşleşme anahtarın kelimelerine göredir (camelCase/snake_case bölünür, büyük/küçük harf duyarsız, iç içe nesne ve dizilerde de); `ip` gibi kısa adlar `description`, `recipient` alanlarını gizlemez. Yazma yolu (`assertAuditEntry`) hassas anahtarı zaten reddeder; bu katman eski veya elle eklenmiş kayıtlar içindir. Kayıt değişmez.
 - **Aktör:** `PublicUser` olarak döner. Silinmiş hesap da gösterilir, çünkü hesap verebilirlik için işlemi kimin yaptığı bilinmeli. Bu görünüm yalnız ADMIN+'a açık.
 
 ## Ekran (`/admin/audit`)
 
-- Süzgeçler: işlem, hedef türü, hedef kimliği, kaynak, gün aralığı, istek kimliği, gerekçede ara (#185; tarih aralığı yoksa veya 31 günü aşarsa istek gönderilmeden uyarı verir, sunucu da reddeder).
-- Liste: zaman, yapan, işlem ve tür, hedef, gerekçe.
+- Süzgeçler: işlem, hedef türü, hedef kimliği, kaynak, sonuç, zaman dilimi, gün aralığı, istek kimliği, gerekçede ara (#185; tarih aralığı yoksa veya 31 günü aşarsa istek gönderilmeden uyarı verir, sunucu da reddeder).
+- **Zaman dilimi (#185):** Türkiye (Europe/Istanbul, varsayılan) veya UTC. Seçilen günler o dilimde gün başından ertesi gün başına kadardır. Tarayıcının kendi saat dilimi kullanılmaz; yöneticinin bilgisayarı başka dilimde olsa da aynı gün aynı aralığı verir. Ofset elle yazılmaz, `Intl`'den okunur (DATA_MODEL kuralı). Listedeki saatler de aynı dilimde ve kısaltmasıyla ("15:00 TR") gösterilir. Sunucuya her zaman UTC ISO gider; API değişmedi. Testler: `apps/web/test/audit-diff.test.ts` (farklı makine dilimlerinde), `apps/web/test/states/audit-panel.spec.ts` (tarayıcı America/New_York).
+- Liste: zaman, yapan, işlem, tür ve sonuç, hedef, gerekçe.
 - "Göster" ile alan alan fark tablosu (Alan / Değişim / Önce / Sonra; "Eklendi", "Kaldırıldı", "Değişti" metinle ve işaretle, renk tek başına anlam taşımaz), kapalı bir bölümde ham önce/sonra JSON'u, istek kimliği ve kayıt kimliği açılır. Bütün kayıt alanları metin olarak basılır (`dangerouslySetInnerHTML` yok); XSS yükleri `apps/web/test/states/audit-panel.spec.ts` ile sınanır.
 - Yükleniyor, boş ve hata durumlarında tekrar deneme ile "daha fazla göster" var; diğer yönetim panelleriyle aynı kalıp (`useRemoteList`).
 - Yazma işlemi yok.
@@ -63,7 +66,7 @@ JSON çıktısı `loaded_records` kapsamı, kayıt sayısı, uygulanan süzgeçl
 
 - **Arayüz:** Audit ekranında yalnız SUPER_ADMIN'e "Süzülen aralığın tamamını sunucudan indir" düğmesi görünür. Uygulanan süzgeçte başlangıç ve bitiş tarihi yoksa ya da aralık 31 günü aşarsa düğme kapalıdır ve nedeni yazılır. Pencere biçim (CSV/JSON), gerekçe ve doğrulayıcı kodu ister; çok kayıtta kod yeniden sorulmaz (step-up harcanmadı), süresi dolmuş step-up'ta yeniden sorulur. Test: `apps/web/test/states/audit-server-export.spec.ts`.
 
-Kalan #185 kapsamı: sonuç/zaman dilimi gelişmiş sorgusu, kritik alarm ve sürümlü telafi/undo işlemleri. Undo append-only kayıtları güncellemez; ayrı mutasyon, yetki ve yeni audit ister.
+Kalan #185 kapsamı: kritik alarm ve sürümlü telafi/undo işlemleri. Sonuç ve zaman dilimi süzgeci yapıldı (yukarıda); export dosyalarına sonuç sütunu eklenmedi (biçim `schemaVersion: 1` sabit), uygulanan `outcome` süzgeci dosyanın `filters` alanında görünür. Undo append-only kayıtları güncellemez; ayrı mutasyon, yetki ve yeni audit ister.
 
 ## Açık konular
 

@@ -6,6 +6,7 @@ import {
   actions,
   allowedAuditOperations,
   assertAuditEntry,
+  auditOutcomeOf,
   AUDIT_REASON_SEARCH_MAX_DAYS,
   AUDIT_SUMMARY_MAX_CHARS,
   auditOperations,
@@ -196,6 +197,7 @@ describe("assertAuditEntry", () => {
       source: e.source,
       action: e.action,
       operation: e.operation,
+      outcome: auditOutcomeOf(e.action, e.operation),
       target: e.target,
       before: e.before,
       after: e.after,
@@ -233,5 +235,12 @@ describe("admin.audit.list sorgusu (#185)", () => {
     assert.deepEqual(fields({ reasonContains: "  ab  ", from: day(0), to: day(1) }), ["reasonContains"], "boşluklar sayılmaz");
     assert.deepEqual(fields({ reasonContains: "x".repeat(101), from: day(0), to: day(1) }), ["reasonContains"]);
     assert.ok(ok({ from: day(0), to: day(400) }), "gerekçe araması yoksa aralık sınırı yok");
+  });
+  test("outcome: yalnız AuditOutcome değerleri; export gövdesi de kabul eder", () => {
+    for (const o of ["APPLIED", "DENIED", "REJECTED", "CANCELLED"]) assert.ok(ok({ outcome: o }), o);
+    assert.deepEqual(fields({ outcome: "FAILED" }), ["outcome"]);
+    assert.deepEqual(fields({ outcome: "denied" }), ["outcome"], "büyük/küçük harf duyarlı");
+    const body = getEndpoint("admin.audit.export").request.body!;
+    assert.ok(body.safeParse({ format: "csv", from: day(0), to: day(1), outcome: "DENIED", reason: "Çeyrek denetimi" }).success);
   });
 });

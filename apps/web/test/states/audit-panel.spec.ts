@@ -62,3 +62,41 @@ test("gerekçede ara: tarih aralığı yoksa uyarı verir ve istek göndermez; a
   await expect(form.getByRole("alert")).toHaveCount(0);
   expect(mock.unexpected).toEqual([]);
 });
+
+// #185: tarayıcı başka saat dilimindeyken de gün sınırları seçilen dilime göre hesaplanır.
+test.describe("sonuç ve zaman dilimi süzgeci", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  test("outcome gider; gün sınırları ve saatler seçilen dilimde (tarayıcı diliminden bağımsız)", async ({ page }) => {
+    const mock = await api(page);
+    const queries: URLSearchParams[] = [];
+    const body = sample("admin.audit.list");
+    body.data[0] = { ...body.data[0], action: "account.mfa", operation: "deny", outcome: "DENIED", createdAt: "2026-10-24T12:00:00.000Z" };
+    mock.handlers.set("admin.audit.list", (r, url) => { queries.push(url.searchParams); return r.fulfill({ json: body }); });
+    await page.goto("/admin/audit");
+    const table = page.getByRole("table", { name: "Audit kayıtları, en yeni önce" });
+    await expect(table.getByRole("columnheader", { name: "Zaman (TR)" })).toBeVisible();
+    await expect(table.getByRole("row").nth(1)).toContainText("15:00 TR");
+    await expect(table.getByRole("row").nth(1)).toContainText("Engellendi");
+
+    const form = page.getByRole("search", { name: "Audit süzgeçleri" });
+    await form.getByLabel("Sonuç").selectOption({ label: "Engellendi" });
+    await form.getByLabel("Başlangıç").fill("2026-10-24");
+    await form.getByLabel("Bitiş").fill("2026-10-24");
+    const before = queries.length;
+    await form.getByRole("button", { name: "Süz" }).click();
+    await expect.poll(() => queries.length).toBeGreaterThan(before);
+    let last = queries[queries.length - 1]!;
+    expect([last.get("outcome"), last.get("from"), last.get("to")]).toEqual(["DENIED", "2026-10-23T21:00:00.000Z", "2026-10-24T21:00:00.000Z"]);
+
+    await form.getByLabel("Zaman dilimi").selectOption("UTC");
+    const beforeUtc = queries.length;
+    await form.getByRole("button", { name: "Süz" }).click();
+    await expect.poll(() => queries.length).toBeGreaterThan(beforeUtc);
+    last = queries[queries.length - 1]!;
+    expect([last.get("from"), last.get("to")]).toEqual(["2026-10-24T00:00:00.000Z", "2026-10-25T00:00:00.000Z"]);
+    await expect(table.getByRole("columnheader", { name: "Zaman (UTC)" })).toBeVisible();
+    await expect(table.getByRole("row").nth(1)).toContainText("12:00 UTC");
+    expect(mock.unexpected).toEqual([]);
+  });
+});
