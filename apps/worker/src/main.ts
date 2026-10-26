@@ -25,6 +25,7 @@ import { createSubprocessModerator } from "./jobs/media/moderator.ts";
 import { thresholdsFromPercent } from "./jobs/media/policy.ts";
 import { EMAIL_CHANGE_EXPIRE_CRON, EMAIL_CHANGE_EXPIRE_QUEUE, expireEmailChanges } from "./jobs/email-change/expire.ts";
 import { refreshSpamScores, SPAM_SCORE_CRON, SPAM_SCORE_QUEUE } from "./jobs/spam-score/job.ts";
+import { evaluateSecurityAlerts, SECURITY_ALERTS_CRON, SECURITY_ALERTS_QUEUE } from "./jobs/security-alerts/job.ts";
 import { BULK_APPROVALS_EXPIRE_CRON, BULK_APPROVALS_EXPIRE_QUEUE, expireBulkApprovals } from "./jobs/moderation/expire-approvals.ts";
 import { ACCOUNT_ERASURE_CRON, ACCOUNT_ERASURE_QUEUE, cleanupAccountErasures } from "./jobs/account-erasure/cleanup.ts";
 import { DATA_EXPORTS_CRON, DATA_EXPORTS_QUEUE, runDataExports } from "./jobs/data-exports/job.ts";
@@ -198,9 +199,15 @@ await boss.schedule(SPAM_SCORE_QUEUE, SPAM_SCORE_CRON, null, { tz: "Europe/Istan
 await boss.work(SPAM_SCORE_QUEUE, { batchSize: 1 }, async () => {
   await refreshSpamScores({ prisma, now: () => new Date(), log, enabled: () => settings.get<boolean>("spam.shadowScoring.enabled") });
 });
+// security.alerts: 5 dakikada bir; audit eşiği aşılınca kritik güvenlik alarmı açar, SUPER_ADMIN'lere bildirir, düzelince kapatır (#185, jobs/security-alerts/job.ts).
+await boss.createQueue(SECURITY_ALERTS_QUEUE, { policy: "singleton", retryLimit: 0 });
+await boss.schedule(SECURITY_ALERTS_QUEUE, SECURITY_ALERTS_CRON, null, { tz: "Europe/Istanbul" });
+await boss.work(SECURITY_ALERTS_QUEUE, { batchSize: 1 }, async () => {
+  await evaluateSecurityAlerts({ prisma, now: () => new Date(), log });
+});
 log("info", "worker hazır", {
   backupEnabled,
-  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_QUEUE, DATA_EXPORTS_QUEUE, ACCOUNT_ERASURE_QUEUE, EMAIL_CHANGE_EXPIRE_QUEUE, BULK_APPROVALS_EXPIRE_QUEUE, SPAM_SCORE_QUEUE],
+  queues: [MEDIA_PROCESS_QUEUE, TRENDS_QUEUE, SNAPSHOTS_QUEUE, SANCTIONS_EXPIRE_QUEUE, EVENTS_DISPATCH_QUEUE, EVENTS_CLEANUP_QUEUE, NOTIFICATIONS_CLEANUP_QUEUE, POLLS_EXPIRE_QUEUE, FEATURED_ACTIVATE_QUEUE, COMMUNITY_REQUESTS_EXPIRE_QUEUE, DATA_EXPORTS_QUEUE, ACCOUNT_ERASURE_QUEUE, EMAIL_CHANGE_EXPIRE_QUEUE, BULK_APPROVALS_EXPIRE_QUEUE, SPAM_SCORE_QUEUE, SECURITY_ALERTS_QUEUE],
   concurrency: config.mediaConcurrency,
   ...(backupEnabled ? { backupQueue: BACKUP_QUEUE } : {}),
 });

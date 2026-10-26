@@ -58,6 +58,27 @@
 | İş kuyruğu | Worker logları: `trends.refresh`, `snapshots.daily`, `events.dispatch`, `featured.activate`, `polls.expire`, `sanctions.expire`; `media.process` hataları (`MODERATION_TIMEOUT`, `MODEL_ERROR`) |
 | Model | `MODERATION_TIMEOUT` oranı %1'i aşarsa eşzamanlılık düşürülür (KV-47 Medya) |
 
+### Güvenlik alarmları (#185)
+
+Kritik yönetici işlemleri ve hesap güvenliği olayları için uygulama içi alarm. Kaynak `audit_logs`; worker `security.alerts` 5 dakikada bir her kuralın penceresindeki kayıtları sayar (`apps/worker/src/jobs/security-alerts/`). Kurallar ve eşikler tek yerde: `packages/contracts/src/security-alerts.ts` (ürün kararı Mehmet; değişince bu tablo da güncellenir).
+
+| Kural | Önem | Kapsam | Eşik | İlk adım |
+|---|---|---|---|---|
+| SUPER_ADMIN rolü değişti veya istendi (`superadmin.change`) | Kritik | Genel | 15 dk'da ≥ 1 kayıt (`before.role`, `after.role` ya da `after.requestedRole` = SUPER_ADMIN) | Değişikliği yapanı ve hedefi audit'te bul; beklenmiyorsa Mehmet'e haber ver, aktörün oturumlarını kapat. |
+| Kısa sürede çok rol değişikliği (`role.change.burst`) | Kritik | Aktör | 15 dk'da ≥ 3 kayıt | Aktörün son işlemlerini audit'te süz; ele geçirilmiş olabilir, oturumlarını kapatıp rolleri geri al. |
+| Art arda hesap anonimleştirme (`anonymize.burst`) | Kritik | Aktör | 60 dk'da ≥ 3 farklı hesap | Geri alınamaz. Aktörü hemen durdur (oturum kapat, rol al), etkilenen hesapları ve yedeği (KV-48) belirle. |
+| Kısa sürede çok yaptırım (`sanction.burst`) | Yüksek | Aktör | 15 dk'da ≥ 20 farklı hesap | Gerekçeleri audit'te oku; toplu spam temizliği değilse aktörü durdur ve yaptırımları kaldır. |
+| Çok oturum kapatma / parola sıfırlama / e-posta değişimi (`account.takeover.burst`) | Yüksek | Aktör | 15 dk'da ≥ 10 farklı hesap | Hedef hesapları listele; destek talebi yoksa aktörü durdur, e-posta değişimlerini iptal et. |
+| Çok audit export'u (`audit.export.burst`) | Yüksek | Aktör | 60 dk'da ≥ 3 export | Export gerekçelerini ve aralıklarını audit'te oku; beklenmiyorsa aktörün oturumlarını kapat. |
+| Acil durum anahtarı değişti (`emergency.update`) | Yüksek | Genel | 15 dk'da ≥ 1 kayıt | Anahtarın yeni değerine ve gerekçeye bak; olay kaydıyla eşleşmiyorsa geri al. |
+| Çok hesapta MFA kilitlenmesi (`mfa.lock.wave`) | Yüksek | Genel | 15 dk'da ≥ 5 farklı hesap | Kaba kuvvet dalgası olabilir: kilitli girişlere ve hız sınırlarına bak, IP engelini değerlendir. |
+
+- **Gürültü azaltma:** aynı kural ve kapsam (aktör ya da genel) için en fazla bir açık alarm vardır (kısmi UNIQUE). Durum sürerse alarmın son görülme zamanı ve en yüksek sayısı güncellenir; yeni bildirim gitmez. Sayı eşiğin altına inince (son eşleşen kayıt pencereden çıkınca) alarm kendiliğinden **kapanır**; aynı durum yeniden olursa yeni alarm açılır.
+- **Bildirim (idempotent):** alarm yalnız açılışta `security.alert.opened` olayını yazar (aynı transaction, outbox). Bildirim tüketicisi bunu **yalnız SUPER_ADMIN'lere** `SECURITY_ALERT` olarak teslim eder; tekrar teslimde tek satır kalır (dedupe), tip kapatılamaz (DB CHECK). Bildirimde kural, önem ve sayı vardır; kişisel veri yoktur. Repo herkese açık olduğu için alarm GitHub issue'suna taşınmaz.
+- **Görünüm:** Yönetim merkezi → Operasyon durumu → "Güvenlik alarmları" (`/admin#guvenlik-alarmlari`, yalnız SUPER_ADMIN): açıklar önce, sonra son 24 saatte kapananlar; kapsam, en yüksek sayı/eşik, açılış ve kapanış zamanı, ilk adım. Veri `admin.ops.status` → `security.alerts`; okunamazsa "Ölçüm yok".
+- **Müdahale:** (1) alarmı aç, kuralın ilk adımını uygula; (2) Audit ekranında aktörü (ya da işlemi) ve alarmın açılış aralığını süz, `outcome` ile reddedilen/engellenen denemeleri ayır; (3) gerekirse aktörün oturumlarını kapat ve rolünü al (yalnız SUPER_ADMIN, gerekçeli); (4) olay ise "Olay müdahalesi" adımlarıyla devam et, zaman çizelgesini kaydet.
+- **Henüz yok (#185 sonraki dilim):** başarısız yönetici erişimlerinin (401/403) kaydı ve alarmı, alarmı "incelendi" diye işaretleme (ack). Worker durursa alarm da çalışmaz; worker sağlığı `/health` ve `staging-monitor` ile izlenir.
+
 ### Operasyon merkezi API'si (#186)
 
 `GET /v1/admin/ops` (`admin.ops.status`) yalnız SUPER_ADMIN içindir (yetki `ops.read`, backend RBAC). Cevap `no-store`'dur ve tek bakışta şunları verir:

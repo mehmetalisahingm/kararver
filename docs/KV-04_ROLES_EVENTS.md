@@ -130,6 +130,7 @@ route("admin.reports.resolve", async ({ params, authorize }) => {
 | `sanction.lifted` | Utku `admin-users` | USER | user | search, metrics | — | — | var |
 | `role.changed` | Utku `rbac` | USER | user | — | — | — | — |
 | `settings.changed` | Utku `settings` | SETTING | user | cache | — | — | var |
+| `security.alert.opened` | Utku `security-alerts` #185 | SECURITY_ALERT | system | notifications | — | SECURITY_ALERT (yalnız SUPER_ADMIN, kapatılamaz) | var |
 
 Payload şemaları `events.ts` içindedir (strict zod). Kabul koşulundaki alanlar: oy (`vote.submitted`, `vote.changed`, `vote.invalidated`), kapanış (`poll.closed`), karar (`decision.updated`), yorum (`comment.created`, `comment.replied`), alternatif (`alternative.created`), trend (`poll.trending`), moderasyon (`moderation.applied`; gizle/geri yükle dahil). Payload'ları kendi üreticileri PR'da doğrular.
 

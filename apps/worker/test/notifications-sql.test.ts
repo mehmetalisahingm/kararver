@@ -54,6 +54,7 @@ describe("bildirim yazımı: ham SQL koruması (postgres)", { skip: url ? false 
       COMMUNITY_FEATURED: { communityId: poll.optionIds[1] },
       SANCTION_APPLIED: { sanctionType: "RESTRICT_COMMENTS", endsAt: "2031-07-08T09:30:15.123Z" },
       ANNOUNCEMENT_PUBLISHED: { level: "INFO" },
+      SECURITY_ALERT: { rule: "role.change.burst", severity: "CRITICAL", count: 4 },
     };
     for (const type of NotificationType.options) {
       const draft: NotificationDraft = {

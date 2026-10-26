@@ -24,7 +24,7 @@ export type NotificationDraft = {
   eventActorId: string | null;
   /** Bildirimde gösterilen aktör; moderasyon, yaptırım ve öne çıkarmada NULL. */
   actorId: string | null;
-  subject: { type: "POLL" | "COMMENT" | "COMMUNITY" | "USER" | "ANNOUNCEMENT"; id: string };
+  subject: { type: "POLL" | "COMMENT" | "COMMUNITY" | "USER" | "ANNOUNCEMENT" | "SECURITY_ALERT"; id: string };
   pollId: string | null;
   data: Record<string, NotificationScalar>;
   dedupeKey: string;

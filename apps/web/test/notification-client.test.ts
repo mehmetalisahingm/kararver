@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { examples } from "@kararver/contracts/fixtures";
 import { HttpClient } from "../src/lib/http-client.ts";
-import { NotificationClient, notificationCopy, notificationHref } from "../src/features/notifications/notification-client.ts";
+import { NotificationClient, notificationCopy, notificationHref, optionalPreferenceTypes } from "../src/features/notifications/notification-client.ts";
 import type { NotificationItem } from "../src/features/notifications/notification-client.ts";
 
 type Seen = { url: string; method: string; body: unknown };
@@ -67,4 +67,22 @@ test("anket ve yorum bildirimleri doğru içeriğe döner", () => {
   const commentNotification = { ...base, type: "REPLY_TO_COMMENT", subject: { type: "COMMENT", id: comment }, data: { parentId: comment, pollId: poll } } as NotificationItem;
   assert.equal(notificationHref(commentNotification), `/karar/${poll}#yorum-${comment}`);
   assert.match(notificationCopy(commentNotification).title, /cevap verdi/);
+});
+
+test("#185 güvenlik alarmı bildirimi ops paneline gider; kuralın adı ve önemi yazılır; tercihlerde listelenmez", () => {
+  const alert = {
+    id: "01998b9a-0000-7000-8000-000000000091",
+    actor: null,
+    readAt: null,
+    createdAt: "2026-10-26T12:00:00.000Z",
+    type: "SECURITY_ALERT",
+    subject: { type: "SECURITY_ALERT", id: "01998b9a-0000-7000-8000-000000000092" },
+    data: { rule: "anonymize.burst", severity: "CRITICAL", count: 3 },
+  } as NotificationItem;
+  assert.equal(notificationHref(alert), "/admin#guvenlik-alarmlari");
+  assert.equal(notificationCopy(alert).title, "Kritik güvenlik alarmı: Art arda hesap anonimleştirme (geri alınamaz).");
+  const unknown = { ...alert, data: { rule: "gelecek.kural", severity: "HIGH", count: 1 } } as NotificationItem;
+  assert.equal(notificationCopy(unknown).title, "Yüksek güvenlik alarmı: yeni alarm.");
+  assert.ok(!optionalPreferenceTypes.includes("SECURITY_ALERT"));
+  assert.ok(!optionalPreferenceTypes.includes("MODERATION_APPLIED"));
 });

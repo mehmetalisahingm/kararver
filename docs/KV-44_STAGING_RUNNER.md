@@ -75,7 +75,7 @@ Kaynak sütunu gerçek kod satırıdır; `kv44-staging-runner.test.mjs` her sat�
 | R0.login | R0 | hepsi | P0 | 200 + kv_session | `packages/contracts/src/domains/auth.ts:87` | |
 | R0.role | R0 | hepsi | P0 | /me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN) | `packages/contracts/src/domains/auth.ts:240` | |
 | ACC.register | R0 | initiator, media-operator | P1 | 202; 429 → BLOCKED-ratelimit (5/IP/saat) | `docs/KV-19_RATE_LIMIT.md:21` | |
-| ACC.owned | R0 | initiator, media-operator | P0 | yeni hesap yalnız USER | `packages/contracts/src/domains/admin.ts:566` | |
+| ACC.owned | R0 | initiator, media-operator | P0 | yeni hesap yalnız USER | `packages/contracts/src/domains/admin.ts:588` | |
 | ACC.login | R0 | initiator, media-operator | P1 | 200, aynı id | `packages/contracts/src/domains/auth.ts:87` | |
 | R2.fixture.poll | R2 | initiator | P1 | 201 | `packages/contracts/src/domains/polls.ts:187` | |
 | R2.fixture.comments | R2 | initiator | P1 | 20× 201 (429 → Retry-After kadar bekle) | `packages/contracts/src/domains/comments.ts:74` | |
@@ -83,7 +83,7 @@ Kaynak sütunu gerçek kod satırıdır; `kv44-staging-runner.test.mjs` her sat�
 | R2.open.expiring | R2 | initiator | P0 | 202 PENDING (T0) | `apps/api/src/modules/moderation/bulk-routes.ts:123` | |
 | R2.open.target | R2 | initiator | P0 | 202 PENDING | `apps/api/src/modules/moderation/bulk-routes.ts:123` | |
 | R2.self_approval | R2 | initiator | P0 | **403 FORBIDDEN `self_approval`** | `apps/api/src/modules/moderation/bulk-approval-routes.ts:112` | |
-| R1.target | R1 | owner | P1 | marker + 8 karakter → tek USER | `packages/contracts/src/domains/admin.ts:566` | |
+| R1.target | R1 | owner | P1 | marker + 8 karakter → tek USER | `packages/contracts/src/domains/admin.ts:588` | |
 | R1.self | R1 | owner | P0 | **409 CONFLICT `self`**; details boş da kabul (bkz. §5) | `apps/api/src/modules/rbac/roles-routes.ts:42` | |
 | R1.last_super_admin | R1 | owner | P0 | **409 CONFLICT `last_super_admin`** → UYGULANAMAZ-staging (bkz. §5; birim testi `apps/api/test/admin-roles.test.ts:171`) | `apps/api/src/modules/rbac/roles-routes.ts:44` | |
 | R1.super_admin_reserved.role | R1 | owner | P0 | 403 FORBIDDEN `super_admin_reserved` | `apps/api/src/modules/rbac/roles-routes.ts:36` | |
@@ -106,7 +106,7 @@ Kaynak sütunu gerçek kod satırıdır; `kv44-staging-runner.test.mjs` her sat�
 | R4.cancel | R4 | initiator | P1 | açık kalan talepler geri çekilir | `packages/contracts/src/domains/moderation.ts:935` | |
 | R4.comment | R4 | initiator | P1 | 200 REMOVE | `packages/contracts/src/domains/moderation.ts:400` | |
 | R4.poll | R4 | initiator | P1 | 200 REMOVE | `packages/contracts/src/domains/moderation.ts:400` | |
-| R4.ban | R4 | initiator, media-operator | P1 | 201 BAN veya 409 already_active | `packages/contracts/src/domains/admin.ts:849` | |
+| R4.ban | R4 | initiator, media-operator | P1 | 201 BAN veya 409 already_active | `packages/contracts/src/domains/admin.ts:871` | |
 | R4.media.reject | R4 | media-operator | P1 | 200 REJECT | `packages/contracts/src/domains/moderation.ts:691` | |
 | R4.residue | R4 | initiator, media-operator | P1 | kalan kayıt yok; varsa TEMİZLİK EKSİK + maskeli liste | `packages/contracts/src/domains/moderation.ts:400` | |
 | R5.merge | R5 | initiator | P1 | tüm rol dosyalarında aynı run id ve release | `docs/KV-44_SECURITY_ACCEPTANCE.md:31` | |
