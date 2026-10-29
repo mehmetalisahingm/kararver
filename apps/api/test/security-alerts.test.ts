@@ -51,21 +51,25 @@ describe("güvenlik alarmları API (postgres)", { skip: backend ? false : "TEST_
     assert.equal(login.statusCode, 200, login.body);
     return { cookie: sessionCookie(login.headers["set-cookie"] as string), id: login.json().data.id };
   }
-  async function alert(): Promise<string> {
+  /** Kural + kapsam başına tek açık alarm (kısmi UNIQUE): yalnız bir test açık alarm ister, diğeri kapalı oluşturur. */
+  async function alert(status: "OPEN" | "RESOLVED" = "OPEN"): Promise<string> {
     const id = randomUUID();
     const at = h.clock.now;
-    await db.securityAlert.create({ data: { id, rule: "role.change.burst", severity: "CRITICAL", scopeKey: admin.id, status: "OPEN", peakCount: 3, openedAt: at, lastSeenAt: at } });
+    await db.securityAlert.create({
+      data: { id, rule: "role.change.burst", severity: "CRITICAL", scopeKey: admin.id, status, peakCount: 3, openedAt: at, lastSeenAt: at, resolvedAt: status === "RESOLVED" ? at : null },
+    });
     return id;
   }
-  /** Sayaç cevabı beklemez; yazılana kadar kısa süre bekler. */
-  async function denials(where: { endpoint: string; status: number; actorKey: string }): Promise<number> {
+  /** Sayaç cevabı beklemez: sayı en az `atLeast` olana kadar kısa süre bekler; son okunan sayıyı döner. */
+  async function denials(where: { endpoint: string; status: number; actorKey: string }, atLeast = 0): Promise<number> {
     const bucket = new Date(Math.floor(h.clock.now.getTime() / 60_000) * 60_000);
-    for (let i = 0; i < 50; i++) {
-      const row = await db.adminAccessDenial.findUnique({ where: { bucket_endpoint_status_actorKey: { bucket, ...where } } });
-      if (row) return row.count;
+    let count = 0;
+    for (let i = 0; i < 100; i++) {
+      count = (await db.adminAccessDenial.findUnique({ where: { bucket_endpoint_status_actorKey: { bucket, ...where } } }))?.count ?? 0;
+      if (count >= atLeast) return count;
       await new Promise((r) => setTimeout(r, 20));
     }
-    return 0;
+    return count;
   }
 
   before(async () => {
@@ -83,7 +87,7 @@ describe("güvenlik alarmları API (postgres)", { skip: backend ? false : "TEST_
   });
 
   test("yalnız SUPER_ADMIN onaylar: misafir 401, kullanıcı ve ADMIN 403; audit yazılmaz", async () => {
-    const id = await alert();
+    const id = await alert("RESOLVED");
     const body = { reason: "Planlı rol bakımı" };
     assertError(await send("POST", `/admin/security-alerts/${id}/ack`, body), 401, "UNAUTHENTICATED");
     assertError(await send("POST", `/admin/security-alerts/${id}/ack`, body, user.cookie), 403, "FORBIDDEN");
@@ -113,14 +117,15 @@ describe("güvenlik alarmları API (postgres)", { skip: backend ? false : "TEST_
     const before403 = await denials({ endpoint: "admin.ops.status", status: 403, actorKey: user.id });
     assertError(await send("GET", "/admin/ops", undefined, user.cookie), 403, "FORBIDDEN");
     assertError(await send("GET", "/admin/ops", undefined, user.cookie), 403, "FORBIDDEN");
-    assert.equal(await denials({ endpoint: "admin.ops.status", status: 403, actorKey: user.id }), before403 + 2);
+    assert.equal(await denials({ endpoint: "admin.ops.status", status: 403, actorKey: user.id }, before403 + 2), before403 + 2);
 
     const before401 = await denials({ endpoint: "admin.ops.status", status: 401, actorKey: "*" });
     assertError(await send("GET", "/admin/ops"), 401, "UNAUTHENTICATED");
-    assert.equal(await denials({ endpoint: "admin.ops.status", status: 401, actorKey: "*" }), before401 + 1);
+    assert.ok((await denials({ endpoint: "admin.ops.status", status: 401, actorKey: "*" }, before401 + 1)) >= before401 + 1, "diğer testlerin 401'leri de aynı dakikaya düşebilir");
 
     // İzinli istek ve admin dışı uçtaki ret sayılmaz.
     assert.equal((await send("GET", "/admin/ops", undefined, root.cookie)).statusCode, 200);
+    await new Promise((r) => setTimeout(r, 200));
     assert.equal(await denials({ endpoint: "admin.ops.status", status: 403, actorKey: root.id }), 0);
     assertError(await send("GET", "/me"), 401, "UNAUTHENTICATED");
     assert.equal(await db.adminAccessDenial.count({ where: { endpoint: { not: { startsWith: "admin." } } } }), 0);
