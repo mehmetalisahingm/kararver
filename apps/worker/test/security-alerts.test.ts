@@ -187,6 +187,42 @@ describe("security.alerts (postgres)", { skip: url ? false : "TEST_DATABASE_URL 
     assert.deepEqual([mine.type, mine.subjectType, mine.actorId, mine.data], ["SECURITY_ALERT", "SECURITY_ALERT", null, { rule: "anonymize.burst", severity: "CRITICAL", count: 3 }]);
   });
 
+  test("dilim 2: reddedilen yönetici istekleri — 403 hesap başına, 401 genel; dakika kovaları toplanır; 401'ler aktör kuralına girmez", async () => {
+    const [actor] = await f.users(1);
+    const start = new Date(T.getTime() + 1800 * MIN);
+    const bucket = (i: number) => new Date(start.getTime() + i * MIN);
+    // 403: 4 dakikada 3+3+2+1 = 9 istek (eşik 10 altı), sonra +1 = 10.
+    for (const [i, count] of [3, 3, 2, 1].entries()) {
+      await db.adminAccessDenial.create({ data: { bucket: bucket(i), endpoint: i % 2 ? "admin.users.list" : "admin.ops.status", status: 403, actorKey: actor!, count } });
+    }
+    await db.adminAccessDenial.create({ data: { bucket: bucket(0), endpoint: "admin.ops.status", status: 401, actorKey: "*", count: 99 } });
+    const t1 = bucket(4);
+    await run(t1);
+    assert.equal((await alertsOf("admin.forbidden.burst", actor!)).length, 0, "9 < 10");
+    assert.equal(await db.securityAlert.count({ where: { rule: "admin.unauthenticated.wave", openedAt: t1 } }), 0, "99 < 100");
+
+    await db.adminAccessDenial.create({ data: { bucket: bucket(4), endpoint: "admin.users.list", status: 403, actorKey: actor!, count: 1 } });
+    await db.adminAccessDenial.create({ data: { bucket: bucket(4), endpoint: "admin.users.list", status: 401, actorKey: "*", count: 1 } });
+    const t2 = bucket(5);
+    await run(t2);
+    const [forbidden] = await alertsOf("admin.forbidden.burst", actor!);
+    assert.deepEqual([forbidden?.status, forbidden?.peakCount, forbidden?.severity], ["OPEN", 10, "HIGH"]);
+    const [wave] = await db.securityAlert.findMany({ where: { rule: "admin.unauthenticated.wave", openedAt: t2 } });
+    assert.deepEqual([wave?.scopeKey, wave?.peakCount], ["*", 100]);
+    assert.equal(await db.securityAlert.count({ where: { rule: "admin.forbidden.burst", scopeKey: "*" } }), 0, "401 aktör kuralına girmez");
+  });
+
+  test("dilim 2: 30 günden eski red sayaçları silinir, yenileri kalır", async () => {
+    const at = new Date(T.getTime() + 2100 * MIN);
+    const old = new Date(Math.floor((at.getTime() - 31 * 86_400_000) / MIN) * MIN);
+    const fresh = new Date(Math.floor((at.getTime() - 29 * 86_400_000) / MIN) * MIN);
+    for (const bucket of [old, fresh]) await db.adminAccessDenial.create({ data: { bucket, endpoint: "admin.audit.list", status: 401, actorKey: "*", count: 1 } });
+    const result = await run(at);
+    assert.ok(result.deniedPurged >= 1);
+    assert.equal(await db.adminAccessDenial.count({ where: { bucket: old } }), 0);
+    assert.equal(await db.adminAccessDenial.count({ where: { bucket: fresh } }), 1);
+  });
+
   test("eşzamanlı iki çalışma aynı alarmı iki kez açmaz (kısmi UNIQUE)", async () => {
     const [actor] = await f.users(1);
     const start = new Date(T.getTime() + 1200 * MIN);

@@ -9,6 +9,15 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.43.0 — 2026-10-29 (Utku, #185 kritik güvenlik alarmları, dilim 2)
+
+Kırıcı değişiklik yok: yeni endpoint, yeni yetki, yeni kurallar, alarm görünümünde varsayılanlı yeni alanlar.
+
+- **Eklendi:** `admin.securityAlerts.ack` (POST `/admin/security-alerts/:id/ack`, yalnız SUPER_ADMIN, gerekçe zorunlu). Yanıt `SecurityAlertView`; 409 `already_acknowledged`, 404. Onay alarmı kapatmaz.
+- **Yetki/Audit:** yeni işlem `security.alert.ack` (super_admin); audit `security.alert.ack` / `ack`, hedef tipi `SECURITY_ALERT`, gerekçe zorunlu.
+- **Eklendi:** `SecurityAlertView` (ops `security.alerts` elemanı artık bu şema) + `acknowledgedAt`, `acknowledgedBy` (varsayılan null).
+- **Kurallar:** `admin.forbidden.burst` (403, hesap başına) ve `admin.unauthenticated.wave` (401, genel); kaynak `admin_access_denials` (`match.source: "denials"`). `AdminDenialStatus`, `ADMIN_DENIAL_RETENTION_DAYS` (30).
+
 ## 1.42.0 — 2026-10-27 (Utku, #185 kritik güvenlik alarmları, dilim 1)
 
 Kırıcı değişiklik yok: yeni olay, yeni bildirim tipi (açık enum, sona eklendi), ops durumunda yeni alan.

@@ -17,6 +17,7 @@ import { createPrismaRateLimitStore } from "../../src/modules/rate-limit/prisma-
 import type { RateLimitStore } from "../../src/modules/rate-limit/store.ts";
 import { createMemoryRateLimitStore } from "./memory-rate-limit-store.ts";
 import { createPrismaAuditStore } from "../../src/modules/audit/prisma-store.ts";
+import { createPrismaSecurityAlertStore } from "../../src/modules/security-alerts/store.ts";
 import { createPrismaAdminUserStore } from "../../src/modules/admin-users/prisma-store.ts";
 import { createPrismaAccountDeletionStore } from "../../src/modules/account-deletion/prisma-store.ts";
 import { createPrismaUserTimelineStore } from "../../src/modules/admin-users/timeline.ts";
@@ -257,6 +258,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     searchStore: backend.prisma ? createPrismaSearchStore(backend.prisma) : undefined,
     revisionStore: backend.prisma ? createPrismaRevisionStore(backend.prisma) : undefined,
     auditStore: backend.prisma ? createPrismaAuditStore(backend.prisma) : undefined,
+    securityAlertStore: backend.prisma ? createPrismaSecurityAlertStore(backend.prisma) : undefined,
     categoryAdminStore: backend.prisma ? createPrismaCategoryAdminStore(backend.prisma) : undefined,
     pointAdminStore: backend.prisma ? createPrismaPointAdminStore(backend.prisma) : undefined,
     featuredAdminStore: backend.prisma ? createPrismaFeaturedAdminStore(backend.prisma) : undefined,

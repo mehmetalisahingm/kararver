@@ -532,7 +532,27 @@ model SecurityAlert {
   openedAt   DateTime  @map("opened_at") @db.Timestamptz(3)
   lastSeenAt DateTime  @map("last_seen_at") @db.Timestamptz(3)
   resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(3)
+  // Dilim 2: "incelendi" işareti (admin.securityAlerts.ack). İkisi birlikte dolu ya da boş (CHECK). Alarmı kapatmaz.
+  acknowledgedAt   DateTime? @map("acknowledged_at") @db.Timestamptz(3)
+  acknowledgedById String?   @map("acknowledged_by_id") @db.Uuid
+
+  acknowledgedBy User? @relation("SecurityAlertAcknowledger", fields: [acknowledgedById], references: [id], onDelete: Restrict)
 
   @@index([status, openedAt(sort: Desc)])
   @@map("security_alerts")
+}
+
+// #185 dilim 2: yönetici uçlarında (admin.*) reddedilen istekler, dakikalık sayaç. İstek başına satır yok (istek seli tabloyu
+// büyütmez); IP/cihaz yok. actor_key: 403'te hesap UUID'si, 401'de '*'. 30 gün saklanır (worker security.alerts).
+// CHECK'ler (durum 401/403, dakika başı, uç admin.*) migration SQL'inde.
+model AdminAccessDenial {
+  bucket   DateTime @db.Timestamptz(0)
+  endpoint String   @db.VarChar(80)
+  status   Int      @db.SmallInt
+  actorKey String   @map("actor_key") @db.VarChar(36)
+  count    Int      @default(1)
+
+  @@id([bucket, endpoint, status, actorKey])
+  @@index([bucket])
+  @@map("admin_access_denials")
 }

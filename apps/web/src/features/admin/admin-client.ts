@@ -167,6 +167,12 @@ export class AdminClient {
   async ops(signal?: AbortSignal) {
     return data<OpsView>(await this.http.request("admin.ops.status", { signal }));
   }
+  /** #185 güvenlik alarmını incelendi olarak işaretler (yalnız SUPER_ADMIN, gerekçe zorunlu); alarmı kapatmaz. */
+  async ackSecurityAlert(id: string, reason: string) {
+    return data<OpsView["security"]["alerts"] extends (infer A)[] | null ? A : never>(
+      await this.http.request("admin.securityAlerts.ack", { params: { id }, body: { reason } }),
+    );
+  }
   async users(q?: string, cursor?: string, signal?: AbortSignal) {
     return page<UserSummary>(await this.http.request("admin.users.list", { query: { q: q || undefined, cursor, limit: "20" }, signal }));
   }
