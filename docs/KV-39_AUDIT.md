@@ -66,7 +66,7 @@ JSON çıktısı `loaded_records` kapsamı, kayıt sayısı, uygulanan süzgeçl
 
 - **Arayüz:** Audit ekranında yalnız SUPER_ADMIN'e "Süzülen aralığın tamamını sunucudan indir" düğmesi görünür. Uygulanan süzgeçte başlangıç ve bitiş tarihi yoksa ya da aralık 31 günü aşarsa düğme kapalıdır ve nedeni yazılır. Pencere biçim (CSV/JSON), gerekçe ve doğrulayıcı kodu ister; çok kayıtta kod yeniden sorulmaz (step-up harcanmadı), süresi dolmuş step-up'ta yeniden sorulur. Test: `apps/web/test/states/audit-server-export.spec.ts`.
 
-Kalan #185 kapsamı: başarısız yönetici erişimlerinin kaydı/alarmı, alarm onayı (ack) ve sürümlü telafi/undo işlemleri. Kritik eylem alarmları (dilim 1) yapıldı: kurallar audit kayıtlarını sayar, runbook [KV-49 "Güvenlik alarmları"](./KV-49_OPERATIONS.md#güvenlik-alarmları-185). Sonuç ve zaman dilimi süzgeci yapıldı (yukarıda); export dosyalarına sonuç sütunu eklenmedi (biçim `schemaVersion: 1` sabit), uygulanan `outcome` süzgeci dosyanın `filters` alanında görünür. Undo append-only kayıtları güncellemez; ayrı mutasyon, yetki ve yeni audit ister.
+Kalan #185 kapsamı: sürümlü telafi/undo işlemleri (#183'e bağlı). Kritik eylem alarmları (dilim 1), reddedilen yönetici erişimlerinin sayacı/alarmı ve alarm onayı (dilim 2, audit `security.alert.ack`) yapıldı: kurallar audit kayıtlarını sayar, runbook [KV-49 "Güvenlik alarmları"](./KV-49_OPERATIONS.md#güvenlik-alarmları-185). Sonuç ve zaman dilimi süzgeci yapıldı (yukarıda); export dosyalarına sonuç sütunu eklenmedi (biçim `schemaVersion: 1` sabit), uygulanan `outcome` süzgeci dosyanın `filters` alanında görünür. Undo append-only kayıtları güncellemez; ayrı mutasyon, yetki ve yeni audit ister.
 
 ## Açık konular
 

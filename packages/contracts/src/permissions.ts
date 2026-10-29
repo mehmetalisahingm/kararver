@@ -208,6 +208,7 @@ export const actions = Object.freeze({
   }),
   "user.legalHold.manage": rule("super_admin", "Hesaba yasal saklama koyma/kaldırma; açıkken anonimleştirme engellenir (#181)"),
   "ops.read": rule("super_admin", "Operasyon merkezi: bileşen, kuyruk, hata ve yedek durumu"),
+  "security.alert.ack": rule("super_admin", "Güvenlik alarmını incelendi olarak işaretleme; gerekçe zorunlu, audit'e yazılır, alarmı kapatmaz (#185)"),
   "emergency.update": rule("super_admin", "Acil durum anahtarları"),
 } satisfies Record<string, ActionRule>);
 
@@ -389,6 +390,7 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.emergency.put": "emergency.update",
   "admin.audit.list": "audit.read",
   "admin.audit.export": "audit.export",
+  "admin.securityAlerts.ack": "security.alert.ack",
   "admin.points.adjust": "points.adjust",
   "admin.metrics.get": "metrics.read",
   "admin.ops.status": "ops.read",

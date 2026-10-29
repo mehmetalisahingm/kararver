@@ -76,6 +76,8 @@ import type { MfaStore } from "./modules/security/store.ts";
 import type { RbacStore } from "./modules/rbac/store.ts";
 import { registerRevisionRoutes } from "./modules/revisions/routes.ts";
 import { registerAuditRoutes } from "./modules/audit/routes.ts";
+import { registerSecurityAlertRoutes } from "./modules/security-alerts/routes.ts";
+import type { SecurityAlertStore } from "./modules/security-alerts/store.ts";
 import type { AuditStore } from "./modules/audit/store.ts";
 import type { RevisionStore } from "./modules/revisions/store.ts";
 import { registerSearchRoutes } from "./modules/search/routes.ts";
@@ -167,6 +169,8 @@ export type AppDeps = {
   metricsStore?: MetricsStore;
   /** KV-186 operasyon yoklaması (DB, worker izi, pg-boss kuyrukları); verilmezse bu bileşenler `unknown`. */
   opsProbe?: OpsProbe;
+  /** #185 güvenlik alarmı onayı ve yönetici uçlarında reddedilen istek sayacı; verilmezse ikisi de yok. */
+  securityAlertStore?: SecurityAlertStore;
   /** Süreç içi istek/hız sınırı telemetrisi; verilmezse uygulama kendi örneğini oluşturur (testler dışarıdan verir). */
   opsTelemetry?: OpsTelemetry;
   /** Verilmezse admin içerik moderasyonu (anket/yorum) route'ları kaydedilmez. */
@@ -297,6 +301,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     now,
     maintenance: deps.settingsService ? () => deps.settingsService!.isMaintenance() : undefined,
     rateLimit: limiter?.enforce,
+    recordDenial: deps.securityAlertStore ? (input) => deps.securityAlertStore!.recordDenial(input) : undefined,
   });
 
   const rolesOf = async (userId: string) => {
@@ -388,6 +393,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   }
   if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl, now });
   if (deps.auditStore) registerAuditRoutes(route, { store: deps.auditStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl, now });
+  if (deps.securityAlertStore) registerSecurityAlertRoutes(route, { store: deps.securityAlertStore, now });
   if (deps.voteStore) {
     registerVoteRoutes(route, { store: deps.voteStore, now, settings: pollSettings });
     registerVoteAdminRoutes(route, { store: deps.voteStore, now });

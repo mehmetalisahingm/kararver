@@ -44,6 +44,11 @@ type RouteOptions = {
   maintenance?: () => Promise<boolean>;
   /** KV-19 (#21) hız sınırı; oturum çözüldükten sonra, yetki ve gövde doğrulamasından önce. Verilmezse sınır yok. */
   rateLimit?: (input: { endpointId: string; method: string; viewer: SessionUser | null; request: FastifyRequest }) => Promise<void>;
+  /**
+   * #185: yönetici uçlarında (admin.*) reddedilen istek (401/403) sayacı. Hata cevabı beklemez ve değişmez; sayaç
+   * kendi hatasını yutar (security-alerts/store.ts).
+   */
+  recordDenial?: (input: { endpointId: string; status: 401 | 403; actorId: string | null; at: Date }) => Promise<void>;
 };
 
 /** Bakım modunda da çalışan yazma endpoint'leri: yönetici (modu kapatabilsin) ve oturum açma/kapama. */
@@ -63,6 +68,11 @@ function parse(schema: z.ZodType | undefined, value: unknown, location: "body" |
 export function createRouter(app: FastifyInstance, options: RouteOptions) {
   return function route(id: string, handler: (ctx: RouteContext) => Promise<RouteResult>): void {
     const endpoint = getEndpoint(id);
+    const denied = (err: unknown, viewer: SessionUser | null) => {
+      if (!options.recordDenial || !id.startsWith("admin.") || !(err instanceof ApiError)) return;
+      if (err.code !== "UNAUTHENTICATED" && err.code !== "FORBIDDEN") return;
+      void options.recordDenial({ endpointId: id, status: err.code === "UNAUTHENTICATED" ? 401 : 403, actorId: viewer?.id ?? null, at: options.now() });
+    };
     // Yetki KV-04 kuralıyla verilir (modules/rbac/access.ts); eşlemesi olmayan endpoint kayıtta patlar.
     const action = permissionForEndpoint(id);
     const mustCheckResource = needsResource(action) && !LEGACY_RESOURCE_CHECKS.has(id);
@@ -78,7 +88,12 @@ export function createRouter(app: FastifyInstance, options: RouteOptions) {
         const viewer = await options.authenticator.resolve(request, reply);
         if (options.rateLimit) await options.rateLimit({ endpointId: id, method: endpoint.method, viewer, request });
         const access = createAccess(options.rbac, viewer, action, options.now());
-        await access.gate();
+        try {
+          await access.gate();
+        } catch (err) {
+          denied(err, viewer);
+          throw err;
+        }
         const ctx: RouteContext = {
           request,
           reply,
@@ -89,7 +104,14 @@ export function createRouter(app: FastifyInstance, options: RouteOptions) {
           authorize: access.authorize,
           moderationScope: access.moderationScope,
         };
-        const result = await handler(ctx);
+        let result: RouteResult;
+        try {
+          result = await handler(ctx);
+        } catch (err) {
+          // Kaynak kontrolü (ctx.authorize) ve handler'ın yetki reddi (ör. stepup_required) de sayılır.
+          denied(err, viewer);
+          throw err;
+        }
         if (mustCheckResource && !access.resourceChecked && result.status < 400) {
           // Unutulan kaynak kontrolü sessiz izin demektir.
           const message = `${id}: '${action}' kaynak bağlamı ister, handler ctx.authorize çağırmadan döndü`;

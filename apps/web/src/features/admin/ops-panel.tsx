@@ -3,7 +3,7 @@
 import { securityAlertRule, SecurityAlertRuleId } from "@kararver/contracts";
 import { useEffect, useState } from "react";
 import type { AdminClient, OpsView } from "./admin-client";
-import { errorMessage } from "./admin-ui";
+import { ActionDialog, errorMessage } from "./admin-ui";
 import styles from "./admin-shell.module.css";
 
 const numbers = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 });
@@ -20,6 +20,8 @@ export function OpsPanel({ admin }: { admin: AdminClient }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [attempt, retry] = useState(0);
+  // Yeniden yüklemede alarm bölümü kısa süre kalkar; işlem sonucu burada kalır.
+  const [notice, setNotice] = useState("");
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -37,6 +39,7 @@ export function OpsPanel({ admin }: { admin: AdminClient }) {
       <button className="kv-button kv-button--secondary" type="button" disabled={loading} onClick={() => retry(n => n + 1)}>Operasyon verilerini yenile</button>
     </div>
     {loading ? <p role="status" aria-live="polite">Operasyon ölçümleri yükleniyor…</p> : null}
+    {notice ? <p role="status">{notice}</p> : null}
     {error ? <p role="alert">Operasyon verileri yüklenemedi: {error} <button className="kv-button" type="button" onClick={() => retry(n => n + 1)}>Operasyonu tekrar dene</button></p> : null}
     {status && !loading && !error ? <>
       <div className={styles.grid} aria-label="Servis sağlığı">
@@ -67,7 +70,7 @@ export function OpsPanel({ admin }: { admin: AdminClient }) {
             </table>
           </div>}
       </article>
-      <SecurityAlerts alerts={status.security.alerts} />
+      <SecurityAlerts admin={admin} alerts={status.security.alerts} onAcked={(message) => { setNotice(message); retry(n => n + 1); }} />
       <article className="kv-card"><h3>Acil durum anahtarları</h3>
         {status.switches == null ? <p>Anahtar durumu: Ölçüm yok</p> : <>
           <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Acil durum anahtarları tablosu">
@@ -91,9 +94,10 @@ export function OpsPanel({ admin }: { admin: AdminClient }) {
 const severityLabel = { CRITICAL: "Kritik", HIGH: "Yüksek" } as const;
 
 /** #185 kritik güvenlik alarmları: açıklar önce, sonra son 24 saatte kapananlar. Önem ve durum metinle yazılır (renk tek başına anlam taşımaz). */
-function SecurityAlerts({ alerts }: { alerts: OpsView["security"]["alerts"] }) {
+function SecurityAlerts({ admin, alerts, onAcked }: { admin: AdminClient; alerts: OpsView["security"]["alerts"]; onAcked: (message: string) => void }) {
   const open = alerts?.filter(a => a.status === "OPEN") ?? [];
   const closed = alerts?.filter(a => a.status === "RESOLVED") ?? [];
+  const [acking, setAcking] = useState<NonNullable<typeof alerts>[number] | null>(null);
   return <article className="kv-card" id="guvenlik-alarmlari" aria-labelledby="guvenlik-alarmlari-baslik">
     <h3 id="guvenlik-alarmlari-baslik">Güvenlik alarmları</h3>
     {alerts == null ? <p>Alarm durumu: Ölçüm yok</p> : <>
@@ -101,7 +105,7 @@ function SecurityAlerts({ alerts }: { alerts: OpsView["security"]["alerts"] }) {
       {alerts.length ? <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Güvenlik alarmları tablosu">
         <table className={styles.table}>
           <caption>Açık alarmlar ve son 24 saatte kapananlar</caption>
-          <thead><tr><th scope="col">Alarm</th><th scope="col">Önem</th><th scope="col">Durum</th><th scope="col">Kapsam</th><th scope="col">En yüksek sayı</th><th scope="col">Açıldı</th><th scope="col">Son görülme / kapanış</th><th scope="col">İlk adım</th></tr></thead>
+          <thead><tr><th scope="col">Alarm</th><th scope="col">Önem</th><th scope="col">Durum</th><th scope="col">Kapsam</th><th scope="col">En yüksek sayı</th><th scope="col">Açıldı</th><th scope="col">Son görülme / kapanış</th><th scope="col">İlk adım</th><th scope="col">İnceleme</th></tr></thead>
           <tbody>{[...open, ...closed].map(a => {
             const rule = SecurityAlertRuleId.safeParse(a.rule);
             const r = rule.success ? securityAlertRule(rule.data) : null;
@@ -114,11 +118,26 @@ function SecurityAlerts({ alerts }: { alerts: OpsView["security"]["alerts"] }) {
               <td>{date(a.openedAt)}</td>
               <td>{a.status === "OPEN" ? date(a.lastSeenAt) : date(a.resolvedAt)}</td>
               <td>{r?.firstStep ?? "—"}</td>
+              <td>{a.acknowledgedBy && a.acknowledgedAt
+                ? <>İncelendi: {a.acknowledgedBy.displayName} <small className="kv-muted">{date(a.acknowledgedAt)}</small></>
+                : <button className="kv-button kv-button--secondary" type="button" aria-label={`İncelendi olarak işaretle: ${r?.label ?? a.rule}`} onClick={() => setAcking(a)}>İncelendi olarak işaretle</button>}</td>
             </tr>;
           })}</tbody>
         </table>
       </div> : null}
-      <p className="kv-muted">Alarmlar audit kayıtlarından 5 dakikada bir hesaplanır; açılınca SUPER_ADMIN'lere bildirim gider, sayı eşiğin altına inince kendiliğinden kapanır. Ayrıntı için audit ekranında aktörü ve zaman aralığını süz. Runbook: KV-49 “Güvenlik alarmları”.</p>
+      {acking ? <ActionDialog
+        open
+        title="Alarmı incelendi olarak işaretle"
+        description={`${SecurityAlertRuleId.safeParse(acking.rule).success ? securityAlertRule(acking.rule as SecurityAlertRuleId).label : acking.rule} · ${date(acking.openedAt)}. İşaret alarmı kapatmaz; kim ve ne zaman incelediği audit'e gerekçeyle yazılır.`}
+        submitLabel="İncelendi olarak işaretle"
+        onClose={() => setAcking(null)}
+        onSubmit={async (reason) => {
+          await admin.ackSecurityAlert(acking.id, reason);
+          setAcking(null);
+          onAcked("Alarm incelendi olarak işaretlendi.");
+        }}
+      /> : null}
+      <p className="kv-muted">Alarmlar audit kayıtlarından ve reddedilen yönetici isteklerinden 5 dakikada bir hesaplanır; açılınca SUPER_ADMIN'lere bildirim gider, sayı eşiğin altına inince kendiliğinden kapanır. Ayrıntı için audit ekranında aktörü ve zaman aralığını süz. Runbook: KV-49 “Güvenlik alarmları”.</p>
     </>}
   </article>;
 }
