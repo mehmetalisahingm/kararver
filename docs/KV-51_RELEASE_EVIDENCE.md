@@ -100,6 +100,24 @@ Durum sözlüğü:
 
 **Ürün kararı uyarısı:** docs/V1_USER_FLOW.md “misafir akışta popup olmadan gezinir” diyor; #144/#145 ise ilk ziyarette premium tanıtım ve devamında login ekranı tanımlıyor. Son yayın kabulünde bu ilişki ürün sahibi tarafından yazılı karara bağlanmalı. Bir testin teknik başarısı çelişen ürün şartını kendiliğinden çözmez.
 
+### 3.1 Hukuki uyum programı kapıları (#284, 30 Ekim 2026)
+
+Bu kapılar #46 güvenlik, #51 operasyon ve #54 yayın kaydına **açık kapı** olarak eklenir. **Hukuki değerlendirme** (karar/metin) ile **kod ve canlı süreç kabulü** ayrı satırlardır: biri diğerinin yerine geçmez. Tamamlanmayan P0 varken "yayına hazır" sonucu üretilmez ve GO verilmez; GO yalnız Mehmet'tedir. Her kapı için karar `uygulanır / uygulanmaz / koşullu` + gerekçeli kaynakla kaydedilir. Yerel/fixture/CI sonucu gerçek staging veya hukuki kabul yerine geçmez.
+
+| ID | Kapı | Kayıt | Sahip | Başlangıç |
+| --- | --- | --- | --- | --- |
+| L01 | Veri sorumlusu, hukuki metinler ve mevzuat kapsam kararları | #285 | Mehmet | NOT RUN |
+| L02 | Yasal sayfalar, kayıt bilgilendirmesi ve sürümlü kabul akışı (uygulama ile metin birebir) | #286 | Ümit | NOT RUN |
+| L03 | Çerez ve localStorage envanteri, tercih/rıza yönetimi (`kv.share.attribution` dahil) | #287 | Mehmet | NOT RUN |
+| L04 | Yurt dışı veri aktarımı ve sağlayıcı sözleşmelerinin kabulü | #288 | Faruk | NOT RUN |
+| L05 | Sosyal ağ kapsamı, yaş doğrulama ve çocuk koruma akışı | #289 | Faruk | NOT RUN |
+| L06 | İçerik/telif şikâyeti, kaldırma ve yaptırıma itiraz süreçleri ([karar listesi](LEGAL_290_TAKEDOWN_APPEALS_DECISIONS.md)) | #290 | Mert | BLOCKED: karar bekliyor (#285) |
+| L07 | Veri ihlali değerlendirmesi ve bildirim-operasyon prosedürü | #291 | Faruk | NOT RUN |
+| L08 | KVKK başvuru/silme/saklama alt kabulü (hukuk kararı + #51 yedek/restore) | #181 | Mert | BLOCKED: hukuk kararı, gerçek SMTP |
+| L09 | Spam puanı karar 13 (saklama/KVKK, hukuk onayı); bayrak kapalı kaldığı sürece açık kapı | #183 | Mert | BLOCKED: hukuk onayı |
+
+**Kapı kuralı:** L01–L09'dan biri BLOCKED/NOT RUN iken regresyon raporu "hazır" demez. `scripts/release-status.mjs` bu kapıları henüz **okumuyor** (kapı listesi #264'te sabit); script güncellenene kadar bu tablo ve #54'teki manuel GO kaydı bağlayıcıdır (Faruk).
+
 ## 4. Test komutları (yetkili ortam)
 
 ~~~sh
