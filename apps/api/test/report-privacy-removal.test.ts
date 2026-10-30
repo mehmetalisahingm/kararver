@@ -162,7 +162,7 @@ describe("rapor gizliliği ve kaldırma tutarlılığı (postgres)", { skip: bac
     await send("POST", `/polls/${pollId}/comments`, { body: "yorum" }, viewer.cookie);
 
     const listsIn = async (cookie?: string) => {
-      const feed = ((await get("/feed?tab=new&limit=100", cookie)).json().data as unknown[]).map((c) => PollCard.parse(c).id);
+      const feed = ((await get(`/feed?tab=new&categoryId=${categoryId}&limit=100`, cookie)).json().data as unknown[]).map((c) => PollCard.parse(c).id);
       const found = ((await get(`/search?${new URLSearchParams({ q: token, type: "polls" })}`, cookie)).json().data as { type: string; poll?: { id: string } }[])
         .filter((r) => r.type === "poll")
         .map((r) => r.poll!.id);
