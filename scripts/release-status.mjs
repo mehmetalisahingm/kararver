@@ -1,6 +1,7 @@
 /**
  * #2 koordinasyon / #54 release kanıt paketi: yayına neyin engel olduğunu tek raporda toplar. SALT OKUMA: GitHub REST API'den
- * main CI, açık PR'lar (CI, review, yaş), yayın kapısı issue'larının kabul maddesi ilerlemesi, açık bug ve staging alarmları;
+ * main CI, açık PR'lar (CI, review, yaş), yayın kapısı issue'larının kabul maddesi ilerlemesi, hukuki kapılar (KV-51 §3.1),
+ * açık bug ve staging alarmları;
  * staging /health'ten çalışan sürüm. Hiçbir şeye yazmaz, birleştirmez, yorum göndermez. Çıktı Markdown'dır; #2/#54'e elle eklenir.
  *   GITHUB_TOKEN=$(gh auth token) node scripts/release-status.mjs [--repo sahip/ad] [--api https://…] [--prod-api https://…] [--out rapor.md]
  * GITHUB_TOKEN zorunludur: rapor ~15 + 2×(açık PR) istek yapar; tokensiz GitHub saatte 60 istekle sınırlar.
@@ -48,6 +49,27 @@ export function reviewState(reviews) {
   return "review_required";
 }
 
+/** Hukuki uyum kapıları (#284) KV-51 §3.1 tablosunda tutulur; liste burada ikinci kez yazılmaz. */
+export const LEGAL_GATES_DOC = "docs/KV-51_RELEASE_EVIDENCE.md";
+
+/**
+ * KV-51 §3.1 tablosu: `| L01 | Kapı | #285 | Sahip | Durum |`. Tablo yoksa (belge eski) boş liste döner.
+ * Durumu PASS / DONE / ✅ ile başlamayan her kapı açıktır: BLOCKED veya NOT RUN varken rapor "hazır" demez.
+ */
+export function parseLegalGates(markdown) {
+  const gates = [];
+  for (const line of (markdown ?? "").split("\n")) {
+    const m = line.match(/^\|\s*(L\d{2})\s*\|(.*)\|\s*$/);
+    if (!m) continue;
+    const cells = m[2].split(/(?<!\\)\|/).map((c) => c.trim());
+    if (cells.length < 4) continue;
+    const [gate, record, owner, status] = cells;
+    const issue = Number(record.match(/#(\d+)/)?.[1]) || null;
+    gates.push({ id: m[1], gate: gate.replace(/\s*\(\[.*?\]\(.*?\)\)/g, ""), issue, owner, status, open: !/^(PASS|DONE|✅)/i.test(status) });
+  }
+  return gates;
+}
+
 export const days = (from, now) => Math.max(0, Math.floor((now.getTime() - Date.parse(from)) / 86_400_000));
 
 const CI_LABEL = { passing: "✅", failing: "✖ kırmızı", pending: "⏳", none: "—" };
@@ -64,7 +86,7 @@ export function nextStep(pr) {
   return { who: "reviewer", what: "review" };
 }
 
-export function renderReport({ generatedAt, repo, main, staging, production = null, prs, gates, adminPackage, bugs, alarms }) {
+export function renderReport({ generatedAt, repo, main, staging, production = null, prs, gates, adminPackage, bugs, alarms, legalGates = null }) {
   const lines = [];
   lines.push(`## Release durumu — ${generatedAt.toISOString().slice(0, 16).replace("T", " ")} UTC`);
   lines.push("");
@@ -89,6 +111,22 @@ export function renderReport({ generatedAt, repo, main, staging, production = nu
     lines.push("| Issue | Sahip | Kabul maddeleri |");
     lines.push("|---|---|---|");
     for (const g of adminPackage) lines.push(`| #${g.number} ${esc(g.title.slice(0, 60))} | ${g.assignees.join(", ") || "—"} | ${g.progress.done}/${g.progress.total} |`);
+  }
+  if (legalGates) {
+    lines.push("");
+    const open = legalGates.filter((g) => g.open).length;
+    if (legalGates.length === 0) {
+      lines.push(`### Hukuki kapılar (#284)`);
+      lines.push(`${LEGAL_GATES_DOC} §3.1 tablosu bulunamadı: hukuki kapılar okunamadı, rapor **hazır değil** sayılır.`);
+    } else {
+      lines.push(`### Hukuki kapılar (#284): ${open ? `**${open}/${legalGates.length} açık → hazır değil**` : `${legalGates.length}/${legalGates.length} tamam`}`);
+      lines.push("| Kapı | Kayıt | Sahip | Durum (KV-51 §3.1) | Issue |");
+      lines.push("|---|---|---|---|---|");
+      for (const g of legalGates) {
+        const issue = g.issueState ? `${g.issueState}${g.progress ? ` · ${g.progress.done}/${g.progress.total}` : ""}` : "—";
+        lines.push(`| ${g.id} ${esc(g.gate.slice(0, 60))} | ${g.issue ? `#${g.issue}` : "—"} | ${esc(g.owner)} | ${esc(g.status)} | ${issue} |`);
+      }
+    }
   }
   lines.push("");
   lines.push(`### Açık PR'lar (${prs.length})`);
@@ -157,6 +195,15 @@ async function collect({ repo, api, prodApi, token, now, http = fetch }) {
     const i = await issue(n);
     if (i.state === "open") adminPackage.push(i);
   }
+  // Hukuki kapılar: main'deki KV-51 belgesinden (tablo yoksa boş liste → "hazır değil").
+  const doc = await gh(`/contents/${LEGAL_GATES_DOC}?ref=main`);
+  const legalGates = parseLegalGates(Buffer.from(doc.content ?? "", "base64").toString("utf8"));
+  for (const g of legalGates) {
+    if (!g.issue) continue;
+    const i = await issue(g.issue);
+    g.issueState = i.state === "open" ? "açık" : "kapalı";
+    g.progress = i.progress;
+  }
   const listIssues = async (label) => (await gh(`/issues?state=open&labels=${encodeURIComponent(label)}&per_page=50`)).filter((i) => !i.pull_request).map((i) => ({ number: i.number, title: i.title }));
   return {
     generatedAt: now,
@@ -169,6 +216,7 @@ async function collect({ repo, api, prodApi, token, now, http = fetch }) {
     adminPackage,
     bugs: await listIssues("bug"),
     alarms: [...(await listIssues("staging-alarm")), ...(await listIssues("production-alarm"))],
+    legalGates,
   };
 }
 
