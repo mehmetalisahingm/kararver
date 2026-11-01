@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import { Suspense, type ReactNode } from "react";
-import { ProductProvider } from "../components/product-provider";
+import { SiteShell } from "../components/site-shell";
+import { LegalFooter } from "../features/legal/views";
+import { legalLinks } from "../features/legal/model";
+import { publishedLegalBundle } from "../features/legal/published";
 import { SourceAttribution } from "../components/source-attribution";
 import { PrivacyPreferences } from "../components/privacy-preferences";
 import "./globals.css";
 import "./premium.css";
+import "./legal.css";
 import "./privacy-preferences.css";
 
 const webUrl = new URL(process.env.WEB_URL ?? "http://localhost:3000");
@@ -30,13 +34,15 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const links = legalLinks(publishedLegalBundle());
   return (
     <html lang="tr">
       <body>
         <Suspense fallback={null}><SourceAttribution /></Suspense>
-        <ProductProvider>
+        <SiteShell legalLinks={links}>
           {children}
-        </ProductProvider>
+        </SiteShell>
+        <LegalFooter links={links} />
         <PrivacyPreferences />
       </body>
     </html>
