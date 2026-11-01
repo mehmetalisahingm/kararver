@@ -1,10 +1,12 @@
-.legal-public, .legal-footer { background: #faf8f2; color: #292826; overflow-wrap: anywhere; line-height: 1.7; }
+.legal-public, .legal-footer { background: #faf8f2; color: #292826; overflow-wrap: anywhere; line-height: 1.7; font-family: system-ui, sans-serif; }
 .legal-public { min-height: 80dvh; }
+.legal-public *, .legal-footer * { box-sizing: border-box; }
 .legal-public header { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 24px; border-bottom: 1px solid #82796c; }
 .legal-public main { max-width: 760px; margin: auto; padding: 24px; }
 .legal-public a, .legal-footer a, .legal-registration a { color: #815b21; display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
-.legal-public h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.25; }
-.legal-public h2 { font-size: 22px; line-height: 1.4; margin-top: 32px; }
+.legal-public h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.25; margin: 24px 0 16px; }
+.legal-public h2 { font-size: 22px; line-height: 1.4; margin: 32px 0 12px; }
+.legal-public p { margin: 0 0 16px; }
 .legal-public address { font-style: normal; border-top: 1px solid #82796c; padding-top: 16px; }
 .legal-public ul { padding-left: 24px; }
 .legal-public a:focus-visible, .legal-footer a:focus-visible, .legal-registration a:focus-visible { outline: 3px solid #815b21; outline-offset: 3px; }

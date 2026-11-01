@@ -64,6 +64,8 @@ kabul kanıtı diye saklanmadı. Aşağıdakiler sözleşme önerisidir, çalı�
 - Yerel legal renderer/paket-yok erişim: üç motor × desktop/mobile **24/24**;
   ayrıca WebKit auth-recovery ve ortak shell **8/8**. Model paketi **18/18**.
   Render fixture'ı onaylı paketle gerçek staging veya hukuki kabul değildir.
+- Staging değişkenleriyle production build ve TypeScript geçti. Son tipografi/
+  paragraf aralığı düzenlemesi WebKit desktop/mobile 2/2 ile yeniden denetlendi.
 - Model negatif testleri, bağımsız gerçek React renderer/HTML fixture testleri
   ve uygulamada paket yokken oturum API'sinden bağımsız erişim ayrı kanıtlardır.
 - Script kapalı metin okuma/sürüm gezme bağımsız renderer fixture'ında test edilir.
