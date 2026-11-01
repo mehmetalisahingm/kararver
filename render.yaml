@@ -1,0 +1,70 @@
+# KararVer FREE hosting preview only. Manual activation after verified backup/restore.
+# This Blueprint does NOT create a worker, object-storage buckets, or a database.
+# Do not connect Vercel to it until full #51/#53/#284 acceptance.
+services:
+  - type: web
+    name: kararver-api-free-preview
+    runtime: node
+    plan: free
+    region: frankfurt
+    repo: https://github.com/mehmetalisahingm/kararver
+    branch: main
+    autoDeployTrigger: off
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @kararver/db run db:generate
+    startCommand: pnpm --filter @kararver/api start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: staging
+      - key: APP_TIMEZONE
+        value: Europe/Istanbul
+      - key: LOG_LEVEL
+        value: info
+      - key: WEB_URL
+        value: https://kararver-staging.vercel.app
+      - key: API_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH_TOKEN_PEPPER
+        sync: false
+      - key: SESSION_COOKIE_NAME
+        value: kv_session
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_TTL_DAYS
+        value: "30"
+      - key: EMAIL_VERIFICATION_REQUIRED
+        value: "false"
+      - key: ROLE_APPROVALS_REQUIRED
+        value: "false"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: MAIL_TRANSPORT
+        value: smtp
+      - key: MAIL_FROM
+        sync: false
+      - key: SMTP_URL
+        sync: false
+      - key: MEDIA_PUBLIC_BASE_URL
+        value: https://kararver-staging.vercel.app/api/media-public
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_FORCE_PATH_STYLE
+        value: "false"
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET_PRIVATE
+        sync: false
+      - key: S3_BUCKET_PUBLIC
+        sync: false
+      - key: JOBS_ENABLED
+        value: "false"
