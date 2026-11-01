@@ -15,6 +15,11 @@ const Env = z.object({
   SESSION_COOKIE_SECURE: bool.default(true),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   AUTH_TOKEN_PEPPER: z.string().min(32, "en az 32 karakter olmalı"),
+  // #180/#291: MFA sırları için oturum pepper'ından AYRI anahtar. Verilince yeni kayıtlar v2 yazılır, eski v1 kayıtlar
+  // doğrulamada ve `mfa:rekey` ile taşınır; sonra AUTH_TOKEN_PEPPER MFA'yı kilitlemeden değiştirilebilir.
+  MFA_ENCRYPTION_KEY: z.string().default("").refine((v) => v === "" || v.length >= 32, "en az 32 karakter olmalı"),
+  // Pepper değiştirildikten sonra ESKİ değer: yalnız v1 kayıtları ve eski kurtarma kodu özetlerini doğrular.
+  MFA_LEGACY_PEPPER: z.string().default("").refine((v) => v === "" || v.length >= 32, "en az 32 karakter olmalı"),
   EMAIL_VERIFICATION_REQUIRED: bool.default(true),
   /** Enables critical role enforcement only after 2 verified SUPER_ADMIN enrollments. */
   ROLE_APPROVALS_REQUIRED: bool.default(false),
@@ -68,6 +73,8 @@ export type Config = {
   allowedOrigins: string[];
   session: { cookieName: string; cookieDomain: string | null; secure: boolean; ttlMs: number };
   authTokenPepper: string;
+  /** MFA şifreleme anahtarları (modules/security/encryption.ts MfaKeys). */
+  mfa: { current: string | null; legacy: string };
   emailVerificationRequired?: boolean;
   roleApprovalsRequired: boolean;
   mail: MailConfig;
@@ -90,6 +97,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   const e = parsed.data;
   const deployed = e.APP_ENV === "staging" || e.APP_ENV === "production";
+  if (e.MFA_ENCRYPTION_KEY && e.MFA_ENCRYPTION_KEY === e.AUTH_TOKEN_PEPPER) {
+    throw new Error("API yapılandırması geçersiz → MFA_ENCRYPTION_KEY, AUTH_TOKEN_PEPPER ile aynı olamaz (ayrı anahtar olmalı)");
+  }
+  if (e.MFA_LEGACY_PEPPER && !e.MFA_ENCRYPTION_KEY) {
+    // Pepper değişmişse eski kayıtlar yalnız okunur; yeni kayıt ayrı anahtarla yazılmalı.
+    throw new Error("API yapılandırması geçersiz → MFA_LEGACY_PEPPER yalnız MFA_ENCRYPTION_KEY ile birlikte kullanılır");
+  }
   if (deployed && !e.SESSION_COOKIE_SECURE) {
     throw new Error("API yapılandırması geçersiz → SESSION_COOKIE_SECURE staging/production'da true olmalı");
   }
@@ -153,6 +167,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ttlMs: e.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
     },
     authTokenPepper: e.AUTH_TOKEN_PEPPER,
+    mfa: { current: e.MFA_ENCRYPTION_KEY || null, legacy: e.MFA_LEGACY_PEPPER || e.AUTH_TOKEN_PEPPER },
     emailVerificationRequired: e.EMAIL_VERIFICATION_REQUIRED,
     roleApprovalsRequired: e.ROLE_APPROVALS_REQUIRED,
     mail:
