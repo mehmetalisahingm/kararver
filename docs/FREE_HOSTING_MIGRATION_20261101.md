@@ -2,6 +2,20 @@
 
 **Durum: HAZIRLIK / NO-GO.** Bu belge ve `render.yaml` yalnızca dağıtım hazırlığıdır. Kaynak veritabanı, bucket'lar, DNS ve mevcut çalışan Railway servisleri değiştirilmedi. Yeni sisteme canlı trafik yönlendirilmedi.
 
+## 1 Kasım 2026 — oluşturulan ücretsiz hedef altyapı
+
+**Gerçekleştirildi (kaynak Railway değiştirilmedi):**
+- Neon Free organizasyonu: `org-red-recipe-40149581` (doğrulandı: `free_v3`).
+- Neon projesi: `kararver-staging-free`, proje ID `broad-rain-56203802`; region `aws-eu-central-1` (Frankfurt), PostgreSQL **18.6**.
+- Branch: `main` (`br-weathered-firefly-b9nrb2au`); DB: `kararver_staging`, bağlantı testi SELECT başarılı.
+- Boş DB'ye **henüz kaynak veriler restore edilmedi**; kullanıcı tablosu sayısı 0.
+- Neon Object Storage (şu anda **boş**): `kararver-staging-uploads-private` ve `kararver-staging-media-public`. İki bucket da `private`; var olan uygulamanın proxy üzerinden erişim düzenini korur.
+- Neon S3 endpoint, path-style, region ve bucket adları `render.yaml`'de önceden tanımlandı. Credential'lar hiçbir yerde commit edilmedi.
+- Neon Free limitleri: 1 GB Postgres storage/project, 100 CU-saat/project/ay, 5 GB egress ve 5 GB Object Storage; limitlere ulaşılması hizmeti kesebilir. **Ücretli plana yükseltme yok.**
+- Neon API / DB doğrudan erişim için connection string kullanılmalı; bağlantı URL'lerini terminal/log/PR üzerinde paylaşmayın. `prisma migrate deploy` ile `pg_restore` **doğrudan (pooler olmayan)** bağlantıyı kullanın. API trafiğinde PgBouncer uyumluluğu test edilirse pooled bağlantı tercih edilebilir.
+
+**Kalan blokajlar:** Railway OAuth bağlantısı `DATABASE_PUBLIC_URL` ve S3 secret'larını redakte ediyor. Güncel kaynak dump ve object copy için güvenli, yetkili aktarım çalıştırılmalı; Render bağlantısı henüz yok; SMTP ve sürekli worker çözülmeden Vercel trafiği çevrilmemeli.
+
 ## Hedef ve kesin sınırlar
 
 - Ücretli plan, kart ekleme, otomatik kullanım aşımı veya abonelik **yok**. Vercel Free mevcut haliyle kalır.
