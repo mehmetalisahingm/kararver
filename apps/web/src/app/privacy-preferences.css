@@ -1,6 +1,6 @@
 .privacy-preferences {
   background: #fff;
-  border-bottom: 1px solid #d2d7e2;
+  border-top: 1px solid #d2d7e2;
   color: #181b25;
   font: 400 14px/1.6 system-ui, sans-serif;
   padding: 12px max(20px, calc((100vw - 1180px) / 2));
@@ -20,6 +20,9 @@
 .privacy-preferences__category label { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; }
 .privacy-preferences input { width: 20px; height: 20px; accent-color: #5630c8; }
 .privacy-preferences__category p { margin: 4px 0 0; }
+@media (max-width: 767px) {
+  .privacy-preferences { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+}
 @media (max-width: 480px) {
   .privacy-preferences__actions button { flex: 1 1 130px; }
 }

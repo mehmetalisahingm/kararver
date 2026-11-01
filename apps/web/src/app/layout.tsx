@@ -34,10 +34,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="tr">
       <body>
         <Suspense fallback={null}><SourceAttribution /></Suspense>
-        <PrivacyPreferences />
         <ProductProvider>
           {children}
         </ProductProvider>
+        <PrivacyPreferences />
       </body>
     </html>
   );

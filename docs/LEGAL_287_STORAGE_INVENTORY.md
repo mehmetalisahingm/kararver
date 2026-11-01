@@ -16,7 +16,7 @@
 
 Temizleme yalnız ilgili ölçüm anahtarını hedefler; toplu `localStorage.clear()` uygulanmaz. Oturum, tema, form ve veri hakları akışı kaynak ölçümüne bağlanmaz. Tercih hesapla birleştirilmez. Aynı origin'deki sekmeler storage olayı ve odaklanmada yenilenir; tüketici her okumada tercihi yeniden kontrol eder. Süre sonu açık sayfada da kontrol edilir.
 
-Tercihlere her sayfadaki aynı adlı düğmeyle ulaşılır. Başlangıçta panel kapalı ve kaynak ölçümü kapalıdır; paneli açmak, sayfayı ziyaret etmek veya URL'de kaynak etiketi bulunması kabul değildir. Otomatik açılan bir çerez duvarı yoktur; yalnız kullanıcı açınca ayrıntı/karar alanı genişler. Böylece hydration sırasında sayfayı iten otomatik panel de eklenmez.
+Tercihlere her sayfanın altındaki aynı adlı düğmeyle ulaşılır. Başlangıçta panel kapalı ve kaynak ölçümü kapalıdır; paneli açmak, sayfayı ziyaret etmek veya URL'de kaynak etiketi bulunması kabul değildir. Otomatik açılan bir çerez duvarı yoktur; yalnız kullanıcı açınca ayrıntı/karar alanı genişler. Böylece hydration sırasında sayfayı iten otomatik panel de eklenmez. Ürün kabuğundaki "İçeriğe geç" bağlantısı ilk klavye durağı olarak kalır; mobil alt gezinme için tercih alanının sonunda boşluk bırakılır.
 
 Depolama erişimi/yazımı engelliyse kabul başarı sayılmaz. Geri çekme kalıcılaştırılamadığında mevcut belge ölçümü kapalı tutar ve kullanıcıya site verilerini temizleme seçeneği açıklanır; yeniden açılışta veya başka sekmede kalıcı kayıt silinmiş gibi garanti verilmez. Storage erişimi tamamen yasaksa fiziksel kaydın silindiği de iddia edilmez.
 
