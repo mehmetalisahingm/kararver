@@ -139,6 +139,30 @@ Dosya değiştirilmiş ya da kesikse çözme reddedilir, geçici düz metin temi
 
 Ölçülen veri adımı (aşağıda) birkaç saniyedir. Toplam süreyi insan adımları belirler: karar, bakım modu, ortam değişkeni değişikliği, yeniden başlatma. Bu adımların süresi staging'de ölçülecek.
 
+## Arındırılmış taşıma (yeni sağlayıcıya geçiş, #297)
+
+Staging'den yeni bir sağlayıcıya veri taşınırken kişisel veri olduğu gibi kopyalanmaz (#288 yurt dışı aktarım, #291). Akış:
+
+1. **Yedek:** `db:backup` (sunucuyla aynı major `pg_dump`; staging PG 18).
+2. **Yerel restore:** `RESTORE_DATABASE_URL=postgresql://…@localhost:…/kararver_restore_<tarih> db:restore --file <yedek>`.
+3. **Deneme:** `SANITIZE_DATABASE_URL=<aynı yerel kopya> db:sanitize`. Her şeyi yapar, doğrular ve **geri alır**; rapor yalnız sayı içerir.
+4. **Uygula:** aynı komut `--apply` ile. Kalan gerçek e-posta izi, oturum ya da MFA kaydı sıfır değilse işlem geri alınır, çıkış kodu 1.
+5. **Arındırılmış yedek:** kopyadan `db:backup` → hedef sağlayıcıda boş DB'ye `db:restore` (doğrudan, pooler olmayan bağlantı) → `db:verify`, `db:verify-votes`, `db:check-migrations`.
+
+**Ne değişir (`packages/db/ops/sanitize.ts`):**
+- **Gerçek görünümlü hesap:** E-postası ayrılmış/test alan adında olmayan hesap (example.*, .test, .invalid, .example, .localhost, .local). E-posta, kullanıcı adı ve görünen ad sentetik değerle değişir (`user_<20 hex>`, `…@example.test`). Bio ve avatar boşalır. Parola özeti geçersiz bir işaretle değişir; giriş yapılamaz, doğrulama hata vermez, `false` döner.
+- **Herkes için silinenler:** oturumlar (IP, user-agent), MFA kayıtları ve kurtarma kodları, tek kullanımlık token'lar, e-posta değişikliği talepleri, idempotency anahtarları, hız sınırı sayaçları, veri dışa aktarma talepleri. MFA kayıtları yeni ortamın `AUTH_TOKEN_PEPPER`'ıyla zaten çözülemez; test hesapları MFA'yı yeniden kurar.
+- **Serbest metin ve JSON:** E-posta her yerde, büyük/küçük harf duyarsız değişir. Kullanıcı adı ve görünen ad, yapısal değerlerle karışmasın diye harf duyarlı eşleşir: serbest metinde tam kelime, JSON'da yalnız değerin tamamı. Örneğin "admin" adlı bir hesap, rol değeri `"ADMIN"`'i ya da `admin.users.list` işlem adını değiştirmez. JSON anahtarları ve yapısal sütunlar (işlem adı, tür, durum, kimlik, özet, rota) değişmez.
+- **Tetikleyiciler:** Ekleme-yalnız ve revizyon tetikleyicileri yalnız bu kopyada, yalnız bu transaction içinde kapatılıp geri açılır; sayaç ve geçmiş üretilmez.
+
+**Güvenlik:** Hedef yalnız yerel sunucu olabilir. Veritabanı adı "restore" ya da "sanitize" içermeli veya `_test` ile bitmeli; `DATABASE_URL` ile aynı olamaz. Araç canlı DB'ye bağlanmaz.
+
+**Sınır:** Genel kelime olan kullanıcı adları (ör. "admin") başka bir kelimenin parçası olarak geçtiği yerde kalabilir. Bu kişiyi tanımlamaz. E-posta izi sıfır olmadan işlem tamamlanmaz.
+
+**1 Kasım 2026 denemesi (staging yedeği, yerel PG 18.6):**
+- **Sayımlar:** 10 gerçek görünümlü hesap; 86 oturum, 7 MFA kaydı, 45 token, 35 idempotency anahtarı, 128 sayaç ve 1 dışa aktarma talebi silindi; 3 metin/JSON alanı yeniden yazıldı. Kalan e-posta izi, oturum ve MFA 0.
+- **Yapı:** Audit işlem/tür/hedef özeti, olay tür özeti ve 5 `"ADMIN"` rol değeri arındırmadan önce ve sonra birebir aynı. 6/6 tutarlılık kontrolü geçti.
+
 ## Migration ve deploy geri dönüşü
 
 Prisma'da down migration yoktur. Geri dönüşün üç yolu var; hangisinin seçileceği hatanın türüne bağlı.
