@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { ProductProvider } from "../components/product-provider";
 import { SourceAttribution } from "../components/source-attribution";
+import { PrivacyPreferences } from "../components/privacy-preferences";
 import "./globals.css";
 import "./premium.css";
+import "./privacy-preferences.css";
 
 const webUrl = new URL(process.env.WEB_URL ?? "http://localhost:3000");
 const publicIndexing = process.env.APP_ENV === "production";
@@ -31,8 +33,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="tr">
       <body>
+        <Suspense fallback={null}><SourceAttribution /></Suspense>
+        <PrivacyPreferences />
         <ProductProvider>
-          <SourceAttribution />
           {children}
         </ProductProvider>
       </body>

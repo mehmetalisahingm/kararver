@@ -1,0 +1,25 @@
+.privacy-preferences {
+  background: #fff;
+  border-bottom: 1px solid #d2d7e2;
+  color: #181b25;
+  font: 400 14px/1.6 system-ui, sans-serif;
+  padding: 12px max(20px, calc((100vw - 1180px) / 2));
+}
+.privacy-preferences__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.privacy-preferences button {
+  appearance: none; font: inherit; font-weight: 600; color: #181b25; background: #fff;
+  border: 1px solid #7c8596; border-radius: 8px; min-height: 44px; padding: 8px 14px; cursor: pointer;
+}
+.privacy-preferences button:hover { background: #edf0f5; }
+.privacy-preferences :focus-visible { outline: 3px solid #653cff; outline-offset: 3px; }
+.privacy-preferences__choices { max-width: 850px; padding: 12px 0; }
+.privacy-preferences h2 { font-size: 20px; margin: 0 0 8px; }
+.privacy-preferences p { margin: 0 0 12px; }
+.privacy-preferences__actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.privacy-preferences__category { margin: 12px 0; padding: 12px; border: 1px solid #d2d7e2; border-radius: 8px; }
+.privacy-preferences__category label { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; }
+.privacy-preferences input { width: 20px; height: 20px; accent-color: #5630c8; }
+.privacy-preferences__category p { margin: 4px 0 0; }
+@media (max-width: 480px) {
+  .privacy-preferences__actions button { flex: 1 1 130px; }
+}
