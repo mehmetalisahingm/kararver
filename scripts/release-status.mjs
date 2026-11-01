@@ -54,8 +54,11 @@ export const LEGAL_GATES_DOC = "docs/KV-51_RELEASE_EVIDENCE.md";
 
 /**
  * KV-51 §3.1 tablosu: `| L01 | Kapı | #285 | Sahip | Durum |`. Tablo yoksa (belge eski) boş liste döner.
- * Durumu PASS / DONE / ✅ ile başlamayan her kapı açıktır: BLOCKED veya NOT RUN varken rapor "hazır" demez.
+ * Yalnız durumu tam olarak `PASS`, `DONE` ya da `✅` olan kapı (isteğe bağlı tarih: `PASS 2026-11-01`) kapalıdır. Ek açıklama
+ * taşıyan her durum (`PASS (kısmi)`, `PASS, onay bekliyor`, `passed`) açık sayılır: rapor "hazır değil" tarafında yanılır.
  */
+const CLOSED_STATUS = /^(PASS|DONE|✅)( \d{4}-\d{2}-\d{2})?$/;
+
 export function parseLegalGates(markdown) {
   const gates = [];
   for (const line of (markdown ?? "").split("\n")) {
@@ -65,7 +68,7 @@ export function parseLegalGates(markdown) {
     if (cells.length < 4) continue;
     const [gate, record, owner, status] = cells;
     const issue = Number(record.match(/#(\d+)/)?.[1]) || null;
-    gates.push({ id: m[1], gate: gate.replace(/\s*\(\[.*?\]\(.*?\)\)/g, ""), issue, owner, status, open: !/^(PASS|DONE|✅)/i.test(status) });
+    gates.push({ id: m[1], gate: gate.replace(/\s*\(\[.*?\]\(.*?\)\)/g, ""), issue, owner, status, open: !CLOSED_STATUS.test(status) });
   }
   return gates;
 }

@@ -88,7 +88,8 @@ const LEGAL_TABLE = [
   "| --- | --- | --- | --- | --- |",
   "| L01 | Veri sorumlusu, hukuki metinler | #285 | Mehmet | NOT RUN |",
   "| L06 | İçerik/telif şikâyeti ([karar listesi](LEGAL_290_TAKEDOWN_APPEALS_DECISIONS.md)) | #290 | Mert | BLOCKED: karar bekliyor (#285) |",
-  "| L09 | Spam puanı karar 13 | #183 | Mert | PASS (hukuk onayı 2026-11-01) |",
+  "| L09 | Spam puanı karar 13 | #183 | Mert | PASS 2026-11-01 |",
+  "| L08 | KVKK başvuru | #181 | Mert | PASS (kısmi) |",
   "| L10 | Kayıtsız satır |",
   "",
 ].join("\n");
@@ -99,7 +100,10 @@ test("hukuki kapılar: tablo satırları, kayıt issue'su ve durum; PASS dışı
     ["L01", 285, "Mehmet", true],
     ["L06", 290, "Mert", true],
     ["L09", 183, "Mert", false],
-  ], "eksik sütunlu satır atlanır");
+    ["L08", 181, "Mert", true],
+  ], "eksik sütunlu satır atlanır; ek açıklamalı PASS açık sayılır");
+  for (const status of ["PASS", "DONE", "✅", "PASS 2026-11-01"]) assert.equal(parseLegalGates(`| L01 | k | #1 | s | ${status} |`)[0].open, false, status);
+  for (const status of ["PASS (kısmi)", "PASS, onay bekliyor", "passed", "pass", "PASSIVE", "NOT RUN"]) assert.equal(parseLegalGates(`| L01 | k | #1 | s | ${status} |`)[0].open, true, status);
   assert.equal(gates[1].gate, "İçerik/telif şikâyeti", "belge bağlantısı kapı adından çıkar");
   assert.equal(gates[1].status, "BLOCKED: karar bekliyor (#285)");
   assert.deepEqual(parseLegalGates("# başka belge\n| ID | x |"), []);
@@ -116,7 +120,7 @@ test("rapor: açık hukuki kapı varken 'hazır değil'; tablo okunamazsa da 'ha
   };
   const gates = parseLegalGates(LEGAL_TABLE).map((g) => ({ ...g, issueState: "açık", progress: { done: 0, total: 3 } }));
   const md = renderReport({ ...base, legalGates: gates });
-  assert.match(md, /### Hukuki kapılar \(#284\): \*\*2\/3 açık → hazır değil\*\*/);
+  assert.match(md, /### Hukuki kapılar \(#284\): \*\*3\/4 açık → hazır değil\*\*/);
   assert.match(md, /\| L06 İçerik\/telif şikâyeti \| #290 \| Mert \| BLOCKED: karar bekliyor \(#285\) \| açık · 0\/3 \|/);
   assert.match(renderReport({ ...base, legalGates: [] }), /§3\.1 tablosu bulunamadı: hukuki kapılar okunamadı, rapor \*\*hazır değil\*\* sayılır/);
   assert.ok(!renderReport(base).includes("Hukuki kapılar"), "eski çağrılar (legalGates yok) bozulmaz");
