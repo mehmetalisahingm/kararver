@@ -27,9 +27,19 @@ export type AckResult = { kind: "ok"; alert: SecurityAlertRecord } | { kind: "no
 
 export interface SecurityAlertStore {
   acknowledge(input: { id: string; actorId: string; reason: string; requestId: string; at: Date }): Promise<AckResult>;
-  /** Reddedilen yönetici isteğini sayar. Asla fırlatmaz: kayıt hatası isteğin cevabını değiştirmez (yalnız loglanır). */
-  recordDenial(input: DenialInput): Promise<void>;
+  /**
+   * Reddedilen yönetici isteğini süreç içi sayaca ekler; DB'ye gitmez, fırlatmaz. Oturumsuz GET'lerde hız sınırı olmadığı için
+   * istek başına DB yazısı dışarıdan yük bindirme yolu olurdu (#283 incelemesi). Sayaçlar aralıkla tek toplu yazıyla aktarılır.
+   */
+  recordDenial(input: DenialInput): void;
+  /** Bekleyen sayaçları hemen yazar ve zamanlayıcıyı durdurur; süreç kapanırken çağrılır. Fırlatmaz. */
+  flushDenials(): Promise<void>;
 }
+
+/** Bekleyen sayaçların yazılma aralığı. Çökmede en çok bu kadarlık sayı kaybolur; alarm 5 dakikalık turla çalışır. */
+export const DENIAL_FLUSH_MS = 30_000;
+/** Bellekte tutulan en çok farklı anahtar (dakika + uç + durum + hesap). Aşılırsa yeni anahtar sayılmaz, yazımda loglanır. */
+export const DENIAL_MAX_KEYS = 5_000;
 
 type Row = Omit<SecurityAlertRecord, "actor" | "acknowledgedBy"> & {
   actorId: string | null;
@@ -72,7 +82,67 @@ const minute = (at: Date) => new Date(Math.floor(at.getTime() / 60_000) * 60_000
 export function createPrismaSecurityAlertStore(
   prisma: PrismaClient,
   log: (message: string, fields: Record<string, unknown>) => void = () => {},
+  options: { flushMs?: number; maxKeys?: number } = {},
 ): SecurityAlertStore {
+  const flushMs = options.flushMs ?? DENIAL_FLUSH_MS;
+  const maxKeys = options.maxKeys ?? DENIAL_MAX_KEYS;
+  type Pending = { bucket: string; endpoint: string; status: number; actorKey: string; count: number };
+  let pending = new Map<string, Pending>();
+  let dropped = 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let running: Promise<void> | null = null;
+
+  const add = (p: Pending) => {
+    const key = `${p.bucket}|${p.endpoint}|${p.status}|${p.actorKey}`;
+    const existing = pending.get(key);
+    if (existing) existing.count += p.count;
+    else if (pending.size < maxKeys) pending.set(key, { ...p });
+    else dropped += p.count;
+  };
+
+  async function write(): Promise<void> {
+    if (pending.size === 0 && dropped === 0) return;
+    const batch = pending;
+    const lost = dropped;
+    pending = new Map();
+    dropped = 0;
+    if (lost > 0) log("admin erişim reddi sayacı dolu; bazı istekler sayılmadı", { dropped: lost, maxKeys });
+    if (batch.size === 0) return;
+    // Sıralı yazım: birden çok API süreci aynı satırlara aynı sırayla kilit alır (kilitlenme olmaz).
+    const rows = [...batch.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, row]) => row);
+    try {
+      await prisma.$executeRaw`
+        INSERT INTO admin_access_denials (bucket, endpoint, status, actor_key, count)
+        SELECT t.bucket, t.endpoint, t.status, t.actor_key, t.count
+          FROM unnest(${rows.map((r) => r.bucket)}::timestamptz[], ${rows.map((r) => r.endpoint)}::varchar[], ${rows.map((r) => r.status)}::smallint[],
+                      ${rows.map((r) => r.actorKey)}::varchar[], ${rows.map((r) => r.count)}::int[]) AS t(bucket, endpoint, status, actor_key, count)
+        ON CONFLICT (bucket, endpoint, status, actor_key) DO UPDATE SET count = admin_access_denials.count + EXCLUDED.count`;
+    } catch (err) {
+      // Geçici DB hatasında sayılar kaybolmasın: bir sonraki yazıma geri eklenir (üst sınır add'de).
+      for (const row of rows) add(row);
+      log("admin erişim reddi sayılamadı", { rows: rows.length, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  /** Tek seferde tek yazım; süren yazım bitmeden yenisi başlamaz. */
+  const flush = (): Promise<void> => {
+    running ??= write().finally(() => {
+      running = null;
+    });
+    return running;
+  };
+
+  const arm = () => {
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = null;
+      void flush().then(() => {
+        if (pending.size > 0) arm();
+      });
+    }, flushMs);
+    timer.unref?.();
+  };
+
   return {
     async acknowledge(input) {
       return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -98,17 +168,20 @@ export function createPrismaSecurityAlertStore(
       });
     },
 
-    async recordDenial(input) {
+    recordDenial(input) {
       // Aynı dakika + uç + durum + hesap tek satır: istek seli tabloyu büyütmez. 401'de hesap bilinmez ('*').
       const actorKey = input.status === 403 && input.actorId ? input.actorId : "*";
-      try {
-        await prisma.$executeRaw`
-          INSERT INTO admin_access_denials (bucket, endpoint, status, actor_key, count)
-          VALUES (${minute(input.at)}::timestamptz, ${input.endpointId}, ${input.status}::smallint, ${actorKey}, 1)
-          ON CONFLICT (bucket, endpoint, status, actor_key) DO UPDATE SET count = admin_access_denials.count + 1`;
-      } catch (err) {
-        log("admin erişim reddi sayılamadı", { endpoint: input.endpointId, status: input.status, error: err instanceof Error ? err.message : String(err) });
+      add({ bucket: minute(input.at).toISOString(), endpoint: input.endpointId, status: input.status, actorKey, count: 1 });
+      arm();
+    },
+
+    async flushDenials() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
       }
+      if (running) await running;
+      await flush();
     },
   };
 }

@@ -7,10 +7,91 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { ErrorBody, SecurityAlertView } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
+import { createPrismaSecurityAlertStore } from "../src/modules/security-alerts/store.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 import { rbacSeeds } from "./support/rbac-probe.ts";
 
 const backend = prismaBackend();
+
+/** Toplu yazım (DB'siz): $executeRaw çağrılarını kaydeden sahte istemci. Satır sırası: bucket, endpoint, status, actor, count. */
+describe("red sayacı toplu yazımı", () => {
+  const AT = new Date("2026-11-01T10:00:30.000Z");
+  const fake = (fail: () => boolean = () => false) => {
+    const writes: unknown[][][] = [];
+    const prisma = {
+      $executeRaw: async (_sql: TemplateStringsArray, ...values: unknown[][]) => {
+        if (fail()) throw new Error("db yok");
+        writes.push(values);
+        return values[0]!.length;
+      },
+    } as unknown as PrismaClient;
+    return { prisma, writes };
+  };
+  const denial = (over: Partial<{ endpointId: string; status: 401 | 403; actorId: string | null; at: Date }> = {}) =>
+    ({ endpointId: "admin.ops.status", status: 401 as const, actorId: null, at: AT, ...over });
+
+  test("sel DB'ye gitmez: 1000 ret tek yazımda tek satır; 401'de hesap tutulmaz, dakika başına kova", async () => {
+    const { prisma, writes } = fake();
+    const store = createPrismaSecurityAlertStore(prisma, undefined, { flushMs: 60_000 });
+    for (let i = 0; i < 1000; i++) store.recordDenial(denial({ actorId: i % 2 ? "x" : null }));
+    assert.equal(writes.length, 0, "istek sırasında yazım yok");
+    await store.flushDenials();
+    assert.deepEqual(writes, [[["2026-11-01T10:00:00.000Z"], ["admin.ops.status"], [401], ["*"], [1000]]]);
+    await store.flushDenials();
+    assert.equal(writes.length, 1, "bekleyen yoksa yazım yok");
+  });
+
+  test("uç, durum, hesap ve dakika ayrı satır; sıra deterministik", async () => {
+    const { prisma, writes } = fake();
+    const store = createPrismaSecurityAlertStore(prisma, undefined, { flushMs: 60_000 });
+    const actor = randomUUID();
+    store.recordDenial(denial({ status: 403, actorId: actor }));
+    store.recordDenial(denial({ status: 403, actorId: actor }));
+    store.recordDenial(denial({ endpointId: "admin.audit.list" }));
+    store.recordDenial(denial({ at: new Date(AT.getTime() + 60_000) }));
+    await store.flushDenials();
+    const [buckets, endpoints, statuses, actors, counts] = writes[0]! as [string[], string[], number[], string[], number[]];
+    assert.deepEqual(
+      buckets.map((b, i) => [b.slice(14, 16), endpoints[i], statuses[i], actors[i], counts[i]]),
+      [["00", "admin.audit.list", 401, "*", 1], ["00", "admin.ops.status", 403, actor, 2], ["01", "admin.ops.status", 401, "*", 1]],
+    );
+  });
+
+  test("yazım hatası fırlatmaz, loglanır; sayılar sonraki yazıma aktarılır", async () => {
+    let down = true;
+    const { prisma, writes } = fake(() => down);
+    const logs: string[] = [];
+    const store = createPrismaSecurityAlertStore(prisma, (m) => logs.push(m), { flushMs: 60_000 });
+    store.recordDenial(denial());
+    await store.flushDenials();
+    assert.equal(logs.length, 1);
+    store.recordDenial(denial());
+    down = false;
+    await store.flushDenials();
+    assert.deepEqual(writes[0]![4], [2]);
+  });
+
+  test("anahtar üst sınırı: yeni anahtar sayılmaz ve loglanır, var olan sayılmaya devam eder", async () => {
+    const { prisma, writes } = fake();
+    const logs: Record<string, unknown>[] = [];
+    const store = createPrismaSecurityAlertStore(prisma, (_m, f) => logs.push(f), { flushMs: 60_000, maxKeys: 1 });
+    store.recordDenial(denial());
+    store.recordDenial(denial({ endpointId: "admin.audit.list" }));
+    store.recordDenial(denial());
+    await store.flushDenials();
+    assert.deepEqual([writes[0]![1], writes[0]![4]], [["admin.ops.status"], [2]]);
+    assert.deepEqual(logs, [{ dropped: 1, maxKeys: 1 }]);
+  });
+
+  test("zamanlayıcı bekleyen varsa kendiliğinden yazar", async () => {
+    const { prisma, writes } = fake();
+    const store = createPrismaSecurityAlertStore(prisma, undefined, { flushMs: 5 });
+    store.recordDenial(denial());
+    for (let i = 0; i < 100 && writes.length === 0; i++) await new Promise((r) => setTimeout(r, 5));
+    assert.equal(writes.length, 1);
+    await store.flushDenials();
+  });
+});
 
 type User = { cookie: string; id: string };
 type Res = { statusCode: number; body: string; headers: Record<string, unknown>; json(): any };

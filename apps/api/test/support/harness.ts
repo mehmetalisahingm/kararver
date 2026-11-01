@@ -258,7 +258,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     searchStore: backend.prisma ? createPrismaSearchStore(backend.prisma) : undefined,
     revisionStore: backend.prisma ? createPrismaRevisionStore(backend.prisma) : undefined,
     auditStore: backend.prisma ? createPrismaAuditStore(backend.prisma) : undefined,
-    securityAlertStore: backend.prisma ? createPrismaSecurityAlertStore(backend.prisma) : undefined,
+    securityAlertStore: backend.prisma ? createPrismaSecurityAlertStore(backend.prisma, undefined, { flushMs: 10 }) : undefined,
     categoryAdminStore: backend.prisma ? createPrismaCategoryAdminStore(backend.prisma) : undefined,
     pointAdminStore: backend.prisma ? createPrismaPointAdminStore(backend.prisma) : undefined,
     featuredAdminStore: backend.prisma ? createPrismaFeaturedAdminStore(backend.prisma) : undefined,

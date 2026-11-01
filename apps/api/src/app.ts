@@ -393,7 +393,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   }
   if (deps.revisionStore) registerRevisionRoutes(route, { store: deps.revisionStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl, now });
   if (deps.auditStore) registerAuditRoutes(route, { store: deps.auditStore, mediaPublicBaseUrl: config.mediaPublicBaseUrl, now });
-  if (deps.securityAlertStore) registerSecurityAlertRoutes(route, { store: deps.securityAlertStore, now });
+  if (deps.securityAlertStore) {
+    registerSecurityAlertRoutes(route, { store: deps.securityAlertStore, now });
+    // Bekleyen red sayaçları kapanışta yazılır.
+    app.addHook("onClose", () => deps.securityAlertStore!.flushDenials());
+  }
   if (deps.voteStore) {
     registerVoteRoutes(route, { store: deps.voteStore, now, settings: pollSettings });
     registerVoteAdminRoutes(route, { store: deps.voteStore, now });

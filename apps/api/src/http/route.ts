@@ -45,10 +45,10 @@ type RouteOptions = {
   /** KV-19 (#21) hız sınırı; oturum çözüldükten sonra, yetki ve gövde doğrulamasından önce. Verilmezse sınır yok. */
   rateLimit?: (input: { endpointId: string; method: string; viewer: SessionUser | null; request: FastifyRequest }) => Promise<void>;
   /**
-   * #185: yönetici uçlarında (admin.*) reddedilen istek (401/403) sayacı. Hata cevabı beklemez ve değişmez; sayaç
-   * kendi hatasını yutar (security-alerts/store.ts).
+   * #185: yönetici uçlarında (admin.*) reddedilen istek (401/403) sayacı. Süreç içi sayaca ekler, DB'ye gitmez ve
+   * fırlatmaz; toplu yazım security-alerts/store.ts'tedir.
    */
-  recordDenial?: (input: { endpointId: string; status: 401 | 403; actorId: string | null; at: Date }) => Promise<void>;
+  recordDenial?: (input: { endpointId: string; status: 401 | 403; actorId: string | null; at: Date }) => void;
 };
 
 /** Bakım modunda da çalışan yazma endpoint'leri: yönetici (modu kapatabilsin) ve oturum açma/kapama. */
@@ -71,7 +71,7 @@ export function createRouter(app: FastifyInstance, options: RouteOptions) {
     const denied = (err: unknown, viewer: SessionUser | null) => {
       if (!options.recordDenial || !id.startsWith("admin.") || !(err instanceof ApiError)) return;
       if (err.code !== "UNAUTHENTICATED" && err.code !== "FORBIDDEN") return;
-      void options.recordDenial({ endpointId: id, status: err.code === "UNAUTHENTICATED" ? 401 : 403, actorId: viewer?.id ?? null, at: options.now() });
+      options.recordDenial({ endpointId: id, status: err.code === "UNAUTHENTICATED" ? 401 : 403, actorId: viewer?.id ?? null, at: options.now() });
     };
     // Yetki KV-04 kuralıyla verilir (modules/rbac/access.ts); eşlemesi olmayan endpoint kayıtta patlar.
     const action = permissionForEndpoint(id);
