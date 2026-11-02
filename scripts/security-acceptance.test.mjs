@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { checkSecurityGate, validateApiUrl } from "./security-acceptance.mjs";
 
-const ORIGIN = "https://api-staging-45cb.up.railway.app";
+const ORIGIN = "https://kararver-api-free-preview.onrender.com";
 const headers = { "strict-transport-security": "max-age=31536000" };
 const api = (override = () => null) => async (url, init) => {
   assert.equal(init.method, "GET", "only read-only requests permitted");
@@ -24,8 +24,10 @@ test("rejects URLs with credentials, proxy bypass, user-selected public hosts or
     "https://api-staging-45cb.up.railway.app/v1/config",
     "https://api-staging-45cb.up.railway.app/?secret=abc",
     "https://127.0.0.1", "file:///etc/passwd",
+    "https://other-app.onrender.com", "https://kararver-api-free-preview.onrender.com.attacker.invalid",
   ]) assert.throws(() => validateApiUrl(value));
   assert.equal(validateApiUrl(ORIGIN), ORIGIN);
+  assert.equal(validateApiUrl("https://api-staging-45cb.up.railway.app"), "https://api-staging-45cb.up.railway.app");
 });
 
 test("requires public health/config and anonymous denial across admin+user routes", async () => {
