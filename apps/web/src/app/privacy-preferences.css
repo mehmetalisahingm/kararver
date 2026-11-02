@@ -1,3 +1,6 @@
+/* Keep the shared footer below the first viewport even while a route streams
+   its short loading fallback. Hydration must not push visible controls away. */
+.site-content { min-block-size: 100svh; }
 .privacy-preferences {
   background: #fff;
   border-top: 1px solid #d2d7e2;
@@ -5,12 +8,20 @@
   font: 400 14px/1.6 system-ui, sans-serif;
   padding: 12px max(20px, calc((100vw - 1180px) / 2));
 }
-.privacy-preferences__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.privacy-preferences__bar {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-block-size: 44px;
+}
+.privacy-preferences__bar [role="status"] { min-inline-size: 0; overflow-wrap: anywhere; }
 .privacy-preferences button {
   appearance: none; font: inherit; font-weight: 600; color: #181b25; background: #fff;
   border: 1px solid #7c8596; border-radius: 8px; min-height: 44px; padding: 8px 14px; cursor: pointer;
 }
 .privacy-preferences button:hover { background: #edf0f5; }
+.privacy-preferences button[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 .privacy-preferences :focus-visible { outline: 3px solid #653cff; outline-offset: 3px; }
 .privacy-preferences__choices { max-width: 850px; padding: 12px 0; }
 .privacy-preferences h2 { font-size: 20px; margin: 0 0 8px; }
@@ -22,6 +33,10 @@
 .privacy-preferences__category p { margin: 4px 0 0; }
 @media (max-width: 767px) {
   .privacy-preferences { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  /* The live region always has its own row; a saved choice cannot wrap the
+     trigger onto a different row when its message appears. */
+  .privacy-preferences__bar { grid-template-columns: minmax(0, 1fr); min-block-size: 101px; }
+  .privacy-preferences__bar [role="status"] { min-block-size: 45px; }
 }
 @media (max-width: 480px) {
   .privacy-preferences__actions button { flex: 1 1 130px; }

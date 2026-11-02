@@ -65,8 +65,9 @@ export function PrivacyPreferences() {
   return (
     <section className="privacy-preferences" aria-label="Çerez ve depolama tercihleri">
       <div className="privacy-preferences__bar">
-        <button type="button" ref={trigger} disabled={!ready} aria-expanded={expanded} aria-controls={expanded ? "privacy-choices" : undefined}
+        <button type="button" ref={trigger} aria-disabled={!ready} aria-expanded={expanded} aria-controls={expanded ? "privacy-choices" : undefined}
           onClick={() => {
+            if (!ready) return;
             setExpanded(open => !open);
             if (!expanded) requestAnimationFrame(() => heading.current?.focus());
           }}>Çerez ve depolama tercihleri</button>

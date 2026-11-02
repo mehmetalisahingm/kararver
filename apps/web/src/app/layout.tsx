@@ -39,9 +39,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="tr">
       <body>
         <Suspense fallback={null}><SourceAttribution /></Suspense>
-        <SiteShell legalLinks={links}>
-          {children}
-        </SiteShell>
+        <div className="site-content">
+          <SiteShell legalLinks={links}>
+            {children}
+          </SiteShell>
+        </div>
         <LegalFooter links={links} />
         <PrivacyPreferences />
       </body>

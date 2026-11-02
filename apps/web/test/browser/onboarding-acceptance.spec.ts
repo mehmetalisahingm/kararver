@@ -50,12 +50,18 @@ for (const width of [1440, 360]) {
       await page.setViewportSize({ width, height: width === 360 ? 800 : 1000 });
       await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
       await page.addInitScript(() => {
-        const layout = { supported: PerformanceObserver.supportedEntryTypes.includes("layout-shift"), value: 0 };
+        const layout = { supported: PerformanceObserver.supportedEntryTypes.includes("layout-shift"), value: 0, shifts: [] as unknown[] };
         (window as Window & { welcomeLayout?: typeof layout }).welcomeLayout = layout;
         if (layout.supported) new PerformanceObserver(list => {
           for (const entry of list.getEntries()) {
-            const shift = entry as PerformanceEntry & { hadRecentInput: boolean; value: number };
-            if (!shift.hadRecentInput) layout.value += shift.value;
+            const shift = entry as PerformanceEntry & { hadRecentInput: boolean; value: number; sources?: { node?: Element; previousRect: DOMRectReadOnly; currentRect: DOMRectReadOnly }[] };
+            if (!shift.hadRecentInput) {
+              layout.value += shift.value;
+              layout.shifts.push({ value: shift.value, sources: shift.sources?.map(source => ({
+                element: source.node?.tagName, className: source.node?.className,
+                previous: source.previousRect.toJSON(), current: source.currentRect.toJSON(),
+              })) });
+            }
           }
         }).observe({ type: "layout-shift", buffered: true });
       });
