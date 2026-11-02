@@ -223,9 +223,51 @@ describe("HTTPS Mailpit staging capture", () => {
       MAILPIT_SEND_URL: "https://mailpit-staging-f6ae.up.railway.app",
     };
     assert.equal(loadConfig(base).mail.transport, "mailpit_api");
+    assert.equal(loadConfig({ ...base, MAILPIT_SEND_URL: "https://kararver-mailpit-free-preview.onrender.com" }).mail.transport, "mailpit_api");
+    assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "https://mailpit.onrender.com.evil.example" }), /MAILPIT_SEND_URL/);
+    assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "https://user:password@mailpit.onrender.com" }), /MAILPIT_SEND_URL/);
+    assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "http://mailpit.onrender.com" }), /MAILPIT_SEND_URL/);
     assert.throws(() => loadConfig({ ...base, APP_ENV: "production" }), /yalnız staging/);
     assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "http://mailpit-staging-f6ae.up.railway.app" }), /MAILPIT_SEND_URL/);
     assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "https://evil.example" }), /MAILPIT_SEND_URL/);
     assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_AUTH: "" }), /MAILPIT_SEND_AUTH/);
+  });
+
+  test("a sleeping staging inbox can return 502/503 before capturing the same verification message", async () => {
+    const requests: RequestInit[] = [];
+    let clock = 0;
+    const fetcher: typeof fetch = async (_url, init) => {
+      requests.push(init!);
+      return new Response("untrusted provider body", { status: requests.length < 3 ? 502 : 200 });
+    };
+    const mailer = createMailpitApiMailer({
+      sendUrl: "https://inbox.onrender.com", sendAuth: "sender:private", from: FROM,
+      retry: { fetcher, now: () => clock, wait: async (ms) => { clock += ms; } },
+    });
+    await mailer.send(MAIL);
+    assert.equal(requests.length, 3);
+    assert.equal(clock, 3000);
+    assert.ok(requests.every((r) => r.body === requests[0]!.body));
+    assert.ok(requests.every((r) => r.headers && new Headers(r.headers).get("authorization") === `Basic ${Buffer.from("sender:private").toString("base64")}`));
+  });
+
+  test("staging inbox retries are bounded and authentication failures are not retried", async () => {
+    for (const status of [503, 401]) {
+      let calls = 0, clock = 0;
+      const fetcher: typeof fetch = async () => {
+        calls++;
+        return new Response("private response must not be exposed", { status });
+      };
+      const mailer = createMailpitApiMailer({
+        sendUrl: "https://inbox.onrender.com", sendAuth: "sender:private", from: FROM,
+        retry: { fetcher, now: () => clock, wait: async (ms) => { clock += ms; } },
+      });
+      await assert.rejects(mailer.send(MAIL), (error: Error) => {
+        assert.ok(!error.message.includes("private") && !error.message.includes("inbox.onrender.com"));
+        return error.message.includes(String(status));
+      });
+      assert.equal(calls, status === 401 ? 1 : 8);
+      assert.ok(clock <= 90_000);
+    }
   });
 });

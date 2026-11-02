@@ -1,7 +1,7 @@
 /**
  * KV-44 / #46 — safe, read-only staging security gate.
  * DOES NOT write data, create users, vote, send email or grant beta access.
- * Run: node scripts/security-acceptance.mjs --api https://api-staging-...up.railway.app
+ * Run: node scripts/security-acceptance.mjs --api https://kararver-api-free-preview.onrender.com
  * --json writes JSON-only to stdout for CI artifacts, not secrets.
  */
 import { pathToFileURL } from "node:url";
@@ -21,8 +21,9 @@ export function validateApiUrl(input) {
       url.port || url.pathname !== "/" || url.search || url.hash) {
     throw new Error("Require bare HTTPS staging API origin without credentials, port or query");
   }
-  if (!url.hostname.endsWith(".up.railway.app") || url.hostname === ".up.railway.app") {
-    throw new Error("Only explicit Railway staging HTTPS origins are supported");
+  const railway = url.hostname.endsWith(".up.railway.app") && url.hostname !== ".up.railway.app";
+  if (!railway && url.hostname !== "kararver-api-free-preview.onrender.com") {
+    throw new Error("Only the explicit Render staging origin or a Railway staging HTTPS origin is supported");
   }
   return url.origin;
 }
@@ -100,7 +101,7 @@ function parseArgs(argv) {
     }
     throw new Error("Unknown or incomplete argument");
   }
-  if (!opts.api) throw new Error("Usage: node scripts/security-acceptance.mjs --api https://api-staging-...up.railway.app [--json]");
+  if (!opts.api) throw new Error("Usage: node scripts/security-acceptance.mjs --api https://kararver-api-free-preview.onrender.com [--json]");
   return opts;
 }
 
