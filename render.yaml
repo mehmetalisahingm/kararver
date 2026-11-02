@@ -9,7 +9,7 @@ services:
     plan: free
     region: frankfurt
     repo: https://github.com/mehmetalisahingm/kararver
-    branch: chore/free-hosting-migration-20261101
+    branch: main
     autoDeployTrigger: off
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @kararver/db run db:generate && python3 -m venv .venv && .venv/bin/pip install --no-cache-dir -r apps/worker/python/requirements.txt
     startCommand: node scripts/start-api-with-worker.mjs
