@@ -223,6 +223,10 @@ describe("HTTPS Mailpit staging capture", () => {
       MAILPIT_SEND_URL: "https://mailpit-staging-f6ae.up.railway.app",
     };
     assert.equal(loadConfig(base).mail.transport, "mailpit_api");
+    assert.equal(loadConfig({ ...base, MAILPIT_SEND_URL: "https://kararver-mailpit-free-preview.onrender.com" }).mail.transport, "mailpit_api");
+    assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "https://mailpit.onrender.com.evil.example" }), /MAILPIT_SEND_URL/);
+    assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "https://user:password@mailpit.onrender.com" }), /MAILPIT_SEND_URL/);
+    assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "http://mailpit.onrender.com" }), /MAILPIT_SEND_URL/);
     assert.throws(() => loadConfig({ ...base, APP_ENV: "production" }), /yalnız staging/);
     assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "http://mailpit-staging-f6ae.up.railway.app" }), /MAILPIT_SEND_URL/);
     assert.throws(() => loadConfig({ ...base, MAILPIT_SEND_URL: "https://evil.example" }), /MAILPIT_SEND_URL/);
