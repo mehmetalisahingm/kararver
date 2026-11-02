@@ -5,7 +5,7 @@
  */
 import { pathToFileURL } from "node:url";
 
-export const API = "https://api-staging-45cb.up.railway.app";
+export const API = "https://kararver-api-free-preview.onrender.com";
 export const WEB = "https://kararver-staging.vercel.app";
 
 const PATHS = [

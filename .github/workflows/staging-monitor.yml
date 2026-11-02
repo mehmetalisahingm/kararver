@@ -34,7 +34,7 @@ jobs:
       ALARM_LABEL: ${{ matrix.target }}-alarm
       # Production alarmı yedek sorumluya da gider (ilk sorumlu ulaşılamazsa).
       RESPONDERS: "${{ matrix.target == 'production' && '@farukkemree · yedek: @mehmetalisahingm' || '@farukkemree' }}"
-      API_URL: ${{ matrix.target == 'staging' && (vars.STAGING_API_URL || 'https://api-staging-45cb.up.railway.app') || vars.PROD_API_URL }}
+      API_URL: ${{ matrix.target == 'staging' && (vars.STAGING_API_URL || 'https://kararver-api-free-preview.onrender.com') || vars.PROD_API_URL }}
       WEB_URL: ${{ matrix.target == 'staging' && (vars.STAGING_WEB_URL || 'https://kararver-staging.vercel.app') || vars.PROD_WEB_URL }}
       # Worker heartbeat'i 10 sn'de bir yazılır; 3 dakikadan eskiyse durmuş sayılır (/health ile aynı eşik, WORKER_OK_SECONDS).
       MAX_WORKER_AGE_MS: "180000"

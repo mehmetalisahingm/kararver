@@ -19,6 +19,8 @@ services:
         value: 24.21.0
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=96 --max-semi-space-size=4
       - key: APP_ENV
         value: staging
       - key: APP_TIMEZONE
