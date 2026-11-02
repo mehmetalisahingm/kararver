@@ -2,6 +2,10 @@
 
 **Araç:** [`scripts/kv44-staging-runner.mjs`](../scripts/kv44-staging-runner.mjs) · **Test:** `pnpm security:test` (ağsız, sahte staging ile) · **Durum:** araç hazır, staging'de **hiç çalıştırılmadı**. Beta kararı [KV-44_SECURITY_ACCEPTANCE.md](KV-44_SECURITY_ACCEPTANCE.md) üzerinden ayrıca verilir.
 
+**Hedef (#301):** Web ve API origin'i `scripts/staging-origins.mjs`'ten gelir: varsayılan `https://kararver-staging.vercel.app` ve `https://kararver-api-free-preview.onrender.com`. `STAGING_WEB_URL` / `STAGING_API_URL` verilebilir, ama yalnız izin listesindeki origin kabul edilir; eski Railway dahil başka değer araç açılırken hata verir ve hiçbir istek gitmez. Aynı modülü `staging-session-acceptance.mjs` ve `staging-write-acceptance.mjs` de kullanır.
+
+**Render Free uykusu:** API ve worker aynı Free serviste çalışır, 15 dakika trafik gelmezse ikisi birlikte uyur. Araç isteklerinde 15–30 sn zaman aşımı var, soğuk açılış bunu aşabilir. Bu yüzden başlangıçtan önce `/health` 200 ve `worker=ready` görülene kadar servis uyandırılır. Pencere boyunca 15 dakikadan uzun boşluk bırakılmaz: T+31 beklemesinde worker uyursa zamanlanmış işler (ör. süresi dolan onaylar) çalışmaz, koşan biri `/health`'i ~10 dakikada bir çağırır.
+
 ## 1. İlkeler
 
 - **Başkasının kimlik bilgisi başka makineye gitmez.** Her kişi yalnız kendi rolünü, kendi makinesinde, kendi env'iyle çalıştırır. Roller arası yalnız maskeli değerler (run id, marker, kimliklerin ilk 8 karakteri) ekrandan okunup argümanla verilir.
