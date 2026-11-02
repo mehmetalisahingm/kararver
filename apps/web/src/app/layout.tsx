@@ -34,9 +34,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="tr">
       <body>
         <Suspense fallback={null}><SourceAttribution /></Suspense>
-        <ProductProvider>
-          {children}
-        </ProductProvider>
+        <div className="site-content">
+          <ProductProvider>
+            {children}
+          </ProductProvider>
+        </div>
         <PrivacyPreferences />
       </body>
     </html>
