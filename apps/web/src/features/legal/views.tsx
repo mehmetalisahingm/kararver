@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { legalLinks, type LegalBundle, type LegalLink, type legalRevision } from "./model";
+import { legalHistory, legalLinks, type LegalBundle, type LegalLink, type legalRevision } from "./model";
 
 export function PublicLegalShell({ children }: { children: ReactNode }) {
   return <div className="legal-public">
@@ -42,7 +42,7 @@ export function LegalDocumentView({ bundle, resolved }: { bundle: LegalBundle; r
     {!current && <p className="legal-archive">Bu önceki sürümdür. <a tabIndex={0} href={`/yasal/${document.slug}`}>Güncel metni oku</a></p>}
     {revision.sections.map((section, index) => <section key={index}><h2>{section.heading}</h2>{section.paragraphs.map((paragraph, n) => <p key={n}>{paragraph}</p>)}</section>)}
     <address>{bundle.operatorName}<br /><a tabIndex={0} href={`mailto:${bundle.contactEmail}`}>{bundle.contactEmail}</a></address>
-    <nav aria-label="Metin sürümleri"><h2>Sürüm geçmişi</h2><ul>{document.revisions.map(item => <li key={item.version}>
+    <nav aria-label="Metin sürümleri"><h2>Sürüm geçmişi</h2><ul>{legalHistory(document).map(item => <li key={item.version}>
       <a tabIndex={0} href={`/yasal/${document.slug}/${item.version}`} aria-current={item.version === revision.version ? "page" : undefined}>Sürüm {item.version} · {item.publishedOn}</a>
     </li>)}</ul></nav>
   </article>;

@@ -24,6 +24,23 @@ değişiklik yapılmaması için bu dal #296 dalının üzerine hazırlanmışt�
   gizlilik gibi aynı kategorideki metinlerin ayrı belgeler olması desteklenir;
   bunların birleştirilmesine yazılım karar vermez.
 
+2 Kasım review devamı: onay tarihi yayın tarihinden sonra olan paket de
+reddedilir. Sürüm geçmişi kaynak dizinin sırasından bağımsız, yayın tarihine
+göre yeniden eskiye gösterilir; aynı gün farklı sürümler mümkün, eşit tarihte
+açıkça seçilmiş güncel sürüm önce gelir. Sıralama onaylı kaynağı değiştirmez,
+hangi sürümün güncel olduğuna otomatik karar vermez.
+
+Geçersiz paket sessizce gizlenmez: doğrulama RootLayout ve yasal route'larda
+çalışır. Kaynağa gömülü geçersiz paket statik ön üretimde build'i durdurur;
+çalışma zamanında doğrulamaya ulaşılırsa root render hatası da üretebilir.
+Bu yüzden paket değişikliği production build ve route testleri geçmeden
+yayımlanmaz; yalnız yasal sayfanın hata vereceği garantisi yoktur. Mevcut kaynak
+değeri null; haricî API/ortamdan çalışma zamanında metin paketi yüklenmez.
+
+#296 `5f70c93` loading/tercih çubuğu düzeltmesi bu dala taşındı. Ortak minimum
+viewport alanı SiteShell'i de sarar; public yasal sayfalar oturumdan bağımsız
+kalmaya devam eder. #296 henüz main'e birleşmediğinden PR base'i korunur.
+
 ## Bilerek etkin olmayan paket
 
 `src/features/legal/published.ts` içindeki paket **null**. #285 üst kaydı ve
@@ -62,7 +79,9 @@ kabul kanıtı diye saklanmadı. Aşağıdakiler sözleşme önerisidir, çalı�
 ## Kabul sınırları ve kalanlar
 
 - Yerel legal renderer/paket-yok erişim: üç motor × desktop/mobile **24/24**;
-  ayrıca WebKit auth-recovery ve ortak shell **8/8**. Model paketi **18/18**.
+  ayrıca WebKit auth-recovery ve ortak shell **8/8**. 2 Kasım model paketi **21/21**;
+  tercih modeliyle toplam **31/31**. Güncel ortak layout'ta legal/tercih/auth/shell
+  WebKit birleşik koşusu **22/22**; son sıralama assertion'ları üç motorda **24/24**.
   Render fixture'ı onaylı paketle gerçek staging veya hukuki kabul değildir.
 - Staging değişkenleriyle production build ve TypeScript geçti. Son tipografi/
   paragraf aralığı düzenlemesi WebKit desktop/mobile 2/2 ile yeniden denetlendi.

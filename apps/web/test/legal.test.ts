@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { activateLegalBundle, legalLinks, legalRevision } from "../src/features/legal/model.ts";
+import { activateLegalBundle, legalHistory, legalLinks, legalRevision } from "../src/features/legal/model.ts";
 import { legalFixture } from "./fixtures/legal.ts";
 
 const now = new Date("2026-11-01T12:00:00Z");
@@ -24,6 +24,7 @@ test("approval can keep privacy notice and policy in separate documents", () => 
   assert.ok(legalRevision(bundle, "aydinlatma"));
 });
 for (const [name, change] of [
+  ["publication before approval", (bundle: ReturnType<typeof legalFixture>) => { bundle.documents = bundle.documents.map(document => ({ ...document, revisions: document.revisions.map(revision => ({ ...revision, approvedOn: "2026-10-31" })) })); }],
   ["operator missing", (bundle: ReturnType<typeof legalFixture>) => { bundle.operatorName = " "; }],
   ["contact header injection", (bundle: ReturnType<typeof legalFixture>) => { bundle.contactEmail = "legal@example.test\r\nBcc:other@example.test"; }],
   ["contact URI query", (bundle: ReturnType<typeof legalFixture>) => { bundle.contactEmail = "legal@example.test?subject=other"; }],
@@ -42,4 +43,19 @@ for (const [name, change] of [
 ] as const) test(`activation refuses ${name}`, () => {
   const bundle = legalFixture(); change(bundle);
   assert.throws(() => activateLegalBundle(bundle, now), /yayımlanamaz/);
+});
+
+test("history sorts publication dates without mutating the approved source", () => {
+  const document = legalFixture().documents[0];
+  const unsorted = { ...document, revisions: [...document.revisions].reverse() };
+  assert.deepEqual(legalHistory(unsorted).map(r => r.version), ["2.0", "1.0"]);
+  assert.deepEqual(unsorted.revisions.map(r => r.version), ["1.0", "2.0"]);
+});
+
+test("same-day revisions keep exact identities and the explicitly active version", () => {
+  const bundle = legalFixture();
+  bundle.documents = bundle.documents.map(document => ({ ...document, revisions: document.revisions.map(revision => ({ ...revision, publishedOn: "2026-10-30" })).reverse() }));
+  const document = activateLegalBundle(bundle, now)!.documents[0];
+  assert.deepEqual(legalHistory(document).map(r => r.version), ["2.0", "1.0"]);
+  assert.equal(legalRevision(bundle, document.slug, "1.0")!.current, false);
 });

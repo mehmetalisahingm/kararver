@@ -45,6 +45,7 @@ export function activateLegalBundle(bundle: LegalBundle | null, now = new Date()
       if (!versionPattern.test(revision.version) || versions.has(revision.version) ||
           !text(revision.title) || !date(revision.publishedOn) || !date(revision.approvedOn) ||
           revision.publishedOn > today || revision.approvedOn > today ||
+          revision.approvedOn > revision.publishedOn ||
           !text(revision.approvalReference) || revision.sections.length === 0 ||
           revision.sections.some(section => !text(section.heading) || section.paragraphs.length === 0 || section.paragraphs.some(paragraph => !text(paragraph)))) invalid();
       versions.add(revision.version);
@@ -68,4 +69,15 @@ export function legalRevision(bundle: LegalBundle | null, slug: string, version?
   if (!document) return null;
   const revision = document.revisions.find(revision => revision.version === (version ?? document.currentVersion));
   return revision ? { document, revision, current: revision.version === document.currentVersion } : null;
+}
+
+/** Newest publication first; same-day revisions remain separate, exact URLs. */
+export function legalHistory(document: LegalDocument): LegalRevision[] {
+  return [...document.revisions].sort((a, b) => {
+    if (a.publishedOn !== b.publishedOn) return a.publishedOn < b.publishedOn ? 1 : -1;
+    if (a.version === b.version) return 0;
+    if (a.version === document.currentVersion) return -1;
+    if (b.version === document.currentVersion) return 1;
+    return a.version < b.version ? 1 : a.version > b.version ? -1 : 0;
+  });
 }

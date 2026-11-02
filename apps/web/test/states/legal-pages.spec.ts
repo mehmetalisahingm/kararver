@@ -6,7 +6,7 @@ import { createElement as h, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import { legalFixture } from "../fixtures/legal";
-import { activateLegalBundle, legalLinks, legalRevision } from "../../src/features/legal/model";
+import { activateLegalBundle, legalHistory, legalLinks, legalRevision } from "../../src/features/legal/model";
 import { api, failure } from "./api";
 
 test.use({ actionTimeout: 15000 });
@@ -16,12 +16,14 @@ const source = readFileSync(new URL("../../src/features/legal/views.tsx", import
 const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 const compiled = { exports: {} as Record<string, React.ComponentType<any>> };
 const require = createRequire(import.meta.url);
-new Function("require", "module", "exports", output)((name: string) => name === "./model" ? { legalLinks } : require(name), compiled, compiled.exports);
+new Function("require", "module", "exports", output)((name: string) => name === "./model" ? { legalLinks, legalHistory } : require(name), compiled, compiled.exports);
 const { PublicLegalShell, LegalDocumentView, LegalFooter, RegistrationLegalNotice } = compiled.exports;
 const css = readFileSync(new URL("../../src/app/legal.css", import.meta.url), "utf8");
 
 test("approved document rendering: versions, contact, keyboard, themes and 2x CSS zoom", async ({ page, context }, info) => {
-  const bundle = activateLegalBundle(legalFixture(), new Date("2026-11-01T12:00:00Z"))!;
+  const fixture = legalFixture();
+  fixture.documents = fixture.documents.map(document => ({ ...document, revisions: [...document.revisions].reverse() }));
+  const bundle = activateLegalBundle(fixture, new Date("2026-11-01T12:00:00Z"))!;
   await context.route("https://legal.kararver.test/**", route => {
     const parts = new URL(route.request().url()).pathname.split("/");
     const resolved = legalRevision(bundle, parts[2], parts[3]);
@@ -34,6 +36,7 @@ test("approved document rendering: versions, contact, keyboard, themes and 2x CS
     await page.goto("https://legal.kararver.test/yasal/gizlilik");
     await expect(page.getByRole("heading", { name: "Gizlilik bilgisi", exact: true })).toBeVisible();
     await expect(page.getByText("Sürüm 2.0 · Yayın:", { exact: false })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Metin sürümleri", exact: true }).getByRole("link")).toHaveText(["Sürüm 2.0 · 2026-10-30", "Sürüm 1.0 · 2026-09-01"]);
     await expect(page.getByRole("link", { name: "legal@example.test", exact: true })).toHaveAttribute("href", "mailto:legal@example.test");
     await page.keyboard.press("Tab");
     await expect(page.getByRole("link", { name: "İçeriğe geç", exact: true })).toBeFocused();
