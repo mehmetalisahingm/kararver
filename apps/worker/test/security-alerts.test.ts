@@ -209,6 +209,8 @@ describe("security.alerts (postgres)", { skip: url ? false : "TEST_DATABASE_URL 
     assert.deepEqual([forbidden?.status, forbidden?.peakCount, forbidden?.severity], ["OPEN", 10, "HIGH"]);
     const [wave] = await db.securityAlert.findMany({ where: { rule: "admin.unauthenticated.wave", openedAt: t2 } });
     assert.deepEqual([wave?.scopeKey, wave?.peakCount], ["*", 100]);
+    assert.equal((await eventsOf(wave!.id)).length, 0, "401 dalgası panelde alarm açar ama SUPER_ADMIN bildirimini spam'lemez");
+    assert.equal((await eventsOf(forbidden!.id)).length, 1, "403 yetki denemesi SUPER_ADMIN bildirimini korur");
     assert.equal(await db.securityAlert.count({ where: { rule: "admin.forbidden.burst", scopeKey: "*" } }), 0, "401 aktör kuralına girmez");
   });
 
