@@ -49,7 +49,10 @@ export function createSmtpMailer(options: { smtpUrl: string; from: string; requi
  * protected test inbox. SMTP strict-STARTTLS remains enforced in production.
  * This deliberately does NOT deliver email to the recipient's real mailbox.
  */
-export function createMailpitApiMailer(options: { sendUrl: string; sendAuth: string; from: string }): Mailer {
+export function createMailpitApiMailer(options: {
+  sendUrl: string; sendAuth: string; from: string;
+  retry?: { fetcher?: typeof fetch; wait?: (ms: number) => Promise<void>; now?: () => number };
+}): Mailer {
   const endpoint = new URL("/api/v1/send", options.sendUrl).toString();
   const displayFrom = options.from.match(/^(.+?)\s*<([^<>]+)>$/);
   const from = displayFrom
@@ -57,7 +60,13 @@ export function createMailpitApiMailer(options: { sendUrl: string; sendAuth: str
     : { Email: options.from };
   return {
     async send(mail) {
-      const response = await fetch(endpoint, {
+      const fetcher = options.retry?.fetcher ?? fetch;
+      const wait = options.retry?.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+      const now = options.retry?.now ?? Date.now;
+      // Render Free may return a transient gateway error while the test inbox wakes.
+      // Retries are staging-only, bounded by both a deadline and an attempt limit.
+      const deadline = now() + 90_000;
+      const request = {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -69,10 +78,30 @@ export function createMailpitApiMailer(options: { sendUrl: string; sendAuth: str
           Subject: mail.subject,
           Text: mail.text,
         }),
-        signal: AbortSignal.timeout(10_000),
-      });
+      };
+      let lastStatus: number | undefined;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const remaining = deadline - now();
+        if (remaining <= 0) break;
+        let response: Response | undefined;
+        try {
+          response = await fetcher(endpoint, { ...request, signal: AbortSignal.timeout(Math.min(10_000, remaining)) });
+        } catch { /* A network failure may be the inbox waking; no URL or credentials are exposed. */ }
+        if (response) {
+          lastStatus = response.status;
+          try { await response.body?.cancel(); } catch { /* Discard untrusted response bodies. */ }
+          if (response.ok) return;
+          if (![408, 429, 502, 503, 504].includes(response.status)) {
+            throw new Error(`Mailpit test inbox rejected mail (HTTP ${response.status})`);
+          }
+        }
+        if (attempt === 7) break;
+        const delay = Math.min(1000 * 2 ** attempt, 16_000, deadline - now());
+        if (delay <= 0) break;
+        await wait(delay);
+      }
       // Never log the response body: an untrusted relay may echo message content.
-      if (!response.ok) throw new Error(`Mailpit test inbox rejected mail (HTTP ${response.status})`);
+      throw new Error(`Mailpit test inbox unavailable${lastStatus ? ` (HTTP ${lastStatus})` : ""}`);
     },
   };
 }

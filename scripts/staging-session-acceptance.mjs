@@ -1,8 +1,8 @@
 /** #46/#48: only the operator's own session is created/revoked. No account/content/config writes. */
 import { pathToFileURL } from "node:url";
+import { stagingOrigins } from "./staging-origins.mjs";
 
-const WEB = "https://kararver-staging.vercel.app";
-const API = "https://api-staging-45cb.up.railway.app";
+const { web: WEB, api: API } = stagingOrigins();
 
 export async function checkStagingSession({ email, password }, http = fetch) {
   if (!email || !password) throw new Error("KV_STAGING_EMAIL and KV_STAGING_PASSWORD are required");

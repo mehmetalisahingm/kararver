@@ -2,7 +2,13 @@
 
 **Araç:** [`scripts/kv44-staging-runner.mjs`](../scripts/kv44-staging-runner.mjs) · **Test:** `pnpm security:test` (ağsız, sahte staging ile) · **Durum:** araç hazır, staging'de **hiç çalıştırılmadı**. Beta kararı [KV-44_SECURITY_ACCEPTANCE.md](KV-44_SECURITY_ACCEPTANCE.md) üzerinden ayrıca verilir.
 
+**Hedef (#301):** Web ve API origin'i `scripts/staging-origins.mjs`'ten gelir: varsayılan `https://kararver-staging.vercel.app` ve `https://kararver-api-free-preview.onrender.com`. `STAGING_WEB_URL` / `STAGING_API_URL` verilebilir, ama yalnız izin listesindeki origin kabul edilir; eski Railway dahil başka değer araç açılırken hata verir ve hiçbir istek gitmez. Aynı modülü `staging-session-acceptance.mjs` ve `staging-write-acceptance.mjs` de kullanır.
+
+**Render Free uykusu:** API ve worker aynı Free serviste çalışır, 15 dakika trafik gelmezse ikisi birlikte uyur. Araç `--preflight` ve R0'da `/health`'i ağ hatası ve 502/503/504 için en çok 90 saniye, 5 saniye arayla yeniden dener (kimlik bilgisi göndermez; sıcak serviste tek istek). Süre dolarsa FAIL verir. Yine de başlangıçtan önce `/health` 200 ve `worker=ready` görülene kadar servis uyandırılır, çünkü bekleme penceredeki süreden yer. Pencere boyunca 15 dakikadan uzun boşluk bırakılmaz: T+31 beklemesinde worker uyursa zamanlanmış işler (ör. süresi dolan onaylar) çalışmaz, koşan biri `/health`'i ~10 dakikada bir çağırır.
+
 ## 1. İlkeler
+
+Staging güvenlik ve KVKK workflow'ları kontrollerden önce aynı sınırlı `--preflight` adımını kullanır. Staging monitor de önce bu adımı dener; başarısızlıkta normal sağlık/alarm denetimine devam eder. Production izlemesi değişmez. Bu bir sürekli uyanık tutma döngüsü değildir; gerçek kesintiler ve yanlış durum kodları başarısız kalır.
 
 - **Başkasının kimlik bilgisi başka makineye gitmez.** Her kişi yalnız kendi rolünü, kendi makinesinde, kendi env'iyle çalıştırır. Roller arası yalnız maskeli değerler (run id, marker, kimliklerin ilk 8 karakteri) ekrandan okunup argümanla verilir.
 - **Sentetik hesap yalnız iki tane:** yazar USER (initiator makinesinde) ve medya USER (media-operator makinesinde). Yönetici rolünde sentetik hesap açılmaz, hiçbir hesaba rol atanmaz. Hesaplar her makinede R0'dan hemen sonra, tek seferde açılır. Kayıt limiti (5/IP/saat) aşılırsa sonuç **BLOCKED-ratelimit** olur, NO-GO değil.

@@ -114,3 +114,11 @@ test("QA/E2E identities abort the report and a clean input carries exclusion evi
   assert.throws(() => aggregateBeta([user()], [], [bug({ issueUrl: "https://github.com/a/b/issues/1", owner: "ok-user" }), bug({ id: "BETA-BUG-002", owner: "SEC_probe" })], TODAY), /QA\/E2E identity/);
   assert.doesNotThrow(() => aggregateBeta([user()], [], [bug({ owner: "second-user" })], TODAY));
 });
+
+test("KV-44 staging aracının sentetik işaretleyicisi (sec_kv44_<hex>) beta raporuna giremez; büyük/küçük harf fark etmez", () => {
+  for (const owner of ["sec_kv44_0123456789", "SEC_KV44_ABCDEF0123"]) {
+    assert.throws(() => aggregateBeta([user()], [], [bug({ owner })], TODAY), /QA\/E2E identity/, owner);
+  }
+  // Aynı runner kullanıcıları @example.test e-postası da taşır; bu da ayrıca yakalanır.
+  assert.throws(() => aggregateBeta([user()], [], [bug({ owner: "ok-user", issueUrl: "https://github.com/a/b/issues/1#sec_kv44_0123456789@example.test" })], TODAY), /GitHub issue/);
+});

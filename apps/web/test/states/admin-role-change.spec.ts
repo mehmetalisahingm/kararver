@@ -52,7 +52,7 @@ test("role change shows the exact target and stops on MFA failure; pending input
   await expect(dialog.getByRole("textbox", { name: "Gerekçe", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeVisible();
-  expect(mutations).toBe(1);
+  await expect.poll(() => mutations).toBe(1);
   release();
   await expect(dialog.getByRole("alert").filter({ hasText: "Bu işlem için yetkin yok." })).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: /^Rol/ })).toBeEnabled();

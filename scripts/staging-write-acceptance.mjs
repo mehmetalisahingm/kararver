@@ -1,9 +1,9 @@
 /** Bounded #46 staging acceptance. Only creates and changes this run's synthetic accounts/content. */
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { stagingOrigins } from "./staging-origins.mjs";
 
-const WEB = "https://kararver-staging.vercel.app";
-const API = "https://api-staging-45cb.up.railway.app";
+const { web: WEB, api: API } = stagingOrigins();
 
 export async function checkStagingWrites({ email, password, expectedSha, apply }, http = fetch, pause = ms => new Promise(resolve => setTimeout(resolve, ms))) {
   if (apply !== true || !email || !password || !/^[a-f0-9]{40}$/.test(expectedSha ?? "")) throw new Error("Explicit apply, credentials and a full verified staging SHA are required");

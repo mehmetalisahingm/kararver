@@ -37,12 +37,18 @@ jobs:
           node-version-file: .nvmrc
       - name: Local gate regression (no HTTP writes)
         run: node --test scripts/security-acceptance.test.mjs scripts/public-media-readonly.test.mjs
+      - name: Wait for Free staging cold start (bounded, no credentials)
+        run: node scripts/kv44-staging-runner.mjs --preflight
+        env:
+          STAGING_API_URL: ${{ vars.STAGING_API_URL || 'https://kararver-api-free-preview.onrender.com' }}
       - name: Live staging guest/CORS/HSTS/config controls (NO beta GO)
         run: |
           node scripts/security-acceptance.mjs \
-            --api https://api-staging-45cb.up.railway.app --json \
+            --api "${STAGING_API_URL}" --json \
             > security-staging-results.json
           node -e 'const r=require("./security-staging-results.json"); console.log("PASS",r.totals.pass,"FAIL",r.totals.fail,"beta",r.betaGate)'
+        env:
+          STAGING_API_URL: ${{ vars.STAGING_API_URL || 'https://kararver-api-free-preview.onrender.com' }}
       - name: Live staging public-media API/proxy denied-object checks (NO media GO)
         run: |
           node scripts/public-media-readonly.mjs --json > media-staging-results.json
