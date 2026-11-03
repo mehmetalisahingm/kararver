@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { STAGING_API_ORIGINS, STAGING_WEB_ORIGINS } from "./staging-origins.mjs";
 import { checkStagingWrites } from "./staging-write-acceptance.mjs";
 
 const sha = "a".repeat(40);
@@ -35,7 +36,7 @@ function harness({ failGrant = false, leakResults = false } = {}) {
   const calls = [], actors = [];
   let role = "USER", votes = 0, closed = false, banned = false, pollCount = 0, communityCount = 0, locked = false;
   const http = async (url, init = {}) => {
-    assert.ok(url.startsWith("https://kararver-staging.vercel.app/api/v1/") || url === "https://api-staging-45cb.up.railway.app/health");
+    assert.ok(url.startsWith(`${STAGING_WEB_ORIGINS[0]}/api/v1/`) || url === `${STAGING_API_ORIGINS[0]}/health`);
     const path = new URL(url).pathname.replace("/api/v1", ""), method = init.method ?? "GET", body = init.body ? JSON.parse(init.body) : undefined;
     const cookie = init.headers?.cookie;
     calls.push({ path, method, body });

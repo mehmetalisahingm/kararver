@@ -25,9 +25,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { crc32, deflateSync } from "node:zlib";
+import { stagingOrigins } from "./staging-origins.mjs";
 
-export const WEB = "https://kararver-staging.vercel.app";
-export const API = "https://api-staging-45cb.up.railway.app";
+export const { web: WEB, api: API } = stagingOrigins();
 export const REPO = "mehmetalisahingm/kararver";
 export const ROLES = Object.freeze(["initiator", "owner", "media-operator", "approver"]);
 const MIN = 60_000;
