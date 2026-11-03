@@ -4,7 +4,7 @@
 // sayaç; IP/cihaz yok, ADMIN_DENIAL_RETENTION_DAYS gün saklanır). Her kural bir pencerede (son `windowMinutes` dakika) eşleşen kayıtları sayar ve sayı eşiği
 // geçerse alarm açılır. Aynı kural ve kapsam (aktör ya da genel) için en fazla bir açık alarm vardır; durum sürerse
 // alarmın son görülme zamanı ve en yüksek sayısı güncellenir, yeni bildirim gitmez. Sayı eşiğin altına inince alarm
-// kendiliğinden kapanır. 401 admin.unauthenticated.wave yalnız panelde gösterilir (bildirim gönderilmez);
+// kendiliğinden kapanır. 401 admin.unauthenticated.wave (`notify: false`) yalnız panelde gösterilir (bildirim gönderilmez);
 // diğer alarmların bildirimi yalnız açılışta, SUPER_ADMIN'lere uygulama içi gider (security.alert.opened).
 //
 // Eşikler ürün kararıdır (Mehmet); değişiklik bu dosyada yapılır ve docs/KV-49_OPERATIONS.md "Güvenlik alarmları"
@@ -51,6 +51,8 @@ export const ADMIN_DENIAL_RETENTION_DAYS = 30;
 export type SecurityAlertRule = {
   id: SecurityAlertRuleId;
   severity: SecurityAlertSeverity;
+  /** false: yalnız ops panelinde görünür, bildirim gitmez. Verilmezse açılışta SUPER_ADMIN'lere bildirilir. */
+  notify?: false;
   /** Ekranda ve bildirimde gösterilen kısa ad. */
   label: string;
   match: AuditMatch | DenialMatch;
@@ -169,6 +171,8 @@ export const securityAlertRules: readonly SecurityAlertRule[] = Object.freeze([
   rule({
     id: "admin.unauthenticated.wave",
     severity: "HIGH",
+    // İnternet tarayıcıları kolay tetikler: zorunlu bildirim alarm yorgunluğu yaratır (Mehmet kararı, 3 Kasım 2026).
+    notify: false,
     label: "Oturumsuz yönetici isteği dalgası",
     match: { source: "denials", statuses: [401] },
     scope: "GLOBAL",

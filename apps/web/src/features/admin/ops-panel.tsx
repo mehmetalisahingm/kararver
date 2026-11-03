@@ -137,7 +137,7 @@ function SecurityAlerts({ admin, alerts, onAcked }: { admin: AdminClient; alerts
           onAcked("Alarm incelendi olarak işaretlendi.");
         }}
       /> : null}
-      <p className="kv-muted">Alarmlar audit kayıtlarından ve reddedilen yönetici isteklerinden 5 dakikada bir hesaplanır; açılınca SUPER_ADMIN'lere bildirim gider, sayı eşiğin altına inince kendiliğinden kapanır. Ayrıntı için audit ekranında aktörü ve zaman aralığını süz. Runbook: KV-49 “Güvenlik alarmları”.</p>
+      <p className="kv-muted">Alarmlar audit kayıtlarından ve reddedilen yönetici isteklerinden 5 dakikada bir hesaplanır; açılınca SUPER_ADMIN'lere bildirim gider (oturumsuz istek dalgası yalnız burada görünür), sayı eşiğin altına inince kendiliğinden kapanır. Ayrıntı için audit ekranında aktörü ve zaman aralığını süz. Runbook: KV-49 “Güvenlik alarmları”.</p>
     </>}
   </article>;
 }

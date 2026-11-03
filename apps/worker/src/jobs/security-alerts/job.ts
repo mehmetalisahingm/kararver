@@ -83,9 +83,9 @@ export async function evaluateSecurityAlerts(deps: SecurityAlertDeps): Promise<S
           ON CONFLICT (rule, scope_key) WHERE status = 'OPEN' DO NOTHING`;
         if (inserted !== 1) continue;
         opened++;
-        // 11.11 yayın kararı: kimliksiz /admin/* tarama dalgası yalnız ops panelindedir.
-        // Alarm DB'ye kaydolur fakat SUPER_ADMIN'e zorunlu bildirim yollanmaz.
-        if (hit.rule === "admin.unauthenticated.wave") continue;
+        // `notify: false` kuralı (kimliksiz /admin/* tarama dalgası) yalnız ops panelindedir: alarm DB'ye kaydolur,
+        // SUPER_ADMIN'e zorunlu bildirim yollanmaz.
+        if (rule.notify === false) continue;
         await writeWorkerEvent(
           tx,
           createEvent({

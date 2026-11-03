@@ -16,6 +16,7 @@ Kırıcı değişiklik yok: yeni endpoint, yeni yetki, yeni kurallar, alarm gör
 - **Eklendi:** `admin.securityAlerts.ack` (POST `/admin/security-alerts/:id/ack`, yalnız SUPER_ADMIN, gerekçe zorunlu). Yanıt `SecurityAlertView`; 409 `already_acknowledged`, 404. Onay alarmı kapatmaz.
 - **Yetki/Audit:** yeni işlem `security.alert.ack` (super_admin); audit `security.alert.ack` / `ack`, hedef tipi `SECURITY_ALERT`, gerekçe zorunlu.
 - **Eklendi:** `SecurityAlertView` (ops `security.alerts` elemanı artık bu şema) + `acknowledgedAt`, `acknowledgedBy` (varsayılan null).
+- **Kural alanı:** `notify?: false`; verilirse alarm yalnız ops panelinde görünür, `security.alert.opened` yazılmaz. Yalnız `admin.unauthenticated.wave` kullanır (Mehmet kararı, 3 Kasım 2026).
 - **Kurallar:** `admin.forbidden.burst` (403, hesap başına) ve `admin.unauthenticated.wave` (401, genel); kaynak `admin_access_denials` (`match.source: "denials"`). `AdminDenialStatus`, `ADMIN_DENIAL_RETENTION_DAYS` (30).
 
 ## 1.42.0 — 2026-10-27 (Utku, #185 kritik güvenlik alarmları, dilim 1)
