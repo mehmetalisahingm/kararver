@@ -1,7 +1,7 @@
 // #2 / #54 release durum raporu: saf hesaplamalar ve Markdown çıktısı (ağ gerekmez).
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checklistProgress, ciSummary, days, nextStep, renderReport, reviewState } from "./release-status.mjs";
+import { checklistProgress, ciSummary, days, nextStep, parseLegalGates, renderReport, reviewState } from "./release-status.mjs";
 
 test("kabul maddesi ilerlemesi: [x]/[X] tamam, [ ] açık; madde dışı köşeli parantez sayılmaz", () => {
   const body = "## Kabul\n- [x] bir\n- [X] iki\n  - [ ] üç (alt madde)\n* [ ] dört\nmetin [x] madde değil\n";
@@ -78,4 +78,50 @@ test("rapor: başlık, staging uyarısı, tablolar ve Markdown kaçışı; GO ka
   assert.ok(!md.includes("**production:**"), "production adresi yokken satır yok");
   assert.match(md, /\| #51 \[KV-49\] Production \| farukkemree \| 2\/4 \| 1 gün önce \|/);
   assert.match(md, /\| #263 fix \\\| health \| farukkemree \| ✅ \| review bekliyor \| 0 gün \| reviewer: review \|/);
+});
+
+// #284 / #292: hukuki kapılar KV-51 §3.1 tablosundan okunur; liste kodda ikinci kez tutulmaz.
+const LEGAL_TABLE = [
+  "### 3.1 Hukuki uyum programı kapıları (#284, 30 Ekim 2026)",
+  "",
+  "| ID | Kapı | Kayıt | Sahip | Başlangıç |",
+  "| --- | --- | --- | --- | --- |",
+  "| L01 | Veri sorumlusu, hukuki metinler | #285 | Mehmet | NOT RUN |",
+  "| L06 | İçerik/telif şikâyeti ([karar listesi](LEGAL_290_TAKEDOWN_APPEALS_DECISIONS.md)) | #290 | Mert | BLOCKED: karar bekliyor (#285) |",
+  "| L09 | Spam puanı karar 13 | #183 | Mert | PASS 2026-11-01 |",
+  "| L08 | KVKK başvuru | #181 | Mert | PASS (kısmi) |",
+  "| L10 | Kayıtsız satır |",
+  "",
+].join("\n");
+
+test("hukuki kapılar: tablo satırları, kayıt issue'su ve durum; PASS dışı her kapı açık", () => {
+  const gates = parseLegalGates(LEGAL_TABLE);
+  assert.deepEqual(gates.map((g) => [g.id, g.issue, g.owner, g.open]), [
+    ["L01", 285, "Mehmet", true],
+    ["L06", 290, "Mert", true],
+    ["L09", 183, "Mert", false],
+    ["L08", 181, "Mert", true],
+  ], "eksik sütunlu satır atlanır; ek açıklamalı PASS açık sayılır");
+  for (const status of ["PASS", "DONE", "✅", "PASS 2026-11-01"]) assert.equal(parseLegalGates(`| L01 | k | #1 | s | ${status} |`)[0].open, false, status);
+  for (const status of ["PASS (kısmi)", "PASS, onay bekliyor", "passed", "pass", "PASSIVE", "NOT RUN"]) assert.equal(parseLegalGates(`| L01 | k | #1 | s | ${status} |`)[0].open, true, status);
+  assert.equal(gates[1].gate, "İçerik/telif şikâyeti", "belge bağlantısı kapı adından çıkar");
+  assert.equal(gates[1].status, "BLOCKED: karar bekliyor (#285)");
+  assert.deepEqual(parseLegalGates("# başka belge\n| ID | x |"), []);
+  assert.deepEqual(parseLegalGates(null), []);
+});
+
+test("rapor: açık hukuki kapı varken 'hazır değil'; tablo okunamazsa da 'hazır değil'", () => {
+  const base = {
+    generatedAt: new Date("2026-10-31T12:00:00.000Z"),
+    repo: "o/r",
+    main: { sha: "9f300cfd541e1234", ci: "passing" },
+    staging: { httpStatus: 200, status: "ok", sha: "9f300cfd541e", onMain: true },
+    prs: [], gates: [], adminPackage: [], bugs: [], alarms: [],
+  };
+  const gates = parseLegalGates(LEGAL_TABLE).map((g) => ({ ...g, issueState: "açık", progress: { done: 0, total: 3 } }));
+  const md = renderReport({ ...base, legalGates: gates });
+  assert.match(md, /### Hukuki kapılar \(#284\): \*\*3\/4 açık → hazır değil\*\*/);
+  assert.match(md, /\| L06 İçerik\/telif şikâyeti \| #290 \| Mert \| BLOCKED: karar bekliyor \(#285\) \| açık · 0\/3 \|/);
+  assert.match(renderReport({ ...base, legalGates: [] }), /§3\.1 tablosu bulunamadı: hukuki kapılar okunamadı, rapor \*\*hazır değil\*\* sayılır/);
+  assert.ok(!renderReport(base).includes("Hukuki kapılar"), "eski çağrılar (legalGates yok) bozulmaz");
 });

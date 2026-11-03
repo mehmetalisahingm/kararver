@@ -138,8 +138,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     }
     let url: URL | null = null;
     try { url = new URL(e.MAILPIT_SEND_URL); } catch {}
-    if (!url || url.protocol !== "https:" || url.username || url.password || url.search || url.hash || !url.hostname.endsWith(".up.railway.app")) {
-      throw new Error("API yapılandırması geçersiz → MAILPIT_SEND_URL: Railway HTTPS adresi gerekli");
+    const hostedTestInbox = url && (url.hostname.endsWith(".up.railway.app") || url.hostname.endsWith(".onrender.com"));
+    if (!url || url.protocol !== "https:" || url.username || url.password || url.search || url.hash || !hostedTestInbox) {
+      throw new Error("API yapılandırması geçersiz → MAILPIT_SEND_URL: Railway veya Render HTTPS test kutusu adresi gerekli");
     }
     if (!/^[^:\s]+:[^\s]+$/.test(e.MAILPIT_SEND_AUTH)) {
       throw new Error("API yapılandırması geçersiz → MAILPIT_SEND_AUTH: kimlik bilgisi gerekli");

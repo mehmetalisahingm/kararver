@@ -511,7 +511,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       now: () => new Date(),
       startedAt: healthStartedAt,
       env: config.appEnv,
-      sha: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null,
+      sha: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT_SHA ?? null,
       workerExpected: process.env.WORKER_HEARTBEAT_EXPECTED === "true",
     });
     return reply.code(httpStatus).header("Cache-Control", "no-store").send(body);

@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { API, MATRIX, WEB, checkEnv, combine, main, maskUrl, mediaHostMatches, mergeEvidence, newRunId, preflight, readPinnedSha, redact, syntheticPng, validateMediaHost } from "./kv44-staging-runner.mjs";
+import { API, MATRIX, WARMUP, WEB, checkEnv, combine, main, maskUrl, mediaHostMatches, mergeEvidence, newRunId, preflight, readPinnedSha, redact, syntheticPng, validateMediaHost } from "./kv44-staging-runner.mjs";
 
 const SHA = "a".repeat(40);
 const MEDIA_HOST = "kv-staging-private.example-bucket.test";
@@ -162,6 +162,65 @@ test("preflight: only two GETs, no credentials", async () => {
   assert.equal(r.pass, true);
   assert.deepEqual(s.requests.map(q => `${q.method} ${q.path}`), ["GET /health", "GET /v1/config"]);
   assert.ok(s.requests.every(q => !q.cookie && q.host === new URL(API).host));
+});
+
+test("soğuk açılış: /health 503 ve ağ hatasında tekrar dener, kimlik bilgisi yok", async () => {
+  let calls = 0;
+  const s = fakeStaging({ "GET /health": () => {
+    calls++;
+    if (calls === 1) throw new TypeError("fetch failed");
+    if (calls === 2) return new Response("{}", { status: 503 });
+    return null;
+  } });
+  const waits = [];
+  const r = await preflight(s.fetch, { pause: async ms => { waits.push(ms); } });
+  assert.equal(r.pass, true);
+  assert.deepEqual(waits, [WARMUP.intervalMs, WARMUP.intervalMs]);
+  assert.deepEqual(s.requests.map(q => q.path), ["/health", "/health", "/health", "/v1/config"]);
+  assert.ok(s.requests.every(q => !q.cookie));
+});
+
+test("soğuk açılış: 503'te bütçe bitince FAIL (asılı kalmaz); 404 tekrar denenmez; ağ hatası bütçe sonunda FAIL", async () => {
+  const down = fakeStaging({ "GET /health": () => new Response("{}", { status: 503 }) });
+  let clock = 0;
+  const report = await preflight(down.fetch, { pause: async ms => { clock += ms; }, now: () => clock });
+  assert.equal(report.pass, false);
+  assert.equal(report.checks.find(c => c.id === "health").status, 503);
+  assert.ok(clock < WARMUP.budgetMs, "bütçeyi aşmaz");
+  assert.equal(down.requests.filter(q => q.path === "/health").length, WARMUP.budgetMs / WARMUP.intervalMs);
+
+  const missing = fakeStaging({ "GET /health": () => new Response("{}", { status: 404 }) });
+  const notRetried = await preflight(missing.fetch, { pause: async () => assert.fail("404 tekrar denenmez") });
+  assert.equal(notRetried.pass, false);
+
+  const dead = fakeStaging({ "GET /health": () => { throw new TypeError("fetch failed"); } });
+  const transport = await preflight(dead.fetch, { pause: async () => {} });
+  assert.equal(transport.checks.find(c => c.id === "health").note, "transport");
+});
+
+test("son soğuk açılış isteğinin zaman aşımı kalan bütçeyi aşmaz", async () => {
+  let clock = 0, calls = 0, aborted = false;
+  const http = async (url, { signal }) => {
+    if (url.endsWith("/v1/config")) return Response.json({ data: {} });
+    if (++calls === 1) { clock = WARMUP.budgetMs - WARMUP.intervalMs - 10; return new Response(null, { status: 503 }); }
+    return new Promise(resolve => {
+      const finish = () => { clock = WARMUP.budgetMs; resolve(new Response(null, { status: 503 })); };
+      const guard = setTimeout(finish, 200);
+      signal.addEventListener("abort", () => { aborted = true; clearTimeout(guard); finish(); }, { once: true });
+    });
+  };
+  const report = await preflight(http, { pause: async ms => { clock += ms; }, now: () => clock });
+  assert.equal(aborted, true, "son isteğe 15 saniye yerine kalan 10 ms verilmeli");
+  assert.equal(report.pass, false, "kalıcı 503 hâlâ başarısız");
+  assert.equal(calls, 2);
+});
+
+test("R0 soğuk açılışı bekler: ilk /health 503 olsa da açılış başarılı", async () => {
+  let first = true;
+  const h = harness({ "GET /health": () => { if (first) { first = false; return new Response("{}", { status: 503 }); } return null; } });
+  const runId = newRunId(new Date(START));
+  assert.equal(await h.run("initiator", "initiator", ["--as", "initiator", "--phase", "open", "--run", runId, "--window-start", new Date(START).toISOString()]), 0);
+  assert.equal(h.s.requests.filter(q => q.path === "/health").length >= 2, true);
 });
 
 test("full run in order R0 → T0 → R1/R3 → R2 → T+31 → R4 → R5: PASS, cleanup TAMAM, no secret in evidence", async () => {

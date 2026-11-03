@@ -187,7 +187,8 @@ describe("topluluk sahibi (postgres)", { skip: backend ? false : "TEST_DATABASE_
     assert.equal(await ownerOf(id), second.id);
     assert.equal((await membership(id, second.id))?.role, "MODERATOR");
     assert.ok(await membership(id, first.id), "eski sahip üye kalır");
-    const replaced = (await audits(id, "community.owner.assign", "assign")).at(-1)!;
+    // Donmuş saatte iki kayıt aynı created_at'i alabilir; sıraya değil içeriğe göre bulunur.
+    const replaced = (await audits(id, "community.owner.assign", "assign")).find((a) => (a.after as { ownerId?: string } | null)?.ownerId === second.id)!;
     assert.deepEqual(replaced.before, { ownerId: first.id });
     assert.deepEqual(replaced.after, { ownerId: second.id, memberAdded: false });
   });
