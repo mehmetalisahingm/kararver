@@ -170,6 +170,24 @@ export const AuditExportFile = z.strictObject({
   generatedAt: Timestamp,
   content: z.string(),
 });
+/**
+ * #185 kritik güvenlik alarmı (ops paneli ve admin.securityAlerts.ack). Kural ve eşikler contracts `securityAlertRules`.
+ * Onay (ack) "incelendi" işaretidir: alarmı kapatmaz; durum eşiğin altına inince kapanma yine kendiliğindendir.
+ */
+export const SecurityAlertView = z.strictObject({
+  id: Id,
+  rule: SecurityAlertRuleId,
+  severity: SecurityAlertSeverity,
+  status: SecurityAlertStatus,
+  /** Aktör kapsamlı kuralda işlemleri yapan (ya da reddedilen) hesap; genel kuralda null. */
+  actor: PublicUser.nullable(),
+  peakCount: Count,
+  openedAt: Timestamp,
+  lastSeenAt: Timestamp,
+  resolvedAt: Timestamp.nullable(),
+  acknowledgedAt: Timestamp.nullable().default(null),
+  acknowledgedBy: PublicUser.nullable().default(null),
+});
 /** Audit kaydını kim üretti: API isteği (aktör dolu), CLI veya worker (aktör null). KV-39 */
 export const AuditSource = z.enum(["API", "CLI", "WORKER"]);
 /**
@@ -318,23 +336,7 @@ export const OpsStatus = z.strictObject({
      * #185 kritik güvenlik alarmları (DB): açık olanlar ve son 24 saatte kapananlar, en yeni önce (en çok 50).
      * Kural ve eşikler contracts `securityAlertRules`. Okunamazsa null.
      */
-    alerts: z
-      .array(
-        z.strictObject({
-          id: Id,
-          rule: SecurityAlertRuleId,
-          severity: SecurityAlertSeverity,
-          status: SecurityAlertStatus,
-          /** Aktör kapsamlı kuralda işlemleri yapan yönetici; genel kuralda null. */
-          actor: PublicUser.nullable(),
-          peakCount: Count,
-          openedAt: Timestamp,
-          lastSeenAt: Timestamp,
-          resolvedAt: Timestamp.nullable(),
-        }),
-      )
-      .nullable()
-      .default(null),
+    alerts: z.array(SecurityAlertView).nullable().default(null),
   }),
   backup: z.strictObject({
     status: OpsHealth,
@@ -920,6 +922,28 @@ export const adminEndpoints = [
     notes: [
       "409 CONFLICT details[0].code: already_lifted (zaten kaldırılmış), expired (süresi dolmuş). İkisi de audit yazmaz.",
       "Silinmiş hesabın yaptırımı kaldırılabilir. users.status kalan aktif yaptırımlardan yeniden hesaplanır.",
+    ],
+  }),
+  defineEndpoint({
+    id: "admin.securityAlerts.ack",
+    domain: "admin",
+    method: "POST",
+    path: "/admin/security-alerts/:id/ack",
+    summary: "Güvenlik alarmını incelendi olarak işaretle",
+    auth: "super_admin",
+    provider: { owner: "Utku", module: "security-alerts" },
+    consumers: utkuUi,
+    unblocks: ["#185"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: Reason }) },
+    responses: { 200: dataOf(SecurityAlertView) },
+    errors: ["NOT_FOUND", "CONFLICT"],
+    idempotency: "none",
+    cache: "private",
+    notes: [
+      "Yalnız SUPER_ADMIN; gerekçe zorunlu. Onay alarmı kapatmaz, yalnız kimin ne zaman incelediğini kaydeder; kapanış durum eşiğin altına inince kendiliğindendir. Açık ya da kapanmış alarm onaylanabilir.",
+      "Audit: security.alert.ack / ack, hedef SECURITY_ALERT, gerekçeyle; after özetinde kural ve durum.",
+      "409 CONFLICT details[0].code: already_acknowledged (ikinci onay audit yazmaz). Bilinmeyen kimlik 404.",
     ],
   }),
   defineEndpoint({

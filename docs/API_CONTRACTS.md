@@ -246,6 +246,7 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `GET /admin/users/:id/activity`<br>Kullanıcının anket ve yorumları (gizli/kaldırılmış dahil) · `admin.users.activity` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `POST /admin/users/:id/sanctions`<br>Uyarı / kısıt / suspend / ban · `admin.sanctions.create` | A | 201 | key (ops.) | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
 | `POST /admin/users/:id/sanctions/:sanctionId/lift`<br>Yaptırımı kaldır · `admin.sanctions.lift` | A | 200 | — | Utku `admin-users` | Utku (admin UI) | #35 | hazır |
+| `POST /admin/security-alerts/:id/ack`<br>Güvenlik alarmını incelendi olarak işaretle · `admin.securityAlerts.ack` | SA | 200 | — | Utku `security-alerts` | Utku (admin UI) | #185 | hazır |
 | `GET /admin/role-approvals/:id`<br>İkinci onay öncesi hedef, rol ve gerekçeyi göster · `admin.roleApprovals.get` | SA | 200 | — | Utku `rbac` | Utku (admin UI) | #182 | hazır |
 | `POST /admin/role-approvals`<br>Kritik rol değişikliği için MFA doğrulanmış onay talebi · `admin.roleApprovals.request` | SA | 201 | — | Utku `rbac` | Utku (admin UI) | #182 | hazır |
 | `POST /admin/role-approvals/:id/approve`<br>Farklı SUPER_ADMIN tarafından MFA doğrulanmış ikinci onay · `admin.roleApprovals.approve` | SA | 200 | — | Utku `rbac` | Utku (admin UI) | #182 | hazır |
@@ -321,7 +322,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #182 | `GET /me/mfa`, `POST /me/mfa/recover`, `POST /me/mfa/step-up`, `GET /admin/role-approvals/:id`, `POST /admin/role-approvals`, `POST /admin/role-approvals/:id/approve` |
 | #183 | `GET /admin/moderation/polls/bulk/preview`, `POST /admin/moderation/polls/bulk`, `GET /admin/moderation/comments/bulk/preview`, `POST /admin/moderation/comments/bulk`, `GET /admin/moderation/bulk-approvals`, `GET /admin/moderation/bulk-approvals/:id`, `POST /admin/moderation/bulk-approvals/:id/approve`, `POST /admin/moderation/bulk-approvals/:id/reject`, `POST /admin/moderation/bulk-approvals/:id/cancel`, `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `GET /admin/moderation/batches`, `GET /admin/spam-scores`, `GET /admin/users/:id/timeline`, `GET /admin/users/:id/timeline/summary` |
 | #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
-| #185 | `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `POST /admin/audit/export` |
+| #185 | `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `POST /admin/security-alerts/:id/ack`, `POST /admin/audit/export` |
 | #186 | `GET /admin/ops` |
 <!-- END:unblocks -->
 

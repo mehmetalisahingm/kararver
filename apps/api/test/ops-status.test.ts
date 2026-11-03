@@ -108,8 +108,8 @@ describe("operasyon telemetrisi (birim)", () => {
         database: ok({ latencyMs: 1, version: "17" }), workerLastSeen: ok(null), queues: ok([]), lastBackup: ok(null),
         securitySignals: ok({ lockedLogins: { emails: 0, ips: 0 }, adminActions24h: [] }),
         securityAlerts: ok([
-          { id: "0192f0e0-0000-7000-8000-0000000000a1", rule: "role.change.burst", severity: "CRITICAL", status: "OPEN", actor, peakCount: 4, openedAt: opened, lastSeenAt: new Date(opened.getTime() + 300_000), resolvedAt: null },
-          { id: "0192f0e0-0000-7000-8000-0000000000a2", rule: "mfa.lock.wave", severity: "HIGH", status: "RESOLVED", actor: null, peakCount: 5, openedAt: opened, lastSeenAt: opened, resolvedAt: new Date(opened.getTime() + 900_000) },
+          { id: "0192f0e0-0000-7000-8000-0000000000a1", rule: "role.change.burst", severity: "CRITICAL", status: "OPEN", actor, peakCount: 4, openedAt: opened, lastSeenAt: new Date(opened.getTime() + 300_000), resolvedAt: null, acknowledgedAt: new Date(opened.getTime() + 600_000), acknowledgedBy: actor },
+          { id: "0192f0e0-0000-7000-8000-0000000000a2", rule: "mfa.lock.wave", severity: "HIGH", status: "RESOLVED", actor: null, peakCount: 5, openedAt: opened, lastSeenAt: opened, resolvedAt: new Date(opened.getTime() + 900_000), acknowledgedAt: null, acknowledgedBy: null },
         ]),
       },
       loginLimits: async () => ({ email: 5, ip: 20 }),
@@ -120,8 +120,8 @@ describe("operasyon telemetrisi (birim)", () => {
     });
     const parsed = OpsStatus.parse(status);
     assert.deepEqual(parsed.security.alerts, [
-      { id: "0192f0e0-0000-7000-8000-0000000000a1", rule: "role.change.burst", severity: "CRITICAL", status: "OPEN", actor: { ...actor, avatarUrl: null }, peakCount: 4, openedAt: "2026-10-26T12:00:00.000Z", lastSeenAt: "2026-10-26T12:05:00.000Z", resolvedAt: null },
-      { id: "0192f0e0-0000-7000-8000-0000000000a2", rule: "mfa.lock.wave", severity: "HIGH", status: "RESOLVED", actor: null, peakCount: 5, openedAt: "2026-10-26T12:00:00.000Z", lastSeenAt: "2026-10-26T12:00:00.000Z", resolvedAt: "2026-10-26T12:15:00.000Z" },
+      { id: "0192f0e0-0000-7000-8000-0000000000a1", rule: "role.change.burst", severity: "CRITICAL", status: "OPEN", actor: { ...actor, avatarUrl: null }, peakCount: 4, openedAt: "2026-10-26T12:00:00.000Z", lastSeenAt: "2026-10-26T12:05:00.000Z", resolvedAt: null, acknowledgedAt: "2026-10-26T12:10:00.000Z", acknowledgedBy: { ...actor, avatarUrl: null } },
+      { id: "0192f0e0-0000-7000-8000-0000000000a2", rule: "mfa.lock.wave", severity: "HIGH", status: "RESOLVED", actor: null, peakCount: 5, openedAt: "2026-10-26T12:00:00.000Z", lastSeenAt: "2026-10-26T12:00:00.000Z", resolvedAt: "2026-10-26T12:15:00.000Z", acknowledgedAt: null, acknowledgedBy: null },
     ]);
   });
 });
