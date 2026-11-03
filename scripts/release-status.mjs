@@ -11,6 +11,7 @@
 import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { STAGING_API_ORIGINS } from "./staging-origins.mjs";
 
 /** Yayın kapısı issue'ları (KV-45 §1, #54 bağımlılıkları) ve süper admin paketi. */
 export const RELEASE_GATES = [46, 47, 48, 51, 52, 53, 54];
@@ -227,7 +228,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const { values } = parseArgs({
     options: {
       repo: { type: "string", default: "mehmetalisahingm/kararver" },
-      api: { type: "string", default: process.env.STAGING_API_URL ?? "https://api-staging-45cb.up.railway.app" },
+      api: { type: "string", default: process.env.STAGING_API_URL || STAGING_API_ORIGINS[0] },
       "prod-api": { type: "string", default: process.env.PROD_API_URL },
       out: { type: "string" },
     },
