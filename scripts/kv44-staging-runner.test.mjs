@@ -198,6 +198,23 @@ test("soğuk açılış: 503'te bütçe bitince FAIL (asılı kalmaz); 404 tekra
   assert.equal(transport.checks.find(c => c.id === "health").note, "transport");
 });
 
+test("son soğuk açılış isteğinin zaman aşımı kalan bütçeyi aşmaz", async () => {
+  let clock = 0, calls = 0, aborted = false;
+  const http = async (url, { signal }) => {
+    if (url.endsWith("/v1/config")) return Response.json({ data: {} });
+    if (++calls === 1) { clock = WARMUP.budgetMs - WARMUP.intervalMs - 10; return new Response(null, { status: 503 }); }
+    return new Promise(resolve => {
+      const finish = () => { clock = WARMUP.budgetMs; resolve(new Response(null, { status: 503 })); };
+      const guard = setTimeout(finish, 200);
+      signal.addEventListener("abort", () => { aborted = true; clearTimeout(guard); finish(); }, { once: true });
+    });
+  };
+  const report = await preflight(http, { pause: async ms => { clock += ms; }, now: () => clock });
+  assert.equal(aborted, true, "son isteğe 15 saniye yerine kalan 10 ms verilmeli");
+  assert.equal(report.pass, false, "kalıcı 503 hâlâ başarısız");
+  assert.equal(calls, 2);
+});
+
 test("R0 soğuk açılışı bekler: ilk /health 503 olsa da açılış başarılı", async () => {
   let first = true;
   const h = harness({ "GET /health": () => { if (first) { first = false; return new Response("{}", { status: 503 }); } return null; } });

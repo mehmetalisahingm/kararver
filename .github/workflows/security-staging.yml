@@ -37,6 +37,10 @@ jobs:
           node-version-file: .nvmrc
       - name: Local gate regression (no HTTP writes)
         run: node --test scripts/security-acceptance.test.mjs scripts/public-media-readonly.test.mjs
+      - name: Wait for Free staging cold start (bounded, no credentials)
+        run: node scripts/kv44-staging-runner.mjs --preflight
+        env:
+          STAGING_API_URL: ${{ vars.STAGING_API_URL || 'https://kararver-api-free-preview.onrender.com' }}
       - name: Live staging guest/CORS/HSTS/config controls (NO beta GO)
         run: |
           node scripts/security-acceptance.mjs \

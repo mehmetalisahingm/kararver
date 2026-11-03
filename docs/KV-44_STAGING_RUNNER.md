@@ -8,6 +8,8 @@
 
 ## 1. İlkeler
 
+Staging güvenlik ve KVKK workflow'ları kontrollerden önce aynı sınırlı `--preflight` adımını kullanır. Staging monitor de önce bu adımı dener; başarısızlıkta normal sağlık/alarm denetimine devam eder. Production izlemesi değişmez. Bu bir sürekli uyanık tutma döngüsü değildir; gerçek kesintiler ve yanlış durum kodları başarısız kalır.
+
 - **Başkasının kimlik bilgisi başka makineye gitmez.** Her kişi yalnız kendi rolünü, kendi makinesinde, kendi env'iyle çalıştırır. Roller arası yalnız maskeli değerler (run id, marker, kimliklerin ilk 8 karakteri) ekrandan okunup argümanla verilir.
 - **Sentetik hesap yalnız iki tane:** yazar USER (initiator makinesinde) ve medya USER (media-operator makinesinde). Yönetici rolünde sentetik hesap açılmaz, hiçbir hesaba rol atanmaz. Hesaplar her makinede R0'dan hemen sonra, tek seferde açılır. Kayıt limiti (5/IP/saat) aşılırsa sonuç **BLOCKED-ratelimit** olur, NO-GO değil.
 - **Pencere 60 dk.** T0 en geç dk 19'da açılır, çünkü T+31 adımı dk 50'den önce bitmeli. Temizlik dışı yazma adımları dk 50'den sonra **BLOCKED-window** olur. Son 10 dakika yalnız R4'e kalır.

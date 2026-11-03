@@ -45,7 +45,7 @@ const MD = "packages/contracts/src/domains/media.ts";
  * `na` = may close as UYGULANAMAZ-staging; `k` = KV44 plan mapping (empty until kv44-plan.md is found).
  */
 export const MATRIX = Object.freeze([
-  { id: "R0.pinned", r: "R0", role: "all", sev: "P0", expect: "STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification", ref: ".github/workflows/staging-monitor.yml:135", needle: "STAGING_PINNED_SHA: ${{ vars.STAGING_PINNED_SHA }}" },
+  { id: "R0.pinned", r: "R0", role: "all", sev: "P0", expect: "STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification", ref: ".github/workflows/staging-monitor.yml:150", needle: "STAGING_PINNED_SHA: ${{ vars.STAGING_PINNED_SHA }}" },
   { id: "R0.release", r: "R0", role: "all", sev: "P0", expect: "200 status=ok env=staging, sha = KV44_EXPECTED_SHA", ref: "apps/api/src/app.ts:507", needle: 'app.get("/health"' },
   { id: "R0.login", r: "R0", role: "all", sev: "P0", expect: "200 + kv_session", ref: "packages/contracts/src/domains/auth.ts:87", needle: 'id: "auth.login"' },
   { id: "R0.role", r: "R0", role: "all", sev: "P0", expect: "/me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN)", ref: "packages/contracts/src/domains/auth.ts:240", needle: 'id: "me.get"' },
@@ -249,7 +249,8 @@ export async function healthAfterWarmup(http, { pause = sleep, now = Date.now } 
   for (let attempt = 1; ; attempt++) {
     let res = null, error = null;
     try {
-      res = await http(API + "/health", { method: "GET", redirect: "manual", credentials: "omit", headers: { accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
+      const remainingMs = Math.max(1, Math.min(15_000, deadline - Number(now())));
+      res = await http(API + "/health", { method: "GET", redirect: "manual", credentials: "omit", headers: { accept: "application/json" }, signal: AbortSignal.timeout(remainingMs) });
     } catch (err) { error = err; }
     if (res && !WARMUP.wakingStatuses.includes(res.status)) return res;
     if (attempt >= maxAttempts || Number(now()) + WARMUP.intervalMs >= deadline) { if (res) return res; throw error; }

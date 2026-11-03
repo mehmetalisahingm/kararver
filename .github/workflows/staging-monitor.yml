@@ -50,6 +50,21 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - uses: actions/checkout@v4
+        if: matrix.target == 'staging'
+      - uses: actions/setup-node@v4
+        if: matrix.target == 'staging'
+        with:
+          node-version-file: .nvmrc
+      - name: Free staging soğuk açılışını bekle
+        if: matrix.target == 'staging' && steps.target.outputs.skip != 'true'
+        # Gerçek kesintide aşağıdaki sağlık adımı alarmı üretmeye devam eder.
+        continue-on-error: true
+        run: node scripts/kv44-staging-runner.mjs --preflight
+        env:
+          STAGING_API_URL: ${{ env.API_URL }}
+          STAGING_WEB_URL: ${{ env.WEB_URL }}
+
       - name: Sağlık kontrolü
         id: health
         if: steps.target.outputs.skip != 'true'
