@@ -18,8 +18,13 @@ const Env = z.object({
   // #180/#291: MFA sırları için oturum pepper'ından AYRI anahtar. Verilince yeni kayıtlar v2 yazılır, eski v1 kayıtlar
   // doğrulamada ve `mfa:rekey` ile taşınır; sonra AUTH_TOKEN_PEPPER MFA'yı kilitlemeden değiştirilebilir.
   MFA_ENCRYPTION_KEY: z.string().default("").refine((v) => v === "" || v.length >= 32, "en az 32 karakter olmalı"),
-  // Pepper değiştirildikten sonra ESKİ değer: yalnız v1 kayıtları ve eski kurtarma kodu özetlerini doğrular.
-  MFA_LEGACY_PEPPER: z.string().default("").refine((v) => v === "" || v.length >= 32, "en az 32 karakter olmalı"),
+  // Pepper değiştirildikten sonra BÜTÜN ESKİ değerler (virgülle, eskiden yeniye): yalnız v1 kayıtları ve eski kurtarma kodu
+  // özetlerini doğrular. Liste yalnız büyür; bir değer silinirse o pepper'la özetlenmiş kurtarma kodları geçersiz olur.
+  MFA_LEGACY_PEPPERS: z
+    .string()
+    .default("")
+    .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean))
+    .refine((list) => list.every((p) => p.length >= 32), "her değer en az 32 karakter olmalı"),
   EMAIL_VERIFICATION_REQUIRED: bool.default(true),
   /** Enables critical role enforcement only after 2 verified SUPER_ADMIN enrollments. */
   ROLE_APPROVALS_REQUIRED: bool.default(false),
@@ -74,7 +79,7 @@ export type Config = {
   session: { cookieName: string; cookieDomain: string | null; secure: boolean; ttlMs: number };
   authTokenPepper: string;
   /** MFA şifreleme anahtarları (modules/security/encryption.ts MfaKeys). */
-  mfa: { current: string | null; legacy: string };
+  mfa: { current: string | null; legacy: string[] };
   emailVerificationRequired?: boolean;
   roleApprovalsRequired: boolean;
   mail: MailConfig;
@@ -100,9 +105,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (e.MFA_ENCRYPTION_KEY && e.MFA_ENCRYPTION_KEY === e.AUTH_TOKEN_PEPPER) {
     throw new Error("API yapılandırması geçersiz → MFA_ENCRYPTION_KEY, AUTH_TOKEN_PEPPER ile aynı olamaz (ayrı anahtar olmalı)");
   }
-  if (e.MFA_LEGACY_PEPPER && !e.MFA_ENCRYPTION_KEY) {
+  if (e.MFA_LEGACY_PEPPERS.length > 0 && !e.MFA_ENCRYPTION_KEY) {
     // Pepper değişmişse eski kayıtlar yalnız okunur; yeni kayıt ayrı anahtarla yazılmalı.
-    throw new Error("API yapılandırması geçersiz → MFA_LEGACY_PEPPER yalnız MFA_ENCRYPTION_KEY ile birlikte kullanılır");
+    throw new Error("API yapılandırması geçersiz → MFA_LEGACY_PEPPERS yalnız MFA_ENCRYPTION_KEY ile birlikte kullanılır");
+  }
+  if (e.MFA_ENCRYPTION_KEY && e.MFA_LEGACY_PEPPERS.includes(e.MFA_ENCRYPTION_KEY)) {
+    throw new Error("API yapılandırması geçersiz → MFA_ENCRYPTION_KEY eski pepper listesinde olamaz");
   }
   if (deployed && !e.SESSION_COOKIE_SECURE) {
     throw new Error("API yapılandırması geçersiz → SESSION_COOKIE_SECURE staging/production'da true olmalı");
@@ -155,6 +163,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // Yarım S3 ayarı her ortamda hatadır; staging/production'da hiç olmaması da hatadır.
     throw new Error(`API yapılandırması geçersiz → eksik: ${missingStorage.join(", ")}`);
   }
+  if (e.APP_ENV === "production" && !e.MFA_ENCRYPTION_KEY) {
+    // Yeni ortam ilk günden ayrı anahtarla açılır; pepper değişimi MFA'yı kilitlemez (docs/SA180_MFA_KEY_ROTATION.md).
+    throw new Error("API yapılandırması geçersiz → production'da MFA_ENCRYPTION_KEY zorunlu");
+  }
   return {
     appEnv: e.APP_ENV,
     logLevel: e.LOG_LEVEL,
@@ -168,7 +180,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ttlMs: e.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
     },
     authTokenPepper: e.AUTH_TOKEN_PEPPER,
-    mfa: { current: e.MFA_ENCRYPTION_KEY || null, legacy: e.MFA_LEGACY_PEPPER || e.AUTH_TOKEN_PEPPER },
+    mfa: { current: e.MFA_ENCRYPTION_KEY || null, legacy: [...new Set([e.AUTH_TOKEN_PEPPER, ...e.MFA_LEGACY_PEPPERS])] },
     emailVerificationRequired: e.EMAIL_VERIFICATION_REQUIRED,
     roleApprovalsRequired: e.ROLE_APPROVALS_REQUIRED,
     mail:

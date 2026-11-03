@@ -28,6 +28,10 @@
 - Veritabanı adresi Railway referansı olarak verilir (`${{Postgres.DATABASE_URL}}`); parola değişirse kendiliğinden güncellenir.
 - Zorunlu güvenlik değişkenleri (`config.ts` staging/production'da zorlar): `SESSION_COOKIE_SECURE=true`, `MAIL_TRANSPORT≠console`, `AUTH_TOKEN_PEPPER` (≥ 32 karakter), bütün `S3_*`, `RATE_LIMIT_ENABLED` kapatılamaz.
 - Geçici erişimler iş bitince kapatılır: KV-48 tatbikatında açılan Postgres TCP proxy kapatıldı.
+- **MFA anahtarları (#300, [runbook](SA180_MFA_KEY_ROTATION.md)):**
+  - `MFA_ENCRYPTION_KEY`, production'da zorunlu. Kaybedilirse bütün v2 MFA kayıtları çözülemez. İki kişide, şifre yöneticisinde ve çevrimdışı ayrı kopya; değiştirilmez.
+  - `MFA_LEGACY_PEPPERS`: bütün eski `AUTH_TOKEN_PEPPER` değerleri, virgülle. Liste yalnız büyür.
+  - **Restore şartı:** Restore edilen DB aynı iki değerle açılır.
 
 ## Deploy ve rollback
 

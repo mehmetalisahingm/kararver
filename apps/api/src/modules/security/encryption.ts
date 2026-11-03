@@ -5,13 +5,15 @@ import { createTotpSecret, totpEnrollmentUri } from "./totp.ts";
  * MFA anahtarları (#180, #291). TOTP sırrı AES-256-GCM ile şifrelenir; ilk bayt anahtar sürümüdür:
  * - v1: anahtar oturum pepper'ından türetilir (eski biçim). Pepper değişirse v1 kayıtları çözülemez.
  * - v2: anahtar ayrı `MFA_ENCRYPTION_KEY`'den türetilir. Oturum pepper'ı MFA'yı kilitlemeden değiştirilebilir.
- * `legacy`, v1 kayıtlarını ve eski kurtarma kodu özetlerini doğrulayan sırdır: pepper değişene kadar AUTH_TOKEN_PEPPER,
- * değiştikten sonra eski değeri tutan MFA_LEGACY_PEPPER. `current` yoksa yeni kayıtlar v1 yazılır (geriye uyum).
+ * `legacy`, v1 kayıtlarını ve eski kurtarma kodu özetlerini doğrulayan sırların LİSTESİDİR: ilk eleman güncel
+ * AUTH_TOKEN_PEPPER, sonrakiler MFA_LEGACY_PEPPERS'teki bütün eski pepper'lar. Liste yalnız büyür (A→B→C sonrası A ve B
+ * ikisi de durur); böylece hiçbir rotasyon eski kurtarma kodunu sessizce geçersiz kılmaz. `current` yoksa yeni kayıtlar
+ * v1 ve `legacy[0]` ile yazılır (geriye uyum).
  */
-export type MfaKeys = { current: string | null; legacy: string };
+export type MfaKeys = { current: string | null; legacy: readonly string[] };
 
 /** Yalnız pepper verilen eski çağrılar için (testler, geçiş öncesi yapılandırma). */
-export const legacyOnly = (pepper: string): MfaKeys => ({ current: null, legacy: pepper });
+export const legacyOnly = (pepper: string): MfaKeys => ({ current: null, legacy: [pepper] });
 
 const LABEL = { 1: "KararVer:encrypted-totp-key:v1\0", 2: "KararVer:encrypted-totp-key:v2\0" } as const;
 
@@ -32,7 +34,9 @@ export const needsRekey = (ciphertext: Uint8Array, keys: MfaKeys): boolean => ke
 export function protectTotpSecret(secret: string, userId: string, keys: MfaKeys): Buffer {
   const version = keys.current ? 2 : 1;
   const nonce = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", derive(version, keys.current ?? keys.legacy), nonce);
+  const secretKey = keys.current ?? keys.legacy[0];
+  if (!secretKey) throw new Error("Invalid MFA encryption configuration");
+  const cipher = createCipheriv("aes-256-gcm", derive(version, secretKey), nonce);
   cipher.setAAD(Buffer.from(userId));
   const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
   return Buffer.concat([Buffer.from([version]), nonce, cipher.getAuthTag(), encrypted]);
@@ -43,10 +47,20 @@ export function recoverTotpSecret(ciphertext: Uint8Array, userId: string, keys: 
   const version = cipherVersion(b);
   if (version === null) throw new Error("Invalid encrypted MFA key");
   if (version === 2 && !keys.current) throw new Error("MFA_ENCRYPTION_KEY gerekli: kayıt ayrı anahtarla şifrelenmiş");
-  const decipher = createDecipheriv("aes-256-gcm", derive(version, version === 2 ? keys.current! : keys.legacy), b.subarray(1, 13));
-  decipher.setAAD(Buffer.from(userId));
-  decipher.setAuthTag(b.subarray(13, 29));
-  return Buffer.concat([decipher.update(b.subarray(29)), decipher.final()]).toString("utf8");
+  const open = (secretKey: string) => {
+    const decipher = createDecipheriv("aes-256-gcm", derive(version, secretKey), b.subarray(1, 13));
+    decipher.setAAD(Buffer.from(userId));
+    decipher.setAuthTag(b.subarray(13, 29));
+    return Buffer.concat([decipher.update(b.subarray(29)), decipher.final()]).toString("utf8");
+  };
+  if (version === 2) return open(keys.current!);
+  // v1: hangi eski pepper ile yazıldığı bilinmez; GCM etiketi yanlış anahtarı reddeder, sıradakine geçilir.
+  for (const secretKey of keys.legacy) {
+    try {
+      return open(secretKey);
+    } catch {}
+  }
+  throw new Error("MFA kaydı eski sırlarla çözülemedi (MFA_LEGACY_PEPPERS eksik olabilir)");
 }
 
 /** v1 kaydı çözüp ayrı anahtarla (v2) yeniden şifreler; dönüş doğrulanmadan yeni kayıt verilmez. */
