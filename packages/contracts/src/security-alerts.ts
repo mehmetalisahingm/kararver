@@ -4,7 +4,8 @@
 // sayaç; IP/cihaz yok, ADMIN_DENIAL_RETENTION_DAYS gün saklanır). Her kural bir pencerede (son `windowMinutes` dakika) eşleşen kayıtları sayar ve sayı eşiği
 // geçerse alarm açılır. Aynı kural ve kapsam (aktör ya da genel) için en fazla bir açık alarm vardır; durum sürerse
 // alarmın son görülme zamanı ve en yüksek sayısı güncellenir, yeni bildirim gitmez. Sayı eşiğin altına inince alarm
-// kendiliğinden kapanır. Bildirim yalnız açılışta, SUPER_ADMIN'lere uygulama içi gider (security.alert.opened).
+// kendiliğinden kapanır. 401 admin.unauthenticated.wave yalnız panelde gösterilir (bildirim gönderilmez);
+// diğer alarmların bildirimi yalnız açılışta, SUPER_ADMIN'lere uygulama içi gider (security.alert.opened).
 //
 // Eşikler ürün kararıdır (Mehmet); değişiklik bu dosyada yapılır ve docs/KV-49_OPERATIONS.md "Güvenlik alarmları"
 // tablosu güncellenir. Kurallar kişisel veri taşımaz: alarmda yalnız kural, kapsam (aktör kimliği) ve sayı vardır.
