@@ -56,7 +56,10 @@ RUN if [ "$WITH_MODERATION" = "true" ]; then \
       && rm -rf /var/lib/apt/lists/*; \
     fi; rm -f /tmp/moderation-requirements.txt
 COPY --from=build --chown=node:node /app /app
-ENV NODE_ENV=production \
+# /health → release.sha bu değerden gelir (izleme ve sürüm sabitleme buna dayanır): --build-arg GIT_COMMIT_SHA=$(git rev-parse HEAD)
+ARG GIT_COMMIT_SHA=""
+ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA} \
+    NODE_ENV=production \
     PG_BIN=/usr/lib/postgresql/${PG_MAJOR}/bin \
     MODERATION_PYTHON=/opt/moderation/bin/python \
     PORT=4000

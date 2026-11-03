@@ -50,7 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: İmajı derle (moderasyonsuz varsayılan)
-        run: docker build --tag "$IMAGE" .
+        run: docker build --tag "$IMAGE" --build-arg GIT_COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" .
       - name: İmaj boyutu ve kullanıcı
         run: |
           docker image inspect "$IMAGE" --format 'boyut: {{.Size}} bayt · kullanıcı: {{.Config.User}}'
@@ -86,7 +86,10 @@ jobs:
           for i in $(seq 1 60); do
             body=$(curl -fsS http://127.0.0.1:4000/health || true)
             if echo "$body" | grep -q '"worker":{"status":"ready"' && echo "$body" | grep -q '"database":{"status":"ok"'; then
-              echo "$body"; exit 0
+              echo "$body"
+              expected=$(echo "${{ github.event.pull_request.head.sha || github.sha }}" | cut -c1-12)
+              echo "$body" | grep -q "\"sha\":\"$expected\"" || { echo "release.sha imajdaki commit değil (beklenen $expected)"; exit 1; }
+              exit 0
             fi
             sleep 3
           done
