@@ -19,7 +19,7 @@ const api = (override = () => null) => async (url, init) => {
 
 test("rejects URLs with credentials, proxy bypass, user-selected public hosts or HTTP", () => {
   for (const value of [
-    "http://api-staging-45cb.up.railway.app", "https://example.com",
+    "https://api-staging-45cb.up.railway.app", "http://api-staging-45cb.up.railway.app", "https://example.com",
     "https://evil.up.railway.app.attacker.invalid", "https://user:pass@api-staging-45cb.up.railway.app",
     "https://api-staging-45cb.up.railway.app/v1/config",
     "https://api-staging-45cb.up.railway.app/?secret=abc",
@@ -27,7 +27,6 @@ test("rejects URLs with credentials, proxy bypass, user-selected public hosts or
     "https://other-app.onrender.com", "https://kararver-api-free-preview.onrender.com.attacker.invalid",
   ]) assert.throws(() => validateApiUrl(value));
   assert.equal(validateApiUrl(ORIGIN), ORIGIN);
-  assert.equal(validateApiUrl("https://api-staging-45cb.up.railway.app"), "https://api-staging-45cb.up.railway.app");
 });
 
 test("requires public health/config and anonymous denial across admin+user routes", async () => {

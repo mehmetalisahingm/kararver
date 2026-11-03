@@ -5,6 +5,7 @@
  * --json writes JSON-only to stdout for CI artifacts, not secrets.
  */
 import { pathToFileURL } from "node:url";
+import { STAGING_API_ORIGINS } from "./staging-origins.mjs";
 
 const PRIVATE = [
   ["/v1/me", "guest-account"],
@@ -21,9 +22,8 @@ export function validateApiUrl(input) {
       url.port || url.pathname !== "/" || url.search || url.hash) {
     throw new Error("Require bare HTTPS staging API origin without credentials, port or query");
   }
-  const railway = url.hostname.endsWith(".up.railway.app") && url.hostname !== ".up.railway.app";
-  if (!railway && url.hostname !== "kararver-api-free-preview.onrender.com") {
-    throw new Error("Only the explicit Render staging origin or a Railway staging HTTPS origin is supported");
+  if (!STAGING_API_ORIGINS.includes(url.origin)) {
+    throw new Error("Only the explicit staging API origin is supported");
   }
   return url.origin;
 }

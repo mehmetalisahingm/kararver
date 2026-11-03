@@ -49,6 +49,12 @@ test("üç runner'da Railway adresi yok ve hedefi ortak modülden alıyor", () =
   }
 });
 
+test("kapsam dışı kalan betiklerde de eski Railway varsayılanı yok", () => {
+  for (const name of ["release-status.mjs", "staging-kvkk-smoke.mjs", "security-acceptance.mjs"]) {
+    assert.ok(!/railway/i.test(readFileSync(path(name), "utf8")), `${name}: Railway kalmış`);
+  }
+});
+
 test("yanlış origin'le runner başlamaz (ağa çıkmadan, sıfırdan farklı çıkış)", () => {
   for (const name of RUNNERS) {
     const r = spawnSync(process.execPath, [path(name)], {
