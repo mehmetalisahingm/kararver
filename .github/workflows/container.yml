@@ -1,0 +1,113 @@
+name: Container image
+# #51/#297: sağlayıcıdan bağımsız API + worker imajı derlenir ve gerçek PostgreSQL 18'e karşı çalıştırılır.
+# İmaj bir registry'ye GÖNDERİLMEZ; bu iş yalnız derlemenin ve çalışmanın kanıtıdır.
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/container.yml
+      - .nvmrc
+      - package.json
+      - pnpm-lock.yaml
+      - apps/api/**
+      - apps/worker/**
+      - packages/**
+      - scripts/start-api-with-worker.mjs
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/container.yml
+      - pnpm-lock.yaml
+      - apps/api/**
+      - apps/worker/**
+      - packages/**
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: container-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18.1-alpine
+        env:
+          POSTGRES_USER: kararver
+          POSTGRES_PASSWORD: kararver_local
+          POSTGRES_DB: kararver_container
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kararver -d kararver_container"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      IMAGE: kararver-api:ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: İmajı derle (moderasyonsuz varsayılan)
+        run: docker build --tag "$IMAGE" .
+      - name: İmaj boyutu ve kullanıcı
+        run: |
+          docker image inspect "$IMAGE" --format 'boyut: {{.Size}} bayt · kullanıcı: {{.Config.User}}'
+          test "$(docker image inspect "$IMAGE" --format '{{.Config.User}}')" = "node"
+      - name: Ortam dosyası (yalnız CI test değerleri; sır yok)
+        run: |
+          cat > ci.env <<'EOF'
+          APP_ENV=test
+          DATABASE_URL=postgresql://kararver:kararver_local@127.0.0.1:5432/kararver_container
+          WEB_URL=http://localhost:3000
+          API_URL=http://localhost:4000
+          PORT=4000
+          AUTH_TOKEN_PEPPER=ci-container-pepper-0123456789-abcdefghij
+          MFA_ENCRYPTION_KEY=ci-container-mfa-key-0123456789-abcdefghij
+          MAIL_FROM=KararVer <no-reply@kararver.test>
+          MEDIA_PUBLIC_BASE_URL=http://localhost:4000/media
+          SESSION_COOKIE_SECURE=false
+          S3_ENDPOINT=http://127.0.0.1:9
+          S3_ACCESS_KEY_ID=ci
+          S3_SECRET_ACCESS_KEY=ci
+          S3_BUCKET_PRIVATE=ci-private
+          S3_BUCKET_PUBLIC=ci-public
+          EOF
+      - name: Migration (imaj içinden, ayrı adım)
+        run: docker run --rm --network host --env-file ci.env "$IMAGE" pnpm --filter @kararver/db run db:deploy
+      - name: pg_dump sunucuyla aynı major (KV-48 zamanlanmış yedek ön koşulu)
+        run: |
+          docker run --rm --network host --env-file ci.env "$IMAGE" sh -c '"$PG_BIN/pg_dump" --version && "$PG_BIN/pg_dump" --schema-only --no-owner "$DATABASE_URL" | grep -c "CREATE TABLE"'
+      - name: API + worker'ı başlat
+        run: docker run --detach --name kv --network host --env-file ci.env "$IMAGE"
+      - name: /health → ok, veritabanı ok, worker ready
+        run: |
+          for i in $(seq 1 60); do
+            body=$(curl -fsS http://127.0.0.1:4000/health || true)
+            if echo "$body" | grep -q '"worker":{"status":"ready"' && echo "$body" | grep -q '"database":{"status":"ok"'; then
+              echo "$body"; exit 0
+            fi
+            sleep 3
+          done
+          echo "son yanıt: $body"; docker logs kv | tail -80; exit 1
+      - name: Herkese açık uç ve güvenlik başlıkları
+        run: |
+          curl -fsS -o /dev/null -w 'categories %{http_code}\n' http://127.0.0.1:4000/v1/categories
+          curl -fsS -D - -o /dev/null http://127.0.0.1:4000/health | grep -iE '^(x-content-type-options|strict-transport-security|content-security-policy):' || true
+      - name: Container sağlık durumu (HEALTHCHECK)
+        run: |
+          for i in $(seq 1 60); do
+            s=$(docker inspect --format '{{.State.Health.Status}}' kv); echo "health: $s"
+            [ "$s" = "healthy" ] && exit 0; [ "$s" = "unhealthy" ] && { docker logs kv | tail -80; exit 1; }
+            sleep 5
+          done
+          exit 1
+      - name: Loglarda sır yok
+        if: always()
+        run: |
+          docker logs kv > container.log 2>&1 || true
+          ! grep -E 'ci-container-pepper|ci-container-mfa-key|kararver_local' container.log
+      - name: Durdur
+        if: always()
+        run: docker rm -f kv || true
