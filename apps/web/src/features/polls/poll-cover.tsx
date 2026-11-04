@@ -1,6 +1,7 @@
 "use client";
 import {useState} from "react";
-import { IllustratedScene, type ArtTopic } from "../../components/visual-story";
+import { IllustratedScene } from "../../components/visual-story";
+import type { ArtTopic } from "../../components/visual-topic";
 import styles from "./polls.module.css";
 
 export function PollCover({src,alt,fallbackTopic}:{src:string;alt:string;fallbackTopic?:ArtTopic}) {
