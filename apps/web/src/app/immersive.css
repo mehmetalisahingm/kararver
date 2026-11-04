@@ -1,5 +1,6 @@
 /* KararVer visual edition. Artwork is decorative, locally rendered, and contains no fake activity. */
 .product .discovery-hero.kv-immersive-hero {
+  --kv-muted: #e4e7ff;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -222,9 +223,9 @@
   0%, 100% { opacity: .7; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.12); }
 }
-.product .kv-art-float { animation: kv-art-bob 5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-.product .kv-art-float--alt { animation: kv-art-bob 6s ease-in-out -2s infinite; transform-box: fill-box; transform-origin: center; }
-.product .kv-art-spark { animation: kv-art-twinkle 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.product .kv-art-float { animation: kv-art-bob 4s ease-in-out; transform-box: fill-box; transform-origin: center; }
+.product .kv-art-float--alt { animation: kv-art-bob 4s ease-in-out -1s; transform-box: fill-box; transform-origin: center; }
+.product .kv-art-spark { animation: kv-art-twinkle 2.6s ease-in-out; transform-box: fill-box; transform-origin: center; }
 @media (max-width: 680px) {
   .product .discovery-hero.kv-immersive-hero {
     min-height: 280px;

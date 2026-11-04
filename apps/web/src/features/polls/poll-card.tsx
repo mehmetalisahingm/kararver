@@ -39,7 +39,10 @@ export function PollCard({ poll }: { poll: Poll }) {
         <Link href={poll.canonicalPath || `/karar/${poll.id}`}>{poll.title}</Link>
       </h2>
       {poll.description && <p className={`kv-muted ${styles.description}`}>{poll.description}</p>}
-      {cover?.status==="ready" && <PollCover key={cover.src} src={cover.src} alt={cover.alt}/>}
+      {cover?.status==="ready" && (
+        <PollCover key={cover.src} src={cover.src} alt={cover.alt}
+          fallback={<IllustratedScene topic={visualTopic(poll.category || poll.title)} />} />
+      )}
       {poll.options.some((o) => o.image) && (
         <div className="photo-options">
           {poll.options.map((o) => (
