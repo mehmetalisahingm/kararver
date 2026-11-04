@@ -19,7 +19,7 @@ test("all artwork stays decorative and uses locally drawn SVG instead of remote 
   assert.match(scene, /viewBox="0 0 460 260"/);
   assert.match(scene, /viewBox="0 0 570 390"/);
   assert.match(scene, /aria-hidden="true"/);
-  assert.doesNotMatch(scene, /https?:\/\/|<image|aktif kullanıcı|50.?000/);
+  assert.doesNotMatch(scene, /<image|https?:\/\/(?!www\.w3\.org\/2000\/svg)|aktif kullanıcı|50.?000/);
 });
 
 test("animation respects reduced motion and no user/media API contract is changed", () => {
