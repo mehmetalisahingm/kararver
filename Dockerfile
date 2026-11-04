@@ -49,12 +49,15 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends "postgresql-client-${PG_MAJOR}" \
  && rm -rf /var/lib/apt/lists/*
 COPY apps/worker/python/requirements.txt /tmp/moderation-requirements.txt
-RUN if [ "$WITH_MODERATION" = "true" ]; then \
-      apt-get update && apt-get install -y --no-install-recommends python3 python3-venv \
-      && python3 -m venv /opt/moderation \
-      && /opt/moderation/bin/pip install --no-cache-dir -r /tmp/moderation-requirements.txt \
-      && rm -rf /var/lib/apt/lists/*; \
-    fi; rm -f /tmp/moderation-requirements.txt
+RUN set -eu; \
+    if [ "$WITH_MODERATION" = "true" ]; then \
+      apt-get update; \
+      apt-get install -y --no-install-recommends python3 python3-venv; \
+      python3 -m venv /opt/moderation; \
+      /opt/moderation/bin/pip install --no-cache-dir -r /tmp/moderation-requirements.txt; \
+      rm -rf /var/lib/apt/lists/*; \
+    fi; \
+    rm -f /tmp/moderation-requirements.txt
 COPY --from=build --chown=node:node /app /app
 # /health → release.sha bu değerden gelir (izleme ve sürüm sabitleme buna dayanır): --build-arg GIT_COMMIT_SHA=$(git rev-parse HEAD)
 ARG GIT_COMMIT_SHA=""
