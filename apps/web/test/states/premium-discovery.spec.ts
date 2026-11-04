@@ -9,6 +9,12 @@ test("premium discovery, community, profile and notification surfaces support bo
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     for(const theme of ["light","dark"]){
       if(await page.locator(".product").getAttribute("data-theme")!==theme)await page.getByRole("button",{name:/temaya geç/}).click();
+      if (["/kesfet", "/kategoriler", "/yukselenler"].includes(path)) {
+        await expect(page.locator(".kv-hero-copy > p")).toHaveCSS("color", "rgb(228, 231, 255)");
+        expect(await page.locator(".kv-hero-decoration").evaluate(element =>
+          element.getAnimations({ subtree: true }).some(animation => animation.effect?.getTiming().iterations === Infinity)
+        )).toBe(false);
+      }
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${path} ${theme}`).toBe(true);
       expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations,`${path} ${theme}`).toEqual([]);
       await page.screenshot({path:info.outputPath(`${path.slice(1).replaceAll("/","-")}-${theme}.png`)});
