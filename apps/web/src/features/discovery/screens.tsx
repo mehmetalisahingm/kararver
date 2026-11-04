@@ -425,7 +425,7 @@ export function DiscoveryScreen({
       <div className="discovery-hero kv-immersive-hero">
         <div className="kv-hero-copy">
           <span className="eyebrow">KARARVER · FİKİRLERİN BULUŞMA NOKTASI</span>
-          <h1>{query.q ? "Arama sonuçları" : categorySlug ? category?.name || "Kategori" : home ? <>Her soru <em>bir hikâye.</em></> : <>Herkesin <em>bir fikri var.</em></>}</h1>
+          <h1>{query.q ? "Arama sonuçları" : categorySlug ? category?.name || "Kategori" : home ? <>Senin <em>için</em></> : "Keşfet"}</h1>
           <p>{category?.description || "Sor, keşfet, başkalarının ne düşündüğünü gör. Bir fikrin varsa burada hayat bulsun."}</p>
           {!query.q && !categorySlug && (
             <div className="kv-hero-actions">
@@ -470,7 +470,7 @@ export function CategoryDirectory() {
       <div className="discovery-hero kv-immersive-hero">
         <div className="kv-hero-copy">
           <span className="eyebrow">BİRBİRİNDEN FARKLI DÜNYALAR</span>
-          <h1>İlgin neredeyse <em>oradayız.</em></h1>
+          <h1>Kategoriler</h1>
           <p>Teknolojiden sanata, spordan günlük hayata… Bir konuyu seç, fikirlere dal.</p>
         </div>
         <div className="kv-hero-decoration"><HeroScene className="kv-hero-scene" /></div>
