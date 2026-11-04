@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { WelcomeDemoChoice } from "../../lib/welcome-draft";
 import { WELCOME_SEEN } from "../../lib/welcome-draft";
 import styles from "./welcome.module.css";
+import { HeroScene } from "../../components/visual-story";
 
 export { WELCOME_SEEN };
 
@@ -61,6 +62,7 @@ export function Welcome({
     </div>
     <section className={styles.stage} key={step} aria-labelledby="welcome-title">
       <p className={styles.eyebrow}>FARKLI FİKİRLER. ORTAK MERAK. <span>0{step + 1} / 05</span></p>
+      {step < 2 && <div className={styles.heroArtwork} aria-hidden="true"><HeroScene /></div>}
       {step === 0 && <p className={styles.wordmark} aria-hidden="true">KARAR<span>VER</span></p>}
       <h1 id="welcome-title" ref={heading} tabIndex={-1}>{titles[step]}</h1>
 
