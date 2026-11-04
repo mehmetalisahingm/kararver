@@ -7,9 +7,9 @@ test("first guest can leave onboarding and returning guests browse the feed with
   await page.goto("/");
   await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toBeVisible();
   await page.getByRole("button",{name:"Üye olmadan akışı keşfet"}).click();
-  await expect(page.getByRole("heading",{name:"Senin için"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Her soru bir hikâye."})).toBeVisible();
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:"Senin için"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Her soru bir hikâye."})).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toHaveCount(0);
   expect(mock.unexpected).toEqual([]);
@@ -18,7 +18,7 @@ test("first guest can leave onboarding and returning guests browse the feed with
 test("authenticated first visit goes directly to feed",async({page})=>{
   await api(page);
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:"Senin için"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Her soru bir hikâye."})).toBeVisible();
   await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toHaveCount(0);
 });
 
@@ -54,7 +54,7 @@ test("premium onboarding saves real category ids once after login and never cast
   await page.getByRole("button",{name:"Giriş yap",exact:true}).click();
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading",{name:"Senin için"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Her soru bir hikâye."})).toBeVisible();
   expect(interestWrites).toBe(1);
   expect(savedIds.length).toBe(1);
   expect(voteWrites).toBe(0);
