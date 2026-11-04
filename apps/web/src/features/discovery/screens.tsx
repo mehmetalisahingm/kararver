@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
 import { PollCard } from "../polls/poll-card";
+import { HeroScene, IllustratedScene, visualTopic } from "../../components/visual-story";
 import { ResultChart } from "./charts";
 import { usePages } from "./use-pages";
 import { dateLabel, feedTabs, formats, queryUrl, searchTypes } from "./model";
@@ -380,7 +381,8 @@ function FeedBody({
               ))}
             </div>
           ) : (
-            <div className="kv-card kv-state">
+            <div className="kv-card kv-state kv-illustrated-empty">
+              <IllustratedScene topic="conversation" />
               <h2>Burada henüz bir eşleşme yok.</h2>
               <p className="kv-muted">
                 {query.q
@@ -420,21 +422,19 @@ export function DiscoveryScreen({
   return (
     <div className={`screen-stack ${surfaces.screen}`}>
       <DiscoveryNav current={categorySlug ? "categories" : "feed"} />
-      <div className="discovery-hero">
-        <span className="eyebrow">HER FİKİR YENİ BİR BAKIŞ AÇISI</span>
-        <h1>
-          {query.q
-            ? "Arama sonuçları"
-            : categorySlug
-              ? category?.name || "Kategori"
-              : home
-                ? "Senin için"
-                : "Keşfet"}
-        </h1>
-        <p>
-          {category?.description ||
-            "Merakını takip et. Bir sonraki fikrini burada bul."}
-        </p>
+      <div className="discovery-hero kv-immersive-hero">
+        <div className="kv-hero-copy">
+          <span className="eyebrow">KARARVER · FİKİRLERİN BULUŞMA NOKTASI</span>
+          <h1>{query.q ? "Arama sonuçları" : categorySlug ? category?.name || "Kategori" : home ? <>Her soru <em>bir hikâye.</em></> : <>Herkesin <em>bir fikri var.</em></>}</h1>
+          <p>{category?.description || "Sor, keşfet, başkalarının ne düşündüğünü gör. Bir fikrin varsa burada hayat bulsun."}</p>
+          {!query.q && !categorySlug && (
+            <div className="kv-hero-actions">
+              <Link href="/olustur" className="kv-button">Bir soru sor ↗</Link>
+              <Link href="/kategoriler" className="kv-hero-link">Konuları keşfet</Link>
+            </div>
+          )}
+        </div>
+        <div className="kv-hero-decoration"><HeroScene className="kv-hero-scene" /></div>
       </div>
       {categorySlug && (
         <Link href="/kategoriler" className="back-link">
@@ -467,10 +467,13 @@ export function CategoryDirectory() {
   return (
     <div className={`screen-stack ${surfaces.screen}`}>
       <DiscoveryNav current="categories" />
-      <div className="discovery-hero">
-        <span className="eyebrow">İLGİN NEREDEYSE</span>
-        <h1>Kategoriler</h1>
-        <p>Bildiğin konulara katıl, yeni dünyalar keşfet.</p>
+      <div className="discovery-hero kv-immersive-hero">
+        <div className="kv-hero-copy">
+          <span className="eyebrow">BİRBİRİNDEN FARKLI DÜNYALAR</span>
+          <h1>İlgin neredeyse <em>oradayız.</em></h1>
+          <p>Teknolojiden sanata, spordan günlük hayata… Bir konuyu seç, fikirlere dal.</p>
+        </div>
+        <div className="kv-hero-decoration"><HeroScene className="kv-hero-scene" /></div>
       </div>
       {categories.error ? (
         <CategoryError message={categories.error} retry={categories.retry} />
@@ -478,29 +481,20 @@ export function CategoryDirectory() {
         <Loading label="Kategoriler yükleniyor…" />
       ) : (
         <div className="category-grid">
-          {categories.data.map((category, i) => (
-            <Link
-              href={`/kategori/${category.slug}`}
-              key={category.id}
-              className="kv-card category-tile"
-            >
-              <span
-                className={`category-glyph category-glyph-${i % 3}`}
-                aria-hidden="true"
-              >
-                {["⌘", "✳", "↗", "▤", "◇", "◉"][i % 6]}
-              </span>
-              <h2>{category.name}</h2>
-              <p>{category.description}</p>
-              <span className="category-open">
-                Konuları keşfet <span aria-hidden="true">↗</span>
-              </span>
+          {categories.data.map((category) => (
+            <Link href={"/kategori/" + category.slug} key={category.id} className="kv-card category-tile kv-category-illustrated">
+              <div className="kv-category-art"><IllustratedScene topic={visualTopic(category.name)} /></div>
+              <div className="kv-category-copy">
+                <h2>{category.name}</h2>
+                <p>{category.description}</p>
+                <span className="category-open">Konuları keşfet <span aria-hidden="true">↗</span></span>
+              </div>
             </Link>
           ))}
         </div>
       )}
       {categories.data?.length === 0 && (
-        <p className="kv-card kv-state">Henüz aktif kategori yok.</p>
+        <div className="kv-card kv-state kv-illustrated-empty"><IllustratedScene topic="conversation" /><p>Henüz aktif kategori yok.</p></div>
       )}
     </div>
   );
@@ -617,6 +611,7 @@ function TrendBody({
             <div className="screen-stack trend-results">
               {pages.result.data.map((item) => (
                 <article key={item.poll.id} className="kv-card trend-card">
+                  <div className="kv-trend-visual"><IllustratedScene topic={visualTopic(item.poll.category)} /></div>
                   <div className="trend-card-heading">
                     <span
                       className="rank-badge"
@@ -652,7 +647,8 @@ function TrendBody({
               ))}
             </div>
           ) : (
-            <div className="kv-card kv-state">
+            <div className="kv-card kv-state kv-illustrated-empty">
+              <IllustratedScene topic="conversation" />
               <h2>
                 {pages.result.reason === "INSUFFICIENT_HISTORY"
                   ? "Karşılaştırma için yeterli geçmiş yok."
@@ -690,10 +686,13 @@ export function TrendsScreen({ query }: { query: Query }) {
   return (
     <div className={`screen-stack ${surfaces.screen}`}>
       <DiscoveryNav current="trends" />
-      <div className="discovery-hero trend-hero">
-        <span className="eyebrow">TOPLULUK NE DÜŞÜNÜYOR?</span>
-        <h1>{formats[query.format]}</h1>
-        <p>Farklı sorular. Değişen tercihler. Yeni bakış açıları.</p>
+      <div className="discovery-hero trend-hero kv-immersive-hero">
+        <div className="kv-hero-copy">
+          <span className="eyebrow">FİKİRLER DEĞİŞİYOR, GÜNDEM HAREKETLENİYOR</span>
+          <h1>{formats[query.format]}</h1>
+          <p>Gerçek oylar, gerçek eğilimler. Topluluğun nabzını burada keşfet.</p>
+        </div>
+        <div className="kv-hero-decoration"><HeroScene className="kv-hero-scene" /></div>
       </div>
       {categories.error ? (
         <CategoryError message={categories.error} retry={categories.retry} />
