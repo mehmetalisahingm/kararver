@@ -54,7 +54,8 @@
   color: #efb4ff;
 }
 .product .kv-immersive-hero p {
-  color: #e4e7ff;
+  /* Explicit foreground pairing: light theme's global paragraph color must not override dark hero art. */
+  color: #e4e7ff !important;
   max-width: 41ch;
   font-size: 14px;
   line-height: 1.7;
@@ -222,9 +223,9 @@
   0%, 100% { opacity: .7; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.12); }
 }
-.product .kv-art-float { animation: kv-art-bob 5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-.product .kv-art-float--alt { animation: kv-art-bob 6s ease-in-out -2s infinite; transform-box: fill-box; transform-origin: center; }
-.product .kv-art-spark { animation: kv-art-twinkle 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.product .kv-art-float { animation: kv-art-bob 3s ease-in-out 1; transform-box: fill-box; transform-origin: center; }
+.product .kv-art-float--alt { animation: kv-art-bob 3.6s ease-in-out 1; transform-box: fill-box; transform-origin: center; }
+.product .kv-art-spark { animation: kv-art-twinkle 2.4s ease-in-out 1; transform-box: fill-box; transform-origin: center; }
 @media (max-width: 680px) {
   .product .discovery-hero.kv-immersive-hero {
     min-height: 280px;
