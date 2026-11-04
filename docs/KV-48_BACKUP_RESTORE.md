@@ -157,7 +157,7 @@ Canlı staging'in sentetikleştirilmesi ayrı, kullanıcıya etkisi olan bir iş
 **Hedef güvenliği (fail-closed):**
 - adres yalnız `localhost`/`127.0.0.1`/`::1`;
 - **sorgu parametresi yok** (`?host=…` ile başka sunucuya yönlendirme reddedilir);
-- bağlandıktan sonra sunucunun kendi adresi (`inet_server_addr`) loopback ya da unix soketi olmalı;
+- bağlandıktan sonra veritabanında **izole kopya işareti** aranır. `db:restore`, yalnız boş hedefe restore ederken bu işareti yazar (`COMMENT ON DATABASE`). Canlı Neon, Railway ya da production DB'sinde işaret olmadığı için **ağ yapısından bağımsız** olarak reddedilir;
 - DB adı `restore`/`sanitize` içerir ya da `_test` ile biter; `DATABASE_URL` ile aynı olamaz.
 
 **Rol sahipleri (`--role-holders`), tek SUPER_ADMIN kilitlenmesin diye:**

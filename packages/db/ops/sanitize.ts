@@ -8,7 +8,8 @@
 //
 // Hedef güvenliği (fail-closed):
 // - Bağlantı adresi yalnız localhost / 127.0.0.1 / ::1; sorgu parametresi kabul edilmez (ör. ?host=uzak-sunucu).
-// - Bağlandıktan sonra sunucunun kendi adresi de denetlenir (inet_server_addr: unix soketi ya da loopback).
+// - Bağlandıktan sonra veritabanında İZOLE KOPYA İŞARETİ aranır: `db:restore` boş hedefe restore ederken yazar
+//   (COMMENT ON DATABASE). Canlı Neon/Railway/production veritabanında bu işaret yoktur → ağ yapısından bağımsız red.
 // - Veritabanı adı "restore" ya da "sanitize" içermeli veya "_test" ile bitmeli; DATABASE_URL ile aynı olamaz.
 // - Varsayılan deneme (dry-run): her şey yapılır, doğrulanır ve geri alınır. Yalnız --apply kalıcı yazar.
 //
@@ -34,7 +35,7 @@
 // Rapor yalnız sayı içerir; hiçbir e-posta, kullanıcı adı veya kimlik yazdırılmaz.
 import { parseArgs } from "node:util";
 import { createPrismaClient, type PrismaClient } from "../src/index.ts";
-import { databaseName, redact } from "./pg-tools.ts";
+import { databaseName, ISOLATED_COPY_MARKER, redact } from "./pg-tools.ts";
 import { checkInvariants, type Invariant } from "./state.ts";
 
 /** E-postası bu kalıba uyan hesap / adres test adresidir (SQL regex, büyük/küçük harf duyarsız). */
@@ -90,11 +91,13 @@ export function assertSafeTarget(target: string, live = process.env.DATABASE_URL
   if (live && new URL(live).host === url.host && databaseName(live) === name) throw new Error("SANITIZE_DATABASE_URL, DATABASE_URL ile aynı olamaz");
 }
 
-/** Bağlandıktan sonra: sunucu gerçekten yerel mi (unix soketi ya da loopback)? */
-async function assertLocalServer(db: Pick<PrismaClient, "$queryRawUnsafe">): Promise<void> {
-  const [row] = await db.$queryRawUnsafe<{ addr: string | null }[]>(`SELECT host(inet_server_addr()) AS addr`);
-  if (row && row.addr !== null && row.addr !== "127.0.0.1" && row.addr !== "::1") {
-    throw new Error("bağlanılan sunucu yerel değil (inet_server_addr loopback değil); arındırma yapılmadı");
+/** Bağlandıktan sonra: bu veritabanı `db:restore` ile açılmış izole bir kopya mı (işaret)? Değilse hiçbir şey yazılmaz. */
+async function assertIsolatedCopy(db: Pick<PrismaClient, "$queryRawUnsafe">): Promise<void> {
+  const [row] = await db.$queryRawUnsafe<{ note: string | null }[]>(
+    `SELECT shobj_description(oid, 'pg_database') AS note FROM pg_database WHERE datname = current_database()`,
+  );
+  if (!row?.note?.startsWith(ISOLATED_COPY_MARKER)) {
+    throw new Error("hedef, db:restore ile açılmış izole bir kopya değil (izole kopya işareti yok); arındırma yapılmadı");
   }
 }
 
@@ -226,7 +229,7 @@ export async function sanitize(target: string, { apply, roleHolders = "keep" }: 
     ok: false,
   };
   try {
-    await assertLocalServer(prisma);
+    await assertIsolatedCopy(prisma);
     try {
       await prisma.$transaction(
         async (tx) => {

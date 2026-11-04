@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
-import { withDatabase } from "../ops/pg-tools.ts";
+import { ISOLATED_COPY_MARKER, withDatabase } from "../ops/pg-tools.ts";
 import { assertSafeTarget, caseInsensitivePattern, sanitize } from "../ops/sanitize.ts";
 import { createPrismaClient, type PrismaClient } from "../src/index.ts";
 
@@ -51,10 +51,12 @@ describe("izole kopyada arındırma (postgres)", { skip: base === null ? "TEST_D
   const third = "ucuncu.kisi@hotmail.com";
 
   /** Taze veritabanı + aynı sentetik veri. */
-  async function fixture(suffix: string) {
+  async function fixture(suffix: string, { marked = true } = {}) {
     const name = `${baseName}_sanitize_${suffix}`;
     await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
     await admin.$executeRawUnsafe(`CREATE DATABASE "${name}"`);
+    // db:restore'un yazdığı izole kopya işareti (marked=false: canlı DB gibi işaretsiz).
+    if (marked) await admin.$executeRawUnsafe(`COMMENT ON DATABASE "${name}" IS '${ISOLATED_COPY_MARKER} test'`);
     const url = withDatabase(base!, name);
     const prismaCli = createRequire(import.meta.url).resolve("prisma/build/index.js");
     const r = spawnSync(process.execPath, [prismaCli, "migrate", "deploy"], { cwd: packageDir, env: { ...process.env, DATABASE_URL: url }, encoding: "utf8" });
@@ -109,6 +111,14 @@ describe("izole kopyada arındırma (postgres)", { skip: base === null ? "TEST_D
       await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${o.name}" WITH (FORCE)`);
     }
     await admin?.$disconnect();
+  });
+
+  test("izole kopya işareti olmayan veritabanı (canlı DB gibi) reddedilir; hiçbir şey yazılmaz", async () => {
+    const { url, db } = await fixture("unmarked", { marked: false });
+    const before = await dump(db);
+    await assert.rejects(sanitize(url, { apply: true }), /izole kopya işareti yok/);
+    assert.equal(await dump(db), before);
+    assert.equal((await db.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM sessions`))[0]!.n, 4n);
   });
 
   test("deneme (dry-run) doğrular ama hiçbir şeyi değiştirmez", async () => {
