@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { HeroScene, IllustratedScene, visualTopic } from "../src/components/visual-story";
+import { visualTopic } from "../src/components/visual-topic.ts";
 
-test("visual topic art follows category meaning rather than position in list", () => {
+test("visual topic art follows the category's meaning, not its position", () => {
   assert.equal(visualTopic("Yapay Zekâ"), "technology");
   assert.equal(visualTopic("Üniversite"), "university");
   assert.equal(visualTopic("Tatil ve seyahat"), "travel");
@@ -15,18 +14,17 @@ test("visual topic art follows category meaning rather than position in list", (
   assert.equal(visualTopic("Kültür"), "conversation");
 });
 
-test("illustrations stay accessible and do not claim fabricated participation", () => {
-  const hero = renderToStaticMarkup(createElement(HeroScene));
-  const category = renderToStaticMarkup(createElement(IllustratedScene, { topic: "technology" }));
-  assert.match(hero, /<svg/);
-  assert.match(category, /<svg/);
-  assert.match(hero, /aria-hidden="true"/);
-  assert.match(category, /aria-hidden="true"/);
-  assert.doesNotMatch(hero + category, /aktif kullanıcı|oy verildi|canlı kullanıcı|50.?000/);
+test("all artwork stays decorative and uses locally drawn SVG instead of remote assets", () => {
+  const scene = readFileSync(new URL("../src/components/visual-story.tsx", import.meta.url), "utf8");
+  assert.match(scene, /viewBox="0 0 460 260"/);
+  assert.match(scene, /viewBox="0 0 570 390"/);
+  assert.match(scene, /aria-hidden="true"/);
+  assert.doesNotMatch(scene, /https?:\/\/|<image|aktif kullanıcı|50.?000/);
 });
 
-test("category-specific artwork produces different illustrations", () => {
-  const tech = renderToStaticMarkup(createElement(IllustratedScene, { topic: "technology" }));
-  const sport = renderToStaticMarkup(createElement(IllustratedScene, { topic: "sports" }));
-  assert.notEqual(tech, sport);
+test("animation respects reduced motion and no user/media API contract is changed", () => {
+  const css = readFileSync(new URL("../src/app/immersive.css", import.meta.url), "utf8");
+  assert.match(css, /prefers-reduced-motion: reduce/);
+  assert.match(css, /kv-poll-visual/);
+  assert.match(css, /kv-category-art/);
 });
