@@ -15,12 +15,14 @@ for(const scenario of ["hidden","public","locked"] as const) test(`premium poll 
   await page.goto("/kesfet");const article=page.locator(".discovery-results > article");
   await expect(article).toHaveCount(1);
   await expect(article.getByRole("button",{name:"Kapak görselini tekrar yükle"})).toBeVisible();
+  await expect(article.locator('svg[aria-hidden="true"]')).toBeVisible();
   if(scenario==="public")await expect(article.getByText("20 oy",{exact:true})).toBeVisible();
   else {await expect(article.getByText("Sonuçlar oy verdikten sonra görünür.")).toBeVisible();await expect(article.getByRole("progressbar")).toHaveCount(0);}
   if(scenario==="locked")await expect(article.getByText("Kilitli",{exact:true})).toBeVisible();
   fail=false;await article.getByRole("button",{name:"Kapak görselini tekrar yükle"}).click();
   await expect(article.getByText("Anket görseli yükleniyor…")).toHaveCount(0);
   await expect(article.getByRole("img")).toBeVisible();
+  await expect(article.locator('svg[aria-hidden="true"]')).toHaveCount(0);
   for(const theme of ["light","dark"]){
     if(await page.locator(".product").getAttribute("data-theme")!==theme)await page.getByRole("button",{name:/temaya geç/}).click();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
