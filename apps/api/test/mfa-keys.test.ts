@@ -113,8 +113,8 @@ const backend = prismaBackend();
     await ctx.prisma!.$executeRaw`INSERT INTO sessions (id, user_id, token_hash, expires_at)
       VALUES (${sessionId}::uuid, ${userId}::uuid, ${randomUUID().replaceAll("-", "").padEnd(64, "0")}, now() + interval '30 days')`;
   });
+  // Hesap silinmez: MFA adımları audit'e yazar ve audit ekleme-yalnızdır (FK RESTRICT). Rastgele kimlikli test hesabı kalır.
   after(async () => {
-    await ctx.prisma!.$executeRaw`DELETE FROM users WHERE id = ${userId}::uuid`;
     await ctx.close();
   });
 
