@@ -315,3 +315,38 @@
 .welcome .benefits strong { color: #815b21; }
 .welcome .stage h1, .welcome .wordmark { color: #292826; }
 .welcome .header a:not(.logo) { color: #292826; }
+
+
+/* Rich illustrated welcome artwork, not mock activity or simulated users. */
+.heroArtwork {
+  position: absolute;
+  top: 12%;
+  right: -9%;
+  width: min(50%, 445px);
+  pointer-events: none;
+  z-index: -1;
+  filter: drop-shadow(0 30px 45px rgba(55, 26, 99, .18));
+  transform: rotate(3deg);
+  opacity: .92;
+}
+.heroArtwork svg { width: 100%; height: auto; display: block; }
+.stage:has(.heroArtwork) h1,
+.stage:has(.heroArtwork) .lead {
+  max-width: min(70%, 590px);
+  position: relative;
+}
+.stage:has(.heroArtwork) .wordmark {
+  position: relative;
+  max-width: min(75%, 700px);
+}
+@media (max-width: 720px) {
+  .heroArtwork { right: -31%; top: 12%; width: 86%; opacity: .19; }
+  .stage:has(.heroArtwork) h1,
+  .stage:has(.heroArtwork) .lead,
+  .stage:has(.heroArtwork) .wordmark { max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .heroArtwork :global(.kv-art-float),
+  .heroArtwork :global(.kv-art-float--alt),
+  .heroArtwork :global(.kv-art-spark) { animation: none; }
+}
