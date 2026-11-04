@@ -10,6 +10,7 @@ import "./globals.css";
 import "./premium.css";
 import "./legal.css";
 import "./privacy-preferences.css";
+import "./immersive.css";
 
 const webUrl = new URL(process.env.WEB_URL ?? "http://localhost:3000");
 const publicIndexing = process.env.APP_ENV === "production";
