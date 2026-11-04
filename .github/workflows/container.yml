@@ -49,6 +49,9 @@ jobs:
       IMAGE: kararver-api:ci
     steps:
       - uses: actions/checkout@v4
+        with:
+          # PR merge-ref değil gerçek head: build image SHA /health ile aynı kaynağı işaret etmeli.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: İmajı derle (moderasyonsuz varsayılan)
         run: docker build --tag "$IMAGE" --build-arg GIT_COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" .
       - name: İmaj boyutu ve kullanıcı
