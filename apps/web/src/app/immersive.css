@@ -1,5 +1,6 @@
 /* KararVer visual edition. Artwork is decorative, locally rendered, and contains no fake activity. */
 .product .discovery-hero.kv-immersive-hero {
+  --kv-muted: #e4e7ff;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -54,8 +55,7 @@
   color: #efb4ff;
 }
 .product .kv-immersive-hero p {
-  /* Explicit foreground pairing: light theme's global paragraph color must not override dark hero art. */
-  color: #e4e7ff !important;
+  color: #e4e7ff;
   max-width: 41ch;
   font-size: 14px;
   line-height: 1.7;
@@ -223,9 +223,9 @@
   0%, 100% { opacity: .7; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.12); }
 }
-.product .kv-art-float { animation: kv-art-bob 3s ease-in-out 1; transform-box: fill-box; transform-origin: center; }
-.product .kv-art-float--alt { animation: kv-art-bob 3.6s ease-in-out 1; transform-box: fill-box; transform-origin: center; }
-.product .kv-art-spark { animation: kv-art-twinkle 2.4s ease-in-out 1; transform-box: fill-box; transform-origin: center; }
+.product .kv-art-float { animation: kv-art-bob 4s ease-in-out; transform-box: fill-box; transform-origin: center; }
+.product .kv-art-float--alt { animation: kv-art-bob 4s ease-in-out -1s; transform-box: fill-box; transform-origin: center; }
+.product .kv-art-spark { animation: kv-art-twinkle 2.6s ease-in-out; transform-box: fill-box; transform-origin: center; }
 @media (max-width: 680px) {
   .product .discovery-hero.kv-immersive-hero {
     min-height: 280px;
