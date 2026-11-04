@@ -3,12 +3,14 @@
 //   DATABASE_URL                yedeklenecek veritabanı (Railway iç adresi; public proxy gerekmez)
 //   BACKUP_PUBLIC_KEY           RSA (≥ 3072 bit) açık anahtar, PEM. Özel anahtar ekip dışında, çevrimdışı.
 //   BACKUP_S3_ENDPOINT, BACKUP_S3_REGION, BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY
+//   ya da BACKUP_OUTPUT_DIR     bucket yerine klasör (#186: GitHub Actions artifact'ı; dosya üzerine yazılmaz)
 //   BACKUP_S3_FORCE_PATH_STYLE  "true" ise path-style (varsayılan false)
 //   BACKUP_DESTINATION          ops_backup_runs etiketi (varsayılan "r2")
 //   BACKUP_PREFIX               bucket öneki (varsayılan "db/<APP_ENV>")
 //   PG_BIN                      pg_dump klasörü (sunucu sürümüyle aynı major; staging PG 18)
 // Çıkış kodu 0 = yedek yüklendi ve kaydedildi; 1 = herhangi bir adım başarısız (kayıt yazılmadı).
 import { runScheduledBackup } from "../src/jobs/backup/scheduled.ts";
+import { createDirectoryBackupUpload } from "../src/jobs/backup/directory-upload.ts";
 import { createS3BackupUpload } from "../src/jobs/backup/s3-upload.ts";
 
 function required(name: string): string {
@@ -25,14 +27,16 @@ try {
   const result = await runScheduledBackup({
     databaseUrl: required("DATABASE_URL"),
     publicKeyPem: required("BACKUP_PUBLIC_KEY").replaceAll("\\n", "\n"),
-    upload: createS3BackupUpload({
-      endpoint: required("BACKUP_S3_ENDPOINT"),
-      region: process.env.BACKUP_S3_REGION ?? "auto",
-      bucket: required("BACKUP_S3_BUCKET"),
-      accessKeyId: required("BACKUP_S3_ACCESS_KEY_ID"),
-      secretAccessKey: required("BACKUP_S3_SECRET_ACCESS_KEY"),
-      forcePathStyle: process.env.BACKUP_S3_FORCE_PATH_STYLE === "true",
-    }),
+    upload: process.env.BACKUP_OUTPUT_DIR
+      ? createDirectoryBackupUpload(process.env.BACKUP_OUTPUT_DIR)
+      : createS3BackupUpload({
+          endpoint: required("BACKUP_S3_ENDPOINT"),
+          region: process.env.BACKUP_S3_REGION ?? "auto",
+          bucket: required("BACKUP_S3_BUCKET"),
+          accessKeyId: required("BACKUP_S3_ACCESS_KEY_ID"),
+          secretAccessKey: required("BACKUP_S3_SECRET_ACCESS_KEY"),
+          forcePathStyle: process.env.BACKUP_S3_FORCE_PATH_STYLE === "true",
+        }),
     destination: process.env.BACKUP_DESTINATION ?? "r2",
     prefix: process.env.BACKUP_PREFIX ?? `db/${env}`,
     now: () => new Date(),
