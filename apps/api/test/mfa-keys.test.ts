@@ -204,6 +204,26 @@ const backend = prismaBackend();
     assert.deepEqual(await ours(), before);
   });
 
+  test("yanlış MFA_ENCRYPTION_KEY: v2 kayıt doğrulanamaz, deneme de uygulama da hiçbir şey yazmaz", async () => {
+    const before = await ours();
+    const wrongKey = { current: "yanlis-anahtar-0123456789-abcdefghijklmnop", legacy: [A] };
+    const dry = await rekeyMfaCredentials(ctx.prisma!, wrongKey, { apply: false, only: users });
+    assert.deepEqual([dry.v2, dry.v2Verified, dry.failed], [1, 0, 1], "deneme yanlış anahtarı yakalar");
+    const r = await rekeyMfaCredentials(ctx.prisma!, wrongKey, { apply: true, only: users });
+    assert.deepEqual([r.applied, r.rekeyed, r.failed], [false, 0, 1]);
+    assert.deepEqual(await ours(), before, "v1 kayıtlar yanlış anahtarla yazılmadı");
+  });
+
+  test("ilk taşıma koruması: anahtarı doğrulanmış v2 kayıt yoksa toplu --apply reddedilir", async () => {
+    const v1Only = users.slice(0, 2);
+    await assert.rejects(
+      rekeyMfaCredentials(ctx.prisma!, { current: KEY, legacy: [A] }, { apply: true, only: v1Only, requireVerifiedKey: true }),
+      /ilk taşıma/,
+    );
+    const r = await rekeyMfaCredentials(ctx.prisma!, { current: KEY, legacy: [A] }, { apply: false, only: v1Only, requireVerifiedKey: true });
+    assert.equal(r.failed, 0, "deneme serbest");
+  });
+
   test("--apply: v1 kayıtlar v2 olur; sonra pepper değişse de TOTP sırrı çözülür; ikinci çalıştırma bir şey yapmaz", async () => {
     const r = await rekeyMfaCredentials(ctx.prisma!, { current: KEY, legacy: [B, A] }, { apply: true, only: users });
     assert.equal(r.failed, 0);

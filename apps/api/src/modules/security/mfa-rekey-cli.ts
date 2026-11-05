@@ -1,4 +1,4 @@
-// MFA anahtar taşıma CLI'ı — #180/#291: pnpm --filter @kararver/api mfa:rekey [--apply]
+// MFA anahtar taşıma CLI'ı — #180/#291: pnpm --filter @kararver/api mfa:rekey [--apply] [--only <hesap-id>,…]
 // Ortam: DATABASE_URL, AUTH_TOKEN_PEPPER, MFA_ENCRYPTION_KEY (zorunlu), MFA_LEGACY_PEPPERS (pepper değiştiyse BÜTÜN eski değerler, virgülle).
 // Varsayılan deneme: hiçbir şey yazmaz, her v1 kaydın çözülebildiğini doğrular. Çıkış kodu: 0 = tamam, 1 = çözülemeyen
 // kayıt ya da hata, 2 = kullanım hatası. Rapor yalnız sayı içerir. Runbook: docs/SA180_MFA_KEY_ROTATION.md
@@ -8,7 +8,12 @@ import { rekeyMfaCredentials } from "./mfa-rekey.ts";
 
 const argv = process.argv.slice(2);
 if (argv[0] === "--") argv.shift();
-const { values } = parseArgs({ args: argv, options: { apply: { type: "boolean", default: false } }, strict: true });
+const { values } = parseArgs({ args: argv, options: { apply: { type: "boolean", default: false }, only: { type: "string" } }, strict: true });
+const only = values.only ? values.only.split(",").map((v) => v.trim()).filter(Boolean) : undefined;
+if (only && !only.every((v) => /^[0-9a-f-]{36}$/i.test(v))) {
+  console.error("--only: virgülle ayrılmış hesap kimlikleri (UUID)");
+  process.exit(2);
+}
 
 const need = (k: string) => {
   const v = process.env[k] ?? "";
@@ -38,12 +43,13 @@ const legacy = [...new Set([pepper, ...previous])];
 
 const prisma = createPrismaClient(databaseUrl);
 try {
-  const r = await rekeyMfaCredentials(prisma, { current, legacy }, { apply: values.apply });
+  const r = await rekeyMfaCredentials(prisma, { current, legacy }, { apply: values.apply, only });
   console.log(`mfa:rekey ${r.applied ? "UYGULANDI" : "DENEME (yazılmadı; kalıcı için --apply)"}`);
-  console.log(`  kayıt: ${r.total} · v1 (pepper'a bağlı): ${r.v1} · v2 (ayrı anahtar): ${r.v2} · taşınan: ${r.rekeyed} · çözülemeyen: ${r.failed} · tanınmayan: ${r.unknown}`);
+  console.log(`  kayıt: ${r.total}${only ? ` (yalnız ${only.length} hesap)` : ""} · v1 (pepper'a bağlı): ${r.v1} · v2 (ayrı anahtar): ${r.v2}, anahtarla doğrulanan: ${r.v2Verified} · taşınan: ${r.rekeyed} · başka süreç taşıdı: ${r.raced} · çözülemeyen: ${r.failed} · tanınmayan: ${r.unknown}`);
+  if (r.v2 > r.v2Verified) console.log("  UYARI: bazı v2 kayıtlar bu anahtarla çözülemedi — MFA_ENCRYPTION_KEY uygulamadakiyle AYNI değil olabilir; hiçbir şey yazılmadı");
   console.log(`  kullanılmamış kurtarma kodu: ${r.unusedRecoveryCodes} (özet olarak saklanır, taşınamaz; v1/v2 ayrımı özetten anlaşılamaz)`);
   console.log(`  eski sır listesi: güncel pepper + ${previous.length} eski pepper`);
-  const pending = r.applied ? r.v1 - r.rekeyed : r.v1;
+  const pending = r.applied ? r.v1 - r.rekeyed - r.raced : r.v1;
   console.log(
     r.failed || r.unknown
       ? "SONUÇ: çözülemeyen kayıt var — pepper DEĞİŞTİRİLMEZ"

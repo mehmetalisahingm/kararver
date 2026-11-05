@@ -54,7 +54,9 @@
 
 > Railway dönemi (21 Ekim'e kadar): migration'lar Railway'in pre-deploy adımında (`db:deploy`) otomatik uygulanıyordu. Railway servisleri durduruldu (#297).
 
-**Rollback (uygulama):** Railway'de önceki başarılı deployment yeniden deploy edilir (dashboard → Deployments → Redeploy, ya da `railway redeploy`). `/health` → `release.sha` önceki SHA olmalı.
+**Rollback (uygulama, Render):** Render → servis → Events/Deploys → önceki başarılı deploy → **Rollback** (ya da önceki commit'in elle deploy'u). `/health` → `release.sha` önceki SHA olmalı; açılış migration kapısı (#301) geçmeli.
+- **MFA uyarısı (#300):** `MFA_ENCRYPTION_KEY` verildikten sonra yazılan v2 MFA kayıtlarını, #300'den **önceki** bir sürüm okuyamaz. O sürüme rollback MFA'lı hesapları step-up'ta reddeder. Geri dönüş kuralları: [SA180_MFA_KEY_ROTATION.md](SA180_MFA_KEY_ROTATION.md) "Geri dönüş".
+- Railway dönemi (21 Ekim'e kadar): önceki deployment Railway'de yeniden deploy ediliyordu.
 - **Migration'lar geri alınmaz:** Prisma'da down migration yok; eski sürüm yeni şemayla çalışır (expand/contract kuralı, KV-48). Eski sürümün `db:deploy` adımı yeni migration'ları zaten uygulanmış bulur.
 - **Veri bozulduysa:** KV-48 restore runbook'u (yeni veritabanına geri yükle, `DATABASE_URL`'i çevir). Ölçülen RTO 5,2 dk.
 

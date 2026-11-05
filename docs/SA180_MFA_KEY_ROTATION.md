@@ -7,11 +7,11 @@ Bu değişiklikten önce MFA'nın iki parçası oturum pepper'ına (`AUTH_TOKEN_
 - TOTP sırrının şifreleme anahtarı;
 - kurtarma kodlarının özeti.
 
-Railway güvenlik olayı (21 Ekim) sonrası pepper'ın değiştirilmesi gerekiyor. Pepper doğrudan değişirse MFA kaydı olan **herkes kilitlenir**: TOTP sırrı çözülemez, kurtarma kodları da geçmez. Bu, #180'deki "cihaz + kurtarma kodu kaybı" durumunu herkese birden yaşatır.
+Bir sır sızıntısı şüphesinde ya da düzenli rotasyonda pepper'ın değiştirilmesi gerekebilir. Pepper doğrudan değişirse MFA kaydı olan **herkes kilitlenir**: TOTP sırrı çözülemez, kurtarma kodları da geçmez. Bu, #180'deki "cihaz + kurtarma kodu kaybı" durumunu herkese birden yaşatır.
 
 ## Bu değişiklik neyi çözer, neyi ÇÖZMEZ
 - **Çözer:** Pepper değişiminin MFA'yı kilitlemesini. Oturum token'ları, sıfırlama bağlantıları ve hız sınırı anahtarları yeni pepper'a geçer; MFA ayrı anahtarla çalışmaya devam eder.
-- **Çözmez: sızmış eski kopya riski.** Taşıma (v1 → v2) **aynı TOTP sırrını** yeni anahtarla yeniden şifreler; kurtarma kodları da aynı kalır. Olay sırasında bir saldırgan eski pepper'ı **ve** veritabanının (ya da bir yedeğin) kopyasını birlikte ele geçirdiyse, o kopyadaki v1 kayıtlarından TOTP sırrını çözüp **geçerli kod üretmeye devam edebilir**. Bu riski yalnız **yeni TOTP kaydı** (yeni sır) ve **yeni kurtarma kodları** kapatır.
+- **Çözmez: eski kopya riski.** Taşıma (v1 → v2) **aynı TOTP sırrını** yeni anahtarla yeniden şifreler; kurtarma kodları da aynı kalır. Eski pepper ile veritabanının (ya da bir yedeğin) bir kopyası birlikte ele geçmişse, o kopyadaki v1 kayıtlarından TOTP sırrı çözülebilir. Bu riski yalnız **yeni TOTP kaydı** (yeni sır) ve **yeni kurtarma kodları** kapatır.
 - **Yeniden kayıt kararı:** Etkilenme kapsamı #291'in özel olay dosyasında değerlendirilir; bu public belgede ayrıntı yok. Karar seçenekleri ve asgari ilke:
   1. **Gerekli değil:** Değerlendirme, DB kopyası ile eski pepper'ın birlikte ele geçirilmediği sonucuna varır. Gerekçe ve tarih #291 özel dosyasına yazılır.
   2. **Yetkili hesaplar için gerekli (önerilen asgari):** `ADMIN` ve üstü her hesap, pepper değişiminden sonra yeni TOTP kurar ve yeni kurtarma kodu alır. Önce **en az ayrıcalıklı yönetici hesabıyla** prova yapılır; SUPER_ADMIN en son, kurtarma planı hazırken.
@@ -61,7 +61,9 @@ Railway güvenlik olayı (21 Ekim) sonrası pepper'ın değiştirilmesi gerekiyo
   - **en az ayrıcalıklı** MFA'lı test hesabıyla giriş + TOTP step-up (kayıt bu sırada v2 olur);
   - yeni MFA kurulumu çalışıyor.
 
-**2. Toplu taşıma:** `mfa:rekey` (deneme) → `çözülemeyen: 0` → `--apply` → `v1: 0`.
+**2. Toplu taşıma:** `mfa:rekey` (deneme) → `çözülemeyen: 0` ve **v2 kayıtlar anahtarla doğrulanmış** → `--apply` → `v1: 0`.
+- **Yanlış anahtar koruması:** v2 kayıtlar verilen anahtarla çözülemezse CLI hiçbir şey yazmaz ve çıkış 1 verir.
+- **İlk taşıma koruması:** DB'de henüz anahtarı doğrulanmış v2 kayıt yoksa toplu `--apply` reddedilir. Önce 1. adımdaki uygulama step-up'ı (kayıt uygulamanın anahtarıyla v2 olur) ya da `--only <hesap-id>` ile tek hesapta tatbikat yapılır.
 
 **3. Pepper değişimi (A→B):**
 - `MFA_LEGACY_PEPPERS = <mevcut liste>,<A>` (ilk rotasyonda yalnız `<A>`) ve `AUTH_TOKEN_PEPPER = <B>` olarak gir, deploy et. Mevcut değerler **silinmez**.
@@ -90,7 +92,7 @@ Kanıt yalnız sayı ve durum koduyla #291'e yazılır.
 | Kilitlenen hesap | [SA180 MFA kilitlenmesi](SA180_SUPER_ADMIN_MFA_LOCKOUT.md) prosedürü | DB'den MFA kaydını elle silmek |
 
 ## Yeni sağlayıcı (#297)
-Neon staging'e gerçek staging verisi, oturum ve MFA kayıtlarıyla birlikte taşındı. Bu runbook orada aynen uygulanır. Staging sırları Railway olayından etkilenmiş olabileceği için Render'daki değerlerin yenilenmesi de bu sırayla yapılır.
+Bu runbook her ortamda aynı sırayla uygulanır. Yeni bir ortam ilk günden `MFA_ENCRYPTION_KEY` ile açılır; sırlar başka ortamdan kopyalanmadan yeniden üretilir. Etkilenme değerlendirmesi ve ortama özgü ayrıntılar public belgeye değil, ilgili özel olay dosyasına yazılır (#291).
 
 ## Testler
 `apps/api/test/mfa-keys.test.ts`:
