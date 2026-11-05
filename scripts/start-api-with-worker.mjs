@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const children = new Set();
@@ -41,6 +41,16 @@ const stop = (signal) => {
 };
 process.once("SIGINT", () => stop("SIGINT"));
 process.once("SIGTERM", () => stop("SIGTERM"));
+
+// #301 migration kapısı: şema bu sürümle uyumlu değilse (bekleyen ya da yarım migration, DB'ye ulaşılamıyor) hiçbir
+// süreç başlamaz. Kapı migration ÇALIŞTIRMAZ; uygulama kontrollü adımda yapılır (docs/KV-49_OPERATIONS.md).
+const gate = spawnSync(process.execPath, [fileURLToPath(new URL("../packages/db/ops/migration-gate.ts", import.meta.url))], {
+  cwd: fileURLToPath(new URL("../packages/db/", import.meta.url)), stdio: "inherit", env: process.env, timeout: 60_000,
+});
+if (gate.status !== 0) {
+  console.error(`[launcher] migration gate failed (exit ${gate.status ?? gate.signal}); api and worker NOT started`);
+  process.exit(1);
+}
 
 start("api");
 start("worker");
