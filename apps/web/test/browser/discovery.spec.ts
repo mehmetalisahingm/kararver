@@ -258,7 +258,7 @@ test("discovery screens support mobile/desktop, both themes and accessible chart
         page.locator(".discovery-results, .category-grid, .trend-results"),
       ).toBeVisible();
       for (const theme of ["dark", "light"]) {
-        // UI-V2 defaults to light and persists a chosen theme. Tests must verify
+        // The selected design defaults to dark and persists a chosen theme. Tests must verify
         // both modes regardless of the current persisted browser preference.
         if (await page.locator(".product").getAttribute("data-theme") !== theme) {
           await page.getByRole("button", { name: /temaya geç/ }).click();
