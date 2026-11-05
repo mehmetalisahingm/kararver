@@ -123,40 +123,57 @@ Dosya değiştirilmiş ya da kesikse çözme reddedilir, geçici düz metin temi
 
 ## Zamanlanmış yedek: GitHub Actions (0 TL, #186; Neon + Render Free)
 
-Render Free 15 dk trafiksizlikte uyuduğu için worker içindeki `BACKUP_ENABLED` zamanlaması güvenilir değil. Bu yüzden yedek, kaynak DB'den (Neon) ve uygulamadan **bağımsız** bir yerde, **`.github/workflows/scheduled-backup.yml`** ile her gece UTC 00:30'da (ve elle) alınır. Public repoda Actions ücretsizdir. Ücretli plan, kart ya da kullanım aşımı yok.
+Render Free 15 dk trafiksizlikte uyuduğu için worker içindeki `BACKUP_ENABLED` zamanlaması güvenilir değil. Bu yüzden yedek, kaynak DB'den (Neon) ve uygulamadan **bağımsız** bir yerde, **`.github/workflows/scheduled-backup.yml`** ile her gece UTC 00:30'da alınır. İş elle de tetiklenebilir; elle tetikleme yalnız Mehmet ve Faruk'a açık.
 
-**Her gece:**
-1. **Doğrulanmış kurtarma noktası:**
-   - anlık yedek (`db:backup`, `pg_dump` 18);
-   - aynı runner'da **ayrı, temiz bir PostgreSQL 18**'e `db:restore` (52 migration + 6/6 tutarlılık).
-   - Düz döküm adım bitince silinir. Loglar yalnız sayı içerir (bağlantı adresi redakte edilir).
-2. **Şifreli yedek:**
-   - `apps/worker/scripts/scheduled-backup.ts`, `BACKUP_OUTPUT_DIR` modunda çalışır: zarf şifrelemesi (RSA-OAEP + AES-256-GCM) ve manifest. Manifestte kişisel veri yok; yalnız sayılar, şema kataloğu ve sha256.
-   - Neon'daki `ops_backup_runs`'a "github-actions" kaydı yazılır; `/admin/ops` son yedeği gösterir.
-3. **Saklama:** Şifreli döküm + manifest **35 gün** saklanan bir artifact olur (KV-48 saklama politikası). Süre dolunca GitHub kendisi siler.
-4. **Alarm:** Başarısızlıkta `backup-alarm` etiketli issue açılır; başarı onu kapatır. Sorumlu Faruk.
+**Gerçek koşu (yalnız `schedule` ve yetkili `workflow_dispatch`; her zaman `main` kodu):**
+1. **Tek döküm, doğrulanmış:**
+   - `db:backup --no-record` (`pg_dump` 18, tutarlı snapshot + manifest);
+   - **aynı dosya** runner'da **ayrı, temiz bir PostgreSQL 18**'e `db:restore` ile geri yüklenir (52 migration + 6/6 tutarlılık).
+2. **Doğrulanan AYNI dökümün şifrelenmesi:**
+   - `scheduled-backup.ts`, `BACKUP_FROM_FILE` ile çalışır; sha256 manifestle eşleşmezse durur.
+   - Zarf şifrelemesi RSA-OAEP + AES-256-GCM. Düz döküm hemen silinir; artifact'ta düz döküm olmadığı ayrıca denetlenir.
+3. **Saklama:** Şifreli döküm + manifest **35 gün** saklanan artifact olur (KV-48 saklama politikası).
+4. **Kayıt:** **Ancak artifact yüklendikten sonra** `ops_backup_runs`'a "github-actions" kaydı yazılır (`record-backup-run.ts`). Yükleme düşerse `/admin/ops` "son yedek" güncellenmez, eskimiş görünür.
+5. **Hata:** Yapılandırma eksikse ya da herhangi bir adım düşerse iş **FAIL** olur ve `backup-alarm` issue'su açılır; başarı onu kapatır. Sorumlu Faruk.
+
+**PR'da:**
+- Yalnız `validate` işi çalışır: yedek kodunun birim testleri.
+- Secret'a **erişmez**, veritabanına bağlanmaz, PR kodu secret'la çalışmaz, alarm açmaz.
 
 **Gerekenler (Mehmet; değerler repoya/issue'ya yazılmaz):**
-- **secret `STAGING_BACKUP_DATABASE_URL`:** Neon **doğrudan** (pooler olmayan) adres. En az yetki önerisi: tablolara yalnız okuma + yalnız `ops_backup_runs`'a ekleme.
+- **secret `STAGING_BACKUP_DATABASE_URL`:** Neon **doğrudan** (pooler olmayan) adres. En az yetki önerisi: tablolara okuma + yalnız `ops_backup_runs`'a ekleme.
 - **değişken `BACKUP_PUBLIC_KEY`:** RSA ≥ 3072 bit açık anahtar.
-- **Anahtar sahipleri:** Özel anahtar **iki kişide** (öneri: Mehmet + Faruk), şifre yöneticisinde ve çevrimdışı tutulur. Repoya, Actions'a, issue'ya **asla** girmez. MFA anahtarıyla (#300) aynı yerde saklanmaz.
-- Bunlar yoksa workflow uyarı verip hiçbir şey yapmadan biter.
+- **Özel anahtar sahipleri:**
+  - **iki kişi** (öneri: Mehmet + Faruk), şifre yöneticisinde ve çevrimdışı;
+  - repoya, Actions'a, issue'ya **asla** girmez;
+  - MFA anahtarıyla (#300) aynı yerde saklanmaz;
+  - sahiplerden biri değişirse yeni anahtar çifti üretilir.
 
-**Güvenlik notu (repo public):** Public repoda artifact'ları GitHub'a girmiş herkes indirebilir. Döküm şifreli olduğu için içerik yalnız özel anahtarla açılır, ama manifest (tablo satır sayıları ve şema kataloğu) okunabilir. Bu kabul edilmezse iki seçenek var: manifest de şifrelenir ya da artifact yerine ayrı ücretsiz özel bir depo kullanılır. Karar Mehmet'te.
+**Maliyet:** Public repoda standart GitHub runner kullanımı ücretsiz; "Standard GitHub-hosted runners in public repositories" ücretsiz kullanım olarak sayılıyor ([GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)). Artifact depolamasının public repoda kotaya sayılıp sayılmadığını belge açıkça yazmıyor. Döküm ~7 MB × 35 gün ≈ 250 MB; ilk ay Settings → Billing'den kontrol edilmeli. Kart ekli değilse aşımda ücret değil, kullanım durur.
 
-**Geri yükleme** (yetkili kişi, kendi makinesinde):
+**Güvenlik notu (repo public, karar Mehmet'te):**
+- Public repoda artifact'ları GitHub'a girmiş herkes indirebilir ve **saklayabilir**. 35 günlük silme, indirilmiş kopyaları geri almaz. Özel anahtar ileride sızarsa o zamana kadar indirilmiş bütün yedekler açılabilir.
+- Manifest (tablo satır sayıları ve şema kataloğu) şifresizdir.
+- Kabul edilmezse seçenekler:
+  - manifesti de şifrelemek;
+  - artifact yerine ayrı, ücretsiz ve **özel** bir depo kullanmak (ör. ayrı private repo ya da hesaba bağlı nesne deposu);
+  - anahtarı periyodik yenilemek.
+
+**Geri yükleme (yetkili kişi, kendi makinesinde; aylık elle tatbikat önerilir):**
 1. Actions → ilgili koşu → artifact'ı indir.
 2. Çöz: `node apps/worker/scripts/decrypt-backup.ts --in <ad>.dump.enc --out <ad>.dump --key kv-backup-private.pem`.
 3. Manifesti aynı klasöre `<ad>.dump.manifest.json` olarak koy.
 4. Boş bir DB'ye `db:restore --file <ad>.dump`.
 
-4 Kasım'da yerelde uçtan uca denendi:
-- klasöre şifreli yedek;
-- özel anahtarla çözme;
-- boş PG 18'e restore;
-- 6/6 tutarlılık geçti.
+**4–5 Kasım yerel kanıt:**
+- tek döküm + temiz PG 18'e restore (tutarlı);
+- `BACKUP_FROM_FILE` ile aynı dosyanın şifrelenmesi; düz döküm silindi;
+- `BACKUP_SKIP_RECORD` ile kayıt sayısı değişmedi (5 → 5); `record-backup-run.ts` sonrası 6;
+- ayrıca şifreli dosya özel anahtarla çözülüp boş PG 18'e restore edildi (6/6).
 
-**Kapsam dışı:** Medya nesneleri (Neon Object Storage) bu işe dahil değil. Nesne envanteri ve checksum'lı ayrı kurtarma noktası #302 ile birlikte ele alınır.
+**İlk gerçek koşu:** İlk gerçek şifreli artifact + izole PG 18 restore kanıtı, secret ve açık anahtar eklendikten sonraki ilk koşudadır. Faruk, artifact'ı indirip çözerek restore'u kendi makinesinde doğrular ve yalnız sayılarla #186'ya yazar.
+
+**Kapsam dışı:** Medya nesneleri (Neon Object Storage) bu işe dahil değil; nesne envanteri ve checksum'lı kurtarma noktası #302 ile birlikte.
 
 ## Restore runbook'u
 

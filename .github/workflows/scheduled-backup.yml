@@ -1,32 +1,60 @@
 name: Scheduled encrypted backup
 # #186 / #51 — 0 TL zamanlanmış şifreli PostgreSQL 18 yedeği (Render Free uyuduğu için worker içi yedek güvenilir değil).
-# Her gece: (1) staging DB'nin anlık yedeği alınır ve AYRI, temiz bir PostgreSQL 18'e geri yüklenip 52 migration +
-# tutarlılık kontrolleriyle doğrulanır, düz döküm silinir; (2) yedek RSA açık anahtarla zarf şifrelemesiyle şifrelenir
-# (özel anahtar ekip dışında, çevrimdışı; CI'da YOK) ve 35 gün saklanan artifact olarak tutulur; (3) başarısızlıkta
-# `backup-alarm` issue'su açılır. Ayrıntı ve geri yükleme: docs/KV-48_BACKUP_RESTORE.md "Zamanlanmış yedek: GitHub Actions".
+# Gerçek koşu (yalnız `schedule` ve yetkili kişinin elle tetiklemesi):
+#   1) tek anlık döküm alınır ve AYRI, temiz bir PostgreSQL 18'e restore edilip 52 migration + tutarlılıkla doğrulanır;
+#   2) DOĞRULANAN AYNI döküm (sha256 manifestle eşleşerek) RSA açık anahtarla zarf şifrelemesiyle şifrelenir; düz döküm
+#      silinir (özel anahtar ekip dışında, çevrimdışı; CI'da YOK);
+#   3) 35 gün saklanan artifact yüklenir; 4) ANCAK yükleme başarılıysa ops_backup_runs kaydı yazılır (/admin/ops);
+#   5) yapılandırma eksikse ya da herhangi bir adım düşerse iş FAIL olur ve `backup-alarm` issue'su açılır.
+# PR'da yalnız `validate` işi çalışır: secret'a ERİŞMEZ, veritabanına bağlanmaz, PR kodu secret'la çalışmaz.
+# Ayrıntı: docs/KV-48_BACKUP_RESTORE.md "Zamanlanmış yedek: GitHub Actions".
 #
 # Gerekenler (Mehmet; değerler repoya/issue'ya yazılmaz):
-#   secrets.STAGING_BACKUP_DATABASE_URL  Neon DOĞRUDAN (pooler olmayan) bağlantı adresi; tercihen salt-okuma + yalnız
-#                                        ops_backup_runs'a yazabilen ayrı rol
-#   vars.BACKUP_PUBLIC_KEY               RSA (≥ 3072 bit) açık anahtar, PEM (tek satırda \n olabilir)
-# Bunlar yoksa iş hiçbir şey yapmadan biter (uyarı ile).
+#   secrets.STAGING_BACKUP_DATABASE_URL  Neon DOĞRUDAN (pooler olmayan) adres; tercihen okuma + ops_backup_runs ekleme rolü
+#   vars.BACKUP_PUBLIC_KEY               RSA (≥ 3072 bit) açık anahtar, PEM
 on:
   schedule:
     - cron: '30 0 * * *'
   workflow_dispatch:
-  # Yalnız sözdizimi/atlama yolu doğrulaması (PR'da secret yok → yedek alınmaz, alarm açılmaz).
   pull_request:
-    paths: [.github/workflows/scheduled-backup.yml]
+    paths:
+      - .github/workflows/scheduled-backup.yml
+      - apps/worker/scripts/scheduled-backup.ts
+      - apps/worker/scripts/record-backup-run.ts
+      - apps/worker/src/jobs/backup/**
 permissions:
   contents: read
-  issues: write
 concurrency:
-  group: scheduled-backup
+  group: scheduled-backup-${{ github.event_name }}
   cancel-in-progress: false
 jobs:
+  validate:
+    # PR doğrulaması: secret yok, veritabanı yok; yalnız iş tanımı ve yedek kodunun testleri.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile --filter "@kararver/worker..."
+      - run: cd apps/worker && node --test test/directory-upload.test.ts
+      - name: Gerçek yedek işi PR'da çalışmaz
+        run: |
+          echo "PR koşusu - gerçek yedek yalnız schedule ve yetkili workflow_dispatch'te çalışır (secret kullanılmadı)."
+
   backup:
+    # Yalnız zamanlanmış koşu ya da yetkili kişinin elle tetiklemesi (owner + ops sorumlusu).
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["mehmetalisahingm","farukkemree"]'), github.actor))
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
     services:
       postgres:
         image: postgres:18.1-alpine
@@ -39,32 +67,29 @@ jobs:
           --health-cmd "pg_isready -U kararver -d kararver"
           --health-interval 5s --health-timeout 3s --health-retries 20
     env:
-      SOURCE_DATABASE_URL: ${{ secrets.STAGING_BACKUP_DATABASE_URL }}
-      BACKUP_PUBLIC_KEY: ${{ vars.BACKUP_PUBLIC_KEY }}
       PG_BIN: /usr/lib/postgresql/18/bin
+      WORK: ${{ runner.temp }}/backup
+      OUT: ${{ runner.temp }}/out
     steps:
-      - name: Yapılandırma var mı
-        id: cfg
+      - name: Yapılandırma (eksikse FAIL + alarm)
+        env:
+          HAS_DB: ${{ secrets.STAGING_BACKUP_DATABASE_URL != '' }}
+          HAS_KEY: ${{ vars.BACKUP_PUBLIC_KEY != '' }}
         run: |
-          if [ -z "$SOURCE_DATABASE_URL" ] || [ -z "$BACKUP_PUBLIC_KEY" ]; then
-            echo "::warning::STAGING_BACKUP_DATABASE_URL secret'ı ya da BACKUP_PUBLIC_KEY değişkeni yok; yedek alınmadı."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+          if [ "$HAS_DB" != "true" ] || [ "$HAS_KEY" != "true" ]; then
+            echo "::error::STAGING_BACKUP_DATABASE_URL secret'ı ya da BACKUP_PUBLIC_KEY değişkeni yok: YEDEK ALINMADI."
+            exit 1
           fi
       - uses: actions/checkout@v4
-        if: steps.cfg.outputs.ready == 'true'
+        with:
+          ref: main
       - uses: actions/setup-node@v4
-        if: steps.cfg.outputs.ready == 'true'
         with:
           node-version-file: .nvmrc
       - uses: pnpm/action-setup@v4
-        if: steps.cfg.outputs.ready == 'true'
       - name: Bağımlılıklar (yalnız db + worker)
-        if: steps.cfg.outputs.ready == 'true'
         run: pnpm install --frozen-lockfile --filter "@kararver/db..." --filter "@kararver/worker..."
       - name: PostgreSQL 18 istemcisi (resmî PGDG)
-        if: steps.cfg.outputs.ready == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-common ca-certificates curl
@@ -75,53 +100,68 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client-18
           "$PG_BIN/pg_dump" --version
-      - name: 1) Yedek → ayrı temiz PG 18'e restore → doğrulama (düz döküm sonra silinir)
-        if: steps.cfg.outputs.ready == 'true'
+      - name: 1) Tek döküm → ayrı temiz PG 18'e restore → doğrulama
+        id: verify
         env:
           DATABASE_URL: ${{ secrets.STAGING_BACKUP_DATABASE_URL }}
           RESTORE_DATABASE_URL: postgresql://kararver:kararver_local@127.0.0.1:5432/kararver_restore_check
         run: |
           set -euo pipefail
-          dir="$RUNNER_TEMP/verify"; mkdir -p "$dir"
-          trap 'rm -rf "$dir"' EXIT
-          node packages/db/ops/backup.ts --out "$dir" | tee backup.log
-          file=$(sed -n 's/^yedek: \(.*\.dump\)$/\1/p' backup.log)
-          test -n "$file"
+          mkdir -p "$WORK"
+          # --no-record: başarı kaydı yalnız 4. adımda, artifact yayımlandıktan sonra yazılır.
+          node packages/db/ops/backup.ts --out "$WORK" --no-record | tee "$RUNNER_TEMP/backup.log"
+          file=$(sed -n 's/^yedek: \(.*\.dump\)$/\1/p' "$RUNNER_TEMP/backup.log")
+          test -f "$file" && test -f "$file.manifest.json"
           node packages/db/ops/restore.ts --file "$file"
-      - name: 2) Şifreli yedek (açık anahtarla; özel anahtar CI'da yok)
-        if: steps.cfg.outputs.ready == 'true'
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+      - name: 2) Doğrulanan AYNI dökümü şifrele (kayıt yazılmaz)
         env:
           DATABASE_URL: ${{ secrets.STAGING_BACKUP_DATABASE_URL }}
+          BACKUP_PUBLIC_KEY: ${{ vars.BACKUP_PUBLIC_KEY }}
           APP_ENV: staging
+          BACKUP_FROM_FILE: ${{ steps.verify.outputs.file }}
           BACKUP_OUTPUT_DIR: ${{ runner.temp }}/out
           BACKUP_DESTINATION: github-actions
           BACKUP_PREFIX: db/staging
+          BACKUP_SKIP_RECORD: 'true'
         run: |
+          set -euo pipefail
           node apps/worker/scripts/scheduled-backup.ts
-          find "$BACKUP_OUTPUT_DIR" -type f -printf '%P %s bayt\n'
-          ! find "$BACKUP_OUTPUT_DIR" -type f -name '*.dump' | grep -q .   # düz döküm yok
+          test ! -e "$BACKUP_FROM_FILE"                                   # düz döküm silindi
+          ! find "$OUT" -type f -name '*.dump' | grep -q .                 # artifact'ta düz döküm yok
+          find "$OUT" -type f -printf '%P %s bayt\n'
       - name: 3) Artifact (35 gün)
-        if: steps.cfg.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: kararver-db-staging-${{ github.run_id }}
           path: ${{ runner.temp }}/out
           retention-days: 35
           if-no-files-found: error
+      - name: 4) Yayımlandıktan SONRA yedek kaydı (/admin/ops)
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_BACKUP_DATABASE_URL }}
+          BACKUP_DESTINATION: github-actions
+        run: |
+          set -euo pipefail
+          manifest=$(find "$OUT" -type f -name '*.manifest.json' | head -1)
+          node apps/worker/scripts/record-backup-run.ts --manifest "$manifest"
+      - name: Temizlik
+        if: always()
+        run: rm -rf "$WORK" "$OUT" "$RUNNER_TEMP/backup.log"
       - name: Başarıda açık alarmı kapat
-        if: success() && steps.cfg.outputs.ready == 'true' && github.event_name != 'pull_request'
+        if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           open=$(gh issue list -R "$GITHUB_REPOSITORY" --label backup-alarm --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
           if [ -n "$open" ]; then gh issue close "$open" -R "$GITHUB_REPOSITORY" --comment "✅ Yedek yeniden başarılı (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."; fi
       - name: Başarısızlıkta alarm
-        if: failure() && github.event_name != 'pull_request'
+        if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh label create backup-alarm --color B60205 --description "Zamanlanmış yedek başarısız (#186)" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
           open=$(gh issue list -R "$GITHUB_REPOSITORY" --label backup-alarm --state open --json number --jq '.[0].number // empty')
-          msg="**Zamanlanmış şifreli yedek başarısız** ($RUN_URL). Runbook: docs/KV-48_BACKUP_RESTORE.md \"Zamanlanmış yedek: GitHub Actions\". Sorumlu: @farukkemree"
+          msg="**Zamanlanmış şifreli yedek başarısız** ($RUN_URL). Yedek alınmamış olabilir. Runbook: docs/KV-48_BACKUP_RESTORE.md \"Zamanlanmış yedek: GitHub Actions\". Sorumlu: @farukkemree"
           if [ -n "$open" ]; then gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$msg"; else gh issue create -R "$GITHUB_REPOSITORY" --title "Yedek alarmı: zamanlanmış yedek başarısız" --label backup-alarm --body "$msg"; fi

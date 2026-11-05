@@ -8,7 +8,14 @@
 //   BACKUP_DESTINATION          ops_backup_runs etiketi (varsayılan "r2")
 //   BACKUP_PREFIX               bucket öneki (varsayılan "db/<APP_ENV>")
 //   PG_BIN                      pg_dump klasörü (sunucu sürümüyle aynı major; staging PG 18)
+//   BACKUP_FROM_FILE            yeni döküm almak yerine, ÖNCE restore ile doğrulanmış mevcut dökümü (<ad>.dump + yanında
+//                               <ad>.dump.manifest.json) şifrele (#186: saklanan dosya = doğrulanan dosya). sha256 manifestle
+//                               eşleşmezse durur. Düz döküm şifrelemeden sonra silinir.
+//   BACKUP_SKIP_RECORD          "true": ops_backup_runs kaydı YAZILMAZ; dosya gerçekten yayımlandıktan sonra
+//                               scripts/record-backup-run.ts yazar (artifact yüklenmeden "başarılı yedek" görünmesin).
 // Çıkış kodu 0 = yedek yüklendi ve kaydedildi; 1 = herhangi bir adım başarısız (kayıt yazılmadı).
+import { readFile } from "node:fs/promises";
+import { sha256File, type Manifest } from "@kararver/db/ops/backup";
 import { runScheduledBackup } from "../src/jobs/backup/scheduled.ts";
 import { createDirectoryBackupUpload } from "../src/jobs/backup/directory-upload.ts";
 import { createS3BackupUpload } from "../src/jobs/backup/s3-upload.ts";
@@ -41,6 +48,17 @@ try {
     prefix: process.env.BACKUP_PREFIX ?? `db/${env}`,
     now: () => new Date(),
     log,
+    ...(process.env.BACKUP_FROM_FILE
+      ? {
+          backup: async () => {
+            const file = process.env.BACKUP_FROM_FILE!;
+            const manifest = JSON.parse(await readFile(`${file}.manifest.json`, "utf8")) as Manifest;
+            if ((await sha256File(file)) !== manifest.sha256) throw new Error("doğrulanan döküm manifestle eşleşmiyor (sha256)");
+            return { file, manifest };
+          },
+        }
+      : {}),
+    ...(process.env.BACKUP_SKIP_RECORD === "true" ? { record: async () => {} } : {}),
   });
   log("info", "çıkış", { key: result.dumpKey });
 } catch (err) {
