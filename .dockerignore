@@ -16,3 +16,20 @@ apps/web/.next
 **/.turbo
 **/*.log
 packages/db/generated
+# #309 inceleme (Utku): .gitignore'daki hassas yerel dosyalar da imaja girmez (yerel docker build'de COPY . .).
+**/*.pem
+**/*.key
+beta-private
+beta-reports
+acceptance-results
+onboarding-results
+state-report
+media-report
+**/outage-sonuc*.json
+.playwright-cli
+output
+**/.venv
+**/.spike-venv
+**/dist
+**/build
+**/.next
