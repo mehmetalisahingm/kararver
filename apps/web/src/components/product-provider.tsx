@@ -220,7 +220,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
             <label className="space-search-label" htmlFor="header-search">Anketlerde ara</label>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="10" cy="10" r="6" /><path d="m15 15 5 5" /></svg>
             <input id="header-search" name="q" type="search" placeholder="Anketlerde ara…" minLength={2} maxLength={100} required />
-            <button type="submit" aria-label="Ara">↗</button>
+            <button type="submit" aria-label="Üst menüde ara">↗</button>
           </form>
           <button
             className="kv-button kv-button--ghost"
