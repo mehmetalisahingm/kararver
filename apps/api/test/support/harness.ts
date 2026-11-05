@@ -1,4 +1,6 @@
 import { createPrismaDecisionStore } from "../../src/modules/decisions/prisma-store.ts";
+import { createPrismaProfileStore } from "../../src/modules/profiles/prisma-store.ts";
+import { createPrismaShareStore } from "../../src/modules/shares/prisma-store.ts";
 // Test düzeneği: uygulamayı sahte saat, mail yakalayıcı ve seçilen store ile kurar.
 // Store'a özgü test işlemleri (durum değiştirme, medya ekleme) her iki uygulamada da aynı arayüzle yapılır.
 import { spawnSync } from "node:child_process";
@@ -253,6 +255,8 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     now: () => clock.now,
     isRegistrationEnabled: fixed ? async () => registrationEnabled.value : undefined,
     decisionStore: backend.prisma ? createPrismaDecisionStore(backend.prisma) : undefined,
+    profileStore: backend.prisma ? createPrismaProfileStore(backend.prisma) : undefined,
+    shareStore: backend.prisma ? createPrismaShareStore(backend.prisma) : undefined,
     pollStore: backend.prisma ? createPrismaPollStore(backend.prisma) : undefined,
     searchStore: backend.prisma ? createPrismaSearchStore(backend.prisma) : undefined,
     revisionStore: backend.prisma ? createPrismaRevisionStore(backend.prisma) : undefined,
