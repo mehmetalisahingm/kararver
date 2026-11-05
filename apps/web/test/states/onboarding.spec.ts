@@ -5,21 +5,21 @@ test("first guest can leave onboarding and returning guests browse the feed with
   const mock=await api(page);
   mock.handlers.set("me.get",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Dünyanın nabzını tut."})).toBeVisible();
   await page.getByRole("button",{name:"Üye olmadan akışı keşfet"}).click();
-  await expect(page.getByRole("heading",{name:"Her soru bir hikâye."})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:"Her soru bir hikâye."})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toHaveCount(0);
+  await expect(page.locator(".space-welcome").getByRole("heading",{name:"Dünyanın nabzını tut."})).toHaveCount(0);
   expect(mock.unexpected).toEqual([]);
 });
 
 test("authenticated first visit goes directly to feed",async({page})=>{
   await api(page);
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:"Her soru bir hikâye."})).toBeVisible();
-  await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toHaveCount(0);
+  await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
+  await expect(page.locator(".space-welcome").getByRole("heading",{name:"Dünyanın nabzını tut."})).toHaveCount(0);
 });
 
 test("premium onboarding saves real category ids once after login and never casts a demo vote",async({page})=>{
@@ -54,7 +54,7 @@ test("premium onboarding saves real category ids once after login and never cast
   await page.getByRole("button",{name:"Giriş yap",exact:true}).click();
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading",{name:"Her soru bir hikâye."})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
   expect(interestWrites).toBe(1);
   expect(savedIds.length).toBe(1);
   expect(voteWrites).toBe(0);
@@ -98,7 +98,7 @@ test("direct content links bypass onboarding even for first-time guests",async({
   mock.handlers.set("me.get",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
   const path=sample("polls.get").data.canonicalPath as string;
   await page.goto(path);
-  await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toHaveCount(0);
+  await expect(page.locator(".space-welcome").getByRole("heading",{name:"Dünyanın nabzını tut."})).toHaveCount(0);
   await expect(page.locator("main h1").first()).toBeVisible();
   expect(mock.unexpected).toEqual([]);
 });

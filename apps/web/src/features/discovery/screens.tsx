@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
 import { PollCard } from "../polls/poll-card";
-import { HeroScene, IllustratedScene, visualTopic } from "../../components/visual-story";
+import { IllustratedScene, visualTopic } from "../../components/visual-story";
+import { TopicShowcase } from "../../components/topic-showcase";
 import { ResultChart } from "./charts";
 import { usePages } from "./use-pages";
 import { dateLabel, feedTabs, formats, queryUrl, searchTypes } from "./model";
@@ -422,7 +423,7 @@ export function DiscoveryScreen({
   return (
     <div className={`screen-stack ${surfaces.screen}`}>
       <DiscoveryNav current={categorySlug ? "categories" : "feed"} />
-      <div className="discovery-hero kv-immersive-hero">
+      {!home && <div className="discovery-hero kv-immersive-hero">
         <div className="kv-hero-copy">
           <span className="eyebrow">KARARVER · FİKİRLERİN BULUŞMA NOKTASI</span>
           <h1>{query.q ? "Arama sonuçları" : categorySlug ? category?.name || "Kategori" : home ? <>Her soru <em>bir hikâye.</em></> : "Keşfet"}</h1>
@@ -434,8 +435,10 @@ export function DiscoveryScreen({
             </div>
           )}
         </div>
-        <div className="kv-hero-decoration"><HeroScene className="kv-hero-scene" /></div>
-      </div>
+
+      </div>}
+      {home && <TopicShowcase categories={categories.data ?? []} />}
+      {home && <div className="space-feed-heading"><div><span className="eyebrow">TOPLULUĞUN GÜNDEMİ</span><h2>Bugünün kararları</h2></div><Link href="/olustur">Söz sende <span aria-hidden="true">↗</span></Link></div>}
       {categorySlug && (
         <Link href="/kategoriler" className="back-link">
           ← Tüm kategoriler
@@ -473,7 +476,7 @@ export function CategoryDirectory() {
           <h1>Kategoriler</h1>
           <p>Teknolojiden sanata, spordan günlük hayata… Bir konuyu seç, fikirlere dal.</p>
         </div>
-        <div className="kv-hero-decoration"><HeroScene className="kv-hero-scene" /></div>
+
       </div>
       {categories.error ? (
         <CategoryError message={categories.error} retry={categories.retry} />
@@ -692,7 +695,7 @@ export function TrendsScreen({ query }: { query: Query }) {
           <h1>{formats[query.format]}</h1>
           <p>Gerçek oylar, gerçek eğilimler. Topluluğun nabzını burada keşfet.</p>
         </div>
-        <div className="kv-hero-decoration"><HeroScene className="kv-hero-scene" /></div>
+
       </div>
       {categories.error ? (
         <CategoryError message={categories.error} retry={categories.retry} />

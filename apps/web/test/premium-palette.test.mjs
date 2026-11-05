@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const productCss = readFileSync(new URL("../src/app/premium.css", import.meta.url), "utf8");
+const productCss = readFileSync(new URL("../src/app/space.css", import.meta.url), "utf8");
 const welcomeCss = readFileSync(new URL("../src/features/onboarding/welcome.module.css", import.meta.url), "utf8");
 
 function tokens(css, selector) {
@@ -25,7 +25,7 @@ const light=tokens(productCss, '.product[data-theme="light"]');
 const dark=tokens(productCss, '.product[data-theme="dark"]');
 const welcome=tokens(welcomeCss, ".welcome");
 
-test("charcoal/champagne light theme text, muted and accents meet WCAG AA",()=>{
+test("space theme text, muted and accents meet WCAG AA in both modes",()=>{
   for(const [fg,bg,name] of [
     [light["--kv-text"],light["--kv-background"],"light content"],
     [light["--kv-muted"],light["--kv-surface"],"light muted"],
@@ -35,15 +35,15 @@ test("charcoal/champagne light theme text, muted and accents meet WCAG AA",()=>{
     [dark["--kv-accent"],dark["--kv-surface"],"dark accent"],
   ]) assert.ok(contrast(fg,bg)>=4.5,name+" expected >=4.5:1, received "+contrast(fg,bg).toFixed(2));
 });
-test("champagne primary CTA uses dark ink in both modes",()=>{
-  assert.match(productCss,/\.product \.kv-button:not\(\.kv-button--secondary\)[\s\S]*?color: #252525;/);
-  assert.match(welcomeCss,/\.primary, \.primary:hover \{ color: #252525 !important;/);
-  for(const x of [light,dark])assert.ok(contrast(x["--kv-primary"],"#252525")>=4.5);
+test("blue primary CTA keeps readable white text in both modes",()=>{
+  assert.match(productCss,/\.product\[data-theme\] \.kv-button \{\s*color: #fff;/);
+  assert.match(welcomeCss,/\.primary, \.primary:hover \{ color: #fff !important;/);
+  for(const x of [light,dark])assert.ok(contrast(x["--kv-primary"],"#ffffff")>=4.5);
 });
 test("focus ring is visible against each theme and onboarding text is legible",()=>{
   for(const x of [light,dark])assert.ok(contrast(x["--kv-focus"],x["--kv-background"])>=3);
-  assert.ok(contrast(welcome["--ink"],"#faf8f2")>=7);
-  assert.ok(contrast(welcome["--accent"],"#faf8f2")>=4.5);
+  assert.ok(contrast(welcome["--ink"],"#051428")>=7);
+  assert.ok(contrast(welcome["--accent"],"#051428")>=4.5);
 });
 test("admin navigation uses theme tokens, not the retired violet selection color",()=>{
   const adminCss=readFileSync(new URL("../src/features/admin/admin-shell.module.css",import.meta.url),"utf8");

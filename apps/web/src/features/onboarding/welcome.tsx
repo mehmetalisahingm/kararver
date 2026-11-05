@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import type { WelcomeDemoChoice } from "../../lib/welcome-draft";
 import { WELCOME_SEEN } from "../../lib/welcome-draft";
 import styles from "./welcome.module.css";
-import { HeroScene } from "../../components/visual-story";
 
 export { WELCOME_SEEN };
 
@@ -13,7 +12,7 @@ type Category = { id: string; name: string };
 type CompletePayload = { categoryIds: string[]; demoChoice: WelcomeDemoChoice | null };
 
 const titles = [
-  "İnsanlar gerçekten ne düşünüyor?",
+  "Dünyanın nabzını tut.",
   "Kararsız kaldığında yalnız değilsin.",
   "Bir mesaj. İki farklı bakış.",
   "Senin kararın, başka birinin bakış açısı.",
@@ -50,7 +49,7 @@ export function Welcome({
   const choiceLabel = choice === "write" ? "Yazarım" : choice === "wait" ? "Beklerim" : "—";
   const payload = (): CompletePayload => ({ categoryIds: selected, demoChoice: choice });
 
-  return <main className={styles.welcome} id="main">
+  return <main className={`${styles.welcome} space-welcome`} id="main">
     <header className={styles.header}>
       <Link href="/basla" tabIndex={0} className={styles.logo}>↗ KARARVER</Link>
       <Link href="/giris?onboarding=1" tabIndex={0} onClick={(event) => { event.preventDefault(); onSkip(); }}>
@@ -62,12 +61,11 @@ export function Welcome({
     </div>
     <section className={styles.stage} key={step} aria-labelledby="welcome-title">
       <p className={styles.eyebrow}>FARKLI FİKİRLER. ORTAK MERAK. <span>0{step + 1} / 05</span></p>
-      {step < 2 && <div className={styles.heroArtwork} aria-hidden="true"><HeroScene /></div>}
-      {step === 0 && <p className={styles.wordmark} aria-hidden="true">KARAR<span>VER</span></p>}
+
       <h1 id="welcome-title" ref={heading} tabIndex={-1}>{titles[step]}</h1>
 
       {step < 2 && <>
-        <p className={styles.lead}>{step === 0 ? "Bir seçimin, düşündüğünden daha çok şey anlatır." : "Sor. Oy ver. Sonucu gör."}</p>
+        <p className={styles.lead}>{step === 0 ? "Güncel gelişmeler, teknoloji, ekonomi ve daha fazlası. Farklı fikirleri keşfet, kendi kararını ver." : "Sor. Oy ver. Sonucu gör."}</p>
         {step === 0 && <div className={styles.benefits} aria-label="KararVer'de neler yapabilirsin?">
           <span><strong>01</strong> Sorunu paylaş</span>
           <span><strong>02</strong> Farklı fikirleri keşfet</span>

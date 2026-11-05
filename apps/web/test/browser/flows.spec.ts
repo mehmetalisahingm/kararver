@@ -10,7 +10,7 @@ test("guest can read; cancel gate stays put; login returns without automatically
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Her soru bir hikâye." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bugünün kararları" })).toBeVisible();
   await expect(page.locator("dialog")).not.toBeVisible();
   await page
     .getByRole("link", { name: "Anketi incele", exact: true })
