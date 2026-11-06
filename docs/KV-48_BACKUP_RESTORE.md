@@ -132,9 +132,11 @@ Render Free 15 dk trafiksizlikte uyuduğu için worker içindeki `BACKUP_ENABLED
 2. **Doğrulanan AYNI dökümün şifrelenmesi:**
    - `scheduled-backup.ts`, `BACKUP_FROM_FILE` ile çalışır; sha256 manifestle eşleşmezse durur.
    - Zarf şifrelemesi RSA-OAEP + AES-256-GCM. Düz döküm hemen silinir; artifact'ta düz döküm olmadığı ayrıca denetlenir.
-3. **Saklama:** Şifreli döküm + manifest **35 gün** saklanan artifact olur (KV-48 saklama politikası).
+3. **Saklama:** Yalnız şifreli dosyalar (`<ad>.dump.enc` + `<ad>.dump.manifest.json.enc`, `BACKUP_ENCRYPT_MANIFEST=true`) **35 gün** saklanan artifact olur (KV-48 saklama politikası). Artifact'ta `.enc` dışında dosya olmadığı denetlenir. Düz manifest yalnız runner'da kalır ve 4. adımdaki kayıt için kullanılır.
+   - **Public log:** `db:backup`, `db:restore` ve şifreleme çıktısı (satır sayıları, tablo ve kontrol adları) runner'daki dosyaya yazılır; Actions loguna yalnız "yedek alındı / N kontrol geçti / başarısız" satırı düşer. Ayrıntı gerekirse aynı adımlar yetkili kişinin makinesinde çalıştırılır.
 4. **Kayıt:** **Ancak artifact yüklendikten sonra** `ops_backup_runs`'a "github-actions" kaydı yazılır (`record-backup-run.ts`). Yükleme düşerse `/admin/ops` "son yedek" güncellenmez, eskimiş görünür.
 5. **Hata:** Yapılandırma eksikse ya da herhangi bir adım düşerse iş **FAIL** olur ve `backup-alarm` issue'su açılır; başarı onu kapatır. Sorumlu Faruk.
+6. **Sessiz durma alarmı:** İş hiç çalışmazsa (workflow devre dışı kaldı, cron atlandı) `backup-alarm` açılmaz. Bu yüzden `staging-monitor` 30 dakikada bir, `BACKUP_PUBLIC_KEY` tanımlıysa, workflow'un etkin olduğunu ve son **başarılı** zamanlanmış/elle koşunun **26 saatten** yeni olduğunu denetler; değilse `staging-alarm` açar. Not: GitHub, public repoda 60 gün commit olmazsa zamanlanmış workflow'ları (izleme dahil) kapatır; o durumda ikisi birlikte durur ve yeniden etkinleştirmek gerekir.
 
 **PR'da:**
 - Yalnız `validate` işi çalışır: yedek kodunun birim testleri.
@@ -153,16 +155,15 @@ Render Free 15 dk trafiksizlikte uyuduğu için worker içindeki `BACKUP_ENABLED
 
 **Güvenlik notu (repo public, karar Mehmet'te):**
 - Public repoda artifact'ları GitHub'a girmiş herkes indirebilir ve **saklayabilir**. 35 günlük silme, indirilmiş kopyaları geri almaz. Özel anahtar ileride sızarsa o zamana kadar indirilmiş bütün yedekler açılabilir.
-- Manifest (tablo satır sayıları ve şema kataloğu) şifresizdir.
+- Manifest (tablo satır sayıları ve şema kataloğu) artık şifreli yüklenir; loglarda sayı ve tablo adı yok (#311).
 - Kabul edilmezse seçenekler:
-  - manifesti de şifrelemek;
   - artifact yerine ayrı, ücretsiz ve **özel** bir depo kullanmak (ör. ayrı private repo ya da hesaba bağlı nesne deposu);
   - anahtarı periyodik yenilemek.
 
 **Geri yükleme (yetkili kişi, kendi makinesinde; aylık elle tatbikat önerilir):**
 1. Actions → ilgili koşu → artifact'ı indir.
 2. Çöz: `node apps/worker/scripts/decrypt-backup.ts --in <ad>.dump.enc --out <ad>.dump --key kv-backup-private.pem`.
-3. Manifesti aynı klasöre `<ad>.dump.manifest.json` olarak koy.
+3. Manifesti de çöz: `node apps/worker/scripts/decrypt-backup.ts --in <ad>.dump.manifest.json.enc --out <ad>.dump.manifest.json --key kv-backup-private.pem` (dökümle aynı klasöre).
 4. Boş bir DB'ye `db:restore --file <ad>.dump`.
 
 **4–5 Kasım yerel kanıt:**

@@ -4,7 +4,7 @@ name: Scheduled encrypted backup
 #   1) tek anlık döküm alınır ve AYRI, temiz bir PostgreSQL 18'e restore edilip 52 migration + tutarlılıkla doğrulanır;
 #   2) DOĞRULANAN AYNI döküm (sha256 manifestle eşleşerek) RSA açık anahtarla zarf şifrelemesiyle şifrelenir; düz döküm
 #      silinir (özel anahtar ekip dışında, çevrimdışı; CI'da YOK);
-#   3) 35 gün saklanan artifact yüklenir; 4) ANCAK yükleme başarılıysa ops_backup_runs kaydı yazılır (/admin/ops);
+#   3) yalnız şifreli dosyalar (döküm + manifest) 35 gün saklanan artifact olur; public loga sayı/tablo adı yazılmaz; 4) ANCAK yükleme başarılıysa ops_backup_runs kaydı yazılır (/admin/ops);
 #   5) yapılandırma eksikse ya da herhangi bir adım düşerse iş FAIL olur ve `backup-alarm` issue'su açılır.
 # PR'da yalnız `validate` işi çalışır: secret'a ERİŞMEZ, veritabanına bağlanmaz, PR kodu secret'la çalışmaz.
 # Ayrıntı: docs/KV-48_BACKUP_RESTORE.md "Zamanlanmış yedek: GitHub Actions".
@@ -40,7 +40,7 @@ jobs:
           node-version-file: .nvmrc
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile --filter "@kararver/worker..."
-      - run: cd apps/worker && node --test test/directory-upload.test.ts
+      - run: cd apps/worker && node --test test/directory-upload.test.ts test/scheduled-backup.test.ts
       - name: Gerçek yedek işi PR'da çalışmaz
         run: |
           echo "PR koşusu - gerçek yedek yalnız schedule ve yetkili workflow_dispatch'te çalışır (secret kullanılmadı)."
@@ -108,11 +108,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$WORK"
+          # Repo public: Actions logu herkese açık. Araç çıktısı (satır sayıları, tablo/kontrol adları) yalnız runner'daki
+          # dosyaya yazılır; loga yalnız sonuç satırı düşer. Ayrıntı gerekirse aynı adım yerelde çalıştırılır (KV-48).
           # --no-record: başarı kaydı yalnız 4. adımda, artifact yayımlandıktan sonra yazılır.
-          node packages/db/ops/backup.ts --out "$WORK" --no-record | tee "$RUNNER_TEMP/backup.log"
+          if ! node packages/db/ops/backup.ts --out "$WORK" --no-record > "$RUNNER_TEMP/backup.log" 2>&1; then
+            echo "::error::db:backup başarısız (ayrıntı public loga yazılmaz)"; exit 1
+          fi
           file=$(sed -n 's/^yedek: \(.*\.dump\)$/\1/p' "$RUNNER_TEMP/backup.log")
           test -f "$file" && test -f "$file.manifest.json"
-          node packages/db/ops/restore.ts --file "$file"
+          echo "yedek alındı: $(basename "$file") ($(grep -c '⚠' "$RUNNER_TEMP/backup.log" || true) uyarı)"
+          if ! node packages/db/ops/restore.ts --file "$file" > "$RUNNER_TEMP/restore.log" 2>&1; then
+            echo "::error::restore doğrulaması başarısız: $(grep -c '✖' "$RUNNER_TEMP/restore.log" || true) kontrol düştü (ayrıntı public loga yazılmaz)"; exit 1
+          fi
+          grep -q '^SONUÇ: yedek eksiksiz' "$RUNNER_TEMP/restore.log"
+          echo "restore doğrulandı: $(grep -c '✔' "$RUNNER_TEMP/restore.log" || true) kontrol geçti"
           echo "file=$file" >> "$GITHUB_OUTPUT"
       - name: 2) Doğrulanan AYNI dökümü şifrele (kayıt yazılmaz)
         env:
@@ -124,12 +133,16 @@ jobs:
           BACKUP_DESTINATION: github-actions
           BACKUP_PREFIX: db/staging
           BACKUP_SKIP_RECORD: 'true'
+          # Manifest satır sayıları ve şema kataloğu taşır: o da şifrelenir; düz manifest yalnız $WORK'te kalır (4. adım).
+          BACKUP_ENCRYPT_MANIFEST: 'true'
         run: |
           set -euo pipefail
-          node apps/worker/scripts/scheduled-backup.ts
+          node apps/worker/scripts/scheduled-backup.ts > "$RUNNER_TEMP/encrypt.log" 2>&1 || { echo "::error::şifreleme başarısız"; exit 1; }
           test ! -e "$BACKUP_FROM_FILE"                                   # düz döküm silindi
-          ! find "$OUT" -type f -name '*.dump' | grep -q .                 # artifact'ta düz döküm yok
-          find "$OUT" -type f -printf '%P %s bayt\n'
+          ! find "$OUT" -type f ! -name '*.enc' | grep -q .               # artifact'ta yalnız şifreli dosya
+          find "$OUT" -type f -name '*.dump.enc' | grep -q .
+          find "$OUT" -type f -name '*.manifest.json.enc' | grep -q .
+          find "$OUT" -type f -printf '%f\n'
       - name: 3) Artifact (35 gün)
         uses: actions/upload-artifact@v4
         with:
@@ -143,11 +156,11 @@ jobs:
           BACKUP_DESTINATION: github-actions
         run: |
           set -euo pipefail
-          manifest=$(find "$OUT" -type f -name '*.manifest.json' | head -1)
-          node apps/worker/scripts/record-backup-run.ts --manifest "$manifest"
+          # Düz manifest artifact'ta yok; doğrulanan dökümün yanında (runner'da) duruyor.
+          node apps/worker/scripts/record-backup-run.ts --manifest "${{ steps.verify.outputs.file }}.manifest.json"
       - name: Temizlik
         if: always()
-        run: rm -rf "$WORK" "$OUT" "$RUNNER_TEMP/backup.log"
+        run: rm -rf "$WORK" "$OUT" "$RUNNER_TEMP/backup.log" "$RUNNER_TEMP/restore.log" "$RUNNER_TEMP/encrypt.log"
       - name: Başarıda açık alarmı kapat
         if: success()
         env:

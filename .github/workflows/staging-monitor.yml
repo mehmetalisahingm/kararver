@@ -1,6 +1,6 @@
 # KV-49 (#51) staging izleme ve alarm. 30 dakikada bir (ve elle): API sağlığı, worker heartbeat'i, çalışan sürüm.
 # Sorun varsa "staging-alarm" etiketli tek bir açık issue açılır/güncellenir; düzelince kapatılır. Secret gerekmez
-# (yalnız public /health okunur). Ayrıntı: docs/KV-49_OPERATIONS.md "İzleme ve alarm".
+# (yalnız public /health okunur). Yedek yapılandırılmışsa son başarılı zamanlanmış yedeğin yaşı da denetlenir (#186). Ayrıntı: docs/KV-49_OPERATIONS.md "İzleme ve alarm".
 # Production: repo değişkeni PROD_API_URL (ve PROD_WEB_URL) tanımlanınca aynı kontroller "production-alarm" etiketiyle çalışır;
 # tanımlı değilken production işi hiçbir şey yapmadan geçer. Production bilerek onaylı sürümde durduğu için gecikme alarmı
 # yoktur; PROD_RELEASE_SHA verilirse "production onaylı sürümde mi" denetlenir.
@@ -232,11 +232,42 @@ jobs:
           printf '%s\n' "${problems[@]}" >> problems.txt
           [ ${#problems[@]} -eq 0 ] && echo "ok=true" >> "$GITHUB_OUTPUT" || echo "ok=false" >> "$GITHUB_OUTPUT"
 
+      # #186 / #311: zamanlanmış yedek sessizce durabilir (workflow devre dışı kaldı, cron atlandı, iş hep düşüyor).
+      # Yedek yapılandırılmışsa (BACKUP_PUBLIC_KEY tanımlı) son BAŞARILI scheduled-backup koşusu BACKUP_MAX_AGE_HOURS'tan
+      # eski olamaz. Yalnız staging; sır gerekmez (Actions geçmişi okunur).
+      - name: Yedek tazeliği
+        id: backup
+        if: matrix.target == 'staging' && vars.BACKUP_PUBLIC_KEY != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKUP_MAX_AGE_HOURS: "26"
+        shell: bash
+        run: |
+          set -u
+          problems=()
+          state=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/scheduled-backup.yml" --jq '.state' 2>/dev/null || echo "okunamadı")
+          [ "$state" = "active" ] || problems+=("zamanlanmış yedek workflow'u etkin değil (durum: $state); Actions → Scheduled encrypted backup → Enable")
+          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/scheduled-backup.yml/runs?branch=main&status=success&per_page=20" \
+            --jq '[.workflow_runs[] | select(.event == "schedule" or .event == "workflow_dispatch")][0].updated_at // empty' 2>/dev/null || true)
+          if [ -z "$last" ]; then
+            problems+=("hiç başarılı zamanlanmış yedek yok (yapılandırma tamam ise elle bir kez çalıştırılmalı)")
+            age="-"
+          else
+            age=$(( ($(date -u +%s) - $(date -u -d "$last" +%s)) / 3600 ))
+            [ "$age" -lt "$BACKUP_MAX_AGE_HOURS" ] || problems+=("son başarılı yedek ${age} saat önce (sınır ${BACKUP_MAX_AGE_HOURS} sa)")
+          fi
+          {
+            echo "- Son başarılı yedek: ${last:-yok} (${age} sa)"
+            if [ ${#problems[@]} -gt 0 ]; then printf -- '- ✖ %s\n' "${problems[@]}"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "${problems[@]}" >> problems.txt
+          [ ${#problems[@]} -eq 0 ] && echo "ok=true" >> "$GITHUB_OUTPUT" || echo "ok=false" >> "$GITHUB_OUTPUT"
+
       - name: Alarm issue'sunu aç / güncelle / kapat
         if: steps.target.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          OK: ${{ steps.health.outputs.ok == 'true' && steps.web.outputs.ok == 'true' && steps.lag.outputs.ok != 'false' }}
+          OK: ${{ steps.health.outputs.ok == 'true' && steps.web.outputs.ok == 'true' && steps.lag.outputs.ok != 'false' && steps.backup.outputs.ok != 'false' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         shell: bash
         run: |

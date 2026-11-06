@@ -11,6 +11,7 @@
 //   BACKUP_FROM_FILE            yeni döküm almak yerine, ÖNCE restore ile doğrulanmış mevcut dökümü (<ad>.dump + yanında
 //                               <ad>.dump.manifest.json) şifrele (#186: saklanan dosya = doğrulanan dosya). sha256 manifestle
 //                               eşleşmezse durur. Düz döküm şifrelemeden sonra silinir.
+//   BACKUP_ENCRYPT_MANIFEST     "true": manifest de şifrelenir (<ad>.manifest.json.enc); düz manifest yalnız yerelde kalır
 //   BACKUP_SKIP_RECORD          "true": ops_backup_runs kaydı YAZILMAZ; dosya gerçekten yayımlandıktan sonra
 //                               scripts/record-backup-run.ts yazar (artifact yüklenmeden "başarılı yedek" görünmesin).
 // Çıkış kodu 0 = yedek yüklendi ve kaydedildi; 1 = herhangi bir adım başarısız (kayıt yazılmadı).
@@ -59,6 +60,7 @@ try {
         }
       : {}),
     ...(process.env.BACKUP_SKIP_RECORD === "true" ? { record: async () => {} } : {}),
+    encryptManifest: process.env.BACKUP_ENCRYPT_MANIFEST === "true",
   });
   log("info", "çıkış", { key: result.dumpKey });
 } catch (err) {
