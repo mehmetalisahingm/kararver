@@ -34,7 +34,13 @@ export const auditTargetTypes = Object.freeze([
 export type AuditTargetType = (typeof auditTargetTypes)[number];
 
 /** KV-04 kataloğunda olmayan, aktörsüz (CLI/worker) işlemler. API isteği bunları yazamaz. */
-export const systemAuditActions = Object.freeze(["user.status.sync", "community.request.expire", "moderation.bulk.expire"] as const);
+// security.mfa.rekey: #300 toplu MFA anahtar taşıması (mfa:rekey --apply), taşınan hesap başına bir kayıt; sır yazılmaz.
+export const systemAuditActions = Object.freeze([
+  "user.status.sync",
+  "community.request.expire",
+  "moderation.bulk.expire",
+  "security.mfa.rekey",
+] as const);
 export type SystemAuditAction = (typeof systemAuditActions)[number];
 export type AuditAction = ActionId | SystemAuditAction;
 

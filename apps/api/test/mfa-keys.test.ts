@@ -232,7 +232,15 @@ const backend = prismaBackend();
       assert.equal(cipherVersion(row.secret_cipher), 2);
       assert.equal(recoverTotpSecret(row.secret_cipher, row.user_id, { current: KEY, legacy: [C] }), secret);
     }
+    // Her taşınan hesap için tek, aktörsüz CLI denetim kaydı; özette sır yok, yalnız sürüm.
+    const audits = await ctx.prisma!.auditLog.findMany({ where: { action: "security.mfa.rekey", targetId: { in: users } } });
+    assert.equal(audits.length, 2);
+    for (const a of audits) {
+      assert.deepEqual([a.source, a.actorId, a.operation, a.targetType], ["CLI", null, "rekey", "USER"]);
+      assert.deepEqual([a.before, a.after], [{ cipherVersion: 1 }, { cipherVersion: 2 }]);
+    }
     const again = await rekeyMfaCredentials(ctx.prisma!, { current: KEY, legacy: [C] }, { apply: true, only: users });
     assert.equal(again.failed, 0, "v1 kalmadı; yeni pepper ile de sorun yok");
+    assert.equal(await ctx.prisma!.auditLog.count({ where: { action: "security.mfa.rekey", targetId: { in: users } } }), 2, "ikinci çalıştırma kayıt yazmaz");
   });
 });

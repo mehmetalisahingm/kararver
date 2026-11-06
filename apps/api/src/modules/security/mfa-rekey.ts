@@ -9,8 +9,10 @@
 //   toplu --apply reddedilir. Önce uygulamada bir MFA'lı test hesabıyla step-up (kayıt uygulamanın anahtarıyla v2 olur)
 //   ya da `only` ile tek hesapta tatbikat yapılır.
 // - Deneme modunda (apply=false) hiçbir şey yazılmaz. Veritabanı hataları "çözülemeyen" sayılmaz, yukarı fırlatılır.
+// - Her taşıma aynı transaction'da `security.mfa.rekey` (CLI, aktörsüz) denetim kaydı yazar: sürüm 1 → 2, sır yok.
 // Kurtarma kodları özet olarak saklandığı için taşınamaz; rapor kaç kullanılmamış kod kaldığını söyler.
 import type { PrismaClient } from "@kararver/db";
+import { writeAudit } from "../audit/write.ts";
 import { cipherVersion, recoverTotpSecret, rekeyTotpSecret, type MfaKeys } from "./encryption.ts";
 
 export type RekeyReport = {
@@ -91,6 +93,8 @@ export async function rekeyMfaCredentials(
         if (!current || cipherVersion(current.secret_cipher) !== 1) return false;
         const next = rekeyTotpSecret(current.secret_cipher, row.user_id, keys);
         await tx.$executeRaw`UPDATE user_mfa_credentials SET secret_cipher = ${next} WHERE user_id = ${row.user_id}::uuid`;
+        await writeAudit(tx, { source: "CLI", actorId: null, action: "security.mfa.rekey", target: { type: "USER", id: row.user_id },
+          before: { cipherVersion: 1 }, after: { cipherVersion: 2 } });
         return true;
       });
       if (written) report.rekeyed++;
