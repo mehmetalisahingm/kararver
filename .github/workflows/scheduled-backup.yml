@@ -68,14 +68,14 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 20
     env:
       PG_BIN: /usr/lib/postgresql/18/bin
-      WORK: ${{ runner.temp }}/backup
-      OUT: ${{ runner.temp }}/out
     steps:
       - name: Yapılandırma (eksikse FAIL + alarm)
         env:
           HAS_DB: ${{ secrets.STAGING_BACKUP_DATABASE_URL != '' }}
           HAS_KEY: ${{ vars.BACKUP_PUBLIC_KEY != '' }}
         run: |
+          # runner bağlamı iş seviyesindeki env'de kullanılamaz; klasörler burada tanımlanır.
+          { echo "WORK=$RUNNER_TEMP/backup"; echo "OUT=$RUNNER_TEMP/out"; } >> "$GITHUB_ENV"
           if [ "$HAS_DB" != "true" ] || [ "$HAS_KEY" != "true" ]; then
             echo "::error::STAGING_BACKUP_DATABASE_URL secret'ı ya da BACKUP_PUBLIC_KEY değişkeni yok: YEDEK ALINMADI."
             exit 1
