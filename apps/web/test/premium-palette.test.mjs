@@ -24,6 +24,7 @@ function contrast(a,b) {
 const light=tokens(productCss, '.product[data-theme="light"]');
 const dark=tokens(productCss, '.product[data-theme="dark"]');
 const welcome=tokens(welcomeCss, ".welcome");
+const studioCss=readFileSync(new URL("../src/app/studio.css",import.meta.url),"utf8");
 
 test("space theme text, muted and accents meet WCAG AA in both modes",()=>{
   for(const [fg,bg,name] of [
@@ -35,15 +36,20 @@ test("space theme text, muted and accents meet WCAG AA in both modes",()=>{
     [dark["--kv-accent"],dark["--kv-surface"],"dark accent"],
   ]) assert.ok(contrast(fg,bg)>=4.5,name+" expected >=4.5:1, received "+contrast(fg,bg).toFixed(2));
 });
-test("blue primary CTA keeps readable white text in both modes",()=>{
+test("legacy blue and editorial lime actions retain readable foregrounds",()=>{
   assert.match(productCss,/\.product\[data-theme\] \.kv-button \{\s*color: #fff;/);
-  assert.match(welcomeCss,/\.primary, \.primary:hover \{ color: #fff !important;/);
+  assert.ok(contrast(welcome["--accent"],"#182113")>=4.5);
   for(const x of [light,dark])assert.ok(contrast(x["--kv-primary"],"#ffffff")>=4.5);
 });
 test("focus ring is visible against each theme and onboarding text is legible",()=>{
   for(const x of [light,dark])assert.ok(contrast(x["--kv-focus"],x["--kv-background"])>=3);
-  assert.ok(contrast(welcome["--ink"],"#051428")>=7);
-  assert.ok(contrast(welcome["--accent"],"#051428")>=4.5);
+  assert.ok(contrast(welcome["--ink"],welcome["--ground"])>=7);
+  assert.ok(contrast(welcome["--accent"],welcome["--ground"])>=4.5);
+  for(const x of [tokens(studioCss,'.product[data-experience="studio"]'),tokens(studioCss,'.product[data-experience="studio"][data-theme="light"]')]) {
+    for(const fg of ["--kv-text","--kv-muted","--kv-accent"])
+      assert.ok(contrast(x[fg],x["--kv-surface"])>=4.5,`${fg} on studio surface`);
+    assert.ok(contrast(x["--kv-focus"],x["--kv-background"])>=3);
+  }
 });
 test("admin navigation uses theme tokens, not the retired violet selection color",()=>{
   const adminCss=readFileSync(new URL("../src/features/admin/admin-shell.module.css",import.meta.url),"utf8");

@@ -50,14 +50,14 @@ function DiscoveryNav({
     </nav>
   );
 }
-function useQueryFocus(query: Query) {
+function useQueryFocus(query: Query, home = false, mission = false) {
   const key = JSON.stringify(query);
   const previous = useRef(key);
   useEffect(() => {
     if (previous.current !== key)
-      document.querySelector<HTMLElement>("#main")?.focus();
+      document.querySelector<HTMLElement>(home ? "#home-feed" : mission ? "#mission-content" : "#main")?.focus({ preventScroll: home || mission });
     previous.current = key;
-  }, [key]);
+  }, [key, home, mission]);
 }
 function useCategories() {
   const { client } = useProduct();
@@ -80,7 +80,7 @@ function useCategories() {
   }, [client, attempt]);
   return { data, error, retry: () => retry((n) => n + 1) };
 }
-function SearchForm({ query }: { query: Query }) {
+function SearchForm({ query, preserveScroll = false }: { query: Query; preserveScroll?: boolean }) {
   const router = useRouter();
   const [text, setText] = useState(query.q);
   const [type, setType] = useState<SearchType>(query.type);
@@ -98,6 +98,7 @@ function SearchForm({ query }: { query: Query }) {
         setError("");
         router.push(
           queryUrl("/kesfet", query, { q: text.trim(), type, category: "" }),
+          { scroll: !preserveScroll },
         );
       }}
     >
@@ -297,6 +298,7 @@ function FeedBody({
 }) {
   const { client, user } = useProduct();
   const path = category ? `/kategori/${category.slug}` : home ? "/" : "/kesfet";
+  const router = useRouter();
   const load = useCallback(
     async (
       cursor: string | undefined,
@@ -325,9 +327,10 @@ function FeedBody({
     ],
   );
   const pages = usePages<SearchResult, Page<SearchResult>>(load);
+  const questions = pages.result?.data.filter((item): item is Extract<SearchResult, { type: "poll" }> => item.type === "poll") ?? [];
   return (
     <>
-      <SearchForm query={query} />
+      {(!home || query.q) && <SearchForm query={query} preserveScroll={!home && !category} />}
       {query.q ? (
         <p className="kv-muted">
           “{query.q}” · {searchTypes[query.type]} sonuçları
@@ -340,6 +343,7 @@ function FeedBody({
                 <Link
                   key={value}
                   href={queryUrl(path, query, { tab: value as FeedTab })}
+                  scroll={!home}
                   aria-current={query.tab === value ? "page" : undefined}
                 >
                   {label}
@@ -351,6 +355,7 @@ function FeedBody({
                 categories={categories}
                 query={query}
                 path={path}
+                navigate={home || !category ? url => router.push(url, { scroll: false }) : undefined}
               />
             )}
           </div>
@@ -365,6 +370,10 @@ function FeedBody({
           </p>
         </>
       )}
+      {home && questions.length > 1 && <div className="home-surprise"><p>Bir yerden başlamak yeter.</p><button type="button" onClick={() => {
+        const poll = questions[Math.floor(Math.random() * questions.length)].poll;
+        router.push(poll.canonicalPath || `/karar/${poll.id}`);
+      }}>Beni şaşırt ↗</button></div>}
       {!pages.result && pages.busy && (
         <Loading
           label={query.q ? "Arama sonuçları yükleniyor…" : "Akış yükleniyor…"}
@@ -416,14 +425,26 @@ export function DiscoveryScreen({
   home?: boolean;
   categorySlug?: string;
 }) {
-  useQueryFocus(query);
+  const mission = !home && !categorySlug;
+  useQueryFocus(query, home, mission);
   const { user } = useProduct();
   const categories = useCategories();
   const category = categories.data?.find((c) => c.slug === categorySlug);
+  if (home) return <div className="home-discovery">
+    <TopicShowcase categories={categories.data ?? []} />
+    <section className="home-feed" id="home-feed" tabIndex={-1} aria-labelledby="home-feed-title">
+      <header className="home-feed-header"><div><span className="eyebrow">03 — SENİN MASAN</span><h2 id="home-feed-title">Bugünün<br />kararları</h2></div><Link href="/olustur">Bir soru bırak ↗</Link></header>
+      {categories.error ? <CategoryError message={categories.error} retry={categories.retry} /> : !categories.data ? <Loading label="Kategoriler yükleniyor…" /> : <FeedBody key={JSON.stringify(query) + (user?.id || "guest")} query={query} home categories={categories.data} />}
+      <Link className="home-all-questions" href="/kesfet">Tüm sorulara göz at ↗</Link>
+    </section>
+  </div>;
   return (
-    <div className={`screen-stack ${surfaces.screen}`}>
+    <div className={`screen-stack ${surfaces.screen}${mission ? " mission-discovery" : ""}`}>
       <DiscoveryNav current={categorySlug ? "categories" : "feed"} />
-      {!home && <div className="discovery-hero kv-immersive-hero">
+      {mission ? <>
+        <header className="mission-directory-heading"><div><span className="eyebrow">YENİ BİR BAKIŞ AÇISI</span><h2>{query.q ? "Arama sonuçları" : "Keşif masası"}</h2></div><p>Bir konu bul. Bir soru aç.<br />Düşündüğünü söyle.</p></header>
+        {!query.q && <nav className="mission-category-links" aria-label="Keşif konuları">{categories.data?.slice(0,8).map(item => <Link key={item.id} href={"/kategori/" + item.slug}>{item.name} ↗</Link>)}</nav>}
+      </> : <div className="discovery-hero kv-immersive-hero">
         <div className="kv-hero-copy">
           <span className="eyebrow">KARARVER · FİKİRLERİN BULUŞMA NOKTASI</span>
           <h1>{query.q ? "Arama sonuçları" : categorySlug ? category?.name || "Kategori" : home ? <>Her soru <em>bir hikâye.</em></> : "Keşfet"}</h1>
@@ -437,8 +458,6 @@ export function DiscoveryScreen({
         </div>
 
       </div>}
-      {home && <TopicShowcase categories={categories.data ?? []} />}
-      {home && <div className="space-feed-heading"><div><span className="eyebrow">TOPLULUĞUN GÜNDEMİ</span><h2>Bugünün kararları</h2></div><Link href="/olustur">Söz sende <span aria-hidden="true">↗</span></Link></div>}
       {categorySlug && (
         <Link href="/kategoriler" className="back-link">
           ← Tüm kategoriler

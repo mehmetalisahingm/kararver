@@ -37,3 +37,7 @@
   .footer > a { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .card :global(progress) { animation: none; transition: none; } }
+
+:global(.product[data-experience="studio"]) :is(.cover,.coverErrorWithFallback,.summary > div){border-radius:0}
+:global(.product[data-experience="studio"]) .option{border-radius:0;border:0;border-bottom:1px solid var(--kv-control-border);padding:18px 14px}
+:global(.product[data-experience="studio"]) .option[data-selected="true"]{border-left:2px solid var(--kv-accent)}

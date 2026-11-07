@@ -70,7 +70,8 @@ test("feed pagination retries preserve items; expired cursor restarts; filters a
   await expect(cards).toHaveCount(3);
   for (const author of await cards.locator(".author small").allTextContents())
     expect(author).toContain("Teknoloji");
-  await expect(page.locator("#main")).toBeFocused();
+  // Filtering returns keyboard focus to the results, keeping the landing scene above.
+  await expect(page.locator("#mission-content")).toBeFocused();
   await expect(
     page.getByRole("button", { name: "Daha fazla göster", exact: true }),
   ).toHaveCount(0);

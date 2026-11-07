@@ -1,12 +1,13 @@
 import {test,expect} from "@playwright/test";
 import {api,failure,sample} from "./api";
 
-test("first guest can leave onboarding and returning guests browse the feed without a login wall",async({page})=>{
+test("first guest enters the scroll experience and returning guests browse without a login wall",async({page})=>{
   const mock=await api(page);
   mock.handlers.set("me.get",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:"Dünyanın nabzını tut."})).toBeVisible();
-  await page.getByRole("button",{name:"Üye olmadan akışı keşfet"}).click();
+  await expect(page.getByRole("heading",{name:"Bir fikre kapıl."})).toBeVisible();
+  await page.getByRole("link",{name:/Aşağı in/}).click();
+  await expect(page).toHaveURL(/#discovery-stage$/);
   await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
   await page.goto("/");
   await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
@@ -39,7 +40,7 @@ test("premium onboarding saves real category ids once after login and never cast
     await r.fulfill({json:sample("votes.put")});
   });
 
-  await page.goto("/");
+  await page.goto("/basla");
   await page.getByRole("button",{name:"Bir karar verelim"}).click();
   await page.getByRole("button",{name:"Kendin dene"}).click();
   await page.getByRole("button",{name:"Beklerim",exact:false}).click();

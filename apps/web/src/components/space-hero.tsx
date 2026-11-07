@@ -1,29 +1,35 @@
+"use client";
 import Link from "next/link";
+import type { CSSProperties } from "react";
+import { useSceneMotion, useScrollScene } from "./scene-motion";
+
+function GravityWord({ children, offset = 0 }: { children: string; offset?: number }) {
+  return <span className="gravity-word" aria-hidden="true">{Array.from(children).map((letter, index) =>
+    <span key={index} style={{ "--fall": (110 + ((index + offset) % 4) * 85) + "px", "--turn": (((index + offset) % 2 ? 1 : -1) * (12 + index * 5)) + "deg" } as CSSProperties}>{letter === " " ? "\u00a0" : letter}</span>
+  )}</span>;
+}
 
 export function SpaceHero() {
-  return <section className="space-hero" aria-labelledby="space-hero-title">
-    <img className="space-hero-backdrop" src="/art/space/earth-astronaut.webp" alt="" width="2160" height="720" fetchPriority="high" />
-    <div className="space-hero-copy">
-      <span className="space-eyebrow"><span aria-hidden="true" /> MERAKININ ÖTESİNİ KEŞFET</span>
-      <h1 id="space-hero-title">Dünyanın<br />nabzını tut.</h1>
-      <p>Güncel gelişmeler, teknoloji, ekonomi, spor ve daha fazlası için topluluğunla karar ver.</p>
-      <div className="space-hero-actions">
-        <Link className="kv-button" href="/kesfet">Gündem anketlerini gör <span aria-hidden="true">→</span></Link>
-        <Link className="space-text-link" href="/olustur">Bir soru sor <span aria-hidden="true">↗</span></Link>
+  const { ref, still } = useScrollScene("orbit");
+  const { paused, reduced, toggle } = useSceneMotion();
+  return <section ref={ref} className="gravity-hero" data-still={still} aria-labelledby="space-hero-title">
+    <div className="gravity-viewport">
+      <img className="gravity-earth" src="/art/space/orbital-earth-v2.webp" alt="" width="2160" height="1215" fetchPriority="high" />
+      <div className="gravity-shade" aria-hidden="true" />
+      <div className="gravity-coordinates" aria-hidden="true"><span>FARKLI FİKİRLERİN ÇEKİM ALANI</span><span>01 / YÖRÜNGEYE GİRİŞ</span></div>
+      <h1 id="space-hero-title" className="gravity-title" aria-label="Bir fikre kapıl.">
+        <GravityWord>Bir fikre</GravityWord><GravityWord offset={3}>kapıl.</GravityWord>
+      </h1>
+      <div className="gravity-astronaut" aria-hidden="true">
+        <div className="gravity-astronaut-float"><img src="/art/space/floating-astronaut-v2.webp" alt="" width="960" height="1280" fetchPriority="high" /></div>
       </div>
-    </div>
-    <aside className="space-discovery-card" aria-label="Keşif rotan">
-      <div className="space-card-orbit" aria-hidden="true"><span /><span /><span /></div>
-      <span className="space-eyebrow">KEŞİF ROTAN</span>
-      <h2>Bir soru.<br />Bambaşka dünyalar.</h2>
-      <p>Bir fikri paylaş, farklı bakış açılarını gör. Kendi kararını ver.</p>
-      <Link href="/kategoriler">Konuları keşfet <span aria-hidden="true">↗</span></Link>
-    </aside>
-    <div className="space-hero-topics" aria-label="Gündemdeki konuları ara">
-      <span>Bir yerden başla</span>
-      <Link href="/kesfet?q=teknoloji">Teknoloji</Link>
-      <Link href="/kesfet?q=ekonomi">Ekonomi</Link>
-      <Link href="/kesfet?q=g%C3%BCnl%C3%BCk%20ya%C5%9Fam">Günlük yaşam</Link>
+      <svg className="gravity-orbit" viewBox="0 0 1000 650" fill="none" aria-hidden="true"><ellipse cx="500" cy="325" rx="460" ry="160" transform="rotate(-24 500 325)" /><circle cx="103" cy="493" r="5" /></svg>
+      <button className="gravity-motion" onClick={toggle} disabled={reduced} aria-pressed={paused} aria-label={reduced ? "Azaltılmış hareket etkin" : paused ? "Hareketi başlat" : "Hareketi durdur"}>
+        <span aria-hidden="true">{still ? "▷" : "Ⅱ"}</span><span>{reduced ? "Hareket azaltıldı" : paused ? "Devam et" : "Hareketi durdur"}</span>
+      </button>
+      <div className="gravity-footnote"><p>Herkes aynı düşünseydi,<br />burada olmazdık.</p><Link href="/basla">Burası nasıl bir yer? ↗</Link></div>
+      <a className="gravity-scroll" href="#discovery-stage"><span>Aşağı in.<br /><strong>Bir taraf seç.</strong></span><span className="gravity-scroll-icon" aria-hidden="true">↓</span></a>
+      <div className="gravity-bottom-note" aria-hidden="true"><span>KARAR SENİN.</span><span>BAŞKA BİR BAKIŞ MÜMKÜN.</span></div>
     </div>
   </section>;
 }

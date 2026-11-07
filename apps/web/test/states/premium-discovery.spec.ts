@@ -9,8 +9,12 @@ test("premium discovery, community, profile and notification surfaces support bo
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     for(const theme of ["light","dark"]){
       if(await page.locator(".product").getAttribute("data-theme")!==theme)await page.getByRole("button",{name:/temaya geç/}).click();
-      if (["/kesfet", "/kategoriler", "/yukselenler"].includes(path)) {
-        await expect(page.locator(".kv-hero-copy > p")).toHaveCSS("color", "rgb(208, 228, 248)");
+      if (["/kesfet", "/topluluklar"].includes(path)) {
+        await expect(page.locator(".mission-copy > p")).toHaveCSS("color", "rgb(215, 216, 205)");
+        await expect(page.locator(".mission-effects")).toHaveCount(1);
+      }
+      if (["/kategoriler", "/yukselenler"].includes(path)) {
+        await expect(page.locator(".kv-hero-copy > p")).toHaveCSS("color", theme === "light" ? "rgb(83, 99, 77)" : "rgb(180, 189, 184)");
         expect(await page.locator(".kv-immersive-hero").evaluate(element =>
           element.getAnimations({ subtree: true }).some(animation => animation.effect?.getTiming().iterations === Infinity)
         )).toBe(false);
@@ -43,5 +47,12 @@ test("user search opens the actual profile and empty notifications offer discove
   await expect(page.getByRole("heading",{name:"Henüz bildirimin yok.",exact:true})).toBeVisible();
   await page.getByRole("link",{name:"Konuları keşfet",exact:true}).click();
   await expect(page).toHaveURL(/\/kesfet$/);
+  await page.goto("/topluluklar");
+  const communities=page.locator(".mission-community-list > article");
+  await expect(communities).toHaveCount(sample("communities.list").data.length);
+  await page.getByRole("searchbox",{name:"Yüklenen topluluklarda ara"}).fill("zzzz-nonexistent");
+  await expect(communities).toHaveCount(0);
+  await page.getByRole("button",{name:"Aramayı temizle",exact:true}).click();
+  await expect(communities).toHaveCount(sample("communities.list").data.length);
   expect(mock.unexpected).toEqual([]);
 });

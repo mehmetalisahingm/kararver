@@ -14,6 +14,7 @@ for(const scenario of ["hidden","public","locked"] as const) test(`premium poll 
   await page.route("https://cover.test/**",r=>fail?r.abort():r.fulfill({contentType:"image/svg+xml",body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><rect width="800" height="500" fill="#82796c"/></svg>'}));
   await page.goto("/kesfet");const article=page.locator(".discovery-results > article");
   await expect(article).toHaveCount(1);
+  await article.scrollIntoViewIfNeeded();
   await expect(article.getByRole("button",{name:"Kapak görselini tekrar yükle"})).toBeVisible();
   await expect(article.locator('svg[aria-hidden="true"]')).toBeVisible();
   if(scenario==="public")await expect(article.getByText("20 oy",{exact:true})).toBeVisible();
@@ -37,6 +38,7 @@ test("guided composer keeps draft and previews settings before explicit publicat
   mock.handlers.set("polls.create",async r=>{publishes++;await r.fulfill({status:201,json:sample("polls.get")});});
   await page.goto("/olustur");
   await page.getByLabel("Sorun",{exact:true}).fill("Yeni tasarım için hangi renk daha iyi?");
+  await expect.poll(()=>page.locator(".studio-draft-ink").evaluate(element=>Number(getComputedStyle(element).opacity))).toBeGreaterThan(0);
   await page.getByLabel("1. seçenek",{exact:true}).fill("Şampanya");
   await page.getByLabel("2. seçenek",{exact:true}).fill("Antrasit");
   await page.getByRole("button",{name:"2 · Yayını düzenle",exact:true}).click();

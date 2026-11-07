@@ -14,12 +14,13 @@ test("visual topic art follows the category's meaning, not its position", () => 
   assert.equal(visualTopic("Kültür"), "conversation");
 });
 
-test("artwork stays decorative and uses local SVG and the selected space backdrop", () => {
+test("artwork stays decorative and uses independent local orbital image layers", () => {
   const scene = readFileSync(new URL("../src/components/visual-story.tsx", import.meta.url), "utf8");
   assert.match(scene, /viewBox="0 0 460 260"/);
   const hero = readFileSync(new URL("../src/components/space-hero.tsx", import.meta.url), "utf8");
-  assert.match(hero, /src="\/art\/space\/earth-astronaut.webp" alt=""/);
-  const backdrop = readFileSync(new URL("../public/art/space/earth-astronaut.webp", import.meta.url));
+  assert.match(hero, /src="\/art\/space\/orbital-earth-v2.webp" alt=""/);
+  assert.match(hero, /src="\/art\/space\/floating-astronaut-v2.webp" alt=""/);
+  const backdrop = readFileSync(new URL("../public/art/space/orbital-earth-v2.webp", import.meta.url));
   assert.equal(backdrop.toString("ascii", 8, 12), "WEBP");
   assert.match(scene, /aria-hidden="true"/);
   assert.doesNotMatch(scene, /<image|https?:\/\/(?!www\.w3\.org\/2000\/svg)|aktif kullanıcı|50.?000/);

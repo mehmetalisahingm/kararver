@@ -5,8 +5,8 @@ import type { ArtTopic } from "./visual-topic";
 export { visualTopic } from "./visual-topic";
 
 const topicImages: Partial<Record<ArtTopic, string>> = {
-  technology: "/art/topics/technology-studio.webp",
-  gaming: "/art/topics/technology-studio.webp",
+  technology: "/art/topics/late-night-desk-v2.webp",
+  gaming: "/art/topics/late-night-desk-v2.webp",
   university: "/art/topics/campus-life.webp",
   travel: "/art/topics/alpine-escape.webp",
 };

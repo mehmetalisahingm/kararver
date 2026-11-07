@@ -12,6 +12,9 @@ import "./legal.css";
 import "./privacy-preferences.css";
 import "./immersive.css";
 import "./space.css";
+import "./gravity.css";
+import "./mission.css";
+import "./studio.css";
 
 const webUrl = new URL(process.env.WEB_URL ?? "http://localhost:3000");
 const publicIndexing = process.env.APP_ENV === "production";

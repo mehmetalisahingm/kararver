@@ -84,6 +84,7 @@ test("search remains readable immediately after repeated theme switches",async({
   await page.goto("/");
   await expect(page.locator("main h1").first()).toBeVisible();
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  await expect(page.locator(".discovery-search")).toBeVisible();
   for(const theme of ["dark","light","dark","light"]) {
     if(await page.locator(".product").getAttribute("data-theme")!==theme) await page.getByRole("button",{name:/tema/i}).click();
     await expect(page.locator(".product")).toHaveAttribute("data-theme",theme);
