@@ -18,7 +18,7 @@ Bir sır sızıntısı şüphesinde ya da düzenli rotasyonda pepper'ın değiş
   3. **Herkes için gerekli.**
 - **Bugünkü sınır:** Kullanıcının kendi MFA'sını kapatıp yeniden kurduğu ya da kurtarma kodunu yenilediği bir akış **yok**; kodlar yalnız kurulumda veriliyor. 2. ve 3. seçenekler bu akış yazılmadan uygulanamaz (ayrı iş, #180). DB'den MFA kaydını elle silmek kabul edilmez.
 
-**Karar (Mehmet, #291 sonrası):** _bekliyor_. Karar gelince bu satır güncellenir.
+**Karar (Mehmet, 7 Kasım 2026, #300):** Eski DB+pepper ifşası şüphesi olan **ayrıcalıklı MFA hesapları** için yeni TOTP sırrı ve yeni kurtarma kodlarıyla **kontrollü yeniden kayıt** (2. seçenek). Kullanıcıyı kilitleyecek zorunlu toplu işlem yok; önce alternatif doğrulanmış bir ADMIN ve owner kurtarma planı hazırlanır. Kod merge'i anahtar ya da pepper rotasyonunu onaylamaz: staging/production anahtarları ve mevcut pepper bu aşamada **değiştirilmez**. Ön koşul: yukarıdaki "bugünkü sınır" kalkmalı, yani kullanıcının kendi TOTP sırrını ve kurtarma kodlarını yenileyebildiği akış (#180, ayrı PR) yazılmalı.
 
 ## Ne değişti (kod)
 - **TOTP sırrı sürümlü şifreleniyor** (`apps/api/src/modules/security/encryption.ts`, ilk bayt):
