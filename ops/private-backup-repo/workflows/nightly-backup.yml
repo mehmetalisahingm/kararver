@@ -1,50 +1,29 @@
-name: Scheduled encrypted backup
-# #186 / #51 — 0 TL zamanlanmış şifreli PostgreSQL 18 yedeği (Render Free uyuduğu için worker içi yedek güvenilir değil).
-# Gerçek koşu (yalnız `schedule` ve yetkili kişinin elle tetiklemesi):
-#   1) tek anlık döküm alınır ve AYRI, temiz bir PostgreSQL 18'e restore edilip 52 migration + tutarlılıkla doğrulanır;
-#   2) DOĞRULANAN AYNI döküm (sha256 manifestle eşleşerek) RSA açık anahtarla zarf şifrelemesiyle şifrelenir; düz döküm
-#      silinir (özel anahtar ekip dışında, çevrimdışı; CI'da YOK);
-#   3) yalnız şifreli dosyalar (döküm + manifest) 35 gün saklanan artifact olur; public loga sayı/tablo adı yazılmaz; 4) ANCAK yükleme başarılıysa ops_backup_runs kaydı yazılır (/admin/ops);
-#   5) yapılandırma eksikse ya da herhangi bir adım düşerse iş FAIL olur ve `backup-alarm` issue'su açılır.
-# PR'da yalnız `validate` işi çalışır: secret'a ERİŞMEZ, veritabanına bağlanmaz, PR kodu secret'la çalışmaz.
-# Ayrıntı: docs/KV-48_BACKUP_RESTORE.md "Zamanlanmış yedek: GitHub Actions".
+name: Nightly encrypted backup
+# KararVer #186 / #51 / #311 — ŞABLON. Yalnız ayrı, PRIVATE yedek reposunda .github/workflows/nightly-backup.yml olarak
+# kullanılır (owner kararı, 7 Kasım 2026: gerçek DB yedeği public repo artifact'ına konmaz). Public KararVer reposunda
+# bu dosya ÇALIŞMAZ (.github dışında) ve oraya kopyalanırsa ilk adım FAIL olur.
+# Akış:
+#   1) tek anlık döküm → ayrı, temiz PostgreSQL 18'e restore → 52 migration + tutarlılık doğrulaması;
+#   2) DOĞRULANAN AYNI döküm (sha256) ve manifest RSA açık anahtarla zarf şifrelemesiyle şifrelenir; düz döküm silinir;
+#   3) yalnız .enc dosyaları 35 gün saklanan PRIVATE artifact olur;
+#   4) ANCAK yükleme başarılıysa ops_backup_runs kaydı yazılır (/admin/ops);
+#   5) yapılandırma eksikse ya da bir adım düşerse FAIL + bu repoda `backup-alarm` issue'su.
+# Kurulum ve kapılar: mehmetalisahingm/kararver docs/KV-48_BACKUP_RESTORE.md "Zamanlanmış yedek: private repo".
 #
-# Gerekenler (Mehmet; değerler repoya/issue'ya yazılmaz):
-#   secrets.STAGING_BACKUP_DATABASE_URL  Neon DOĞRUDAN (pooler olmayan) adres; tercihen okuma + ops_backup_runs ekleme rolü
+# Gerekenler (bu private repoda; değerler hiçbir issue'ya yazılmaz):
+#   secrets.STAGING_BACKUP_DATABASE_URL  Neon DOĞRUDAN (pooler olmayan) adres; okuma + ops_backup_runs ekleme rolü
 #   vars.BACKUP_PUBLIC_KEY               RSA (≥ 3072 bit) açık anahtar, PEM
+#   vars.KARARVER_REF                    isteğe bağlı: kodun alınacağı ref (varsayılan main; tercihen onaylı SHA)
 on:
   schedule:
     - cron: '30 0 * * *'
   workflow_dispatch:
-  pull_request:
-    paths:
-      - .github/workflows/scheduled-backup.yml
-      - apps/worker/scripts/scheduled-backup.ts
-      - apps/worker/scripts/record-backup-run.ts
-      - apps/worker/src/jobs/backup/**
 permissions:
   contents: read
 concurrency:
-  group: scheduled-backup-${{ github.event_name }}
+  group: nightly-backup
   cancel-in-progress: false
 jobs:
-  validate:
-    # PR doğrulaması: secret yok, veritabanı yok; yalnız iş tanımı ve yedek kodunun testleri.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-      - uses: pnpm/action-setup@v4
-      - run: pnpm install --frozen-lockfile --filter "@kararver/worker..."
-      - run: cd apps/worker && node --test test/directory-upload.test.ts test/scheduled-backup.test.ts
-      - name: Gerçek yedek işi PR'da çalışmaz
-        run: |
-          echo "PR koşusu - gerçek yedek yalnız schedule ve yetkili workflow_dispatch'te çalışır (secret kullanılmadı)."
-
   backup:
     # Yalnız zamanlanmış koşu ya da yetkili kişinin elle tetiklemesi (owner + ops sorumlusu).
     if: >-
@@ -69,6 +48,15 @@ jobs:
     env:
       PG_BIN: /usr/lib/postgresql/18/bin
     steps:
+      - name: Yalnız PRIVATE repoda çalışır (public'te FAIL, otomatik geri dönüş yok)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          visibility=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility' 2>/dev/null || echo "okunamadı")
+          if [ "$visibility" != "private" ]; then
+            echo "::error::Bu iş yalnız private yedek reposunda çalışır (bu repo: $visibility). YEDEK ALINMADI."
+            exit 1
+          fi
       - name: Yapılandırma (eksikse FAIL + alarm)
         env:
           HAS_DB: ${{ secrets.STAGING_BACKUP_DATABASE_URL != '' }}
@@ -80,9 +68,12 @@ jobs:
             echo "::error::STAGING_BACKUP_DATABASE_URL secret'ı ya da BACKUP_PUBLIC_KEY değişkeni yok: YEDEK ALINMADI."
             exit 1
           fi
+      # Kod public KararVer reposundan okunur (token gerekmez); secret'lar yalnız bu private repoda.
       - uses: actions/checkout@v4
         with:
-          ref: main
+          repository: ${{ vars.KARARVER_REPOSITORY || 'mehmetalisahingm/kararver' }}
+          ref: ${{ vars.KARARVER_REF || 'main' }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -108,17 +99,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$WORK"
-          # Repo public: Actions logu herkese açık. Araç çıktısı (satır sayıları, tablo/kontrol adları) yalnız runner'daki
-          # dosyaya yazılır; loga yalnız sonuç satırı düşer. Ayrıntı gerekirse aynı adım yerelde çalıştırılır (KV-48).
+          # Private repoda da log en az bilgiyle tutulur: araç çıktısı (satır sayıları, tablo/kontrol adları) yalnız
+          # runner'daki dosyaya yazılır; loga yalnız sonuç satırı düşer. Ayrıntı gerekirse aynı adım yerelde çalıştırılır.
           # --no-record: başarı kaydı yalnız 4. adımda, artifact yayımlandıktan sonra yazılır.
           if ! node packages/db/ops/backup.ts --out "$WORK" --no-record > "$RUNNER_TEMP/backup.log" 2>&1; then
-            echo "::error::db:backup başarısız (ayrıntı public loga yazılmaz)"; exit 1
+            echo "::error::db:backup başarısız (ayrıntı loga yazılmaz)"; exit 1
           fi
           file=$(sed -n 's/^yedek: \(.*\.dump\)$/\1/p' "$RUNNER_TEMP/backup.log")
           test -f "$file" && test -f "$file.manifest.json"
           echo "yedek alındı: $(basename "$file") ($(grep -c '⚠' "$RUNNER_TEMP/backup.log" || true) uyarı)"
           if ! node packages/db/ops/restore.ts --file "$file" > "$RUNNER_TEMP/restore.log" 2>&1; then
-            echo "::error::restore doğrulaması başarısız: $(grep -c '✖' "$RUNNER_TEMP/restore.log" || true) kontrol düştü (ayrıntı public loga yazılmaz)"; exit 1
+            echo "::error::restore doğrulaması başarısız: $(grep -c '✖' "$RUNNER_TEMP/restore.log" || true) kontrol düştü (ayrıntı loga yazılmaz)"; exit 1
           fi
           grep -q '^SONUÇ: yedek eksiksiz' "$RUNNER_TEMP/restore.log"
           echo "restore doğrulandı: $(grep -c '✔' "$RUNNER_TEMP/restore.log" || true) kontrol geçti"
@@ -176,5 +167,5 @@ jobs:
         run: |
           gh label create backup-alarm --color B60205 --description "Zamanlanmış yedek başarısız (#186)" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
           open=$(gh issue list -R "$GITHUB_REPOSITORY" --label backup-alarm --state open --json number --jq '.[0].number // empty')
-          msg="**Zamanlanmış şifreli yedek başarısız** ($RUN_URL). Yedek alınmamış olabilir. Runbook: docs/KV-48_BACKUP_RESTORE.md \"Zamanlanmış yedek: GitHub Actions\". Sorumlu: @farukkemree"
+          msg="**Zamanlanmış şifreli yedek başarısız** ($RUN_URL). Yedek alınmamış olabilir. Runbook: mehmetalisahingm/kararver docs/KV-48_BACKUP_RESTORE.md \"Zamanlanmış yedek: private repo\". Sorumlu: @farukkemree"
           if [ -n "$open" ]; then gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$msg"; else gh issue create -R "$GITHUB_REPOSITORY" --title "Yedek alarmı: zamanlanmış yedek başarısız" --label backup-alarm --body "$msg"; fi
