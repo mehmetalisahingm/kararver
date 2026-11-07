@@ -9,6 +9,15 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.43.0 — 2026-11-07 (Faruk, #180/#291 doğrulayıcı yenileme)
+
+Kırıcı değişiklik yok: iki yeni endpoint, iki yeni audit türü.
+
+- **Eklendi:** `me.mfa.reenroll.begin` (POST `/me/mfa/reenroll`) ve `me.mfa.reenroll.confirm` (POST `/me/mfa/reenroll/confirm`); ikisi de `account.mfa` kuralına bağlı. MFA'sı açık kullanıcı kendi TOTP sırrını ve kurtarma kodlarını kilitlenmeden yeniler.
+- Başlatma parola + bu oturumda taze, kullanılmamış step-up ister ve onu tüketir (yoksa 403 `stepup_required`). Yeni sır ayrı bekleyen alanda 10 dakika tutulur; eski sır onaya kadar geçerli. MFA kapalıysa 409 `mfa_not_enabled`, ayrı MFA anahtarı yoksa 409 `mfa_key_required`.
+- Onay yeni sırla üretilmiş kodu ister; tek transaction'da yeni sır v2 yazılır, eski kurtarma kodları iptal edilir, 10 yeni kod döner, diğer oturumların step-up'ları düşürülür.
+- **Audit:** `account.mfa` için yeni türler `reenroll_begin` ve `reenroll`. Özette sır ya da kod yoktur, yalnız sayılar.
+
 ## 1.42.0 — 2026-11-06 (Faruk, #300 MFA anahtar taşıma denetimi)
 
 Kırıcı değişiklik yok: yeni sistem işlemi.

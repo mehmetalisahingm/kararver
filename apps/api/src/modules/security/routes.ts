@@ -44,4 +44,26 @@ export function registerMfaRoutes(route: Route, deps: {
     if (result.kind !== "verified") throw new ApiError("FORBIDDEN", "Kurtarma doğrulaması başarısız.");
     return { status: 200, body: { data: { stepUpExpiresAt: result.expiresAt.toISOString() } } };
   });
+  // #180/#291 doğrulayıcı yenileme: eski sır onaya kadar geçerli; kullanıcı kilitlenmez.
+  route("me.mfa.reenroll.begin", async ({ viewer, body, request }) => {
+    if (!(await deps.hasher.verify(viewer!.user.passwordHash, body.password)))
+      throw new ApiError("FORBIDDEN", "Kimlik yeniden doğrulanamadı.");
+    const result = await deps.store.reenrollBegin({ userId: viewer!.id, sessionId: viewer!.sessionId,
+      email: viewer!.user.email, now: deps.now(), requestId: request.id });
+    if (result.kind === "session") throw new ApiError("UNAUTHENTICATED", "Oturum geçersiz.");
+    if (result.kind === "not_enabled") throw new ApiError("CONFLICT", "MFA etkin değil.", [{ code: "mfa_not_enabled" }]);
+    if (result.kind === "key_required")
+      throw new ApiError("CONFLICT", "Doğrulayıcı yenileme bu ortamda henüz açık değil.", [{ code: "mfa_key_required" }]);
+    if (result.kind !== "created") // stepup_required
+      throw new ApiError("FORBIDDEN", "Önce doğrulayıcı kodunla kimliğini doğrula.", [{ code: "stepup_required" }]);
+    return { status: 200, body: { data: { secret: result.secret, uri: result.uri,
+      expiresAt: result.expiresAt.toISOString() } } };
+  });
+  route("me.mfa.reenroll.confirm", async ({ viewer, body, request }) => {
+    const result = await deps.store.reenrollConfirm({ userId: viewer!.id, sessionId: viewer!.sessionId,
+      code: body.code, now: deps.now(), requestId: request.id });
+    if (result.kind === "session") throw new ApiError("UNAUTHENTICATED", "Oturum geçersiz.");
+    if (result.kind !== "reenrolled") throw new ApiError("FORBIDDEN", "Yeni doğrulayıcı kodu doğrulanamadı veya süresi doldu. Eski doğrulayıcın geçerli.");
+    return { status: 200, body: { data: { enabled: true, recoveryCodes: result.recoveryCodes } } };
+  });
 }

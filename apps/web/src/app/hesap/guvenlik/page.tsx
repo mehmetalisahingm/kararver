@@ -32,6 +32,11 @@ function SecuritySettings({ userId }: { userId: string }) {
   const [recoveryCode, setRecoveryCode] = useState("");
   const [recovering, setRecovering] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  // Doğrulayıcı yenileme (#180/#291): yeni sır yalnız bu bileşende, onaya kadar; eski sır o ana dek geçerli.
+  const [reenrollOpen, setReenrollOpen] = useState(false);
+  const [reenroll, setReenroll] = useState<SetupResult | null>(null);
+  const [reenrollPassword, setReenrollPassword] = useState("");
+  const [reenrollCode, setReenrollCode] = useState("");
 
   async function refresh() {
     const result = await api.request("me.mfa.status") as Envelope<Status>;
@@ -93,6 +98,29 @@ function SecuritySettings({ userId }: { userId: string }) {
     finally { setBusy(false); }
   }
 
+  async function reenrollAct(event: FormEvent, action: "begin" | "confirm") {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true); setError(""); setNote("");
+    try {
+      if (action === "begin") {
+        const result = await api.request("me.mfa.reenroll.begin", { body: { password: reenrollPassword } }) as Envelope<SetupResult>;
+        setReenroll(result.data); setReenrollPassword("");
+        setNote("Yeni anahtarı doğrulayıcı uygulamana ekle ve yeni altı haneli kodu gir. Onaylayana kadar eski doğrulayıcın geçerli.");
+      } else {
+        const confirmed = await api.request("me.mfa.reenroll.confirm", { body: { code: reenrollCode } }) as Envelope<{ recoveryCodes: string[] }>;
+        setRecoveryCodes(confirmed.data.recoveryCodes);
+        setReenroll(null); setReenrollCode(""); setReenrollOpen(false);
+        setNote("Doğrulayıcın yenilendi. Eski anahtar ve eski kurtarma kodların artık geçmez; uygulamadaki eski kaydı silebilirsin.");
+      }
+      await refresh();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  function toggleReenroll() {
+    setReenrollOpen(!reenrollOpen); setReenroll(null); setReenrollPassword(""); setReenrollCode("");
+  }
+
   return <div className="screen-stack">
     <section className="kv-card screen-stack">
       <span className="eyebrow">HESAP GÜVENLİĞİ</span>
@@ -138,6 +166,25 @@ function SecuritySettings({ userId }: { userId: string }) {
           <label>Kurtarma kodun<input autoComplete="off" required pattern="[a-fA-F0-9]{32}" maxLength={32} value={recoveryCode} onChange={e => setRecoveryCode(e.target.value)} /></label>
           <button className="kv-button" disabled={busy}>Kurtarma kodunu kullan</button>
         </form>}
+      </>}
+      {status?.enabled && <><button className="kv-button kv-button--secondary" onClick={toggleReenroll}>Doğrulayıcıyı yenile</button>
+        {reenrollOpen && !reenroll && <form className="screen-stack" aria-label="Doğrulayıcı yenileme" onSubmit={e => void reenrollAct(e, "begin")}>
+          <p className="kv-muted">Yeni bir doğrulayıcı anahtarı ve yeni kurtarma kodları alırsın. Önce yukarıdan mevcut kodunla ya da bir kurtarma koduyla yeniden doğrula; bu onay yenilemeyi başlatırken kullanılır.</p>
+          {!status.stepUpExpiresAt && <p className="kv-help">Bu oturumda geçerli bir yeniden doğrulama yok.</p>}
+          <label>Yenileme için mevcut şifren<input type="password" autoComplete="current-password" required minLength={10} maxLength={128} value={reenrollPassword} onChange={e => setReenrollPassword(e.target.value)} /></label>
+          <button className="kv-button" disabled={busy || reenrollPassword.length < 10}>Yenilemeyi başlat</button>
+        </form>}
+        {reenroll && <div className="screen-stack">
+          <p className="kv-help">Kurulum bağlantısını üçüncü kişilerle paylaşma. Bu anahtar yalnız sana özeldir.</p>
+          <div className="kv-card"><strong>Yeni doğrulayıcı anahtarı</strong><code>{reenroll.secret}</code></div>
+          <p className="kv-muted">Bu yenileme {new Date(reenroll.expiresAt).toLocaleTimeString("tr-TR")} saatine kadar geçerli. O zamana kadar onaylamazsan eski doğrulayıcın aynen çalışmaya devam eder.</p>
+          <form className="screen-stack" onSubmit={e => void reenrollAct(e, "confirm")}>
+            <label>Yeni doğrulayıcı kodu
+              <input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={reenrollCode} onChange={e => setReenrollCode(e.target.value.replace(/\D/g, ""))} />
+            </label>
+            <button className="kv-button" disabled={busy || reenrollCode.length !== 6}>Yeni doğrulayıcıyı onayla</button>
+          </form>
+        </div>}
       </>}
       <p className="kv-help">Yeniden doğrulama kritik işlemde bir kez kullanılır. Yeni SUPER_ADMIN ataması normal API üzerinden yasaktır. Mevcut SUPER_ADMIN rolünün düşürülmesi ayrıca yürürlükteki MFA/bağımsız onay kurallarına ve son yönetici korumasına tabidir.</p>
       <Link href="/hesap">Hesabıma dön</Link>
