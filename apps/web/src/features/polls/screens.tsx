@@ -9,6 +9,7 @@ import { ReportButton } from "../community/report-dialog";
 import { SocialPanel } from "../social/social-panel";
 import { DecisionPanel } from "./decision-panel";
 import { PollGallery } from "./gallery";
+import { IllustratedScene, visualTopic } from "../../components/visual-story";
 
 export function PollDetail({ id }: { id: string }) {
   const { client, user, selections, select, requireUser, notify, syncUser } =
@@ -134,6 +135,11 @@ export function PollDetail({ id }: { id: string }) {
             )}
           </div>
         </div>
+        {!poll.gallery?.some((item) => item.status === "ready") && !poll.options.some((option) => option.image) && (
+          <div className="kv-poll-visual" data-illustration="true">
+            <IllustratedScene topic={visualTopic(poll.category || poll.title)} />
+          </div>
+        )}
         <h1>{poll.title}</h1>
         <p className="kv-muted">{poll.description}</p>
         {poll.kind === "poll" && (

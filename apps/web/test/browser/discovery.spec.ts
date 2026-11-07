@@ -70,7 +70,8 @@ test("feed pagination retries preserve items; expired cursor restarts; filters a
   await expect(cards).toHaveCount(3);
   for (const author of await cards.locator(".author small").allTextContents())
     expect(author).toContain("Teknoloji");
-  await expect(page.locator("#main")).toBeFocused();
+  // Filtering returns keyboard focus to the results, keeping the landing scene above.
+  await expect(page.locator("#mission-content")).toBeFocused();
   await expect(
     page.getByRole("button", { name: "Daha fazla göster", exact: true }),
   ).toHaveCount(0);
@@ -258,7 +259,7 @@ test("discovery screens support mobile/desktop, both themes and accessible chart
         page.locator(".discovery-results, .category-grid, .trend-results"),
       ).toBeVisible();
       for (const theme of ["dark", "light"]) {
-        // UI-V2 defaults to light and persists a chosen theme. Tests must verify
+        // The selected design defaults to dark and persists a chosen theme. Tests must verify
         // both modes regardless of the current persisted browser preference.
         if (await page.locator(".product").getAttribute("data-theme") !== theme) {
           await page.getByRole("button", { name: /temaya geç/ }).click();
