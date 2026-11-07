@@ -14,6 +14,20 @@ export type OpsProbe = {
   lastBackup(): Promise<Date | null>;
   /** Bütün süreçlerin ortak tabloları: giriş kilitleri (KV-19 sayaçları) ve 24 saatlik kritik yönetici işlemleri (audit). */
   securitySignals(limits: LoginLimits): Promise<SecuritySignals>;
+  /** #185 kritik güvenlik alarmları: açıklar ve son 24 saatte kapananlar, en yeni önce (en çok 50). Tablo yoksa hata fırlatır. */
+  securityAlerts(): Promise<SecurityAlertRow[]>;
+};
+
+export type SecurityAlertRow = {
+  id: string;
+  rule: string;
+  severity: string;
+  status: string;
+  actor: { id: string; username: string; displayName: string } | null;
+  peakCount: number;
+  openedAt: Date;
+  lastSeenAt: Date;
+  resolvedAt: Date | null;
 };
 
 export type LoginLimits = { email: number; ip: number };
@@ -96,6 +110,22 @@ export function createPrismaOpsProbe(
             OR (action = ${SECURITY_EVENT_OPERATIONS.action} AND operation = ANY(${[...SECURITY_EVENT_OPERATIONS.operations]}::text[])))
         GROUP BY action, operation ORDER BY count DESC, action, operation`;
       return { lockedLogins: locked ?? { emails: 0, ips: 0 }, adminActions24h: actions };
+    },
+    async securityAlerts() {
+      // scope_key aktör kapsamlı kuralda kullanıcı UUID'si, genel kuralda '*'. Silinmiş hesap da gösterilir (audit gibi).
+      const rows = await prisma.$queryRaw<Array<Omit<SecurityAlertRow, "actor"> & { actorId: string | null; username: string | null; displayName: string | null }>>`
+        SELECT a.id::text AS id, a.rule, a.severity, a.status, a.peak_count AS "peakCount", a.opened_at AS "openedAt",
+               a.last_seen_at AS "lastSeenAt", a.resolved_at AS "resolvedAt",
+               u.id::text AS "actorId", u.username, u.display_name AS "displayName"
+          FROM security_alerts a
+          LEFT JOIN users u ON a.scope_key <> '*' AND u.id::text = a.scope_key
+         WHERE a.status = 'OPEN' OR a.resolved_at > now() - interval '24 hours'
+         ORDER BY a.opened_at DESC, a.id DESC
+         LIMIT 50`;
+      return rows.map(({ actorId, username, displayName, ...r }) => ({
+        ...r,
+        actor: actorId && username && displayName ? { id: actorId, username, displayName } : null,
+      }));
     },
     async lastBackup() {
       const [row] = await prisma.$queryRaw<Array<{ at: Date | null }>>`SELECT max(finished_at) AS at FROM ops_backup_runs`;

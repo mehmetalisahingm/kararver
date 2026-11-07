@@ -22,6 +22,7 @@ const SANCTION = id(14);
 const ANNOUNCEMENT = id(15);
 const VOTE = id(16);
 const MODERATION = id(17);
+const SECURITY_ALERT = id(18);
 const T0 = "2026-09-28T12:00:00Z";
 const T1 = "2026-10-05T12:00:00Z";
 
@@ -90,4 +91,5 @@ export const eventExamples: { [T in EventType]: EventExample<T> } = {
   "sanction.lifted": ex("sanction.lifted", ADMIN, user, { sanctionId: SANCTION, type: "RESTRICT_COMMENTS" }),
   "role.changed": ex("role.changed", ADMIN, user, { previousRoles: ["USER"], roles: ["USER", "MODERATOR"] }),
   "settings.changed": ex("settings.changed", ADMIN, { type: "SETTING", id: "polls.voteChangeAllowed" }, { version: 4, public: true }),
+  "security.alert.opened": ex("security.alert.opened", null, { type: "SECURITY_ALERT", id: SECURITY_ALERT }, { rule: "role.change.burst", severity: "CRITICAL", count: 3, windowMinutes: 15 }),
 };

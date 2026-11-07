@@ -84,7 +84,7 @@ describe("operasyon telemetrisi (birim)", () => {
       throw new Error("bağlantı yok: postgres://gizli@host/db");
     };
     const status = await buildOpsStatus({
-      probe: { database: fail, workerLastSeen: fail, queues: fail, lastBackup: fail, securitySignals: fail },
+      probe: { database: fail, workerLastSeen: fail, queues: fail, lastBackup: fail, securitySignals: fail, securityAlerts: fail },
       loginLimits: async () => ({ email: 5, ip: 20 }),
       telemetry: createOpsTelemetry(),
       env: "test",
@@ -95,8 +95,34 @@ describe("operasyon telemetrisi (birim)", () => {
     assert.equal(status.components.database.status, "down");
     assert.equal(status.components.queue.status, "unknown");
     assert.deepEqual([status.backup.status, status.backup.lastBackupAt], ["unknown", null]);
-    assert.deepEqual([status.security.lockedLogins, status.security.adminActions24h], [null, null]);
+    assert.deepEqual([status.security.lockedLogins, status.security.adminActions24h, status.security.alerts], [null, null, null]);
     assert.ok(!JSON.stringify(status).includes("postgres://"), "hata ayrıntısı/bağlantı adresi sızmaz");
+  });
+
+  test("#185 güvenlik alarmları: açık ve kapanmış alarm sözleşmeye uyar; aktör PublicUser (avatar yok), genel kural aktörsüz", async () => {
+    const opened = new Date("2026-10-26T12:00:00.000Z");
+    const ok = <T>(v: T) => async () => v;
+    const actor = { id: "0192f0e0-0000-7000-8000-000000000001", username: "deniz", displayName: "Deniz" };
+    const status = await buildOpsStatus({
+      probe: {
+        database: ok({ latencyMs: 1, version: "17" }), workerLastSeen: ok(null), queues: ok([]), lastBackup: ok(null),
+        securitySignals: ok({ lockedLogins: { emails: 0, ips: 0 }, adminActions24h: [] }),
+        securityAlerts: ok([
+          { id: "0192f0e0-0000-7000-8000-0000000000a1", rule: "role.change.burst", severity: "CRITICAL", status: "OPEN", actor, peakCount: 4, openedAt: opened, lastSeenAt: new Date(opened.getTime() + 300_000), resolvedAt: null },
+          { id: "0192f0e0-0000-7000-8000-0000000000a2", rule: "mfa.lock.wave", severity: "HIGH", status: "RESOLVED", actor: null, peakCount: 5, openedAt: opened, lastSeenAt: opened, resolvedAt: new Date(opened.getTime() + 900_000) },
+        ]),
+      },
+      loginLimits: async () => ({ email: 5, ip: 20 }),
+      telemetry: createOpsTelemetry(),
+      env: "test",
+      startedAt: new Date(),
+      now: () => new Date(),
+    });
+    const parsed = OpsStatus.parse(status);
+    assert.deepEqual(parsed.security.alerts, [
+      { id: "0192f0e0-0000-7000-8000-0000000000a1", rule: "role.change.burst", severity: "CRITICAL", status: "OPEN", actor: { ...actor, avatarUrl: null }, peakCount: 4, openedAt: "2026-10-26T12:00:00.000Z", lastSeenAt: "2026-10-26T12:05:00.000Z", resolvedAt: null },
+      { id: "0192f0e0-0000-7000-8000-0000000000a2", rule: "mfa.lock.wave", severity: "HIGH", status: "RESOLVED", actor: null, peakCount: 5, openedAt: "2026-10-26T12:00:00.000Z", lastSeenAt: "2026-10-26T12:00:00.000Z", resolvedAt: "2026-10-26T12:15:00.000Z" },
+    ]);
   });
 });
 
@@ -228,6 +254,33 @@ describe("operasyon yoklaması (postgres + gerçek pg-boss)", { skip: backend ? 
     assert.match(status.components.database.version ?? "", /^\d+(\.\d+)?$/);
     assert.equal(status.components.queue.status, "unknown");
     assert.equal(status.components.worker.status, "unknown");
+  });
+
+  test("#185 güvenlik alarmları DB'den: açık ve 24 saat içinde kapanan görünür, eskisi görünmez; aktör kullanıcıyla eşlenir", async () => {
+    const db = h.prisma!;
+    const tag = randomUUID().slice(0, 8);
+    const user = await db.user.create({
+      data: { email: `sa_${tag}@example.test`, emailNormalized: `sa_${tag}@example.test`, username: `sa_${tag}`, usernameNormalized: `sa_${tag}`, displayName: "Alarm Aktörü", passwordHash: "x" },
+    });
+    const now = Date.now();
+    const at = (minutesAgo: number) => new Date(now - minutesAgo * 60_000);
+    const ids = { open: randomUUID(), recent: randomUUID(), old: randomUUID() };
+    await db.securityAlert.createMany({
+      data: [
+        { id: ids.open, rule: `test.${tag}`, severity: "CRITICAL", scopeKey: user.id, status: "OPEN", peakCount: 3, openedAt: at(10), lastSeenAt: at(5) },
+        { id: ids.recent, rule: `test.${tag}`, severity: "HIGH", scopeKey: "*", status: "RESOLVED", peakCount: 5, openedAt: at(120), lastSeenAt: at(100), resolvedAt: at(90) },
+        { id: ids.old, rule: `test.${tag}`, severity: "HIGH", scopeKey: "*", status: "RESOLVED", peakCount: 1, openedAt: at(3000), lastSeenAt: at(3000), resolvedAt: at(25 * 60) },
+      ],
+    });
+    try {
+      const rows = (await createPrismaOpsProbe(db, { schema }).securityAlerts()).filter((r) => r.rule === `test.${tag}`);
+      assert.deepEqual(rows.map((r) => r.id), [ids.open, ids.recent], "en yeni önce; 24 saatten eski kapanmış yok");
+      assert.deepEqual(rows[0]!.actor, { id: user.id, username: `sa_${tag}`, displayName: "Alarm Aktörü" });
+      assert.equal(rows[1]!.actor, null);
+      assert.deepEqual([rows[0]!.status, rows[0]!.peakCount, rows[1]!.resolvedAt?.getTime()], ["OPEN", 3, at(90).getTime()]);
+    } finally {
+      await db.securityAlert.deleteMany({ where: { rule: `test.${tag}` } });
+    }
   });
 
   test("toplu içerik işleri (#181) kendi tablosundan kuyruk olarak; tablo yoksa listede yok", async () => {
