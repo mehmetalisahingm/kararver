@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 import { decodeBase32, hotp } from "../src/modules/security/totp.ts";
-import { createMfaEnrollment, recoverTotpSecret } from "../src/modules/security/encryption.ts";
+import { createMfaEnrollment, legacyOnly, recoverTotpSecret } from "../src/modules/security/encryption.ts";
 
 const backend = prismaBackend();
 const suite = backend ? describe : describe.skip;
@@ -119,9 +119,9 @@ suite("SA #180 MFA PostgreSQL enrollment, replay and step-up", () => {
   });
 
   test("encrypted keys are account-bound and never contain plaintext", () => {
-    const enrollment = createMfaEnrollment("owner@example.test", randomUUID(), "x".repeat(64));
+    const enrollment = createMfaEnrollment("owner@example.test", randomUUID(), legacyOnly("x".repeat(64)));
     assert.equal(enrollment.ciphertext.includes(Buffer.from(enrollment.secret)), false);
     const id = randomUUID();
-    assert.throws(() => recoverTotpSecret(enrollment.ciphertext, id, "x".repeat(64)));
+    assert.throws(() => recoverTotpSecret(enrollment.ciphertext, id, legacyOnly("x".repeat(64))));
   });
 });
