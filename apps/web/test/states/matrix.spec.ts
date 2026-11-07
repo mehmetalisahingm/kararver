@@ -81,7 +81,7 @@ test("all implemented routes: light/dark, overflow, landmarks and accessible nam
 
 test("search remains readable immediately after repeated theme switches",async({page})=>{
   await api(page);
-  await page.goto("/");
+  await page.goto("/kesfet");
   await expect(page.locator("main h1").first()).toBeVisible();
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await expect(page.locator(".discovery-search")).toBeVisible();
