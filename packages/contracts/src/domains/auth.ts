@@ -228,6 +228,32 @@ export const authEndpoints = [
     notes: ["Kod yalnız bir kere kullanılabilir; TOTP kurulumu kaldırılmaz. Kodlar yalnız kurulum onayında gösterilir, loglanmaz."],
   }),
   defineEndpoint({
+    id: "me.mfa.reenroll.begin", domain: "auth", method: "POST", path: "/me/mfa/reenroll",
+    summary: "Etkin MFA için yeni TOTP sırrı başlat; eski sır onaya kadar geçerli", auth: "user",
+    provider: auth, consumers: web, unblocks: ["#180", "#291"],
+    availability: { status: "ready" }, request: { body: z.strictObject({ password: Password }) },
+    responses: { 200: dataOf(z.strictObject({ secret: z.string(), uri: z.string(), expiresAt: Timestamp })) },
+    errors: ["FORBIDDEN", "CONFLICT"], idempotency: "none", cache: "private",
+    notes: [
+      "Parola ve bu oturumda taze, kullanılmamış MFA step-up gerekir (TOTP ya da kurtarma kodu); başlatma step-up'ı tüketir. Yoksa 403 `stepup_required`.",
+      "Yeni sır etkin kaydın yanında ayrı, oturuma bağlı bekleyen alanda 10 dakika tutulur. Eski sır ve eski kurtarma kodları onaya kadar geçerli; kullanıcı kilitlenmez.",
+      "MFA etkin değilse 409 `mfa_not_enabled`; sunucuda ayrı MFA anahtarı (MFA_ENCRYPTION_KEY) yoksa 409 `mfa_key_required` (yeni sır eski pepper'a bağlanmaz).",
+      "Secret ve URI yalnız bu cevapta döner; UI loglamaz, saklamaz. Yeni başlatma bekleyen eskisinin yerine geçer.",
+    ],
+  }),
+  defineEndpoint({
+    id: "me.mfa.reenroll.confirm", domain: "auth", method: "POST", path: "/me/mfa/reenroll/confirm",
+    summary: "Yeni TOTP sırrını kodla doğrula; eski sırrı ve kurtarma kodlarını değiştir", auth: "user",
+    provider: auth, consumers: web, unblocks: ["#180", "#291"],
+    availability: { status: "ready" }, request: { body: z.strictObject({ code: z.string().regex(/^\d{6}$/) }) },
+    responses: { 200: dataOf(z.strictObject({ enabled: z.boolean(), recoveryCodes: z.array(z.string().regex(/^[a-f0-9]{32}$/)).length(10) })) },
+    errors: ["FORBIDDEN"], idempotency: "none", cache: "private",
+    notes: [
+      "Kod YENİ sırla üretilmiş olmalı ve başlatan oturumdan gelmeli. Yanlış kodda hiçbir şey değişmez; eski sır çalışmaya devam eder (deneme sayacı ortaktır).",
+      "Tek transaction: yeni sır v2 yazılır, eski kurtarma kodlarının hepsi iptal edilir, 10 yeni kod üretilir, audit yazılır ve diğer oturumların step-up'ları düşürülür. Eşzamanlı iki onaydan yalnız biri kazanır.",
+    ],
+  }),
+  defineEndpoint({
     id: "me.mfa.stepup", domain: "auth", method: "POST", path: "/me/mfa/step-up",
     summary: "Mevcut oturum için 5 dakikalık MFA yeniden doğrulama", auth: "user",
     provider: auth, consumers: web, unblocks: ["#180", "#182"],

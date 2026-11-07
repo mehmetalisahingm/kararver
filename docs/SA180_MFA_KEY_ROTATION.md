@@ -16,9 +16,22 @@ Bir sır sızıntısı şüphesinde ya da düzenli rotasyonda pepper'ın değiş
   1. **Gerekli değil:** Değerlendirme, DB kopyası ile eski pepper'ın birlikte ele geçirilmediği sonucuna varır. Gerekçe ve tarih #291 özel dosyasına yazılır.
   2. **Yetkili hesaplar için gerekli (önerilen asgari):** `ADMIN` ve üstü her hesap, pepper değişiminden sonra yeni TOTP kurar ve yeni kurtarma kodu alır. Önce **en az ayrıcalıklı yönetici hesabıyla** prova yapılır; SUPER_ADMIN en son, kurtarma planı hazırken.
   3. **Herkes için gerekli.**
-- **Bugünkü sınır:** Kullanıcının kendi MFA'sını kapatıp yeniden kurduğu ya da kurtarma kodunu yenilediği bir akış **yok**; kodlar yalnız kurulumda veriliyor. 2. ve 3. seçenekler bu akış yazılmadan uygulanamaz (ayrı iş, #180). DB'den MFA kaydını elle silmek kabul edilmez.
+- **Bugünkü sınır (güncellendi, 7 Kasım 2026):** Kullanıcının kendi TOTP sırrını ve kurtarma kodlarını **kilitlenmeden** yenilediği akış artık var: **Hesap güvenliği → "Doğrulayıcıyı yenile"** (`me.mfa.reenroll.begin` / `me.mfa.reenroll.confirm`, ayrıntı aşağıda "Doğrulayıcı yenileme"). Akış yalnız sağlanır; ayrıcalıklı hesapların yeniden kaydı **başlatılmadı**, 5. adımdaki sırayla ve Mehmet'in onayıyla yapılır. Kalan sınırlar:
+  - akış sunucuda `MFA_ENCRYPTION_KEY` yoksa kapalıdır (409 `mfa_key_required`), yani 1. adım uygulanmadan yeniden kayıt yapılamaz;
+  - MFA'yı tamamen kapatma akışı yoktur (bilinçli; yenileme kapatmadan yapılır);
+  - doğrulayıcısını ve bütün kurtarma kodlarını kaybetmiş hesap bu akışı kullanamaz: [SA180 MFA kilitlenmesi](SA180_SUPER_ADMIN_MFA_LOCKOUT.md).
+  DB'den MFA kaydını elle silmek kabul edilmez; akış da hiçbir kaydı silmez.
 
-**Karar (Mehmet, 7 Kasım 2026, #300):** Eski DB+pepper ifşası şüphesi olan **ayrıcalıklı MFA hesapları** için yeni TOTP sırrı ve yeni kurtarma kodlarıyla **kontrollü yeniden kayıt** (2. seçenek). Kullanıcıyı kilitleyecek zorunlu toplu işlem yok; önce alternatif doğrulanmış bir ADMIN ve owner kurtarma planı hazırlanır. Kod merge'i anahtar ya da pepper rotasyonunu onaylamaz: staging/production anahtarları ve mevcut pepper bu aşamada **değiştirilmez**. Ön koşul: yukarıdaki "bugünkü sınır" kalkmalı, yani kullanıcının kendi TOTP sırrını ve kurtarma kodlarını yenileyebildiği akış (#180, ayrı PR) yazılmalı.
+**Karar (Mehmet, 7 Kasım 2026, #300):** Eski DB+pepper ifşası şüphesi olan **ayrıcalıklı MFA hesapları** için yeni TOTP sırrı ve yeni kurtarma kodlarıyla **kontrollü yeniden kayıt** (2. seçenek). Kullanıcıyı kilitleyecek zorunlu toplu işlem yok; önce alternatif doğrulanmış bir ADMIN ve owner kurtarma planı hazırlanır. Kod merge'i anahtar ya da pepper rotasyonunu onaylamaz: staging/production anahtarları ve mevcut pepper bu aşamada **değiştirilmez**. Ön koşul: yukarıdaki "bugünkü sınır" kalkmalı, yani kullanıcının kendi TOTP sırrını ve kurtarma kodlarını yenileyebildiği akış (#180, ayrı PR) yazılmalı. **Durum:** akış #300'e bağlı ayrı PR'da yazıldı; bu PR yeniden kaydı başlatmaz.
+
+## Doğrulayıcı yenileme (#180/#291)
+Kullanıcı kendi MFA'sını kapatmadan yeni TOTP sırrı ve yeni kurtarma kodları alır. Tasarım ilkesi: **onaya kadar eski sır geçerli, hiçbir adımda kilitlenme yok.**
+1. **Başlatma** (`POST /me/mfa/reenroll`, parola): bu oturumda taze ve **kullanılmamış** bir step-up gerekir (mevcut TOTP ya da kurtarma koduyla). Başlatma onu tüketir. Yeni sır `user_mfa_credentials.reenroll_*` bekleyen alanlarına, her zaman v2 (ayrı anahtar) ile ve başlatan oturuma bağlı olarak 10 dakikalığına yazılır. Etkin `secret_cipher` ve kurtarma kodları **değişmez**. Yeni başlatma bekleyen öncekinin yerine geçer.
+2. **Onay** (`POST /me/mfa/reenroll/confirm`, YENİ sırdan kod): kod yanlışsa, eski sırdan geliyorsa, süre dolmuşsa ya da başka oturumdan geliyorsa hiçbir şey değişmez; eski sır çalışmaya devam eder. Deneme sayacı step-up ile ortaktır (5 hatada 15 dk kilit).
+3. Onay başarılıysa **tek transaction'da**: yeni sır etkin olur (v2), bekleyen alan temizlenir, kullanılmamış bütün eski kurtarma kodları `revoked_at` ile **iptal edilir** (silinmez), 10 yeni kod üretilir ve bir kez gösterilir, `account.mfa`/`reenroll` audit kaydı yazılır, **diğer oturumların** açık step-up'ları düşürülür. Eşzamanlı iki onaydan yalnız biri kazanır (satır kilidi).
+- **Audit:** `reenroll_begin` ve `reenroll`. Özette yalnız sayılar var (`cipherVersion`, verilen/iptal edilen kod sayısı, düşürülen step-up sayısı); sır, kod ya da şifreli kayıt yok.
+- **Migration:** `20261107120000_faruk_sa180_mfa_reenroll` (yalnız sütun ekler; mevcut kayıtlara dokunmaz, geriye uyumlu).
+- **Yeniden kayıt provası (5. adım):** hesap sahibi giriş yapar → step-up → "Doğrulayıcıyı yenile" → yeni anahtarı uygulamaya ekler → yeni kodla onaylar → yeni kurtarma kodlarını saklar → **yeni** kodla bir step-up daha yapar. Uygulamadaki eski kaydı ancak bundan sonra siler. Kanıt yalnız audit sayısıyla (#291) yazılır.
 
 ## Ne değişti (kod)
 - **TOTP sırrı sürümlü şifreleniyor** (`apps/api/src/modules/security/encryption.ts`, ilk bayt):
@@ -81,7 +94,7 @@ Bir sır sızıntısı şüphesinde ya da düzenli rotasyonda pepper'ın değiş
 
 Kanıt yalnız sayı ve durum koduyla #291'e yazılır.
 
-**5. Yeniden kayıt:** Karar 2 ya da 3 ise, yenileme akışı hazır olduktan sonra sırasıyla en az ayrıcalıklı yönetici → diğer yöneticiler → SUPER_ADMIN.
+**5. Yeniden kayıt:** Karar 2 ya da 3 ise, 1. adım (ayrı anahtar) uygulandıktan sonra "Doğrulayıcı yenileme" akışıyla ve yukarıdaki prova sırasıyla: en az ayrıcalıklı yönetici → diğer yöneticiler → SUPER_ADMIN.
 
 ## Geri dönüş (kilitlenmeden)
 | Durum | Yapılacak | Yapılmayacak |
@@ -108,5 +121,12 @@ Bu runbook her ortamda aynı sırayla uygulanır. Yeni bir ortam ilk günden `MF
   4. pepper B→C'de A kodunun bozulmaması;
   5. negatif: listeden A silinirse A kodu reddedilir; anahtar kaldırılırsa v2 kayıt reddedilir ve kayıt değişmez; doğru yapılandırmaya dönülünce kalan kodlar geçer.
 - **PostgreSQL toplu taşıma:** deneme yazmaz; listede olmayan eski sırla çözülemeyen kayda dokunulmaz; `--apply` sonrası yeni pepper ile çözülür.
+
+`apps/api/test/mfa-reenroll.test.ts` (PostgreSQL, doğrulayıcı yenileme):
+- step-up yokken, yanlış parolayla, MFA kapalıyken ya da ayrı anahtar yokken başlatma reddedilir; step-up tek kullanımlıktır;
+- yanlış kodla, eski sırrın koduyla ya da başka oturumdan onayda etkin sır değişmez ve eski sır çalışır;
+- eşzamanlı iki onaydan yalnız biri kazanır; diğer oturumun step-up'ı düşer; MFA kaydı silinmez;
+- onaydan sonra eski sır ve eski kurtarma kodları geçmez, yenileri geçer; kurtarma koduyla alınmış step-up da başlatmaya yeter;
+- audit kayıtlarında sır, kurtarma kodu ya da şifreli kayıt yoktur.
 
 Mevcut `mfa.test.ts` ve step-up kullanan bütün API testleri değişmeden geçiyor.
