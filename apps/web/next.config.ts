@@ -20,7 +20,13 @@ const config: NextConfig = {
   // demo hesapları/örnek veriler staging/production JS'ine girer (scripts/scan-demo-strings.mjs).
   env: { NEXT_PUBLIC_KV_DATA_MODE: process.env.NEXT_PUBLIC_KV_DATA_MODE || "api" },
   async headers() {
-    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+    return [
+      { source: "/:path*", headers: SECURITY_HEADERS },
+      { source: "/experiences/cabin/index.html", headers: [
+        { key: "Content-Security-Policy", value: "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" },
+        { key: "X-Frame-Options", value: "SAMEORIGIN" },
+      ] },
+    ];
   },
   devIndicators: false,
   // Browser uses NEXT_PUBLIC_API_URL=/api; this rewrite keeps session requests same-origin.
