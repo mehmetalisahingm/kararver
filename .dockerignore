@@ -1,0 +1,35 @@
+# İmaja girmeyenler: bağımlılıklar imajda yeniden kurulur; sırlar, yedekler ve web derlemesi hiç girmez.
+**/node_modules
+.git
+.github
+**/.env
+**/.env.*
+!.env.example
+drill
+**/*.dump
+**/*.dump.enc
+**/*.manifest.json
+apps/web/.next
+**/coverage
+**/test-results
+**/playwright-report
+**/.turbo
+**/*.log
+packages/db/generated
+# #309 inceleme (Utku): .gitignore'daki hassas yerel dosyalar da imaja girmez (yerel docker build'de COPY . .).
+**/*.pem
+**/*.key
+beta-private
+beta-reports
+acceptance-results
+onboarding-results
+state-report
+media-report
+**/outage-sonuc*.json
+.playwright-cli
+output
+**/.venv
+**/.spike-venv
+**/dist
+**/build
+**/.next
