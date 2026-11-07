@@ -79,7 +79,7 @@ Kaynak sütunu gerçek kod satırıdır; `kv44-staging-runner.test.mjs` her sat�
 | R0.pinned | R0 | hepsi (R4 hariç) | P0 | STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification | `.github/workflows/staging-monitor.yml:135` | |
 | R0.release | R0 | hepsi | P0 | 200 status=ok env=staging, sha = KV44_EXPECTED_SHA | `apps/api/src/app.ts:507` | |
 | R0.login | R0 | hepsi | P0 | 200 + kv_session | `packages/contracts/src/domains/auth.ts:87` | |
-| R0.role | R0 | hepsi | P0 | /me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN) | `packages/contracts/src/domains/auth.ts:240` | |
+| R0.role | R0 | hepsi | P0 | /me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN) | `packages/contracts/src/domains/auth.ts:266` | |
 | ACC.register | R0 | initiator, media-operator | P1 | 202; 429 → BLOCKED-ratelimit (5/IP/saat) | `docs/KV-19_RATE_LIMIT.md:21` | |
 | ACC.owned | R0 | initiator, media-operator | P0 | yeni hesap yalnız USER | `packages/contracts/src/domains/admin.ts:566` | |
 | ACC.login | R0 | initiator, media-operator | P1 | 200, aynı id | `packages/contracts/src/domains/auth.ts:87` | |
@@ -104,7 +104,7 @@ Kaynak sütunu gerçek kod satırıdır; `kv44-staging-runner.test.mjs` her sat�
 | R3.not-public | R3 | media-operator | P0 | anonim /media-public 404, imza sızıntısı yok | `apps/api/src/modules/media/public-routes.ts:12` | |
 | R2.resolve | R2 | approver | P1 | 8 karakter → tek talep, başlatan ben değilim | `packages/contracts/src/domains/moderation.ts:855` | |
 | R2.stepup_required | R2 | approver | P0 | **403 FORBIDDEN `stepup_required`** | `apps/api/src/modules/moderation/bulk-approval-routes.ts:121` | |
-| R2.stepup | R2 | approver | P1 | 200 stepUpExpiresAt (kod kanıtta `******`) | `packages/contracts/src/domains/auth.ts:231` | |
+| R2.stepup | R2 | approver | P1 | 200 stepUpExpiresAt (kod kanıtta `******`) | `packages/contracts/src/domains/auth.ts:257` | |
 | R2.approve | R2 | approver | P0 | 200 APPROVED | `apps/api/src/modules/moderation/bulk-approval-routes.ts:138` | |
 | R2.closed.reapprove | R2 | approver | P0 | **409 CONFLICT `closed`** | `apps/api/src/modules/moderation/bulk-approval-routes.ts:111` | |
 | R2.expired.view | R2 | approver | P1 | T+31'de status EXPIRED | `apps/api/src/modules/moderation/bulk-approval-routes.ts:22` | |
