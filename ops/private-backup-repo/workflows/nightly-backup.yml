@@ -1,0 +1,171 @@
+name: Nightly encrypted backup
+# KararVer #186 / #51 / #311 — ŞABLON. Yalnız ayrı, PRIVATE yedek reposunda .github/workflows/nightly-backup.yml olarak
+# kullanılır (owner kararı, 7 Kasım 2026: gerçek DB yedeği public repo artifact'ına konmaz). Public KararVer reposunda
+# bu dosya ÇALIŞMAZ (.github dışında) ve oraya kopyalanırsa ilk adım FAIL olur.
+# Akış:
+#   1) tek anlık döküm → ayrı, temiz PostgreSQL 18'e restore → 52 migration + tutarlılık doğrulaması;
+#   2) DOĞRULANAN AYNI döküm (sha256) ve manifest RSA açık anahtarla zarf şifrelemesiyle şifrelenir; düz döküm silinir;
+#   3) yalnız .enc dosyaları 35 gün saklanan PRIVATE artifact olur;
+#   4) ANCAK yükleme başarılıysa ops_backup_runs kaydı yazılır (/admin/ops);
+#   5) yapılandırma eksikse ya da bir adım düşerse FAIL + bu repoda `backup-alarm` issue'su.
+# Kurulum ve kapılar: mehmetalisahingm/kararver docs/KV-48_BACKUP_RESTORE.md "Zamanlanmış yedek: private repo".
+#
+# Gerekenler (bu private repoda; değerler hiçbir issue'ya yazılmaz):
+#   secrets.STAGING_BACKUP_DATABASE_URL  Neon DOĞRUDAN (pooler olmayan) adres; okuma + ops_backup_runs ekleme rolü
+#   vars.BACKUP_PUBLIC_KEY               RSA (≥ 3072 bit) açık anahtar, PEM
+#   vars.KARARVER_REF                    isteğe bağlı: kodun alınacağı ref (varsayılan main; tercihen onaylı SHA)
+on:
+  schedule:
+    - cron: '30 0 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nightly-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    # Yalnız zamanlanmış koşu ya da yetkili kişinin elle tetiklemesi (owner + ops sorumlusu).
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["mehmetalisahingm","farukkemree"]'), github.actor))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+    services:
+      postgres:
+        image: postgres:18.1-alpine
+        env:
+          POSTGRES_USER: kararver
+          POSTGRES_PASSWORD: kararver_local
+          POSTGRES_DB: kararver
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kararver -d kararver"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      PG_BIN: /usr/lib/postgresql/18/bin
+    steps:
+      - name: Yalnız PRIVATE repoda çalışır (public'te FAIL, otomatik geri dönüş yok)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          visibility=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility' 2>/dev/null || echo "okunamadı")
+          if [ "$visibility" != "private" ]; then
+            echo "::error::Bu iş yalnız private yedek reposunda çalışır (bu repo: $visibility). YEDEK ALINMADI."
+            exit 1
+          fi
+      - name: Yapılandırma (eksikse FAIL + alarm)
+        env:
+          HAS_DB: ${{ secrets.STAGING_BACKUP_DATABASE_URL != '' }}
+          HAS_KEY: ${{ vars.BACKUP_PUBLIC_KEY != '' }}
+        run: |
+          # runner bağlamı iş seviyesindeki env'de kullanılamaz; klasörler burada tanımlanır.
+          { echo "WORK=$RUNNER_TEMP/backup"; echo "OUT=$RUNNER_TEMP/out"; } >> "$GITHUB_ENV"
+          if [ "$HAS_DB" != "true" ] || [ "$HAS_KEY" != "true" ]; then
+            echo "::error::STAGING_BACKUP_DATABASE_URL secret'ı ya da BACKUP_PUBLIC_KEY değişkeni yok: YEDEK ALINMADI."
+            exit 1
+          fi
+      # Kod public KararVer reposundan okunur (token gerekmez); secret'lar yalnız bu private repoda.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.KARARVER_REPOSITORY || 'mehmetalisahingm/kararver' }}
+          ref: ${{ vars.KARARVER_REF || 'main' }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+      - name: Bağımlılıklar (yalnız db + worker)
+        run: pnpm install --frozen-lockfile --filter "@kararver/db..." --filter "@kararver/worker..."
+      - name: PostgreSQL 18 istemcisi (resmî PGDG)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common ca-certificates curl
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/kararver-pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+          "$PG_BIN/pg_dump" --version
+      - name: 1) Tek döküm → ayrı temiz PG 18'e restore → doğrulama
+        id: verify
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_BACKUP_DATABASE_URL }}
+          RESTORE_DATABASE_URL: postgresql://kararver:kararver_local@127.0.0.1:5432/kararver_restore_check
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK"
+          # Private repoda da log en az bilgiyle tutulur: araç çıktısı (satır sayıları, tablo/kontrol adları) yalnız
+          # runner'daki dosyaya yazılır; loga yalnız sonuç satırı düşer. Ayrıntı gerekirse aynı adım yerelde çalıştırılır.
+          # --no-record: başarı kaydı yalnız 4. adımda, artifact yayımlandıktan sonra yazılır.
+          if ! node packages/db/ops/backup.ts --out "$WORK" --no-record > "$RUNNER_TEMP/backup.log" 2>&1; then
+            echo "::error::db:backup başarısız (ayrıntı loga yazılmaz)"; exit 1
+          fi
+          file=$(sed -n 's/^yedek: \(.*\.dump\)$/\1/p' "$RUNNER_TEMP/backup.log")
+          test -f "$file" && test -f "$file.manifest.json"
+          echo "yedek alındı: $(basename "$file") ($(grep -c '⚠' "$RUNNER_TEMP/backup.log" || true) uyarı)"
+          if ! node packages/db/ops/restore.ts --file "$file" > "$RUNNER_TEMP/restore.log" 2>&1; then
+            echo "::error::restore doğrulaması başarısız: $(grep -c '✖' "$RUNNER_TEMP/restore.log" || true) kontrol düştü (ayrıntı loga yazılmaz)"; exit 1
+          fi
+          grep -q '^SONUÇ: yedek eksiksiz' "$RUNNER_TEMP/restore.log"
+          echo "restore doğrulandı: $(grep -c '✔' "$RUNNER_TEMP/restore.log" || true) kontrol geçti"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+      - name: 2) Doğrulanan AYNI dökümü şifrele (kayıt yazılmaz)
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_BACKUP_DATABASE_URL }}
+          BACKUP_PUBLIC_KEY: ${{ vars.BACKUP_PUBLIC_KEY }}
+          APP_ENV: staging
+          BACKUP_FROM_FILE: ${{ steps.verify.outputs.file }}
+          BACKUP_OUTPUT_DIR: ${{ runner.temp }}/out
+          BACKUP_DESTINATION: github-actions
+          BACKUP_PREFIX: db/staging
+          BACKUP_SKIP_RECORD: 'true'
+          # Manifest satır sayıları ve şema kataloğu taşır: o da şifrelenir; düz manifest yalnız $WORK'te kalır (4. adım).
+          BACKUP_ENCRYPT_MANIFEST: 'true'
+        run: |
+          set -euo pipefail
+          node apps/worker/scripts/scheduled-backup.ts > "$RUNNER_TEMP/encrypt.log" 2>&1 || { echo "::error::şifreleme başarısız"; exit 1; }
+          test ! -e "$BACKUP_FROM_FILE"                                   # düz döküm silindi
+          ! find "$OUT" -type f ! -name '*.enc' | grep -q .               # artifact'ta yalnız şifreli dosya
+          find "$OUT" -type f -name '*.dump.enc' | grep -q .
+          find "$OUT" -type f -name '*.manifest.json.enc' | grep -q .
+          find "$OUT" -type f -printf '%f\n'
+      - name: 3) Artifact (35 gün)
+        uses: actions/upload-artifact@v4
+        with:
+          name: kararver-db-staging-${{ github.run_id }}
+          path: ${{ runner.temp }}/out
+          retention-days: 35
+          if-no-files-found: error
+      - name: 4) Yayımlandıktan SONRA yedek kaydı (/admin/ops)
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_BACKUP_DATABASE_URL }}
+          BACKUP_DESTINATION: github-actions
+        run: |
+          set -euo pipefail
+          # Düz manifest artifact'ta yok; doğrulanan dökümün yanında (runner'da) duruyor.
+          node apps/worker/scripts/record-backup-run.ts --manifest "${{ steps.verify.outputs.file }}.manifest.json"
+      - name: Temizlik
+        if: always()
+        run: rm -rf "$WORK" "$OUT" "$RUNNER_TEMP/backup.log" "$RUNNER_TEMP/restore.log" "$RUNNER_TEMP/encrypt.log"
+      - name: Başarıda açık alarmı kapat
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label backup-alarm --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -n "$open" ]; then gh issue close "$open" -R "$GITHUB_REPOSITORY" --comment "✅ Yedek yeniden başarılı (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."; fi
+      - name: Başarısızlıkta alarm
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create backup-alarm --color B60205 --description "Zamanlanmış yedek başarısız (#186)" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label backup-alarm --state open --json number --jq '.[0].number // empty')
+          msg="**Zamanlanmış şifreli yedek başarısız** ($RUN_URL). Yedek alınmamış olabilir. Runbook: mehmetalisahingm/kararver docs/KV-48_BACKUP_RESTORE.md \"Zamanlanmış yedek: private repo\". Sorumlu: @farukkemree"
+          if [ -n "$open" ]; then gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$msg"; else gh issue create -R "$GITHUB_REPOSITORY" --title "Yedek alarmı: zamanlanmış yedek başarısız" --label backup-alarm --body "$msg"; fi

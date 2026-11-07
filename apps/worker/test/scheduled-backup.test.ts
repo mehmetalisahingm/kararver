@@ -133,6 +133,32 @@ describe("zamanlanmış yedek işi", () => {
     assert.ok(!(await readdir(tmpdir())).some((n) => n.startsWith("kv-backup-") && existsSync(path.join(tmpdir(), n, "kararver-kararver-20261016T003000Z.dump"))));
   });
 
+  test("encryptManifest: manifest de şifreli yüklenir, düz manifest yüklenmez; çözülen manifest aynı (#311)", async () => {
+    const plain = '{"kind":"kararver-db-backup","tables":{"users":10}}';
+    const { d, uploads, records } = deps({
+      encryptManifest: true,
+      backup: async (_url, out) => {
+        const file = path.join(out, "kararver-kararver-20261016T003000Z.dump");
+        await writeFile(file, Buffer.concat([Buffer.from("PGDMP"), randomBytes(4096)]));
+        await writeFile(`${file}.manifest.json`, plain);
+        return { file, manifest: manifestFor(file, await sha256(file), 4101) };
+      },
+    });
+    const result = await runScheduledBackup(d);
+    assert.deepEqual(
+      uploads.map((u) => [u.key, u.type]),
+      [
+        ["db/test/2026/10/16/kararver-kararver-20261016T003000Z.dump.enc", "application/octet-stream"],
+        ["db/test/2026/10/16/kararver-kararver-20261016T003000Z.dump.manifest.json.enc", "application/octet-stream"],
+      ],
+    );
+    assert.equal(result.manifestKey, uploads[1]!.key);
+    assert.ok(!(await readFile(uploads[1]!.copy)).includes(Buffer.from("users")), "yüklenen manifest şifreli");
+    await decryptFile(uploads[1]!.copy, path.join(dir, "manifest.out"), privateKey);
+    assert.equal(await readFile(path.join(dir, "manifest.out"), "utf8"), plain);
+    assert.equal(records.length, 1);
+  });
+
   test("yükleme başarısızsa kayıt yazılmaz ve hata yükselir", async () => {
     const { d, records } = deps({ upload: async () => { throw new Error("yedek yüklenemedi (AccessDenied, HTTP 403)"); } });
     await assert.rejects(runScheduledBackup(d), /HTTP 403/);
