@@ -1,6 +1,6 @@
 # Ücretsiz 3D kabin
 
-7 Kasım 2026. Ana sayfa için yeni sanat yönünü değerlendirmek üzere ayrı hazırlanmış yerel önizleme. Önceden onaylanan ana sayfa ve diğer sayfalar bu çalışmayla değiştirilmedi. Deploy veya ücretli servis işlemi yapılmadı.
+7 Kasım 2026. Ana sayfada önce onaylanan yörünge açılışı, ardından 3D kabin ve keşfet akışı bulunur. Ayrı kabin önizlemesi /deney/kabin adresindedir; ücretli servis açılmadı.
 
 ## Açma ve düzenleme
 
@@ -14,12 +14,12 @@ Son malzeme pasında, kendi 3D modelimizin render'larından yerleşik imagegen i
 
 ## Etkileşim
 
-- Nesneyi fare veya dokunmayla tutup sürükle; kuvvet yayı açısal hareketi ve çarpışmaları korur.
+- Nesneyi fare veya dokunmayla tutup sürükle; yumuşak kuvvet yayı ve sınırlandırılmış tork çarpışmaları korurken kontrolsüz dönmeyi önler.
 - Yer çekimi düğmesi 0 g / 1 g arasında geçer. Elma sekmesi düşme yüksekliğine bağlıdır.
 - Su ve süt, parçacık tabanlı ayrı akışkan çözücüleri ve hareketli yüzeylerle çizilir.
 - Sıfırla başlangıç konumlarını ve akışkanları geri getirir. Hareketi durdur tüm simülasyonu durdurur.
 - Kabini keşfet menüsünden klavyeyle nesne seç; ok tuşlarıyla hareket ettir, Escape ile bırak.
-- Boş alanda sürüklemek veya Bakış açısı düğmesi kamerayı çevirir. Yalnız ortam seçeneği nesneleri gizler.
+- Kamera yalnız Bakış açısı düğmesiyle küçük ve yumuşak geçişler yapar; boş alanda sürüklemek kabini döndürmez. Yalnız ortam seçeneği nesneleri gizler.
 - Azaltılmış hareket tercihi başlangıçta simülasyonu durdurur. Kullanıcının yer çekimi, sürükleme veya tuş etkileşimi hareketi başlatabilir.
 
 Fizik RAPIER, görselleştirme Three.js, paketleme esbuild kullanır. Üretim sırasında veya sayfa çalışırken fal, ücretli AI API'si, uzak model servisi veya abonelik çağrısı yoktur. Bu çalışma için yeni ödeme yapılmadı. Görseller yerleşik imagegen ile üretildi; WebP dönüşümü yalnız kayıpsız format dönüşümüdür.
@@ -39,7 +39,7 @@ Tam üretim istemleri [texture-prompts.md](./texture-prompts.md) ve [finish-prom
 
 ## Doğrulama ve sınırlar
 
-- `node --test apps/web/test/cabin-physics.test.mjs`: 5/5 geçti; 0 g / düşme / zemin / sıfırlama, farklı yükseklikten sekme, kuvvetle sürükleme ve iki akışkanın sonlu kalıp parçacıklarını koruması.
+- `node --test apps/web/test/cabin-physics.test.mjs`: 11/11 geçti; 0 g / düşme / zemin / sıfırlama, farklı yükseklikten sekme, kuvvetle sürükleme ve iki akışkanın sonlu kalıp parçacıklarını koruması.
 - Web TypeScript kontrolü ve üretim build'i geçti.
 - Paketlenmiş sürümde masaüstü 1440×1000 ve telefon görünümü 390×844 kontrol edildi. Telefon görünümünde yatay taşma yok; bu, fiziksel telefonda cihaz kabulü değildir.
 - Gerçek fare hareketi elmayı seçip yer değiştirdi; ok tuşu kontrolü, durdurma, yer çekimi ve sıfırlama tarayıcıda kontrol edildi. Durdurulduğunda konum sabit kaldı. Yer çekimi açıldıktan sonra su ve süt zemine yayıldı.
@@ -47,4 +47,4 @@ Tam üretim istemleri [texture-prompts.md](./texture-prompts.md) ve [finish-prom
 - Azaltılmış hareket tercihiyle başlangıçta duraklama doğrulandı. WebGL bağlam kaybı bilerek tetiklendi; yeniden deneme bağlantılı hata görünümü açıldı, sayfa yenilendikten sonra sahne tekrar yüklendi.
 - Intel UHD Graphics üzerinde sabit kamera / 0 g sahnesinde kısa masaüstü ölçümleri yaklaşık 31–35 FPS idi. Kamera çevrilirken kabin yeniden çizilir; aynı hız garanti edilmez. FPS, pencere boyutu ve cihaz yüküne bağlıdır.
 
-Bu gerçek zamanlı bir 3D yorumdur; fotogerçekçilik için kullanıcı görsel kabulü henüz alınmadı. Giysi çarpışmaları sadeleştirilmiş şekillerle, su/süt ise küçük bir PBF çözücüsüyle hesaplanır; bunlar bilimsel sıvı veya giysi simülasyonları değildir. Bu önizleme ana sayfanın yerine yayımlanmadı.
+Bu gerçek zamanlı bir 3D yorumdur; fotogerçekçilik için kullanıcı görsel kabulü henüz alınmadı. Giysi çarpışmaları sadeleştirilmiş şekillerle, su/süt ise küçük bir PBF çözücüsüyle hesaplanır; bunlar bilimsel sıvı veya giysi simülasyonları değildir. Kabin, önceki giriş ekranının altında ayrı bölüm olarak yer alır.

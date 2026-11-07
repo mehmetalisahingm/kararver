@@ -18,7 +18,7 @@ renderer.info.autoReset=false;
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
 renderer.transmissionResolutionScale=.5;
 host.appendChild(renderer.domElement);const canvas=renderer.domElement;canvas.tabIndex=0;
-canvas.setAttribute('aria-label','Mekik kabini. Nesneleri tutup sürükleyebilirsin. Boş alanda sürükleyerek bakış açısını değiştir.');
+canvas.setAttribute('aria-label','Mekik kabini. Nesneleri tutup yavaşça sürükleyebilirsin. Bakış açısını menüdeki düğmeyle değiştir.');
 const scene=new T.Scene();scene.background=new T.Color('#050a0f');
 const camera=new T.PerspectiveCamera(mobile?65:49,innerWidth/innerHeight,.06,150);
 camera.position.set(mobile?.04:.18,1.68,mobile?3.7:2.6);camera.lookAt(0,1.68,-3.2);
@@ -74,36 +74,35 @@ function cacheCabin(){
 
 let paused=matchMedia('(prefers-reduced-motion:reduce)').matches,gravity=false,roomOnly=true,disposed=false;
 let offscreen=false,priorPause=paused;
-addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==parent||event.data?.type!=='kararver-cabin-visibility')return;const hide=!event.data.visible;if(hide===offscreen)return;offscreen=hide;if(hide){priorPause=paused;paused=true;cancelAnimationFrame(frame);frame=0;}else{paused=priorPause;last=performance.now();wake();}});
+addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==parent||event.data?.type!=='kararver-cabin-visibility')return;const hide=!event.data.visible;if(hide===offscreen)return;offscreen=hide;if(hide){priorPause=paused;paused=true;physics?.cancelDrag();cancelAnimationFrame(frame);frame=0;}else{paused=priorPause;last=performance.now();wake();}});
 document.querySelector('#pause').ariaPressed=String(paused);document.querySelector('#pause').textContent=paused?'▷':'Ⅱ';document.querySelector('#pause').setAttribute('aria-label',paused?'Hareketi başlat':'Hareketi durdur');
 renderer.shadowMap.autoUpdate=false;
 let frame=0,last=0,time=0,selected=null,lastShadow=0;const yaw={x:.03,y:0,tx:.03,ty:0};
 const roots=new Map();let physics=null,fluidSystem=null;
 function render(now){
- if(disposed)return;frame=0;const dt=Math.min(.10,Math.max(0,(now-last)/1000));last=now;if(!paused)time+=dt;
- yaw.x+=(yaw.tx-yaw.x)*.065;yaw.y+=(yaw.ty-yaw.y)*.065;
+ if(disposed||offscreen||document.hidden){frame=0;return;}frame=0;const dt=Math.min(.10,Math.max(0,(now-last)/1000));last=now;if(!paused)time+=dt;
+ const viewBlend=1-Math.exp(-1.7*dt);yaw.x+=(yaw.tx-yaw.x)*viewBlend;yaw.y+=(yaw.ty-yaw.y)*viewBlend;
  camera.rotation.set(yaw.y,yaw.x,0,'YXZ');
  if(physics&&!paused&&!roomOnly)physics.update(dt,time);
  if(staticDirty||Math.abs(yaw.x-cachedYaw)+Math.abs(yaw.y-cachedPitch)>.0004)cacheCabin();
  if(now-lastShadow>(gravity?45:140)){renderer.shadowMap.needsUpdate=true;lastShadow=now;}
  renderer.info.reset();composer.render();if((!paused||Math.abs(yaw.tx-yaw.x)+Math.abs(yaw.ty-yaw.y)>.0001)&&!document.hidden)frame=requestAnimationFrame(render);
 }
-function wake(){if(!frame)frame=requestAnimationFrame(render);}
+function wake(){if(!frame&&!offscreen&&!document.hidden&&!disposed)frame=requestAnimationFrame(render);}
 function reset(){gravity=false;document.body.dataset.gravity='false';document.querySelector('#gravity').ariaPressed='false';document.querySelector('#gravity').innerHTML='<span>↓</span> Yer çekimini aktif et';document.querySelector('#state-label').textContent='SERBEST SÜZÜLÜŞ';document.querySelector('#g-value').innerHTML='0.00<small>g</small>';physics?.reset();wake();}
 function resume(){paused=false;document.querySelector('#pause').ariaPressed='false';document.querySelector('#pause').setAttribute('aria-label','Hareketi durdur');document.querySelector('#pause').textContent='Ⅱ';last=performance.now();wake();}
 function setGravity(){gravity=!gravity;physics?.setGravity(gravity);document.body.dataset.gravity=String(gravity);document.querySelector('#gravity').ariaPressed=String(gravity);document.querySelector('#gravity').innerHTML=gravity?'<span>↑</span> Yer çekimini kapat':'<span>↓</span> Yer çekimini aktif et';document.querySelector('#state-label').textContent=gravity?'YER ÇEKİMİ AKTİF':'SERBEST SÜZÜLÜŞ';document.querySelector('#g-value').innerHTML=(gravity?'1.00':'0.00')+'<small>g</small>';resume();}
 document.querySelector('#gravity').onclick=setGravity;document.querySelector('#reset').onclick=reset;
-document.querySelector('#pause').onclick=()=>{paused=!paused;document.querySelector('#pause').ariaPressed=String(paused);document.querySelector('#pause').setAttribute('aria-label',paused?'Hareketi başlat':'Hareketi durdur');document.querySelector('#pause').textContent=paused?'▷':'Ⅱ';last=performance.now();wake();};
+document.querySelector('#pause').onclick=()=>{paused=!paused;if(paused)physics?.cancelDrag();document.querySelector('#pause').ariaPressed=String(paused);document.querySelector('#pause').setAttribute('aria-label',paused?'Hareketi başlat':'Hareketi durdur');document.querySelector('#pause').textContent=paused?'▷':'Ⅱ';last=performance.now();wake();};
 function showObjects(value){roomOnly=!value;roots.forEach(root=>root.visible=value);fluidSystem?.visible(value);document.querySelector('#gravity').disabled=roomOnly||!physics;document.querySelector('#reset').disabled=roomOnly||!physics;document.querySelector('#pick').disabled=roomOnly||!physics;wake();}
 document.querySelector('#room').onclick=()=>showObjects(false);document.querySelector('#objects').onclick=()=>{if(!physics){location.search='';return;}showObjects(true);};
 document.querySelector('#pick').onchange=e=>{if(!physics||!e.target.value)return;physics.select(e.target.value);document.querySelector('.settings').open=false;canvas.focus();};
 document.querySelector('#copy').onchange=e=>document.body.classList.toggle('no-copy',!e.target.checked);
-let angle=0;document.querySelector('#angle').onclick=()=>{angle=(angle+1)%3;yaw.tx=[0,.21,-.21][angle];yaw.ty=[0,-.04,.035][angle];wake();};
-let pan=null;canvas.onpointerdown=e=>{if(e.button!==0)return;pan={x:e.clientX,y:e.clientY,ox:yaw.tx,oy:yaw.ty};canvas.setPointerCapture(e.pointerId);canvas.focus();};
-canvas.onpointermove=e=>{if(pan){yaw.tx=T.MathUtils.clamp(pan.ox-(e.clientX-pan.x)*.001,-.38,.38);yaw.ty=T.MathUtils.clamp(pan.oy-(e.clientY-pan.y)*.001,-.22,.22);wake();}};
-canvas.onpointerup=canvas.onpointercancel=()=>{pan=null;};
+let angle=0;document.querySelector('#angle').onclick=()=>{angle=(angle+1)%3;yaw.tx=[.03,.10,-.04][angle];yaw.ty=[0,-.015,.015][angle];wake();};
+canvas.onpointerdown=e=>{if(e.button===0)canvas.focus();};
+canvas.onpointermove=()=>{};canvas.onpointerup=canvas.onpointercancel=()=>{};
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight);staticTarget.setSize(Math.ceil(innerWidth*renderer.getPixelRatio()),Math.ceil(innerHeight*renderer.getPixelRatio()));staticDirty=true;wake();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelAnimationFrame(frame);frame=0;}else{last=performance.now();wake();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){physics?.cancelDrag();cancelAnimationFrame(frame);frame=0;}else{last=performance.now();wake();}});
 canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();disposed=true;cancelAnimationFrame(frame);document.querySelector('#gravity').disabled=true;document.querySelector('#reset').disabled=true;window.dispatchEvent(new Event('cabin-render-failure'));});
 const cubeTarget=new T.WebGLCubeRenderTarget(mobile?128:256,{generateMipmaps:true,minFilter:T.LinearMipmapLinearFilter,type:T.HalfFloatType}),cube=new T.CubeCamera(.1,100,cubeTarget);cube.position.set(0,1.7,-1.5);scene.add(cube);
 function captureEnvironment(){const visibles=[];roots.forEach(o=>{visibles.push([o,o.visible]);o.visible=false;});if(fluidSystem)for(const v of Object.values(fluidSystem.views))for(const o of [v.globe,v.surface,v.spray]){visibles.push([o,o.visible]);o.visible=false;}cachedBackground.visible=shadowFloor.visible=false;room.visible=earth.visible=true;cube.update(renderer,scene);const baked=pmrem.fromCubemap(cubeTarget.texture);scene.environment=baked.texture;scene.environmentIntensity=.65;visibles.forEach(([o,value])=>o.visible=value);staticDirty=true;wake();}

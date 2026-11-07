@@ -50,9 +50,11 @@ export class CabinFluid {
     let vx = 0, vy = 0, vz = 0;
     for (let i = 0; i < v.length; i += 3) { vx += v[i]; vy += v[i + 1]; vz += v[i + 2]; }
     vx /= this.count; vy /= this.count; vz /= this.count;
-    const fx = target ? (target.x - c.x) * 65 - vx * 11 : 0;
-    const fy = target ? (target.y - c.y) * 65 - vy * 11 : 0;
-    const fz = target ? (target.z - c.z) * 65 - vz * 11 : 0;
+    let fx = target ? (target.x - c.x) * 10 - vx * 7 : 0;
+    let fy = target ? (target.y - c.y) * 10 - vy * 7 : 0;
+    let fz = target ? (target.z - c.z) * 10 - vz * 7 : 0;
+    const acceleration=Math.hypot(fx,fy,fz),maxAcceleration=1.2;
+    if(acceleration>maxAcceleration){fx*=maxAcceleration/acceleration;fy*=maxAcceleration/acceleration;fz*=maxAcceleration/acceleration;}
     for (let k = 0; k < p.length; k += 3) {
       v[k] += fx * dt; v[k + 1] += (fy - (gravity ? 9.81 : 0)) * dt; v[k + 2] += fz * dt;
       p[k] += v[k] * dt; p[k + 1] += v[k + 1] * dt; p[k + 2] += v[k + 2] * dt;
@@ -105,6 +107,10 @@ export class CabinFluid {
       }
     }
     for (let a = 0; a < p.length; a += 3) {
+      if(!gravity){
+        const dx=p[a]-old[a],dy=p[a+1]-old[a+1],dz=p[a+2]-old[a+2],distance=Math.hypot(dx,dy,dz),limit=(target ? .35 : .14)*dt;
+        if(distance>limit){p[a]=old[a]+dx*limit/distance;p[a+1]=old[a+1]+dy*limit/distance;p[a+2]=old[a+2]+dz*limit/distance;}
+      }
       for (let axis = 0; axis < 3; axis++) v[a + axis] = (p[a + axis] - old[a + axis]) / dt;
       if (gravity && p[a + 1] <= FLOOR + .008) {
         if (!this.splashed && old[a + 1] > FLOOR + .008 && vy < -1.2) {

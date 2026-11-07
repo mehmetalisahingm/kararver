@@ -33,7 +33,7 @@ export async function createObjects({scene,camera,canvas,roots,getGravity,resume
  }
  const water=new CabinFluid({x:-1.15,y:1.63,z:-1.18}),milk=new CabinFluid({x:1.15,y:2.13,z:-1.8},true),fluids={water,milk},views={water:liquidView(false),milk:liquidView(true)};
  for(const id of ['water','milk']){const v=views[id];v.globe.userData.itemId=v.surface.userData.itemId=id;scene.add(v.surface,v.globe,v.spray);updateLiquid(fluids[id],v,0,false);}
- let accumulator=0,drag=null,pan=null,selection=null;const ray=new T.Raycaster(),pointer=new T.Vector2(),point=new T.Vector3(),direction=new T.Vector3();
+ let accumulator=0,drag=null,selection=null,lastNudge=-Infinity;const ray=new T.Raycaster(),pointer=new T.Vector2(),point=new T.Vector3(),direction=new T.Vector3();
  const oldMove=canvas.onpointermove,oldDown=canvas.onpointerdown,oldUp=canvas.onpointerup;
  const setRay=e=>{const r=canvas.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);};
  const pick=()=>ray.intersectObjects([...roots.values()].filter(o=>o.visible).concat(Object.values(views).flatMap(v=>[v.globe,v.surface]).filter(o=>o.visible)),true).find(h=>h.object.userData.itemId);
@@ -47,11 +47,13 @@ export async function createObjects({scene,camera,canvas,roots,getGravity,resume
  };
  canvas.onpointermove=e=>{setRay(e);if(drag){if(ray.ray.intersectPlane(drag.plane,point)){drag.target.copy(point);drag.target.x=T.MathUtils.clamp(point.x,-1.55,1.55);drag.target.y=T.MathUtils.clamp(point.y,.25,3.1);drag.target.z=T.MathUtils.clamp(point.z,-4.5,1.2);}wake();}else{oldMove?.(e);canvas.style.cursor=pick()?'grab':'default';}};
  canvas.onpointerup=canvas.onpointercancel=end;
+ canvas.addEventListener('lostpointercapture',end);window.addEventListener('blur',end);
  const keys=e=>{
   if(e.key==='Escape'){end();selection=null;onSelect(null);return;}if(!selection||/INPUT|BUTTON|SUMMARY/.test(e.target.tagName))return;
   const axes={ArrowLeft:['x',-.12],ArrowRight:['x',.12],ArrowUp:['y',.12],ArrowDown:['y',-.12],PageUp:['z',-.12],PageDown:['z',.12]};const axis=axes[e.key];if(!axis)return;e.preventDefault();
-  if(selection==='water'||selection==='milk'){const p=fluids[selection].positions;for(let i=0;i<p.length;i+=3)p[i+['x','y','z'].indexOf(axis[0])]+=axis[1];}
-  else {const b=physics.bodies.get(selection);const force={x:0,y:getGravity()?b.mass()*.7:0,z:0};force[axis[0]]=axis[1]*b.mass()*5;b.applyImpulse(force,true);}resume();
+  if(performance.now()-lastNudge<100)return;lastNudge=performance.now();
+  if(selection==='water'||selection==='milk'){const p=fluids[selection].positions;for(let i=0;i<p.length;i+=3)p[i+['x','y','z'].indexOf(axis[0])]+=axis[1]*.125;}
+  else {const b=physics.bodies.get(selection);const force={x:0,y:0,z:0};force[axis[0]]=axis[1]*b.mass()*(getGravity()?3:.45);b.applyImpulse(force,true);}resume();
  };canvas.addEventListener('keydown',keys);
  function sync(){roots.forEach((o,id)=>{const b=physics.bodies.get(id);o.position.copy(b.translation());o.quaternion.copy(b.rotation());});}
  sync();
@@ -62,14 +64,15 @@ export async function createObjects({scene,camera,canvas,roots,getGravity,resume
    accumulator+=Math.min(dt,.10);let count=0;
    while(accumulator>=FLUID_STEP&&count<10){
     if(drag&&drag.id!=='water'&&drag.id!=='milk')physics.drag(drag.id,drag.target,drag.local);
-    physics.world.step();
+    physics.step();
     for(const id of ['water','milk']){const f=fluids[id],target=drag?.id===id?drag.target.clone().sub(drag.offset):null;if(getGravity()||drag?.id===id||f.active)f.step(FLUID_STEP,getGravity(),target,physics.fluidContact);}
     accumulator-=FLUID_STEP;count++;
    }
    sync();for(const id of ['water','milk'])updateLiquid(fluids[id],views[id],dt,getGravity());
   },
   setGravity(value){physics.setGravity(value);},
+  cancelDrag:end,
   reset(){end();physics.reset();water.reset();milk.reset();for(const v of Object.values(views))v.drops=[];accumulator=0;sync();for(const id of ['water','milk'])updateLiquid(fluids[id],views[id],0,false);},
-  dispose(){end();canvas.removeEventListener('keydown',keys);physics.dispose();}
+  dispose(){end();canvas.removeEventListener('keydown',keys);canvas.removeEventListener('lostpointercapture',end);window.removeEventListener('blur',end);physics.dispose();}
  };
 }

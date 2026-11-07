@@ -11,7 +11,7 @@ function CabinHero() {
     return () => observer.disconnect();
   }, []);
   return <section id="cabin-stage" aria-label="Bir fikre kapıl: etkileşimli 3D kabin" style={{ height: "100svh", minHeight: 660, position: "relative", background: "#171a1b" }}>
-    <iframe loading="lazy" ref={frame} title="Yer çekimiyle etkileşimli 3D uzay kabini" src="/experiences/cabin/index.html?embed=1" style={{ width: "100%", height: "100%", border: 0, display: "block" }} />
+    <iframe loading="lazy" ref={frame} onLoad={() => { const rect = frame.current?.getBoundingClientRect(); if (rect) frame.current?.contentWindow?.postMessage({ type: "kararver-cabin-visibility", visible: rect.bottom > 0 && rect.top < innerHeight }, location.origin); }} title="Yer çekimiyle etkileşimli 3D uzay kabini" src="/experiences/cabin/index.html?embed=1" style={{ width: "100%", height: "100%", border: 0, display: "block" }} />
     <a href="#discovery-stage" style={{ position: "absolute", bottom: 94, right: "4vw", color: "#e7f3a5", background: "#171e1bd9", padding: "10px 14px", fontSize: 12, textDecoration: "none", borderRadius: 3 }}>Keşfetmeye devam et ↓</a>
   </section>;
 }
@@ -47,4 +47,3 @@ function OriginalHero() {
   </section>;
 }
 export function SpaceHero() { return <><OriginalHero /><CabinHero /></>; }
-
