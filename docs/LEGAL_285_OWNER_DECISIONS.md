@@ -1,3 +1,9 @@
+## 8 Kasım 2026 — ret bildirimi kullanıcı hesabına teslimden itibaren 30 gün ürün içi itiraz
+
+**Mehmet'in kesin kararı:** Anket `UNDER_REVIEW→REMOVED` olarak reddedildikten sonra kullanıcı, **ret bildiriminin kendisine ulaştığı tarihten itibaren 30 gün içinde** itiraz edebilir. **Karar tarihi ve outbox olay zamanı teslim değildir.** API/worker ilk gerçek, alıcıya özel gelen kutusu bildirim yazımından itibaren 30 gün sayan bağımsız, değişmez kanıt kaydı ve `GET/POST /me/moderation-appeals/:rejectionActionId` taslağı hazır. 30 günlük başvuru penceresi **KVKK m.13'teki veri sorumlusunun başvuruya yanıt süresinden ayrı**, 30 günlük operasyonel DB yedeği saklama kararından da bağımsızdır. İtirazın değerlendirilmesi başvuru süresinden sonra da devam edebilir. [Teknik, bildirim, veri saklama, hukuk ve kabul notu](LEGAL_290_V1_APPEAL_30_DAY_DELIVERY_2026_11_08.md).
+
+**Uyarı:** Bugünkü teknik kanıt, bildirimin **hesaba ait özel gelen kutusuna ulaştığını** gösterir; kişinin telefonu/e-postası üzerinde gördüğünü veya hukuken tebliğ edildiğini kanıtlamaz. Bildirim kanalı ve gerçek kişiye tebliğ ispatı, UI ve hesap erişimi olmayan kullanıcılar için güvenli başvuru #290 kapsamında açık. Geçerli ret düzeltme/ücretsiz yayın için özgül dosyalama kanıtı istenir; üretim, hukuk ve staging GO henüz verilmemiştir.
+
 ## 8 Kasım 2026 — hatalı ön moderasyon reddine itiraz kabulünde ücretsiz yayın
 
 **Mehmet'in kesin kararı:** Şüpheli anketin ön moderasyon başvurusunda 10 puan kesilir; ret sonrası bir kez 10 puan iade edilir. İtiraz haklı bulunup yanlış ret düzeltilirse **aynı anket ücretsiz yeniden yayımlanır**, iade edilen 10 puan kullanıcıda kalır; yeniden kesinti, otomatik iade geri alma veya yeni anket talebi yok. [Teknik, test, KVKK ve operasyona dair kabul belgesi](LEGAL_327_FREE_ACCEPTED_APPEAL_REINSTATEMENT_2026_11_08.md).
