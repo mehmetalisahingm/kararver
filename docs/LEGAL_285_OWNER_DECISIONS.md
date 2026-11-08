@@ -2,6 +2,12 @@
 
 1 Kasım 2026. Bağlantılar: #284, #285–#291, #181, #183, #51/#53/#54. Bu dosya teknik hazırlık ve açık karar kaydıdır; onaylı aydınlatma/sözleşme metni veya hukuki kabul değildir.
 
+## 8 Kasım 2026 — hesap ve içerik silme işletmeci kararı
+
+Mehmet'in yeni kararı: Hesabını silen kişinin **hesabı, yazdığı anketler ve yorumları** silinsin; yalnız **geri ilişkilendirilemeyen anonim toplu istatistikler** kalabilsin. Kanuni saklama zorunlulukları (ör. imha işlem kaydı) ayrı, amaçla sınırlı ve açıklanmış istisna olarak değerlendirilir; anonim istatistik diye gösterilmez.
+
+Karar ve mevcut kod arasındaki **uyumsuzluklar** (anket/yorum tombstone DB satırları, tekil oy zamanları/event geçmişi, async medya, yedek/restore ve audit retention) [#181 uygulama karar dokümanında](LEGAL_181_OWNER_ERASURE_POLICY_2026_11_08.md) listelendi. Silme feature flag'i ve gerçek kullanıcı verisi bu karar kaydı nedeniyle açılıp silinmedi. #181/#285/#287/#288/#53/#54 kapıları kapanmadı. Tam uygulamayı destekleyen gerçek DB/cihaz/yedek ve hukuki kabul olmadan GO verilmez.
+
 ## Hesap sahibinden alınmış gerçek karar
 
 - **Kesinleşti:** şirket bulunmuyor; hizmet kendi adına gerçek kişi olarak yayımlanacak. Bu karar kullanıcının 1 Kasım 2026 cevabıdır. Bir şirket/unvan/vergi kaydı uydurulmaz.
