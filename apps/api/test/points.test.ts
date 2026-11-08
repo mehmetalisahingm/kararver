@@ -197,6 +197,11 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(refund.delta, 10);
     assert.equal(refund.balanceAfter, 20);
     assert.equal(refund.idempotencyKey, `moderation-refund:${pollId}`);
+    const history = await send("GET", "/me/points/ledger?limit=10", undefined, owner.cookie);
+    assert.equal(history.statusCode, 200, history.body);
+    assert.ok(history.json().data.some((e: { referenceId: string; reason: string; delta: number }) =>
+      e.referenceId === pollId && e.reason === "MODERATION_REFUND" && e.delta === 10));
+
     assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "MODERATION_REFUND" } }), 1);
     assert.equal((await db.poll.findUniqueOrThrow({ where: { id: pollId } })).status, "REMOVED");
 
