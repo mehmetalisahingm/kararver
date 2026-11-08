@@ -324,7 +324,7 @@ export function AuthScreen({
           )}
           {!demo && ["verify", "reset"].includes(mode) && <p className="kv-help">{code ? "E-postadaki bağlantı alındı. İşlemi tamamlamak için onayla." : "E-postana gönderilen bağlantıyı açmalısın."}</p>}
           <ErrorMessage message={error} />
-          <button className="kv-button" disabled={!interactive || busy || (!demo && ["verify", "reset"].includes(mode) && !code)} aria-busy={!interactive || busy}>
+          <button className="kv-button" disabled={!interactive || busy || (!demo && mode === "register" && !adultConfirmed) || (!demo && ["verify", "reset"].includes(mode) && !code)} aria-busy={!interactive || busy}>
             {busy
               ? "İşlem sürüyor…"
               : mode === "login"
