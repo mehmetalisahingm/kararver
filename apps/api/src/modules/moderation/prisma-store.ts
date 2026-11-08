@@ -125,6 +125,17 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   // A pending poll's advertised voting duration starts when a moderator
   // publishes it, not when its review queue submission was created.
   const releasingReview = row.status === "UNDER_REVIEW" && next === "ACTIVE";
+  if (releasingReview) {
+    // A moderator may not make the poll public before every linked image has
+    // passed media moderation. Previously approved images remain governed by
+    // their independent media revoke/hide pipeline.
+    const pendingMedia = await tx.$queryRaw<{ id: string }[]>`
+      SELECT pm.media_id::text AS id FROM poll_media pm
+      JOIN media_assets ma ON ma.id = pm.media_id
+      WHERE pm.poll_id = ${input.id}::uuid AND ma.status <> 'APPROVED'
+      LIMIT 1`;
+    if (pendingMedia.length) return { kind: "conflict", reason: "invalid_transition" };
+  }
   const durationMs = row.closes_at === null ? null : Math.max(0, row.closes_at.getTime() - row.opens_at.getTime());
   await tx.poll.update({
     where: { id: input.id },
