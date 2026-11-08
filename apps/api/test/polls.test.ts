@@ -202,8 +202,11 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal(repeated.statusCode, 202, repeated.body);
     assert.equal(repeated.json().data.id, pendingId);
     assert.equal(await db.poll.count({ where: { authorId: owner.id } }), 1);
-    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, reason: "PUBLISH" } }), 1,
-      "tekrarlanan 202 istek yeni puan harcaması yaratmaz");
+    // Core poll harness intentionally runs with publishCostPoints=0; charge
+    // accounting under real 10-point settings is independently covered by
+    // points.test.ts. An identical 202 replay must never add ledger entries.
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, reason: "PUBLISH" } }), 0,
+      "inceleme makbuzunun idempotent tekrarı yeni işlem yaratmaz");
 
     const attempts = { action: "RESTORE", reason: "Riskli olmayan genel kamu hizmeti sorusu olarak incelendi." };
     assertError(await send("POST", `/admin/polls/${pendingId}/moderation`, attempts, owner.cookie), 403, "FORBIDDEN");
