@@ -324,6 +324,44 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(takedown.statusCode, 200, takedown.body);
     assert.equal((await summary(owner.cookie)).balance, 10, "yayın sonrası kaldırmada iade yok");
     assert.equal(await db.pointLedgerEntry.count({ where: { referenceId: normalId, reason: "MODERATION_REFUND" } }), 0);
+
+    // Exactly 30 days is still within the filing window. After 30 days +
+    // one millisecond, the user's own private endpoint must reject filing;
+    // the moderator decision time or outbox occurredAt must not override it.
+    const deadlineOwner = await login(await registerVerified());
+    const late = await send("POST", "/polls", {
+      ...pollBody(), title: `Siyasi partilerin trafik projeleri tartışması ${++titleSeq}`,
+    }, deadlineOwner.cookie, `deadline-${randomUUID()}`);
+    assert.equal(late.statusCode, 202, late.body);
+    const latePollId: string = late.json().data.id;
+    assert.equal((await send("POST", `/admin/polls/${latePollId}/moderation`,
+      { action: "REMOVE", reason: "Ön moderasyonda reddedildi." }, reviewer.cookie)).statusCode, 200);
+    const rejectionId = (await db.moderationAction.findFirstOrThrow({
+      where: { pollId: latePollId, action: "REMOVE", fromStatus: "UNDER_REVIEW" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    })).id;
+    const deliveredAt = h.clock.now;
+    await db.moderationAppealWindow.create({
+      data: {
+        rejectionActionId: rejectionId, recipientId: deadlineOwner.id,
+        notificationId: randomUUID(), deliveredAt,
+        deadlineAt: new Date(deliveredAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+    h.clock.advance(30 * 24 * 60 * 60 * 1000 + 1);
+    const tooLate = await send("POST", `/me/moderation-appeals/${rejectionId}`,
+      { reason: "Bu itiraz son tarihten bir milisaniye sonra gönderildi." }, deadlineOwner.cookie);
+    assert.equal(tooLate.statusCode, 409, tooLate.body);
+    assert.equal(tooLate.json().error.details[0].code, "appeal_window_closed");
+    assert.equal((await send("GET", `/me/moderation-appeals/${rejectionId}`, undefined, deadlineOwner.cookie)).json().data.status, "EXPIRED");
+    assert.equal((await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: rejectionId } })).filedAt, null);
+    h.clock.advance(-(30 * 24 * 60 * 60 * 1000 + 1));
+    h.clock.advance(30 * 24 * 60 * 60 * 1000);
+    const lastInstant = await send("POST", `/me/moderation-appeals/${rejectionId}`,
+      { reason: "Son başvuru anında kullanıcı tarafından yapılan itiraz kabul edilmeli." }, deadlineOwner.cookie);
+    assert.equal(lastInstant.statusCode, 200, lastInstant.body);
+    assert.equal(lastInstant.json().data.status, "FILED");
+    h.clock.advance(-30 * 24 * 60 * 60 * 1000);
   });
 
   test("ledger sayfalı okunur ve DB'de UPDATE/DELETE edilemez", async () => {
