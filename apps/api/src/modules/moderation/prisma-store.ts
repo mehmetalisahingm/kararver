@@ -83,8 +83,8 @@ async function expectationFails(tx: Tx, input: ApplyInput, currentStatus: Conten
 }
 
 async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
-  const [row] = await tx.$queryRaw<{ status: ContentStatus; trend_excluded_at: Date | null; comments_closed_at: Date | null; community_id: string | null }[]>`
-    SELECT status::text AS status, trend_excluded_at, comments_closed_at, community_id::text AS community_id
+  const [row] = await tx.$queryRaw<{ status: ContentStatus; trend_excluded_at: Date | null; comments_closed_at: Date | null; community_id: string | null; opens_at: Date; closes_at: Date | null }[]>`
+    SELECT status::text AS status, trend_excluded_at, comments_closed_at, community_id::text AS community_id, opens_at, closes_at
       FROM polls WHERE id = ${input.id}::uuid FOR UPDATE`;
   if (!row) return { kind: "not_found" };
   if (await tx.accountErasure.count({ where: { user: { polls: { some: { id: input.id } } } } }))
@@ -122,10 +122,21 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   if (next === "same") return { kind: "unchanged", outcome: outcome(row.status, excluded) };
   if (row.status === "REMOVED" && !input.actorIsAdmin) return { kind: "forbidden", reason: "admin_required" };
 
+  // A pending poll's advertised voting duration starts when a moderator
+  // publishes it, not when its review queue submission was created.
+  const releasingReview = row.status === "UNDER_REVIEW" && next === "ACTIVE";
+  const durationMs = row.closes_at === null ? null : Math.max(0, row.closes_at.getTime() - row.opens_at.getTime());
   await tx.poll.update({
     where: { id: input.id },
     // REMOVED ⇔ deleted_at dolu; geri yüklemede boşalır.
-    data: { status: next, deletedAt: next === "REMOVED" ? input.now : row.status === "REMOVED" ? null : undefined },
+    data: {
+      status: next,
+      deletedAt: next === "REMOVED" ? input.now : row.status === "REMOVED" ? null : undefined,
+      ...(releasingReview ? {
+        opensAt: input.now,
+        closesAt: durationMs === null ? null : new Date(input.now.getTime() + durationMs),
+      } : {}),
+    },
   });
   const trail = await recordTrail(tx, input, row.status, next, snap(row.status, excluded, closed), snap(next, excluded, closed));
   return { kind: "applied", outcome: outcome(next, excluded), trail };
