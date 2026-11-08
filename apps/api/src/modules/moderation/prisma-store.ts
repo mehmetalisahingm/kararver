@@ -157,9 +157,8 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
       });
       // An erased, suspended, banned or otherwise restricted account cannot
       // get an old rejected poll republished as a side effect of appeal undo.
-      if (author.author.deletedAt !== null || author.author.status !== "ACTIVE") {
-        return { kind: "conflict", reason: "author_erased" };
-      }
+      if (author.author.deletedAt !== null) return { kind: "conflict", reason: "author_erased" };
+      if (author.author.status !== "ACTIVE") return { kind: "conflict", reason: "invalid_transition" };
       if (refunded) {
         // Preserve immutable debit/refund history and reject corrupted or
         // unrelated credits; NEVER charge again on an accepted appeal.
