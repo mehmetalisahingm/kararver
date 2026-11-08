@@ -307,6 +307,36 @@ describe("yorumlar (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assertError(await send("POST", `/polls/${poll.id}/comments`, { body: "x" }, alice.cookie), 404, "NOT_FOUND");
   });
 
+  test("defense-in-depth: hesabı silinmiş anket sahibi yanlışlıkla ACTIVE kalsa bile tüm public yorum ve anket okumaları kapanır", async () => {
+    const author = await signUp();
+    const poll = await db.poll.create({
+      data: {
+        authorId: author.id,
+        categoryId,
+        publicId: randomUUID().replaceAll("-", "").slice(0, 12),
+        slug: "privacy-hidden-owner",
+        title: "Hesabı silinen anket sahibinin içeriği",
+        closesAt: new Date("2031-01-01T00:00:00Z"),
+        options: { create: [{ position: 0, label: "Evet" }, { position: 1, label: "Hayır" }] },
+      },
+      select: { id: true },
+    });
+    const otherComment = await db.comment.create({
+      data: { pollId: poll.id, authorId: alice.id, body: "Sadece kişisel veri erişimiyle okunabilir yorum" },
+      select: { id: true },
+    });
+    // Gerçek hesap silme bunu aynı transaction'da REMOVED'a alıyor.
+    // Bu test eski yedek/stale durumunda iki kat korumayı ölçer.
+    await db.user.update({ where: { id: author.id }, data: { deletedAt: new Date() } });
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: poll.id } })).status, "ACTIVE");
+    assertError(await get(`/polls/${poll.id}`), 404, "NOT_FOUND");
+    assertError(await get(`/polls/${poll.id}/comments`, alice.cookie), 404, "NOT_FOUND");
+    assertError(await get(`/comments/${otherComment.id}/replies`, alice.cookie), 404, "NOT_FOUND");
+    assertError(await send("PUT", `/comments/${otherComment.id}/reaction`, { value: "LIKE" }, alice.cookie), 404, "NOT_FOUND");
+    assert.equal(await db.comment.count({ where: { id: otherComment.id, body: "Sadece kişisel veri erişimiyle okunabilir yorum" } }), 1,
+      "başka kullanıcının yorumu sadece anket sahibi hesabını sildi diye imha edilmez");
+  });
+
   test("anket detayındaki commentCount yorum ekleme/silmeyle tutarlı", async () => {
     const poll = await createPoll();
     const a = await comment(poll.id, alice.cookie, { body: "A" });
