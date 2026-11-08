@@ -58,7 +58,7 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     };
   }
 
-  function send(method: "POST" | "PATCH" | "DELETE", url: string, body: unknown, cookie?: string, key?: string) {
+  function send(method: "POST" | "PUT" | "PATCH" | "DELETE", url: string, body: unknown, cookie?: string, key?: string) {
     return h.app.inject({
       method,
       url: `/v1${url}`,
@@ -121,6 +121,46 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
       db.poll.update({ where: { id: pollId }, data: { voteCount: { increment: 1 } } }),
     ]);
   }
+
+  // ─── Misafir okuma, sonuç mahremiyeti ve katılım yetkisi ───
+
+  test("misafir halka açık anketi ve izinli sonuçları okuyabilir; oy/yorum/anket yazamaz", async () => {
+    const owner = await signUp();
+    const voter = await signUp();
+    const poll = await createPoll(owner.cookie, { resultsVisibility: "ALWAYS" });
+    await castVote(poll.id, poll.options[0]!.id, voter.id);
+
+    const detail = await get(`/polls/${poll.id}`);
+    assert.equal(detail.statusCode, 200, detail.body);
+    const wire = PollDetail.parse(detail.json().data);
+    assert.equal(wire.viewer, null, "misafire kişiye özel oy/tercih verilmez");
+    assert.equal(wire.results?.visible, true);
+    assert.equal(wire.results?.visible && wire.results.total, 1);
+    assert.equal(wire.canonicalPath, `/karar/${wire.slug}-${wire.publicId}`);
+
+    const lookup = await get(`/polls/lookup?publicId=${wire.publicId}`);
+    assert.equal(lookup.statusCode, 200, lookup.body);
+    assert.equal(lookup.json().data.id, poll.id);
+
+    const comments = await get(`/polls/${poll.id}/comments`);
+    assert.equal(comments.statusCode, 200, comments.body);
+    assert.ok(Array.isArray(comments.json().data));
+
+    assertError(await send("PUT", `/polls/${poll.id}/vote`, { optionId: poll.options[0]!.id }), 401, "UNAUTHENTICATED");
+    assertError(await send("POST", `/polls/${poll.id}/comments`, { body: "Misafir yorumu" }), 401, "UNAUTHENTICATED");
+    assertError(await send("POST", "/polls", pollBody(), undefined, key()), 401, "UNAUTHENTICATED");
+    assert.equal(await db.vote.count({ where: { pollId: poll.id, userId: owner.id } }), 0);
+    assert.equal(await db.comment.count({ where: { pollId: poll.id } }), 0);
+  });
+
+  test("AFTER_VOTE kuralı, işletmeci ayrıca değiştirmeden misafire oy toplamlarını açmaz", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie, { resultsVisibility: "AFTER_VOTE" });
+    const detail = await get(`/polls/${poll.id}`);
+    assert.equal(detail.statusCode, 200, detail.body);
+    assert.deepEqual(PollDetail.parse(detail.json().data).results, { visible: false });
+    assert.doesNotMatch(JSON.stringify(detail.json()), /"total":|\\"votes\\":/);
+  });
 
   // ─── Oluşturma ──────────────────────────────────────────────
 
