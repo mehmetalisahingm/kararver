@@ -54,3 +54,21 @@ test("guided composer keeps draft and previews settings before explicit publicat
   await expect(page.getByLabel("1. seçenek",{exact:true})).toHaveValue("Şampanya");
   expect(mock.unexpected).toEqual([]);
 });
+
+test("a new poll can explicitly choose AFTER_VOTE without changing the public default",async({page})=>{
+  const mock=await api(page);
+  await page.goto("/olustur");
+  await page.getByLabel("Sorun",{exact:true}).fill("Bu hafta hangi özelliği geliştirmeliyiz?");
+  await page.getByLabel("1. seçenek",{exact:true}).fill("Arama");
+  await page.getByLabel("2. seçenek",{exact:true}).fill("Bildirim");
+  await page.getByRole("button",{name:"2 · Yayını düzenle",exact:true}).click();
+  const visibility=page.getByLabel("Sonuç görünürlüğü",{exact:true});
+  await expect(visibility).toHaveValue("always");
+  await visibility.selectOption("after_vote");
+  await page.getByRole("button",{name:"Yayın önizlemesi",exact:true}).click();
+  const dialog=page.getByRole("dialog",{name:"Yayımlamaya hazır mısın?"});
+  await expect(dialog).toContainText("Oy verdikten sonra");
+  await page.keyboard.press("Escape");
+  await expect(visibility).toHaveValue("after_vote");
+  expect(mock.unexpected).toEqual([]);
+});
