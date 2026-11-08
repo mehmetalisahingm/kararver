@@ -122,6 +122,7 @@ model ModerationAction {
   targetUser User?       @relation("ModerationTargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
   report     Report?     @relation(fields: [reportId], references: [id], onDelete: Restrict)
   batchItems ModerationBatchItem[]
+  appealNotice ModerationAppealNoticeReceipt?
 
   @@index([pollId, createdAt])
   @@index([commentId, createdAt])
@@ -334,3 +335,22 @@ model SpamAccountScore {
   @@index([score(sort: Desc), userId])
   @@map("spam_account_scores")
 }
+
+// V1: product-policy appeal clock starts on IN-APP notice delivery, not when
+// the moderation event was created or when user later marks it read.
+// Delivery evidence is append-only; never silently backfill failed notices.
+model ModerationAppealNoticeReceipt {
+  moderationActionId String @id @map("moderation_action_id") @db.Uuid
+  recipientId String @map("recipient_id") @db.Uuid
+  notificationId String @unique @map("notification_id") @db.Uuid
+  deliveredAt DateTime @map("delivered_at") @db.Timestamptz(3)
+  appealDeadlineAt DateTime @map("appeal_deadline_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  action ModerationAction @relation(fields: [moderationActionId], references: [id], onDelete: Restrict)
+  recipient User @relation(fields: [recipientId], references: [id], onDelete: Restrict)
+
+  @@index([recipientId, appealDeadlineAt])
+  @@map("moderation_appeal_notice_receipts")
+}
+
