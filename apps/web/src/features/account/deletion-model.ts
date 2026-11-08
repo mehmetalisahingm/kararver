@@ -27,7 +27,7 @@ export function describeDeletionLink(link: DeletionLink): { title: string; body:
   if (link.action === "confirm") {
     return {
       title: "Hesabını kalıcı olarak sil",
-      body: "Bu işlem geri alınamaz. Kişisel bilgilerin silinir, paylaşım ve yorum metinlerin kaldırılır, oyların hesabınla bağı koparılır ve bütün oturumların kapanır. Devam etmek için aşağıdaki düğmeye bas.",
+      body: "Bu işlem geri alınamaz. Hesabın kullanıma kapanır; paylaşım ve yorumların yayından kaldırılır ve oturumların sonlandırılır. Dosyaların arka planda temizlenmesi ve yedek/sınırlı hukuki kayıtların ele alınması ayrıca zaman alabilir. Devam etmek için aşağıdaki düğmeye bas.",
       button: "Hesabımı kalıcı olarak sil",
       danger: true,
     };
