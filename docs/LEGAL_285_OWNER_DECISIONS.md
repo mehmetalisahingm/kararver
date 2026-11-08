@@ -2,6 +2,12 @@
 
 1 Kasım 2026. Bağlantılar: #284, #285–#291, #181, #183, #51/#53/#54. Bu dosya teknik hazırlık ve açık karar kaydıdır; onaylı aydınlatma/sözleşme metni veya hukuki kabul değildir.
 
+## 8 Kasım — 18+ ürün politikası (yeni, kesin karar)
+
+Mehmet, KararVer'de **yeni kayıtların 18 yaş ve üzeriyle sınırlandırılmasını** seçti. Bu ürün kuralı, genel bir yasal yaş eşiği olduğu iddiası değildir. Teknik ürün kararı ve güçlü yaş doğrulaması arasındaki fark, mevcut hesapların geçişi ve hukuki değerlendirmede kalan #289 kapıları [ayrı dosyada](LEGAL_289_AGE18_PRODUCT_POLICY.md) açıklıdır. #285/#286 yasal metinleri onaylanmadan bu ürün tercihi tek başına hukuki GO değildir.
+
+İletişim için `karariniverdestek@gmail.com` hesabı açılacağı bildirildi. **Açıldığı ve işletildiği henüz onaylanmadığından** önceki eksik/henüz public olmayan kanal durumu sürer.
+
 ## Hesap sahibinden alınmış gerçek karar
 
 - **Kesinleşti:** şirket bulunmuyor; hizmet kendi adına gerçek kişi olarak yayımlanacak. Bu karar kullanıcının 1 Kasım 2026 cevabıdır. Bir şirket/unvan/vergi kaydı uydurulmaz.
