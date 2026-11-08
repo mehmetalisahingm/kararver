@@ -23,6 +23,16 @@ test("HTTP uses credentialed no-store requests and preserves idempotency across 
     assert.equal("balance" in body, false);
   }
 });
+test("an accepted-but-private 202 submission stays a pending receipt, not a public poll", async () => {
+  const client = new ApiClient("http://api.test", async () =>
+    new Response(JSON.stringify({ data: { id: detail.id, status: "UNDER_REVIEW" } }), { status: 202 }));
+  const draft = { ...emptyDraft(), categoryId: "01998b9a-0000-7000-8000-000000000030",
+    title: "Görsel bağlamlı değerlendirme", options: ["Birinci", "İkinci"], mediaIds: ["01998b9a-0000-7000-8000-000000000032"] };
+  const pending = await client.create(draft, "private-review-key");
+  assert.deepEqual(pending, { id: detail.id, status: "UNDER_REVIEW" });
+  assert.equal("canonicalPath" in pending, false, "an unpublished poll has no public link");
+});
+
 test("viewer projection stays hidden and malformed hidden payload is rejected", async () => {
   const client = new ApiClient("http://api.test", async () => reply("polls.get", "guest-hidden"));
   assert.deepEqual((await client.get(detail.id)).results, {visible:false});
