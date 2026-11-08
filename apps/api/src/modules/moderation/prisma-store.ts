@@ -146,9 +146,9 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
       latest.undoOfId === null;
     // A past refund is NEVER permission to restore arbitrary removed polls.
     if (wasReviewRejection || refunded) {
-      if (!wasReviewRejection || !input.actorIsAdmin || !input.undoOf ||
+      if (!wasReviewRejection || !latest || !input.actorIsAdmin || !input.undoOf ||
         input.undoOf !== latest.id || input.expect?.actionId !== latest.id ||
-        input.expect.status !== "REMOVED") {
+        input.expect?.status !== "REMOVED") {
         return { kind: "conflict", reason: "invalid_transition" };
       }
       const author = await tx.poll.findUniqueOrThrow({
