@@ -122,6 +122,7 @@ model ModerationAction {
   targetUser User?       @relation("ModerationTargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
   report     Report?     @relation(fields: [reportId], references: [id], onDelete: Restrict)
   batchItems ModerationBatchItem[]
+  appealWindow ModerationAppealWindow?
 
   @@index([pollId, createdAt])
   @@index([commentId, createdAt])
@@ -130,6 +131,29 @@ model ModerationAction {
   @@index([actorId, createdAt])
   @@index([reportId])
   @@map("moderation_actions")
+}
+
+/**
+ * Rejection notification delivered into the registered recipient's private
+ * inbox. This proof survives regular notification/outbox cleanup. 30 DAYS
+ * is the FILING WINDOW, NOT a blanket data-retention duration.
+ */
+model ModerationAppealWindow {
+  rejectionActionId String   @id @map("rejection_action_id") @db.Uuid
+  recipientId       String   @map("recipient_id") @db.Uuid
+  notificationId    String   @map("notification_id") @db.Uuid
+  deliveredAt       DateTime @map("delivered_at") @db.Timestamptz(3)
+  deadlineAt        DateTime @map("deadline_at") @db.Timestamptz(3)
+  filedAt           DateTime? @map("filed_at") @db.Timestamptz(3)
+  filedReason       String?  @map("filed_reason") @db.VarChar(1000)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  rejection ModerationAction @relation(fields: [rejectionActionId], references: [id], onDelete: Restrict)
+  recipient User @relation("ModerationAppealRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+
+  @@index([recipientId, deliveredAt(sort: Desc)])
+  @@index([deadlineAt])
+  @@map("moderation_appeal_windows")
 }
 
 // #181: kullanıcıya ait içeriğin toplu gizlenmesi/kaldırılması (ve geri alınması). Önizleme → gerekçe → ayrı onay → kuyruk;
