@@ -1,0 +1,26 @@
+
+// V1 #290 — user-filed moderation appeal, with a 14-calendar-day
+// INTERNAL resolution target from submittedAt. No automatic disposition.
+// SQL guard enforces the notice recipient, 30d filing window and immutable
+// submittedAt/resolutionDueAt. This does not replace an authenticated API.
+model ModerationAppealCase {
+  id String @id @default(uuid(7)) @db.Uuid
+  rejectionActionId String @map("rejection_action_id") @db.Uuid
+  appellantId String @map("appellant_id") @db.Uuid
+  submittedAt DateTime @map("submitted_at") @db.Timestamptz(3)
+  resolutionDueAt DateTime @map("resolution_due_at") @db.Timestamptz(3)
+  status String @default("OPEN") @db.VarChar(12)
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(3)
+  outcome String? @db.VarChar(10)
+  resolvedById String? @map("resolved_by_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  rejectionReceipt ModerationAppealNoticeReceipt @relation(fields: [rejectionActionId], references: [moderationActionId], onDelete: Restrict)
+  appellant User @relation("AppealAppellant", fields: [appellantId], references: [id], onDelete: Restrict)
+  resolvedBy User? @relation("AppealResolver", fields: [resolvedById], references: [id], onDelete: Restrict)
+
+  @@unique([rejectionActionId, appellantId], map: "moderation_appeal_cases_unique_author_action")
+  @@index([status, resolutionDueAt])
+  @@index([appellantId, submittedAt(sort: Desc)])
+  @@map("moderation_appeal_cases")
+}
