@@ -233,6 +233,22 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
       { digest, reason: "Karara itiraz kabul edildi" }, owner.cookie);
     assert.equal(unauthorizedUndo.statusCode, 403, unauthorizedUndo.body);
 
+    // The same moderator must not accidentally restore a poll for a banned
+    // user, nor one edited to solicit forbidden respondent details.
+    await db.user.update({ where: { id: owner.id }, data: { status: "BANNED" } });
+    const bannedUndo = await send("POST", `/admin/moderation/actions/${rejectedAction.id}/undo`,
+      { digest, reason: "Bu kullanıcı yasaklıyken yayımlama denemesi" }, reviewer.cookie);
+    assert.equal(bannedUndo.statusCode, 409, bannedUndo.body);
+    await db.user.update({ where: { id: owner.id }, data: { status: "ACTIVE" } });
+
+    await db.poll.update({ where: { id: pollId }, data: { title: "Hangi partiye oy verdin?" } });
+    const sensitiveUndo = await send("POST", `/admin/moderation/actions/${rejectedAction.id}/undo`,
+      { digest, reason: "Hassas veriyi açıkça soran anketi açma denemesi" }, reviewer.cookie);
+    assert.equal(sensitiveUndo.statusCode, 409, sensitiveUndo.body);
+    await db.poll.update({ where: { id: pollId }, data: { title: pendingBody.title } });
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: pollId } })).status, "REMOVED");
+    assert.equal((await summary(owner.cookie)).balance, 20);
+
     const beforeRestore = await db.poll.findUniqueOrThrow({
       where: { id: pollId }, select: { opensAt: true, closesAt: true },
     });
