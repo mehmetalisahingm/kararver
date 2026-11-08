@@ -159,6 +159,17 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
       // get an old rejected poll republished as a side effect of appeal undo.
       if (author.author.deletedAt !== null) return { kind: "conflict", reason: "author_erased" };
       if (author.author.status !== "ACTIVE") return { kind: "conflict", reason: "invalid_transition" };
+      // A user-initiated corrected rejection must have a REAL confirmed
+      // notification delivery and a timely first filing. A moderator cannot
+      // invent/backdate a receipt or use a free RESTORE without an appeal.
+      const appeal = await tx.moderationAppealWindow.findUnique({
+        where: { rejectionActionId: latest.id },
+        select: { recipientId: true, deliveredAt: true, deadlineAt: true, filedAt: true },
+      });
+      if (!appeal || appeal.recipientId !== author.authorId || !appeal.filedAt ||
+          appeal.filedAt < appeal.deliveredAt || appeal.filedAt > appeal.deadlineAt) {
+        return { kind: "conflict", reason: "invalid_transition" };
+      }
       if (refunded) {
         // Preserve immutable debit/refund history and reject corrupted or
         // unrelated credits; NEVER charge again on an accepted appeal.
