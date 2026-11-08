@@ -290,7 +290,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
           data: {
             publicId: poll.publicId,
             slug: poll.slug,
-            status: poll.status,
+            status: poll.status ?? "ACTIVE",
             authorId: poll.authorId,
             categoryId: poll.categoryId,
             communityId: poll.communityId,
