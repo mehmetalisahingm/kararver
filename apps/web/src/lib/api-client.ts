@@ -153,8 +153,8 @@ export class ApiClient implements ProductClient {
     this.acceptUser(await this.http.request("auth.login", { body: { email, password } }));
     return (await this.refreshPoints())!;
   }
-  async register(name: string, email: string, password: string, username?: string) {
-    await this.http.request("auth.register", { body: { displayName: name, email, password, username } });
+  async register(name: string, email: string, password: string, username?: string, adultConfirmed?: boolean) {
+    await this.http.request("auth.register", { body: { displayName: name, email, password, username, ...(adultConfirmed === undefined ? {} : { adultConfirmed }) } });
   }
   async verify(_email: string, token: string) { await this.http.request("auth.email.verify", { body: { token } }); if (this.user) await this.restore(); }
   async resendVerification() { await this.http.request("auth.email.resend"); }
