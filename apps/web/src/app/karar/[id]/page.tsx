@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { PollDetail } from "../../../features/polls/screens";
 import { ShareActions } from "../../../features/polls/share-actions";
 import { loadPublicPoll, webBaseUrl } from "../../../lib/server-public-polls";
+import { mapPoll } from "../../../lib/poll-mapper";
 import { pollShareMetadata, publicRobots } from "../../../lib/seo";
 
 function descriptionOf(value: string | null): string {
@@ -11,7 +13,7 @@ function descriptionOf(value: string | null): string {
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const poll = await loadPublicPoll(id);
+  const poll = await loadPublicPoll(id, { strict: process.env.APP_ENV === "production" });
   if (!poll) {
     return {
       title: "İçerik bulunamadı · Kararver",
@@ -34,10 +36,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // The real poll body is part of the initial HTML, not a JS-only loading
+  // spinner. Public results stay subject to the API's visibility projection.
+  // Preview/demo stays client-driven and remains noindex by policy.
+  const poll = await loadPublicPoll(id, { strict: process.env.APP_ENV === "production" });
+  if (!poll && process.env.APP_ENV === "production") notFound();
   return (
     <>
-      <PollDetail id={id} />
-      <ShareActions routeId={id} />
+      <PollDetail id={id} initialPoll={poll ? mapPoll(poll) : undefined} />
+      {poll && <ShareActions routeId={id} />}
     </>
   );
 }
