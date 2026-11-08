@@ -147,7 +147,11 @@ export function AuthScreen({
         await finishSignIn();
       }
       if (mode === "register") {
-        await client.register(name, email, password, username);
+        if (!demo && !adultConfirmed) {
+          setError("Kayıt için 18 yaşını doldurmuş olman gerekiyor.");
+          return;
+        }
+        await client.register(name, email, password, username, adultConfirmed);
         if (demo) {
           router.push(`/dogrula${emailSuffix}`);
         } else {
