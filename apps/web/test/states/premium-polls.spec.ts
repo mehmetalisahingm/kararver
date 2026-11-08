@@ -41,7 +41,7 @@ test("guided composer keeps draft and previews settings before explicit publicat
   await expect(page.locator("#compose-settings")).toBeFocused();
   await page.getByLabel("Kategori",{exact:true}).selectOption({label:"Otomobil"});
   await page.getByLabel("Anket süresi",{exact:true}).selectOption({label:"7 gün"});
-  await page.getByLabel("Sonuç görünürlüğü",{exact:true}).selectOption({label:"Herkese açık"});
+  await expect(page.getByLabel("Sonuç görünürlüğü",{exact:true})).toHaveValue("always");
   await page.getByRole("button",{name:"Yayın önizlemesi",exact:true}).click();
   const dialog=page.getByRole("dialog",{name:"Yayımlamaya hazır mısın?"});
   await expect(dialog.getByRole("list",{name:"Yayımlanacak seçenekler"})).toContainText("Şampanya");
