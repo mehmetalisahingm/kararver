@@ -35,7 +35,7 @@ test("sonuç metni hesap erişimini açıklar, depo/yedek temizliği bitmeden t�
   assert.match(deleted, /depo temizliği|Dosyaların depo temizliği/i);
   assert.match(deleted, /yedekler/i);
   assert.doesNotMatch(deleted, /Hesabın kalıcı olarak silindi/);
-  assert.match(deletionResultMessage("unchanged"), /zaten silinmiş/);
+  assert.match(deletionResultMessage("unchanged"), /erişim daha önce kapatılmış/);
   assert.match(deletionResultMessage("cancelled"), /şifreni değiştir/i);
 });
 
