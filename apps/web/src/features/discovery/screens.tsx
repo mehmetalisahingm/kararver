@@ -433,7 +433,7 @@ export function DiscoveryScreen({
   if (home) return <div className="home-discovery">
     <TopicShowcase categories={categories.data ?? []} />
     <section className="home-feed" id="home-feed" tabIndex={-1} aria-labelledby="home-feed-title">
-      <header className="home-feed-header"><div><span className="eyebrow">03 — SENİN MASAN</span><h2 id="home-feed-title">Bugünün<br />kararları</h2></div><Link href="/olustur">Bir soru bırak ↗</Link></header>
+      <header className="home-feed-header"><div><span className="eyebrow">03 — SENİN MASAN</span><h2 id="home-feed-title" aria-label="Bugünün kararları">Bugünün<br />kararları</h2></div><Link href="/olustur">Bir soru bırak ↗</Link></header>
       {categories.error ? <CategoryError message={categories.error} retry={categories.retry} /> : !categories.data ? <Loading label="Kategoriler yükleniyor…" /> : <FeedBody key={JSON.stringify(query) + (user?.id || "guest")} query={query} home categories={categories.data} />}
       <Link className="home-all-questions" href="/kesfet">Tüm sorulara göz at ↗</Link>
     </section>
