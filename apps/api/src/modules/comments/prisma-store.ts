@@ -2,7 +2,7 @@
 // Kilit sırası her yerde aynıdır: önce anket satırı, sonra yorum(lar). Böylece yorum ekleme,
 // silme ve tepki işlemleri birbirini kilitlemeden (deadlock) sıraya girer.
 import { createEvent, newEventId } from "@kararver/contracts";
-import type { PrismaClient } from "@kararver/db";
+import type { Prisma, PrismaClient } from "@kararver/db";
 import { ApiError } from "../../http/errors.ts";
 import { runIdempotent } from "../../http/idempotency.ts";
 import { writeEvent } from "../events/write.ts";
@@ -109,7 +109,7 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
   // Public discussion access is closed if the poll is hidden OR its owner was erased.
   // Third-party comments stay accessible only to their authors via the encrypted
   // personal-data export path; these public comment queries must never expose them.
-  const publicPoll = { status: { in: [...VISIBLE_POLL] }, author: { deletedAt: null } } as const;
+  const publicPoll = { status: { in: [...VISIBLE_POLL] }, author: { deletedAt: null } } satisfies Prisma.PollWhereInput;
 
   return {
     async isPollVisible(pollId) {
