@@ -13,12 +13,12 @@ export function confirmMail(webUrl: string, to: string, raw: string): Mail {
   };
 }
 
-/** Silme tamamlandı: adres artık hesapta tutulmaz, bu son bildirimdir. */
+/** DB'deki erişim/tombstone uygulandı; object storage, cache ve yedek temizliği henüz teyit edilmemiş olabilir. */
 export function deletedMail(to: string): Mail {
   return {
     to,
-    subject: "KararVer — hesabın silindi",
-    text: "Merhaba,\n\nKararVer hesabın talebin üzerine kalıcı olarak silindi: kişisel bilgilerin, paylaşım ve yorum metinlerin kaldırıldı ve oturumların kapandı. Bu adres artık hesabında kayıtlı değil, bu son bildirimdir.\n\nBunu sen yapmadıysan hemen destek ile iletişime geç.",
+    subject: "KararVer — hesap silme talebin işlendi",
+    text: "Merhaba,\n\nKararVer hesabına erişim kapatıldı, hesap bilgilerin temizlendi, paylaşımların ve yorumların yayından kaldırıldı. Oturumların sonlandırıldı. Depolanan dosyaların temizliği arka planda devam edebilir; yedekler ve hukuken saklanması gereken sınırlı kayıtlar ayrıca ele alınır. Tamamının anında yok edildiği anlamına gelmez.\n\nBu e-posta adresi artık hesabında iletişim adresi olarak kullanılmıyor. Bunu sen yapmadıysan destek kanalı üzerinden başvur.",
   };
 }
 
