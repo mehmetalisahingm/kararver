@@ -86,6 +86,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [returnTo, setReturn] = useState("/");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [themeReady, setThemeReady] = useState(false);
   const [gate, setGate] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
@@ -95,6 +96,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       const saved = window.localStorage.getItem("kararver:theme");
       if (saved === "light" || saved === "dark") setTheme(saved);
     } catch { /* Retain the default theme when storage is unavailable. */ }
+    setThemeReady(true);
   }, []);
   function toggleTheme() {
     setTheme(previous => {
@@ -228,6 +230,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
               theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"
             }
             onClick={toggleTheme}
+            disabled={!themeReady}
           >
             {theme === "dark" ? "☀" : "☾"}
           </button>

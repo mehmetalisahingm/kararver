@@ -15,7 +15,8 @@
 .choice-sound button { border:1px solid var(--kv-control-border); border-radius:999px; padding:8px 13px; background:transparent; color:var(--kv-text); font:inherit; cursor:pointer; }
 .choice-sound button[aria-pressed="true"] { color:#182113; background:#dbe99b; border-color:#dbe99b; }
 .choice-sound button:focus-visible { outline:2px solid var(--kv-accent); outline-offset:3px; }
-.comparison-desk { margin-top:34px; padding:clamp(20px,3vw,34px); border:1px solid #51635b; border-radius:20px; color:#f3f1e8; background:linear-gradient(135deg,#192a22,#101715 75%); }
+.comparison-desk { min-width:0; margin-top:34px; padding:clamp(20px,3vw,34px); border:1px solid #51635b; border-radius:20px; color:#f3f1e8; background:linear-gradient(135deg,#192a22,#101715 75%); }
+.product[data-theme] .comparison-desk h2 { color:#f3f1e8; }
 .comparison-desk h2 { margin:10px 0; font-size:clamp(25px,3vw,36px); letter-spacing:-.04em; }
 .comparison-desk p { color:#c1cdbf; font-size:13px; }
 .comparison-desk__scroll { overflow-x:auto; margin-top:24px; }

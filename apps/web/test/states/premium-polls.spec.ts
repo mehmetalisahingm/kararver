@@ -33,6 +33,20 @@ for(const scenario of ["hidden","public","locked"] as const) test(`premium poll 
   expect(mock.unexpected).toEqual([]);
 });
 
+test("comparison table stays inside mobile layout and supports keyboard scrolling",async({page})=>{
+  await api(page);
+  await page.goto(`/karar/${sample("polls.get").data.id}`);
+  const region=page.getByRole("region",{name:"Seçenek karşılaştırma tablosu"});
+  await expect(region).toBeVisible();
+  await region.focus();
+  await expect(region).toBeFocused();
+  if(await region.evaluate(el=>el.scrollWidth>el.clientWidth)) {
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(()=>region.evaluate(el=>el.scrollLeft)).toBeGreaterThan(0);
+  }
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
 test("guided composer keeps draft and previews settings before explicit publication",async({page},info)=>{
   const mock=await api(page);let publishes=0;
   mock.handlers.set("polls.create",async r=>{publishes++;await r.fulfill({status:201,json:sample("polls.get")});});
@@ -41,7 +55,7 @@ test("guided composer keeps draft and previews settings before explicit publicat
   await expect.poll(()=>page.locator(".studio-draft-ink").evaluate(element=>Number(getComputedStyle(element).opacity))).toBeGreaterThan(0);
   await page.getByLabel("1. seçenek",{exact:true}).fill("Şampanya");
   await page.getByLabel("2. seçenek",{exact:true}).fill("Antrasit");
-  await page.getByRole("button",{name:"2 · Yayını düzenle",exact:true}).click();
+  await page.getByRole("navigation",{name:"Oluşturma adımları"}).getByRole("button",{name:/02.*Yayını düzenle/}).click();
   await expect(page.locator("#compose-settings")).toBeFocused();
   await page.getByLabel("Kategori",{exact:true}).selectOption({label:"Otomobil"});
   await page.getByLabel("Anket süresi",{exact:true}).selectOption({label:"7 gün"});

@@ -67,9 +67,12 @@ test("all implemented routes: light/dark, overflow, landmarks and accessible nam
     for(const [index,path] of paths.entries()) {
       await page.goto(path);
       await expect(page.locator("main h1").first()).toBeVisible();
-      // Toggle through the product control, preserving its own theme semantics.
-      if(await page.locator(".product").getAttribute("data-theme")!==theme) await page.getByRole("button",{name:/tema/i}).click();
+      // Session/loading headings can precede hydration of the saved theme.
       await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+      // Toggle through the product control, preserving its own theme semantics.
+      await expect(page.getByRole("button",{name:/temaya geç/})).toBeEnabled();
+      if(await page.locator(".product").getAttribute("data-theme")!==theme) await page.getByRole("button",{name:/tema/i}).click();
+      await expect(page.locator(".product")).toHaveAttribute("data-theme",theme);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${theme} ${path}`).toBe(true);
       const report=await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze();
       expect(report.violations,`${theme} ${path}`).toEqual([]);

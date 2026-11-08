@@ -24,6 +24,8 @@
 .compose-preview__top { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }
 .compose-preview__top > div > span { color:#cbdda5; font-size:9px; font-weight:700; letter-spacing:.14em; }
 .compose-preview__top h2 { margin:5px 0 0; font-size:19px; letter-spacing:-.03em; }
+.product[data-theme] .compose-preview :is(h2,h3) { color:#f3f1e8; }
+.product[data-theme] .orbital-results h2 { color:#f0f1e8; }
 .compose-preview__live { display:flex; gap:6px; align-items:center; color:#b5c4b5; font-size:9px; letter-spacing:.1em; }
 .compose-preview__live i { width:6px; height:6px; border-radius:50%; background:#dbe99b; box-shadow:0 0 10px #dbe99b; }
 .compose-preview__card { overflow:hidden; border:1px solid #51635b; border-radius:14px; background:#0d1512; }

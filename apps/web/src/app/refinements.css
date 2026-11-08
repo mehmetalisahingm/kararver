@@ -12,7 +12,7 @@
   border-radius: 12px;
   background-color: var(--kv-surface-2);
   color: var(--kv-text);
-  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 .product[data-theme] textarea.kv-input { min-height: 124px; resize: vertical; }
 .product[data-theme] :is(input.kv-input:not([type="file"]), textarea.kv-input, select.kv-input, .discovery-search input, .discovery-search select):hover { border-color: var(--kv-accent); }
