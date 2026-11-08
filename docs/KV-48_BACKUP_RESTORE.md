@@ -143,7 +143,7 @@ Render Free 15 dk trafiksizlikte uyuduğu için worker içindeki `BACKUP_ENABLED
 
 **Kurulum (Mehmet; hiçbir değer issue'ya yazılmaz):**
 1. Ayrı **private** repo aç (ör. `kararver-backups`). Erişim yalnız Mehmet + Faruk. Repo boş kalabilir; yalnız `.github/workflows/` altına iki şablon kopyalanır.
-2. **Kota kapısı:** GitHub Free'de private repo için aylık 2.000 Actions dakikası ve 500 MB artifact/paket deposu dahil. Tahmin: ~6 dk × 30 gece ≈ 180 dk; ~7 MB × 2 dosya × 30 gün ≈ 250 MB. Settings → Billing'de harcama limitinin **0 $** olduğu, kart ya da otomatik aşım faturası olmadığı doğrulanmalı. Aşımda iş durur, ücret çıkmaz; freshness alarmı bunu gösterir.
+2. **Kota kapısı:** GitHub Free'de private repo için aylık 2.000 Actions dakikası ve 500 MB artifact/paket deposu dahil. Tahmin: ~6 dk × 30 gece ≈ 180 dk; ~7 MB × 2 dosya × 30 gün ≈ 210 MB (öngörü; gerçek boyut/kota ölçülmeli). Settings → Billing'de harcama limitinin **0 $** olduğu, kart ya da otomatik aşım faturası olmadığı doğrulanmalı. Aşımda iş durur, ücret çıkmaz; freshness alarmı bunu gösterir.
 3. Private repoda secret `STAGING_BACKUP_DATABASE_URL` (Neon **doğrudan** adres; en az yetki: tablolara okuma + yalnız `ops_backup_runs`'a ekleme) ve değişken `BACKUP_PUBLIC_KEY` (RSA ≥ 3072 bit açık anahtar).
 4. **Özel anahtar:** iki sahip (öneri Mehmet + Faruk), şifre yöneticisinde ve çevrimdışı. Repoya, Actions'a, issue'ya **asla** girmez; MFA anahtarıyla (#300) aynı yerde saklanmaz; sahiplerden biri değişirse yeni anahtar çifti üretilir.
 5. İlk koşu elle tetiklenir. Faruk artifact'ı indirip çözer, temiz PG 18'e restore eder ve yalnız sayılarla #186'ya yazar.
