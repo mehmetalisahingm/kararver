@@ -6,7 +6,10 @@ test("first guest enters the scroll experience and returning guests browse witho
   mock.handlers.set("me.get",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
   await page.goto("/");
   await expect(page.getByRole("heading",{name:"Bir fikre kapıl."})).toBeVisible();
+  // The 3D engine must not load while visitors are reading the first scene.
+  await expect(page.locator("#cabin-stage iframe")).toHaveCount(0);
   await page.getByRole("link",{name:/Aşağı in/}).click();
+  await expect(page.locator("#cabin-stage iframe")).toHaveCount(1);
   await expect(page).toHaveURL(/#cabin-stage$/);
   await page.getByRole("link", {name:/Keşfetmeye devam et/}).click();
   await expect(page).toHaveURL(/#discovery-stage$/);
