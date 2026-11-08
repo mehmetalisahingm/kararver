@@ -1,18 +1,46 @@
 "use client";
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSceneMotion, useScrollScene } from "./scene-motion";
 import { OrbitalJourney } from "./orbital-journey";
 
 function CabinHero() {
+  const section = useRef<HTMLElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  // An iframe one viewport below the fold can still be eagerly fetched by
+  // browser lazy-loading heuristics. Loading the 3D engine while users are
+  // trying to read the feed can stall hydration and accessibility tests.
+  // Mount it only once the user actually reaches the cabin.
   useEffect(() => {
-    const observer = new IntersectionObserver(([entry]) => frame.current?.contentWindow?.postMessage({ type: "kararver-cabin-visibility", visible: entry.isIntersecting }, location.origin));
-    if (frame.current) observer.observe(frame.current);
+    const element = section.current;
+    if (!element) return;
+    if (!("IntersectionObserver" in window)) {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "0px" });
+    observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  return <section id="cabin-stage" aria-label="Bir fikre kapıl: etkileşimli 3D kabin" style={{ height: "100svh", minHeight: 660, position: "relative", background: "#171a1b" }}>
-    <iframe loading="lazy" ref={frame} onLoad={() => { const rect = frame.current?.getBoundingClientRect(); if (rect) frame.current?.contentWindow?.postMessage({ type: "kararver-cabin-visibility", visible: rect.bottom > 0 && rect.top < innerHeight }, location.origin); }} title="Yer çekimiyle etkileşimli 3D uzay kabini" src="/experiences/cabin/index.html?embed=1" style={{ width: "100%", height: "100%", border: 0, display: "block" }} />
+
+  useEffect(() => {
+    if (!visible || !frame.current) return;
+    const observer = new IntersectionObserver(([entry]) => frame.current?.contentWindow?.postMessage({ type: "kararver-cabin-visibility", visible: entry.isIntersecting }, location.origin));
+    observer.observe(frame.current);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  return <section ref={section} id="cabin-stage" aria-label="Bir fikre kapıl: etkileşimli 3D kabin" style={{ height: "100svh", minHeight: 660, position: "relative", background: "#171a1b" }}>
+    {visible
+      ? <iframe loading="lazy" ref={frame} onLoad={() => { const rect = frame.current?.getBoundingClientRect(); if (rect) frame.current?.contentWindow?.postMessage({ type: "kararver-cabin-visibility", visible: rect.bottom > 0 && rect.top < innerHeight }, location.origin); }} title="Yer çekimiyle etkileşimli 3D uzay kabini" src="/experiences/cabin/index.html?embed=1" style={{ width: "100%", height: "100%", border: 0, display: "block" }} />
+      : <div aria-hidden="true" style={{ width: "100%", height: "100%" }} />}
     <a href="#discovery-stage" style={{ position: "absolute", bottom: 94, right: "4vw", color: "#e7f3a5", background: "#171e1bd9", padding: "10px 14px", fontSize: 12, textDecoration: "none", borderRadius: 3 }}>Keşfetmeye devam et ↓</a>
   </section>;
 }
