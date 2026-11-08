@@ -7,6 +7,8 @@ export default defineConfig({
     browserName: (process.env.KV_BROWSER || "chromium") as "chromium" | "firefox" | "webkit",
     baseURL: "http://127.0.0.1:3000",
     viewport: { width: 1440, height: 1000 },
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     launchOptions: process.env.KV_BROWSER_PATH
       ? { executablePath: process.env.KV_BROWSER_PATH }
       : {},

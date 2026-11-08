@@ -163,6 +163,8 @@ test("five trends differ; hidden counts stay hidden; movement has exact dated ta
   await page
     .getByLabel("Trend görünümü", { exact: true })
     .selectOption("WEEKLY_MOVERS");
+  await expect(page).toHaveURL(/format=WEEKLY_MOVERS/);
+  await expect(page.getByLabel("Trend görünümü", { exact: true })).toHaveValue("WEEKLY_MOVERS");
   await expect(page.locator(".trend-results > article")).toHaveCount(2);
   const movement = page.locator(".trend-results > article").first();
   await expect(movement).toContainText("+20 yüzde puan");
@@ -182,6 +184,7 @@ test("five trends differ; hidden counts stay hidden; movement has exact dated ta
     "none",
   );
   await page.getByLabel("Kategori", { exact: true }).selectOption("seyahat");
+  await expect(page).toHaveURL(/category=seyahat/);
   await expect(
     page.getByRole("heading", {
       name: "Karşılaştırma için yeterli geçmiş yok.",
@@ -191,7 +194,11 @@ test("five trends differ; hidden counts stay hidden; movement has exact dated ta
   await page
     .getByLabel("Trend görünümü", { exact: true })
     .selectOption("DAILY_RISING");
+  await expect(page).toHaveURL(/format=DAILY_RISING/);
+  await expect(page.getByLabel("Trend görünümü", { exact: true })).toHaveValue("DAILY_RISING");
+  await expect(page.getByLabel("Kategori", { exact: true })).toHaveValue("seyahat");
   await page.getByLabel("Kategori", { exact: true }).selectOption("spor");
+  await expect(page).toHaveURL(/category=spor/);
   await expect(
     page.getByRole("heading", { name: "Bu kategoride henüz trend yok." }),
   ).toBeVisible();
