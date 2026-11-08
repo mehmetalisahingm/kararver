@@ -38,14 +38,14 @@ test("accepts only a signed independent fresh journal spanning the backup time",
 test("wrong signer, invalid/unsigned content, missing entries, duplicates and extra fields are rejected", () => {
   const [raw, signature] = build(journal());
   const other = generateKeyPairSync("ed25519");
-  assert.throws(() => validateJournal(raw, signature, other.publicKey.export({ type: "spki", format: "pem" }), iso(now - 10_000), now), /journal_signature_invalid/);
-  assert.throws(() => validateJournal(Buffer.from(JSON.stringify(journal())), Buffer.alloc(64), pem, iso(now - 10_000), now), /journal_signature_invalid/);
+  assert.throws(() => validateJournal(raw, signature, other.publicKey.export({ type: "spki", format: "pem" }), iso(now - 86_400_000), now), /journal_signature_invalid/);
+  assert.throws(() => validateJournal(Buffer.from(JSON.stringify(journal())), Buffer.alloc(64), pem, iso(now - 86_400_000), now), /journal_signature_invalid/);
   const [dup, dSig] = build(journal({ erasedUserIds: [userId, userId] }));
-  assert.throws(() => validateJournal(dup, dSig, pem, iso(now - 10_000), now), /journal_subjects_invalid/);
+  assert.throws(() => validateJournal(dup, dSig, pem, iso(now - 86_400_000), now), /journal_subjects_invalid/);
   const [bad, bSig] = build(journal({ secret: "should-be-rejected" }));
-  assert.throws(() => validateJournal(bad, bSig, pem, iso(now - 10_000), now), /journal_unknown_fields/);
+  assert.throws(() => validateJournal(bad, bSig, pem, iso(now - 86_400_000), now), /journal_unknown_fields/);
   const [missing, mSig] = build({ kind: "kararver-independent-erasure-journal", version: 1, sealedThrough: iso(now) });
-  assert.throws(() => validateJournal(missing, mSig, pem, iso(now - 10_000), now), /journal_schema_invalid/);
+  assert.throws(() => validateJournal(missing, mSig, pem, iso(now - 86_400_000), now), /journal_schema_invalid/);
 });
 
 test("stale journal, one older than the restored snapshot or future-dated proof fails closed", () => {
