@@ -357,6 +357,8 @@ export function SocialPanel({ poll }: { poll: Poll }) {
     .filter((c) => !c.parentId && c.kind === tab)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
   const parent = data.comments.find((c) => c.id === draft.parentId);
+  const highlighted = data.comments.filter(c => !c.deleted && !c.parentId && c.kind === "comment" && c.reaction.likes > 0).sort((a, b) => b.reaction.likes - a.reaction.likes || b.createdAt.localeCompare(a.createdAt))[0];
+  const alternative = data.comments.filter(c => !c.deleted && !c.parentId && c.kind === "alternative").sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   return (
     <section
       className="kv-card screen-stack social-panel"
@@ -372,6 +374,10 @@ export function SocialPanel({ poll }: { poll: Poll }) {
       <h2 id="comments-title" tabIndex={-1} ref={heading}>
         Yorumlar
       </h2>
+      {(highlighted || alternative) && <div className="perspective-section" aria-label="Öne çıkan bakış açıları"><div><span>FİKİR PENCERESİ</span><h3>Bir soruya, farklı açılar.</h3><p>Şu ana kadar yüklenen paylaşımlardan.</p></div><div className="perspective-grid">
+        {highlighted && <blockquote><small>BEĞENİLEN YORUM · {highlighted.reaction.likes} BEĞENİ</small><p>{highlighted.text}</p><footer>{highlighted.author}</footer></blockquote>}
+        {alternative && <blockquote><small>SON ALTERNATİF ÖNERİ</small><p>{alternative.text}</p><footer>{alternative.author}</footer></blockquote>}
+      </div></div>}
       <Reactions
         label="Gönderiye tepki"
         value={data.reaction}

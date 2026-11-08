@@ -22,6 +22,7 @@ export function PollDetail({ id }: { id: string }) {
   const [attempt, retry] = useState(0);
   const [busy, setBusy] = useState(false);
   const [launched, setLaunched] = useState(false);
+  const [sound, setSound] = useState(false);
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const lock = useRef(false);
   useEffect(() => {
@@ -85,6 +86,23 @@ export function PollDetail({ id }: { id: string }) {
       lock.current = false;
       setBusy(false);
     }
+  }
+  function playChoiceSound() {
+    if (!sound) return;
+    try {
+      const context = new AudioContext();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(440, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(590, context.currentTime + .12);
+      gain.gain.setValueAtTime(.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(.025, context.currentTime + .025);
+      gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + .2);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.onended = () => { void context.close(); };
+      oscillator.start(); oscillator.stop(context.currentTime + .21);
+    } catch { /* Audio is optional and must never block a choice. */ }
   }
   async function toggleBookmark() {
     if (!poll || !requireUser(`/karar/${id}`) || !client.setBookmark || bookmarkBusy) return;
@@ -152,6 +170,7 @@ export function PollDetail({ id }: { id: string }) {
         <p className="kv-muted">{poll.description}</p>
         {poll.kind === "poll" && (
           <>
+            <div className="choice-sound"><button type="button" aria-pressed={sound} onClick={() => setSound(value => !value)}>{sound ? "♪ Ses açık" : "♪ Ses kapalı"}</button><span>Seçim sesi · isteğe bağlı</span></div>
             <fieldset
               id="vote-options"
               tabIndex={-1}
@@ -188,6 +207,7 @@ export function PollDetail({ id }: { id: string }) {
                         onChange={() => {
                           select(id, option.id);
                           setError("");
+                          playChoiceSound();
                         }}
                       />
                       {option.label}
@@ -238,6 +258,12 @@ export function PollDetail({ id }: { id: string }) {
                 Sonuçlar oy verdikten sonra görünür.
               </p>
             )}
+            <section className="comparison-desk" aria-labelledby="comparison-title">
+              <div><span className="comparison-desk__eyebrow">KARŞILAŞTIRMA MASASI</span><h2 id="comparison-title">Seçeneklere yakından bak.</h2><p>Kararını verirken seçenekleri yan yana gör.</p></div>
+              <div className="comparison-desk__scroll"><table><caption className="sr-only">Seçeneklerin karşılaştırması</caption><thead><tr><th scope="col">Seçenek</th>{poll.options.map(option => <th scope="col" key={option.id}>{option.label}</th>)}</tr></thead><tbody><tr><th scope="row">Oy oranı</th>{poll.options.map(option => <td key={option.id}>{poll.results.visible ? `%${poll.results.options.find(result => result.id === option.id)?.percent ?? 0}` : "Gizli"}</td>)}</tr><tr><th scope="row">Oy sayısı</th>{poll.options.map(option => <td key={option.id}>{poll.results.visible ? poll.results.options.find(result => result.id === option.id)?.votes ?? 0 : "Gizli"}</td>)}</tr></tbody></table></div>
+              {!poll.results.visible && <p className="comparison-desk__note">Bu anketin sonuçları henüz sana açık değil.</p>}
+              <a className="comparison-desk__link" href="#comments-title">Yorumları ve alternatif önerileri incele →</a>
+            </section>
           </>
         )}
       </article>
