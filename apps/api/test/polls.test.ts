@@ -177,6 +177,60 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal(publicView.statusCode, 200);
   });
 
+  // ─── V1 seçici yayın öncesi inceleme ────────────────────────
+
+  test("şüpheli anket 202 UNDER_REVIEW olur; misafire 404, yetkisiz onay 403; ADMIN onayıyla süre yeniden başlar", async () => {
+    const owner = await signUp();
+    const reviewer = await signUp();
+    await db.userRole.create({ data: { userId: reviewer.id, role: "ADMIN" } });
+    const content = pollBody({
+      title: "Siyasi partilerin trafik vaatleri nasıl değerlendirilmeli?",
+      description: "Bu soru kişisel siyasi görüş veya oy bilgisi istemez.",
+    });
+    const idemKey = key();
+    const first = await send("POST", "/polls", content, owner.cookie, idemKey);
+    assert.equal(first.statusCode, 202, first.body);
+    assert.deepEqual(Object.keys(first.json().data).sort(), ["id", "status"]);
+    assert.equal(first.json().data.status, "UNDER_REVIEW");
+    const pendingId: string = first.json().data.id;
+    const saved = await db.poll.findUniqueOrThrow({ where: { id: pendingId }, select: { status: true, opensAt: true, closesAt: true } });
+    assert.equal(saved.status, "UNDER_REVIEW");
+
+    assertError(await get(`/polls/${pendingId}`), 404, "NOT_FOUND");
+    assertError(await get(`/polls/${pendingId}`, owner.cookie), 404, "NOT_FOUND");
+    const repeated = await send("POST", "/polls", content, owner.cookie, idemKey);
+    assert.equal(repeated.statusCode, 202, repeated.body);
+    assert.equal(repeated.json().data.id, pendingId);
+    assert.equal(await db.poll.count({ where: { authorId: owner.id } }), 1);
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, reason: "PUBLISH" } }), 1,
+      "tekrarlanan 202 istek yeni puan harcaması yaratmaz");
+
+    const attempts = { action: "RESTORE", reason: "Riskli olmayan genel kamu hizmeti sorusu olarak incelendi." };
+    assertError(await send("POST", `/admin/polls/${pendingId}/moderation`, attempts, owner.cookie), 403, "FORBIDDEN");
+    const queue = await get("/admin/polls?status=UNDER_REVIEW", reviewer.cookie);
+    assert.equal(queue.statusCode, 200, queue.body);
+    assert.ok(queue.json().data.some((row: { id: string }) => row.id === pendingId));
+
+    h.clock.advance(6 * HOUR);
+    const accepted = await send("POST", `/admin/polls/${pendingId}/moderation`, attempts, reviewer.cookie);
+    assert.equal(accepted.statusCode, 200, accepted.body);
+    assert.equal(accepted.json().data.status, "ACTIVE");
+    const published = await db.poll.findUniqueOrThrow({ where: { id: pendingId }, select: { status: true, opensAt: true, closesAt: true } });
+    assert.equal(published.status, "ACTIVE");
+    assert.equal(published.opensAt.getTime(), h.clock.now.getTime(), "oylama süresi moderatör onayında başlamalı");
+    assert.equal(published.closesAt!.getTime() - published.opensAt.getTime(), 72 * HOUR);
+    assert.equal((await get(`/polls/${pendingId}`)).statusCode, 200);
+    assert.equal((await send("POST", "/polls", content, owner.cookie, idemKey)).statusCode, 202,
+      "onaydan sonra bile aynı idempotency key ilk inceleme makbuzunu verir");
+  });
+
+  test("düşük riskli sıradan anket doğrudan 201 ve ACTIVE olur", async () => {
+    const owner = await signUp();
+    const result = await send("POST", "/polls", pollBody({ title: "Telefon batarya ömrünü nasıl buluyorsunuz?" }), owner.cookie, key());
+    assert.equal(result.statusCode, 201, result.body);
+    assert.equal(PollDetail.parse(result.json().data).status, "ACTIVE");
+  });
+
   // ─── Oluşturma ──────────────────────────────────────────────
 
   test("anket oluşturma 201; sahip sonucu görür ama oy veremez", async () => {
