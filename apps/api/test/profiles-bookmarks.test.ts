@@ -80,6 +80,7 @@ describe("KV-22 profiles/bookmarks (postgres)", { skip: backendFactory ? false :
       username: `${prefix}_${suffix}`,
       displayName: `${prefix} kullanıcı`,
       password: "guclu-bir-sifre-1",
+      adultConfirmed: true,
     };
     const mailIndex = mails.length;
     assert.equal((await request("POST", "/auth/register", account)).statusCode, 202);
