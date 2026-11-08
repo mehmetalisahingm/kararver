@@ -1,3 +1,9 @@
+## 8 Kasım 2026 — moderasyon itirazının 14 takvim gününde sonuçlandırılması hedefi
+
+**Mehmet'in kesin kararı:** KararVer V1'de ön moderasyon ret kararına yapılan **kullanıcı itirazının sistemde kaydedildiği andan itibaren 14 takvim günü (336 saat)** içinde sonuçlandırılması ekibin **operasyon hedefidir**. Ret bildiriminin tesliminden başlayan **30 günlük kullanıcı itiraz BAŞVURU hakkı** değişmez. 14 günlük hedef aşılırsa itiraz otomatik reddedilmez/onaylanmaz; kullanıcı puanları, anonim sonuç mahremiyeti, yanlış ret telafisi değişmez.
+
+[Ürün, teknik 14g/30g ayrımı, gizli moderatör iş yükü, uyarı taslakları, veri güvenliği, KVKK ve test kabul matrisi](LEGAL_290_14_DAY_APPEAL_RESOLUTION_SLA_2026_11_08.md). Bu hazırlık **gerçek başvuru API/UX, teslim edilen bildirim, on-call moderatör ve staging tam doğrulaması yerine geçmez**. #290/#327/#285/#53/#54 NO-GO; operasyon eskalasyonunun sorumlusu sonraki açık karardır.
+
 ## 8 Kasım 2026 — moderasyon reddine itiraz için 30 günlük BAŞVURU süresi
 
 **Mehmet'in kesin işletmeci kararı:** KararVer V1'de anketin ön moderasyon reddine ürün içi itiraz, **ret bildiriminin kullanıcıya ulaşmasından itibaren 30 gün** içinde yapılır. Karar/outbox tarihi süreyi başlatmaz; V1 uygulama içi zorunlu bildirim **ilgili kullanıcının özel inbox'ına transaction commit ile kaydedildiğinde** ulaşmış sayılır. 720 saat sonu dahil, sunucu başvuru zamanı esas; başvuru süresinde yapılmışsa sonuçlandırma gecikmesi başvuruyu düşürmez. Başvuru ve teslim kanıtı eksikse otomatik “süre doldu” reddi yok.
