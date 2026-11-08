@@ -32,7 +32,7 @@ Puan hareketleri, moderatör kararları ve denetim izi hesap/poll ilişkisi taş
 
 Resmî kaynaklar:
 - [KVKK — Aydınlatma yükümlülüğü](https://www.kvkk.gov.tr/Icerik/2033/Aydinlatma-Yukumlulugu-)
-- [KVKK — Aydınlatma yükümlülüğü duyurusu](https://www.kvkk.gov.tr/Icerik/6765/AYDINLATMA_YUKUMLULUGUNUN_YERINE_GETIRILMESI_HAKKINDA_KAMUOYU_DUYURUSU)
+- [KVKK — Aydınlatma yükümlülüğü duyurusu](https://www.kvkk.gov.tr/Icerik/6765/AYDINLATMA-YUKUMLULUGUNUN-YERINE-GETIRILMESI-HAKKINDA-KAMUOYU-DUYURUSU)
 - [KVKK — Başvuru hakkı](https://www.kvkk.gov.tr/Icerik/2062/Basvuru-Hakki)
 
 ## Kalan zorunlu kabul ve sonraki işletmeci kararı
