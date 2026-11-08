@@ -193,6 +193,8 @@ export type HarnessOptions = {
    * (system_settings) gelir; KV-40 testleri için. Varsayılan false: eski testler sabit ayarla çalışır.
    */
   realSettings?: boolean;
+  /** Legacy auth fixtures predate the 18+ contract. New policy tests MUST pass true. */
+  adultDeclarationRequired?: boolean;
 };
 
 export async function createHarness(factory: BackendFactory, options: HarnessOptions = {}): Promise<Harness> {
