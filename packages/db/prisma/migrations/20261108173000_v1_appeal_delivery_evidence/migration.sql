@@ -5,8 +5,8 @@
 BEGIN;
 
 CREATE TABLE moderation_appeal_notice_receipts (
-  moderation_action_id UUID PRIMARY KEY REFERENCES moderation_actions(id) ON DELETE RESTRICT,
-  recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  moderation_action_id UUID PRIMARY KEY REFERENCES moderation_actions(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
   notification_id UUID NOT NULL UNIQUE,
   delivered_at TIMESTAMPTZ(3) NOT NULL,
   appeal_deadline_at TIMESTAMPTZ(3) NOT NULL,
