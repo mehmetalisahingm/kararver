@@ -41,7 +41,7 @@ export function describeDeletionLink(link: DeletionLink): { title: string; body:
 }
 
 export function deletionResultMessage(kind: "deleted" | "unchanged" | "cancelled"): string {
-  if (kind === "deleted") return "Hesabın kalıcı olarak silindi. Kişisel bilgilerin kaldırıldı ve oturumların kapandı. Bu adrese son bir bildirim gönderdik.";
+  if (kind === "deleted") return "Hesabına erişim kapatıldı, hesap bilgilerin temizlendi ve paylaşım/yorumların yayından kaldırıldı. Dosyaların depo temizliği arka planda devam edebilir; yedekler ve sınırlı yasal kayıtlar ayrıca ele alınır. E-postana son işlem bildirimini gönderdik.";
   if (kind === "unchanged") return "Hesabın zaten silinmiş.";
   return "Talep iptal edildi ve hesabındaki bütün oturumlar kapatıldı; hesabın silinmedi. Şifreni değiştirmeni öneririz.";
 }
