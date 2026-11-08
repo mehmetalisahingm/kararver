@@ -197,7 +197,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
     findIdempotentResult: (scope) => findIdempotentResult(prisma, scope),
 
     async findPoll(by, viewerId) {
-      const poll = await prisma.poll.findUnique({ where: by, include: pollInclude(viewerId) });
+      const poll = await prisma.poll.findFirst({ where: { ...by, author: { deletedAt: null } }, include: pollInclude(viewerId) });
       if (!poll) return null;
       const follows = await followingIds([poll.id], viewerId);
       return { ...toRecord(poll as PollRow), viewerFollowing: follows.has(poll.id) };
@@ -206,7 +206,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
     async listByIds(ids, viewerId) {
       if (ids.length === 0) return [];
       const rows = await prisma.poll.findMany({
-        where: { id: { in: ids }, status: { in: ["ACTIVE", "LOCKED"] } },
+        where: { id: { in: ids }, status: { in: ["ACTIVE", "LOCKED"] }, author: { deletedAt: null } },
         include: pollInclude(viewerId),
       });
       const follows = await followingIds(ids, viewerId);
@@ -233,6 +233,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
         where: {
           // Gizli, incelemede ve kaldırılmış içerik feed'e girmez.
           status: { in: ["ACTIVE", "LOCKED"] },
+          author: { deletedAt: null },
           ...(categoryId ? { categoryId } : {}),
           ...(communityId ? { communityId } : {}),
           ...keyset,
