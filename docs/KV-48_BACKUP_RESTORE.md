@@ -53,7 +53,7 @@ pnpm --filter @kararver/worker media:check
 |---|---|---|
 | PostgreSQL | Sağlayıcının otomatik yedeği ve PITR'ı (varsa, hosting kararında doğrulanacak) | Sağlayıcıya göre |
 | PostgreSQL (bağımsız kopya) | `db:backup` → ayrı bir yedek bucket'ına (farklı erişim anahtarı; uygulamanın anahtarı yedekleri silemez) | Günlük; **30 gün üst sınır (8 Kasım 2026 işletmeci kararı)** — eski katman önerileri artık onaylı değil |
-| PostgreSQL (deploy öncesi) | Migration içeren her deploy'dan hemen önce `db:backup` | Son 5 deploy |
+| PostgreSQL (deploy öncesi) | Migration içeren her deploy'dan hemen önce `db:backup` | **En fazla 30 gün**, bu süre içinde en son 5 deploy (hangisi daha erken sınıra ulaşırsa) |
 | Private bucket (orijinal + işlenmiş) | DB yedeğinden **sonra** yedek bucket'ına senkron (ör. rclone sync; R2'de nesne sürümleme yok) | Günlük |
 | Public bucket | **Yedeklenmez.** İçerik, private bucket'taki işlenmiş kopyanın birebir aynısıdır (worker ve `admin.media.decide` aynı veriyi yazar). APPROVED kayıtlar için `processed_object_key` → `public_object_key` kopyalanarak yeniden üretilir. | — |
 
