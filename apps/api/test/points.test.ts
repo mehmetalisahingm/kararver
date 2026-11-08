@@ -155,6 +155,76 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(await db.poll.count({ where: { authorId: owner.id } }), 2);
   });
 
+  test("UNDER_REVIEW moderatör reddi gerçek yayın ücretini tek sefer iade eder; tekrar ve yanlış kaldırma iade etmez", async () => {
+    const owner = await login(await registerVerified());
+    const reviewer = await login(await registerVerified());
+    await db.userRole.create({ data: { userId: reviewer.id, role: "SUPER_ADMIN" } });
+
+    const pendingBody = {
+      ...pollBody(),
+      title: `Siyasi partilerin ulaşım projelerini değerlendirelim ${++titleSeq}`,
+    };
+    const pendingKey = `points-pending-${randomUUID()}`;
+    const queued = await send("POST", "/polls", pendingBody, owner.cookie, pendingKey);
+    assert.equal(queued.statusCode, 202, queued.body);
+    const pollId: string = queued.json().data.id;
+    assert.equal(queued.json().data.status, "UNDER_REVIEW");
+    assert.equal((await summary(owner.cookie)).balance, 10);
+    const publish = await db.pointLedgerEntry.findFirstOrThrow({
+      where: { referenceId: pollId, userId: owner.id, reason: "PUBLISH" },
+    });
+    assert.equal(publish.delta, -10);
+
+    const retries = await send("POST", "/polls", pendingBody, owner.cookie, pendingKey);
+    assert.equal(retries.statusCode, 202, retries.body);
+    assert.equal(retries.json().data.id, pollId);
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "PUBLISH" } }), 1);
+
+    const denied = await send("POST", `/admin/polls/${pollId}/moderation`,
+      { action: "REMOVE", reason: "İnceleme sonucunda uygunsuz içerik tespit edildi." }, owner.cookie);
+    assert.equal(denied.statusCode, 403, denied.body);
+    assert.equal((await summary(owner.cookie)).balance, 10);
+
+    const rejection = await send("POST", `/admin/polls/${pollId}/moderation`,
+      { action: "REMOVE", reason: "İnceleme sonucunda uygunsuz içerik tespit edildi." }, reviewer.cookie);
+    assert.equal(rejection.statusCode, 200, rejection.body);
+    assert.equal(rejection.json().data.status, "REMOVED");
+    assert.equal((await summary(owner.cookie)).balance, 20, "reddedilen içerik için tek yayın ücreti iade edilir");
+
+    const refund = await db.pointLedgerEntry.findFirstOrThrow({
+      where: { userId: owner.id, referenceId: pollId, reason: "MODERATION_REFUND" },
+    });
+    assert.equal(refund.delta, 10);
+    assert.equal(refund.balanceAfter, 20);
+    assert.equal(refund.idempotencyKey, `moderation-refund:${pollId}`);
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "MODERATION_REFUND" } }), 1);
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: pollId } })).status, "REMOVED");
+
+    const duplicate = await send("POST", `/admin/polls/${pollId}/moderation`,
+      { action: "REMOVE", reason: "Yinelenen reddetme talebi" }, reviewer.cookie);
+    assert.equal(duplicate.statusCode, 200, duplicate.body);
+    assert.equal((await summary(owner.cookie)).balance, 20);
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "MODERATION_REFUND" } }), 1);
+
+    // Reopening after refund is forbidden until the owner decides whether
+    // appeal reinstatement should re-charge points.
+    const restore = await send("POST", `/admin/polls/${pollId}/moderation`,
+      { action: "RESTORE", reason: "Karara itiraz" }, reviewer.cookie);
+    assert.equal(restore.statusCode, 409, restore.body);
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: pollId } })).status, "REMOVED");
+    assert.equal((await summary(owner.cookie)).balance, 20);
+
+    const normal = await send("POST", "/polls", pollBody(), owner.cookie, `normal-${randomUUID()}`);
+    assert.equal(normal.statusCode, 201, normal.body);
+    assert.equal((await summary(owner.cookie)).balance, 10);
+    const normalId: string = normal.json().data.id;
+    const takedown = await send("POST", `/admin/polls/${normalId}/moderation`,
+      { action: "REMOVE", reason: "Yayımlandıktan sonra kaldırma" }, reviewer.cookie);
+    assert.equal(takedown.statusCode, 200, takedown.body);
+    assert.equal((await summary(owner.cookie)).balance, 10, "yayın sonrası kaldırmada iade yok");
+    assert.equal(await db.pointLedgerEntry.count({ where: { referenceId: normalId, reason: "MODERATION_REFUND" } }), 0);
+  });
+
   test("ledger sayfalı okunur ve DB'de UPDATE/DELETE edilemez", async () => {
     const account = await registerVerified();
     const owner = await login(account);
