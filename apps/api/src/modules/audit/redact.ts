@@ -20,6 +20,13 @@ const SENSITIVE_WORDS = new Set([
   "otp",
   "recovery",
   "apikey",
+  // Eski audit özetlerindeki alternatif kimlik bilgisi adları da gizlenir.
+  "authorization",
+  "credential",
+  "bearer",
+  "jwt",
+  "privatekey",
+  "accesskey",
   "cookie",
   "session",
   "email",
@@ -29,6 +36,8 @@ const SENSITIVE_WORDS = new Set([
 /** Birden çok kelimeye bölünen hassas adlar: apiKey / api_key, userAgent / user-agent. */
 const SENSITIVE_SEQUENCES = [
   ["api", "key"],
+  ["private", "key"],
+  ["access", "key"],
   ["user", "agent"],
 ];
 
