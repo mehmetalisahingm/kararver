@@ -151,8 +151,8 @@ model ModerationAppealWindow {
   rejection ModerationAction @relation(fields: [rejectionActionId], references: [id], onDelete: Restrict)
   recipient User @relation("ModerationAppealRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
 
-  @@index([recipientId, deliveredAt(sort: Desc)])
-  @@index([deadlineAt])
+  @@index([recipientId, deliveredAt(sort: Desc)], map: "moderation_appeal_windows_recipient_delivered_idx")
+  @@index([deadlineAt], map: "moderation_appeal_windows_deadline_idx")
   @@map("moderation_appeal_windows")
 }
 
