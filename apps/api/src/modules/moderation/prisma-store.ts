@@ -152,8 +152,14 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
         return { kind: "conflict", reason: "invalid_transition" };
       }
       const author = await tx.poll.findUniqueOrThrow({
-        where: { id: input.id }, select: { authorId: true },
+        where: { id: input.id },
+        select: { authorId: true, author: { select: { status: true, deletedAt: true } } },
       });
+      // An erased, suspended, banned or otherwise restricted account cannot
+      // get an old rejected poll republished as a side effect of appeal undo.
+      if (author.author.deletedAt !== null || author.author.status !== "ACTIVE") {
+        return { kind: "conflict", reason: "author_erased" };
+      }
       if (refunded) {
         // Preserve immutable debit/refund history and reject corrupted or
         // unrelated credits; NEVER charge again on an accepted appeal.
