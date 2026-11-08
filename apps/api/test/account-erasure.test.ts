@@ -414,6 +414,10 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
     assert.deepEqual(await publicComments.listTopLevel(own.id, "COMMENT", "new", { after: null, limit: 10 }, other.id), []);
     assert.equal(await publicComments.findComment(retainedComment.id, other.id), null);
     assert.equal(await publicComments.listReplies(comment.id, { after: null, limit: 10 }, other.id), null);
+    // Normal profilindeki yorum listesi de kamuya kapalıdır; kişi veri erişim hakkıyla karıştırılmaz.
+    const publicProfile = await send("GET", `/profiles/${other.username}/comments`);
+    assert.equal(publicProfile.statusCode, 200, publicProfile.body);
+    assert.equal(JSON.stringify(publicProfile.json()).includes("BASKASININ-YORUMU"), false);
 
     // Bu veri **yalnız yorum sahibinin kişisel veri paketine** dahildir.
     // Aynı paket başkasının yorumu veya silinen hesabın özel içeriğini taşımaz.
