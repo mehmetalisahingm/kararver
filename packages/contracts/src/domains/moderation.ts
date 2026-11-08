@@ -596,7 +596,53 @@ const contentEndpoints = [
   }),
 ];
 
+/** The deadline is always 30 x 24 h from actual private-inbox delivery.
+ * It is NOT calculated from moderator decision or event occurredAt. */
+export const MyModerationAppealView = z.strictObject({
+  rejectionActionId: Id,
+  deliveredAt: Timestamp,
+  deadlineAt: Timestamp,
+  filedAt: Timestamp.nullable(),
+  status: z.enum(["OPEN", "FILED", "EXPIRED"]),
+});
+
 export const moderationEndpoints = [
+  defineEndpoint({
+    id: "me.moderationAppeals.get",
+    domain: "moderation",
+    method: "GET",
+    path: "/me/moderation-appeals/:id",
+    summary: "Kendi ret bildiriminin teyitli teslim ve son itiraz tarihini oku",
+    auth: "user",
+    provider: moderation,
+    consumers: ["Ümit (itiraz ve bildirim UI)"],
+    unblocks: ["#290", "#327"],
+    availability: { status: "ready" },
+    request: { params: IdParams },
+    responses: { 200: dataOf(MyModerationAppealView) },
+    errors: ["NOT_FOUND"],
+    idempotency: "none",
+    cache: "private",
+    notes: ["Yalnız asıl anket sahibi; kullanıcı bildirimini almamışsa saat başlamaz ve bu kayıt yoktur. Geçmiş notification.createdAt karar anıdır, teslim kanıtı değildir."],
+  }),
+  defineEndpoint({
+    id: "me.moderationAppeals.file",
+    domain: "moderation",
+    method: "POST",
+    path: "/me/moderation-appeals/:id",
+    summary: "30 gün içinde tek seferlik moderasyon itirazını kaydet",
+    auth: "user",
+    provider: moderation,
+    consumers: ["Ümit (itiraz başvurusu)"],
+    unblocks: ["#290", "#327"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: z.string().trim().min(10).max(1000) }) },
+    responses: { 200: dataOf(MyModerationAppealView) },
+    errors: ["NOT_FOUND", "CONFLICT"],
+    idempotency: "natural",
+    cache: "private",
+    notes: ["Ret bildirimi kullanıcı gelen kutusuna gerçek teslim edilmeden süre başlamaz. İtiraz son gün/son saniyede kabul; 30 günü aşınca 409 appeal_window_closed. Tekrar istek ilk başvuru anını değiştirmez. İtirazın değerlendirilmesi 30 günle sınırlı değildir."],
+  }),
   defineEndpoint({
     id: "reports.create",
     domain: "moderation",
