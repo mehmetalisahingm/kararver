@@ -229,7 +229,7 @@
   .app-aside { grid-column: 2; }
 }
 @media (max-width: 767px) {
-  .app-header { padding: 11px 16px; min-height: 64px; gap: 9px; flex-wrap: nowrap; }
+  .app-header { padding: 11px 16px; min-height: 64px; gap: 9px; flex-wrap: wrap; }
   .brand { font-size: 21px; }
   .brand span { width: 33px; height: 33px; font-size: 18px; border-radius: 11px; }
   .header-caption { display: none; }
