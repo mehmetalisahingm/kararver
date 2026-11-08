@@ -78,6 +78,10 @@ jobs:
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
       - run: pnpm beta:test
+      - name: Hesap silme politikası — read-only NO-GO denetimi ve testleri
+        run: |
+          node --test scripts/erasure-policy-audit.test.mjs
+          node scripts/erasure-policy-audit.mjs
       - run: pnpm security:test
       - run: pnpm --filter @kararver/web test
       - run: pnpm --filter @kararver/web build
