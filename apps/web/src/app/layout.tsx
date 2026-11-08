@@ -19,6 +19,7 @@ import "./studio.css";
 import "./refinements.css";
 import "./decision-orbit.css";
 import "./exploration.css";
+import "./quality-refinements.css";
 
 const webUrl = new URL(process.env.WEB_URL ?? "http://localhost:3000");
 const publicIndexing = process.env.APP_ENV === "production";

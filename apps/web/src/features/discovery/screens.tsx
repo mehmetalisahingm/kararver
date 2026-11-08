@@ -635,7 +635,7 @@ function TrendBody({
             <section className="trend-galaxy" aria-labelledby="galaxy-title">
               <div className="trend-galaxy__intro"><span>GÜNDEMİN YÖRÜNGESİ</span><h2 id="galaxy-title">Fikirler burada<br />birbirine yaklaşır.</h2><p>Seçtiğin filtredeki ilk {Math.min(6, pages.result.data.length)} konuyu keşfet.</p></div>
               <div className="trend-galaxy__stars">
-                {pages.result.data.slice(0, 6).map((item, index) => <Link className="trend-galaxy__star" href={item.poll.canonicalPath || `/karar/${item.poll.id}`} key={item.poll.id} style={{ "--star-index": index } as CSSProperties}><span aria-hidden="true" className="trend-galaxy__light" /><span className="trend-galaxy__label"><small>#{item.rank} · {item.poll.category}</small><strong>{item.poll.title}</strong></span></Link>)}
+                {pages.result.data.slice(0, 6).map((item, index) => <Link className="trend-galaxy__star" href={item.poll.canonicalPath || `/karar/${item.poll.id}`} key={item.poll.id} style={{ "--star-index": index, "--star-x": ["2%", "53%", "9%", "50%", "3%", "54%"][index], "--star-y": ["3%", "9%", "35%", "41%", "68%", "72%"][index] } as CSSProperties}><span aria-hidden="true" className="trend-galaxy__light" /><span className="trend-galaxy__label"><small>#{item.rank} · {item.poll.category}</small><strong>{item.poll.title}</strong></span></Link>)}
               </div>
             </section>
             <div className="screen-stack trend-results">

@@ -12,6 +12,12 @@ import { DecisionPanel } from "./decision-panel";
 import { PollGallery } from "./gallery";
 import { IllustratedScene, visualTopic } from "../../components/visual-story";
 
+const planets = ["choice-planet.webp", "choice-desert.webp", "choice-ice.webp", "choice-gas.webp", "choice-volcanic.webp", "choice-ocean.webp"];
+const planetStyle = (index: number): CSSProperties => ({
+  "--planet-image": `url('/art/space/${planets[index % planets.length]}')`,
+  "--planet-hue": "0deg",
+} as CSSProperties);
+
 export function PollDetail({ id }: { id: string }) {
   const { client, user, selections, select, requireUser, notify, syncUser } =
     useProduct();
@@ -187,11 +193,9 @@ export function PollDetail({ id }: { id: string }) {
               </legend>
               <div className="vote-options orbital-options" data-launching={busy || launched}>
                 {poll.options.map((option, index) => (
-                  <label className="vote-option orbital-option" key={option.id} style={{ "--planet-hue": `${index * 55}deg` } as CSSProperties}>
-                    {option.image && (
-                      <img src={option.image} alt="" width={800} height={530} />
-                    )}
-                    <div className="orbital-option__scene" aria-hidden="true">
+                  <label className="vote-option orbital-option" key={option.id} style={planetStyle(index)}>
+                    <div className="orbital-option__scene" data-photo={Boolean(option.image)} aria-hidden="true">
+                      {option.image && <img className="orbital-option__photo" src={option.image} alt="" width={800} height={530} />}
                       <div className="orbital-option__number">0{index + 1} / SEÇENEK</div>
                       <div className="orbital-option__ring" />
                       <div className="orbital-option__planet" />
@@ -231,8 +235,8 @@ export function PollDetail({ id }: { id: string }) {
             {poll.results.visible ? (
               <section className="screen-stack orbital-results" aria-labelledby="results-title">
                 <div className="orbital-results__heading"><div><p className="orbital-results__eyebrow">BİRLİKTE ŞEKİLLENEN BİR EVREN</p><h2 id="results-title">Sonuçlar</h2></div><p>Her oy, bu hikâyede bir iz bırakır.</p></div>
-                {poll.results.options.map((result, index) => (
-                  <div className="result orbital-result" key={result.id} style={{ "--planet-hue": `${index * 55}deg`, "--planet-scale": String(0.45 + Math.max(0, Math.min(100, result.percent)) / 100 * 0.55) } as CSSProperties}>
+                {poll.results.options.map((result) => (
+                  <div className="result orbital-result" key={result.id} style={{ ...planetStyle(Math.max(0, poll.options.findIndex(option => option.id === result.id))), "--planet-scale": String(0.45 + Math.max(0, Math.min(100, result.percent)) / 100 * 0.55) } as CSSProperties}>
                     <div className="orbital-result__world" aria-hidden="true"><div className="orbital-result__planet" /></div>
                     <div className="orbital-result__detail">
                     <div className="kv-row kv-between">

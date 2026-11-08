@@ -1,0 +1,58 @@
+/* One visual world per choice, with user photographs kept in the same scene. */
+.orbital-option__planet, .orbital-result__planet { background-image:var(--planet-image); }
+.product[data-experience="studio"] .orbital-poll .orbital-option__scene > img.orbital-option__photo { position:absolute; inset:0; width:100%; height:100%; aspect-ratio:auto; object-fit:cover; border-radius:0; opacity:.72; }
+.orbital-option__scene[data-photo="true"] { height:clamp(230px,24vw,310px); background:#121c18; }
+.orbital-option__scene[data-photo="true"]::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,#08120fd9 0%,#101b1473 54%,#0b1510a1 100%),linear-gradient(0deg,#08110fbd,transparent 55%); }
+.orbital-option__scene[data-photo="true"]::before { z-index:1; }
+.orbital-option__scene[data-photo="true"] :is(.orbital-option__ring,.orbital-option__planet,.orbital-option__star,.orbital-option__number) { z-index:2; }
+.orbital-option__scene[data-photo="true"] .orbital-option__planet { width:clamp(130px,14vw,185px); margin-left:30%; }
+.orbital-option__scene[data-photo="true"] .orbital-option__ring { margin-left:30%; }
+.orbital-option__scene[data-photo="true"] .orbital-option__star { transform:translate(125px,-42px); }
+.product[data-experience="studio"] .orbital-poll .orbital-option > span { background:#111b17; }
+
+/* The editor stays one continuous form; the preview never changes its data. */
+.compose-workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(270px, .55fr); align-items:start; gap:24px; }
+.product[data-experience="studio"][data-area="compose"] .compose-workspace > form.kv-card { min-width:0; padding:clamp(22px,3vw,40px); border:1px solid var(--kv-border); border-radius:20px; background:var(--kv-surface); }
+.product[data-area="compose"] .compose-workspace > form.kv-card > section:first-child { border-top:0; padding-top:0; }
+.product[data-experience="studio"][data-area="compose"] nav[aria-label="Oluşturma adımları"] ol { gap:10px; }
+.product[data-experience="studio"][data-area="compose"] nav[aria-label="Oluşturma adımları"] button { display:flex; align-items:center; gap:12px; min-height:60px; padding:10px 14px; border:1px solid var(--kv-border); border-radius:12px; color:var(--kv-text); background:var(--kv-surface); }
+.product[data-experience="studio"][data-area="compose"] nav[aria-label="Oluşturma adımları"] button span { display:grid; flex:none; place-items:center; width:30px; height:30px; border:1px solid var(--kv-control-border); border-radius:50%; color:var(--kv-muted); font-size:10px; }
+.product[data-experience="studio"][data-area="compose"] nav[aria-label="Oluşturma adımları"] button strong { font-size:12px; font-weight:600; }
+.product[data-experience="studio"][data-area="compose"] nav[aria-label="Oluşturma adımları"] button[aria-current="step"] { border-color:var(--kv-accent); background:var(--kv-soft); }
+.product[data-experience="studio"][data-area="compose"] nav[aria-label="Oluşturma adımları"] button[aria-current="step"] span { background:#dbe99b; border-color:#dbe99b; color:#182113; }
+.compose-preview { position:sticky; top:20px; min-width:0; padding:20px; border:1px solid #4c6256; border-radius:18px; color:#f3f1e8; background:#101a16; }
+.compose-preview__top { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }
+.compose-preview__top > div > span { color:#cbdda5; font-size:9px; font-weight:700; letter-spacing:.14em; }
+.compose-preview__top h2 { margin:5px 0 0; font-size:19px; letter-spacing:-.03em; }
+.compose-preview__live { display:flex; gap:6px; align-items:center; color:#b5c4b5; font-size:9px; letter-spacing:.1em; }
+.compose-preview__live i { width:6px; height:6px; border-radius:50%; background:#dbe99b; box-shadow:0 0 10px #dbe99b; }
+.compose-preview__card { overflow:hidden; border:1px solid #51635b; border-radius:14px; background:#0d1512; }
+.compose-preview__orbit { position:relative; display:grid; place-items:center; height:125px; overflow:hidden; background:radial-gradient(ellipse at center,#344c39,#17281e 55%,#0d1813); }
+.compose-preview__orbit::before { content:""; position:absolute; width:210px; height:70px; border:1px solid #dbe99b5c; border-radius:50%; transform:rotate(-16deg); }
+.compose-preview__planet { width:125px; height:125px; background:url('/art/space/choice-planet.webp') center/contain no-repeat; filter:drop-shadow(0 6px 12px #0008); }
+.compose-preview__content { display:grid; gap:12px; padding:18px; }
+.compose-preview__category { color:#cbdca2; font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+.compose-preview__content h3 { margin:0; font-size:20px; line-height:1.2; letter-spacing:-.03em; overflow-wrap:anywhere; }
+.compose-preview__content p { margin:0; color:#b9c8bb; font-size:12px; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; max-height:6em; overflow:auto; }
+.product[data-area="compose"] .compose-preview__content ul { display:grid; gap:7px; margin:0; padding:0; list-style:none; }
+.compose-preview__content li { display:flex; align-items:center; gap:8px; min-width:0; padding:10px; border:1px solid #52635a; border-radius:8px; font-size:12px; overflow-wrap:anywhere; }
+.compose-preview__content li i { flex:none; width:11px; height:11px; border:1px solid #c1d2bd; border-radius:50%; }
+.compose-preview__footer { padding-top:11px; border-top:1px solid #ffffff20; color:#b9c8bb; font-size:11px; }
+.compose-preview > p { margin:15px 0 0; color:#b9c8bb; font-size:11px; line-height:1.5; }
+.compose-preview__mobile { display:none; }
+
+/* A navigable constellation rather than a row of unrelated cards. */
+.trend-galaxy { min-height:0; }
+.trend-galaxy__stars { position:relative; display:block; height:330px; margin-top:14px; }
+.trend-galaxy__stars::before, .trend-galaxy__stars::after { content:""; position:absolute; inset:10% 4%; border:1px solid #e6f2b126; border-radius:50%; transform:rotate(-11deg); pointer-events:none; }
+.trend-galaxy__stars::after { inset:22% 13%; transform:rotate(12deg); border-color:#dce9b016; }
+.trend-galaxy__star { position:absolute; left:var(--star-x); top:var(--star-y); width:42%; min-height:0; padding:9px 12px; border-color:transparent; background:transparent; }
+.trend-galaxy__star:hover, .trend-galaxy__star:focus-visible { background:#0a1713d9; }
+.trend-galaxy__light { width:12px; height:12px; animation:star-breathe 5s ease-in-out infinite; animation-delay:calc(var(--star-index) * -.6s); }
+.trend-galaxy__star:first-child .trend-galaxy__light { width:17px; height:17px; }
+.trend-galaxy__label strong { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+@keyframes star-breathe { 0%,100% { box-shadow:0 0 4px 3px #e1f0ad38,0 0 20px 4px #d7eaa355; } 50% { box-shadow:0 0 7px 4px #e1f0ad66,0 0 30px 8px #d7eaa388; } }
+@media(max-width:1000px) { .compose-workspace { grid-template-columns:minmax(0,1fr) minmax(240px,.55fr); gap:16px; } }
+@media(max-width:760px) { .compose-workspace { display:flex; flex-direction:column; } .compose-preview { position:static; width:100%; order:-1; } .compose-preview__orbit { height:90px; } .compose-preview__planet { width:100px; height:100px; } .compose-preview__mobile { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:-4px 0 0; color:#d7e2d2; font-size:12px; } .compose-preview__mobile span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .compose-preview__mobile button { flex:none; border:1px solid #aabd9a; border-radius:999px; padding:7px 12px; background:transparent; color:#e4f1ad; font:inherit; } .compose-preview[data-expanded="false"] :is(.compose-preview__card, .compose-preview__mobile + p) { display:none; } .compose-preview[data-expanded="false"] > p { display:none; } .compose-preview[data-expanded="true"] .compose-preview__mobile { margin-bottom:16px; } }
+@media(max-width:600px) { .trend-galaxy__stars { height:auto; display:grid; grid-template-columns:1fr; gap:8px; margin-top:25px; } .trend-galaxy__stars::before,.trend-galaxy__stars::after { display:none; } .trend-galaxy__star { position:relative; left:auto; top:auto; width:100%; padding:13px 10px; border-bottom:1px solid #e1efab30; border-radius:0; } .trend-galaxy__label strong { -webkit-line-clamp:unset; } .orbital-option__scene[data-photo="true"] { height:205px; } }
+@media(prefers-reduced-motion:reduce) { .trend-galaxy__light { animation:none; } }
