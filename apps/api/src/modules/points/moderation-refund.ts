@@ -2,7 +2,7 @@
 // Must run inside the SAME transaction as UNDER_REVIEW -> REMOVED moderation.
 // Caller must first lock the poll row, then this function locks the points account.
 // Uses a stable ledger key and never refunds more than the actual original charge.
-import type { Prisma, PrismaClient } from "@kararver/db";
+import type { Prisma } from "@kararver/db";
 
 type Tx = Prisma.TransactionClient;
 
