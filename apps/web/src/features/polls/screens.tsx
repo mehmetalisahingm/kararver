@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
@@ -20,8 +21,14 @@ export function PollDetail({ id }: { id: string }) {
   const [error, setError] = useState("");
   const [attempt, retry] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [launched, setLaunched] = useState(false);
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const lock = useRef(false);
+  useEffect(() => {
+    if (!launched) return;
+    const timer = setTimeout(() => setLaunched(false), 700);
+    return () => clearTimeout(timer);
+  }, [launched]);
   useEffect(() => {
     let active = true;
     setPoll(null);
@@ -66,6 +73,7 @@ export function PollDetail({ id }: { id: string }) {
     try {
       const next = await client.vote(id, selections[id]);
       setPoll(next);
+      setLaunched(true);
       notify("Oyun kaydedildi.");
     } catch (e) {
       setError((e as Error).message);
@@ -117,7 +125,7 @@ export function PollDetail({ id }: { id: string }) {
       <Link href="/" className="back-link">
         ← Akışa dön
       </Link>
-      <article className="kv-card poll-card">
+      <article className="kv-card poll-card orbital-poll">
         <div className="kv-row kv-between">
           <span className="kv-badge">{poll.category}</span>
           <div className="kv-row">
@@ -158,16 +166,23 @@ export function PollDetail({ id }: { id: string }) {
                     ? "Oyun kaydedildi."
                     : "Sen hangisini seçerdin?"}
               </legend>
-              <div className="vote-options">
-                {poll.options.map((option) => (
-                  <label className="vote-option" key={option.id}>
+              <div className="vote-options orbital-options" data-launching={busy || launched}>
+                {poll.options.map((option, index) => (
+                  <label className="vote-option orbital-option" key={option.id} style={{ "--planet-hue": `${index * 55}deg` } as CSSProperties}>
                     {option.image && (
                       <img src={option.image} alt="" width={800} height={530} />
                     )}
+                    <div className="orbital-option__scene" aria-hidden="true">
+                      <div className="orbital-option__number">0{index + 1} / SEÇENEK</div>
+                      <div className="orbital-option__ring" />
+                      <div className="orbital-option__planet" />
+                      <div className="orbital-option__star" />
+                    </div>
                     <span>
                       <input
                         name="vote"
                         type="radio"
+                        aria-label={option.label}
                         value={option.id}
                         checked={(selections[id] || poll.ownVote) === option.id}
                         onChange={() => {
@@ -194,10 +209,12 @@ export function PollDetail({ id }: { id: string }) {
               </button>
             )}
             {poll.results.visible ? (
-              <section className="screen-stack" aria-labelledby="results-title">
-                <h2 id="results-title">Sonuçlar</h2>
-                {poll.results.options.map((result) => (
-                  <div className="result" key={result.id}>
+              <section className="screen-stack orbital-results" aria-labelledby="results-title">
+                <div className="orbital-results__heading"><div><p className="orbital-results__eyebrow">BİRLİKTE ŞEKİLLENEN BİR EVREN</p><h2 id="results-title">Sonuçlar</h2></div><p>Her oy, bu hikâyede bir iz bırakır.</p></div>
+                {poll.results.options.map((result, index) => (
+                  <div className="result orbital-result" key={result.id} style={{ "--planet-hue": `${index * 55}deg`, "--planet-scale": String(0.45 + Math.max(0, Math.min(100, result.percent)) / 100 * 0.55) } as CSSProperties}>
+                    <div className="orbital-result__world" aria-hidden="true"><div className="orbital-result__planet" /></div>
+                    <div className="orbital-result__detail">
                     <div className="kv-row kv-between">
                       <span>
                         {poll.options.find((o) => o.id === result.id)?.label}
@@ -211,6 +228,7 @@ export function PollDetail({ id }: { id: string }) {
                       max="100"
                       aria-label={`${poll.options.find((o) => o.id === result.id)?.label} yüzde ${result.percent}`}
                     />
+                    </div>
                   </div>
                 ))}
                 <p className="kv-help">Toplam {poll.results.total} oy</p>
