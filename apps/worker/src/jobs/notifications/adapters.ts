@@ -42,7 +42,7 @@ const visible = (status: string) => status === "ACTIVE" || status === "LOCKED";
 function draftOf(
   event: DomainEvent,
   type: NotificationType,
-  x: { subject: NotificationDraft["subject"]; pollId: string | null; actorId: string | null; data: Record<string, NotificationScalar>; dedupeKey?: string },
+  x: { subject: NotificationDraft["subject"]; pollId: string | null; actorId: string | null; data: Record<string, NotificationScalar>; dedupeKey?: string; moderationActionId?: string },
 ): NotificationDraft {
   return {
     type,
@@ -53,7 +53,7 @@ function draftOf(
     pollId: x.pollId,
     data: x.data,
     dedupeKey: x.dedupeKey ?? `notifications:${naturalKey(event) ?? event.id}`,
-    moderationActionId: event.type === "moderation.applied" ? event.payload.moderationActionId : undefined,
+    moderationActionId: x.moderationActionId,
     createdAt: new Date(event.occurredAt),
   };
 }
@@ -179,6 +179,7 @@ export const notificationAdapters: Readonly<Partial<Record<EventType, Notificati
             pollId: e.subject.type === "POLL" ? e.subject.id : null,
             actorId: null,
             data: { action: e.payload.action, toStatus: e.payload.toStatus },
+            moderationActionId: e.payload.moderationActionId,
           }),
     recipients: async (tx, e) => {
       if (e.subject.type === "POLL") return { userIds: [(await pollOf(tx, e.subject.id)).authorId] };
