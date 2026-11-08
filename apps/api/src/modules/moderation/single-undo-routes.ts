@@ -19,15 +19,19 @@ type Blocked = "forbidden" | "admin_required" | "not_reversible" | "is_undo" | "
 
 /**
  * Kararın tek işlemle önceki duruma döndüren telafisi; yoksa null.
- * HIDE/REMOVE (önceki ACTIVE) → RESTORE; RESTORE (önceki HIDDEN) → HIDE, (önceki REMOVED) → REMOVE; anketlerde LOCK (ACTIVE) ↔ UNLOCK,
+ * HIDE/REMOVE (önceki ACTIVE) → RESTORE; POLL REMOVE (önceki UNDER_REVIEW) → RESTORE yalnız doğrulanmış itiraz düzeltmesi, RESTORE (önceki HIDDEN) → HIDE, (önceki REMOVED) → REMOVE; anketlerde LOCK (ACTIVE) ↔ UNLOCK,
  * EXCLUDE_FROM_TRENDS ↔ INCLUDE_IN_TRENDS, CLOSE_COMMENTS ↔ OPEN_COMMENTS. Uyarı, yaptırım, rapor reddi, taşıma ve görsel kararları geri alınmaz.
  */
 export function inverseDecision(rec: Pick<ActionRecord, "kind" | "action" | "fromStatus">): ModerationActionName | null {
   const poll = rec.kind === "polls";
   switch (rec.action) {
     case "HIDE":
-    case "REMOVE":
       return rec.fromStatus === "ACTIVE" ? "RESTORE" : null;
+    case "REMOVE":
+      // A prepublication rejection can be reversed only through this
+      // versioned, audited undo flow (and only for polls, not comments).
+      // The refunded points remain credited to the author.
+      return rec.fromStatus === "ACTIVE" || (poll && rec.fromStatus === "UNDER_REVIEW") ? "RESTORE" : null;
     case "RESTORE":
       return rec.fromStatus === "HIDDEN" ? "HIDE" : rec.fromStatus === "REMOVED" ? "REMOVE" : null;
     case "LOCK":
