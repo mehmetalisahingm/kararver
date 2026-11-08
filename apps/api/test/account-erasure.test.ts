@@ -11,6 +11,8 @@ import type { PrismaClient } from "@kararver/db";
 import { tombstoneOf } from "../src/modules/account-erasure/store.ts";
 import { decodeBase32, hotp } from "../src/modules/security/totp.ts";
 import { snapshotDay } from "../../worker/src/jobs/snapshots/job.ts";
+import { collectPackage } from "../../worker/src/jobs/data-exports/collect.ts";
+import { createPrismaCommentStore } from "../src/modules/comments/prisma-store.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
 const backend = prismaBackend();
@@ -391,6 +393,35 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
     assert.equal(await db.report.count({ where: { reporterId: user.id } }), 1);
     assert.equal(await db.comment.count({ where: { pollId: own.id, body: "BASKASININ-YORUMU" } }), 1);
     assert.equal((await userRow(other.id)).email, other.email);
+
+    // Ürün kararı: anket sahibi silindiyse üçüncü kişinin yorumu da
+    // misafire / yorum sahibine / başka oturuma normal API ile açılmaz.
+    const retainedComment = await db.comment.findFirstOrThrow({
+      where: { pollId: own.id, authorId: other.id },
+      select: { id: true, body: true, status: true },
+    });
+    assert.equal(retainedComment.body, "BASKASININ-YORUMU");
+    assert.equal(retainedComment.status, "ACTIVE", "başkasının içeriği zorla silinmedi");
+    for (const cookie of [undefined, other.cookie, boss.cookie]) {
+      assertError(await send("GET", `/polls/${own.id}/comments`, undefined, cookie), 404, "NOT_FOUND");
+      assertError(await send("GET", `/comments/${comment.id}/replies`, undefined, cookie), 404, "NOT_FOUND");
+    }
+
+    // Defense-in-depth: route doğrulaması atlanıp store doğrudan çağrılsa
+    // bile kaldırılmış anketin yorumları listelenemez veya tekil okunamaz.
+    const publicComments = createPrismaCommentStore(db);
+    assert.equal(await publicComments.isPollVisible(own.id), false);
+    assert.deepEqual(await publicComments.listTopLevel(own.id, "COMMENT", "new", { after: null, limit: 10 }, other.id), []);
+    assert.equal(await publicComments.findComment(retainedComment.id, other.id), null);
+    assert.equal(await publicComments.listReplies(comment.id, { after: null, limit: 10 }, other.id), null);
+
+    // Bu veri **yalnız yorum sahibinin kişisel veri paketine** dahildir.
+    // Aynı paket başkasının yorumu veya silinen hesabın özel içeriğini taşımaz.
+    const ownerExport = await collectPackage(db, other.id, h.clock.now);
+    assert.ok(ownerExport.collections.comments?.some((c) => c.id === retainedComment.id && c.body === retainedComment.body));
+    const strangerExport = await collectPackage(db, boss.id, h.clock.now);
+    assert.equal(strangerExport.collections.comments?.some((c) => c.id === retainedComment.id), false);
+
     const shown = await send("GET", `/polls/${own.id}`);
     assert.equal(shown.statusCode, 404, shown.body);
     assert.equal(JSON.stringify(shown.json()).includes(user.username), false, "eski kullanıcı adı yanıtta yok");
