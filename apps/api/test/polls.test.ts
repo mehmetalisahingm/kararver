@@ -12,6 +12,7 @@ import { createPrismaPollStore } from "../src/modules/polls/prisma-store.ts";
 import { mapDbError } from "../src/modules/polls/routes.ts";
 import { PollReferenceError } from "../src/modules/polls/store.ts";
 import { slugify } from "../src/modules/polls/slug.ts";
+import { findExpired } from "../../worker/src/jobs/polls/expire.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
 const HOUR = 60 * 60 * 1000;
@@ -214,7 +215,11 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal(queue.statusCode, 200, queue.body);
     assert.ok(queue.json().data.some((row: { id: string }) => row.id === pendingId));
 
-    h.clock.advance(6 * HOUR);
+    h.clock.advance(73 * HOUR);
+    // An unpublished poll must NEVER emit a poll.closed event while queued,
+    // even if its original pre-review closesAt is now in the past.
+    const expiredCandidates = await findExpired(db, new Date(h.clock.now.getTime() - 10 * 24 * HOUR), h.clock.now, 1000);
+    assert.equal(expiredCandidates.includes(pendingId), false);
     const accepted = await send("POST", `/admin/polls/${pendingId}/moderation`, attempts, reviewer.cookie);
     assert.equal(accepted.statusCode, 200, accepted.body);
     assert.equal(accepted.json().data.status, "ACTIVE");
@@ -225,6 +230,7 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal((await get(`/polls/${pendingId}`)).statusCode, 200);
     assert.equal((await send("POST", "/polls", content, owner.cookie, idemKey)).statusCode, 202,
       "onaydan sonra bile aynı idempotency key ilk inceleme makbuzunu verir");
+    h.clock.advance(-73 * HOUR);
   });
 
   test("düşük riskli sıradan anket doğrudan 201 ve ACTIVE olur", async () => {
