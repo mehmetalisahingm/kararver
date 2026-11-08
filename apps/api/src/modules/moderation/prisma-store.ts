@@ -4,6 +4,7 @@
 import type { Prisma, PrismaClient } from "@kararver/db";
 import { writeAudit } from "../audit/write.ts";
 import { refundRejectedReviewPoints } from "../points/moderation-refund.ts";
+import { detectSensitiveSurvey } from "../polls/sensitive-policy.ts";
 import { writeEvent } from "../events/write.ts";
 import { communityOfTarget } from "./community-of.ts";
 import { listComments, listPolls } from "./content-list.ts";
@@ -123,21 +124,62 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   if (next === "same") return { kind: "unchanged", outcome: outcome(row.status, excluded) };
   if (row.status === "REMOVED" && !input.actorIsAdmin) return { kind: "forbidden", reason: "admin_required" };
 
-  // A review rejection has already returned the publishing points. Reopening
-  // that poll without a new charge would grant an uncharged public listing.
-  // The appeal/reinstatement points rule still needs an owner decision.
+  // A rejected review poll is FREE to reinstate after a proven wrong
+  // decision. Direct RESTORE is deliberately NOT equivalent to an appeal:
+  // require an ADMIN+ version-checked single-decision undo of the ORIGINAL
+  // UNDER_REVIEW -> REMOVED action. A refunded user's 10 points stay intact.
+  let correctedRejection = false;
   if (row.status === "REMOVED" && next === "ACTIVE") {
-    const credited = await tx.pointLedgerEntry.findFirst({
-      where: { referenceId: input.id, reason: "MODERATION_REFUND" },
-      select: { id: true },
-    });
-    if (credited) return { kind: "conflict", reason: "invalid_transition" };
+    const [latest, refunded] = await Promise.all([
+      tx.moderationAction.findFirst({
+        where: { pollId: input.id },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { id: true, action: true, fromStatus: true, toStatus: true, undoOfId: true },
+      }),
+      tx.pointLedgerEntry.findFirst({
+        where: { referenceId: input.id, reason: "MODERATION_REFUND" },
+        select: { userId: true, delta: true },
+      }),
+    ]);
+    const wasReviewRejection = latest?.action === "REMOVE" &&
+      latest.fromStatus === "UNDER_REVIEW" && latest.toStatus === "REMOVED" &&
+      latest.undoOfId === null;
+    // A past refund is NEVER permission to restore arbitrary removed polls.
+    if (wasReviewRejection || refunded) {
+      if (!wasReviewRejection || !input.actorIsAdmin || !input.undoOf ||
+        input.undoOf !== latest.id || input.expect?.actionId !== latest.id ||
+        input.expect.status !== "REMOVED") {
+        return { kind: "conflict", reason: "invalid_transition" };
+      }
+      const author = await tx.poll.findUniqueOrThrow({
+        where: { id: input.id }, select: { authorId: true },
+      });
+      if (refunded) {
+        // Preserve immutable debit/refund history and reject corrupted or
+        // unrelated credits; NEVER charge again on an accepted appeal.
+        const original = await tx.pointLedgerEntry.findFirst({
+          where: { userId: author.authorId, referenceId: input.id, reason: "PUBLISH", delta: { lt: 0 } },
+          select: { delta: true },
+        });
+        if (!original || refunded.userId !== author.authorId || refunded.delta !== -original.delta) {
+          return { kind: "conflict", reason: "invalid_transition" };
+        }
+      }
+      correctedRejection = true;
+    }
   }
 
-  // A pending poll's advertised voting duration starts when a moderator
-  // publishes it, not when its review queue submission was created.
-  const releasingReview = row.status === "UNDER_REVIEW" && next === "ACTIVE";
+  // Reviewing either initially or after a corrected wrongful rejection must
+  // grant the full vote duration, not reuse an already elapsed private clock.
+  const releasingReview = (row.status === "UNDER_REVIEW" && next === "ACTIVE") || correctedRejection;
   if (releasingReview) {
+    const content = await tx.poll.findUniqueOrThrow({
+      where: { id: input.id },
+      select: { title: true, description: true, extraInfo: true, options: { select: { label: true } } },
+    });
+    // A human reversal may correct a mistaken risk flag, but it cannot
+    // override V1's categorical ban on collecting sensitive respondent data.
+    if (detectSensitiveSurvey(content)) return { kind: "conflict", reason: "invalid_transition" };
     // A moderator may not make the poll public before every linked image has
     // passed media moderation. Previously approved images remain governed by
     // their independent media revoke/hide pipeline.
