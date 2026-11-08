@@ -106,10 +106,14 @@ function commentEvent(c: { id: string; pollId: string; authorId: string; kind: C
 
 export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
   const notFound = <T>(reason: Extract<Outcome<T>, { ok: false }>["reason"]): Outcome<T> => ({ ok: false, reason });
+  // Public discussion access is closed if the poll is hidden OR its owner was erased.
+  // Third-party comments stay accessible only to their authors via the encrypted
+  // personal-data export path; these public comment queries must never expose them.
+  const publicPoll = { status: { in: [...VISIBLE_POLL] }, author: { deletedAt: null } } as const;
 
   return {
     async isPollVisible(pollId) {
-      return (await prisma.poll.count({ where: { id: pollId, status: { in: [...VISIBLE_POLL] } } })) > 0;
+      return (await prisma.poll.count({ where: { id: pollId, ...publicPoll } })) > 0;
     },
 
     async listTopLevel(pollId, kind, sort, page, viewerId) {
@@ -122,6 +126,7 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
           pollId,
           parentId: null,
           kind,
+          poll: publicPoll,
           // Kaldırılmış ama cevabı olan yorum, cevapları bağlamsız kalmasın diye tombstone olarak listelenir.
           OR: [{ status: "ACTIVE" }, { status: "REMOVED", replyCount: { gt: 0 } }],
           ...keyset([...fields], page.after),
@@ -136,12 +141,13 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
     async listReplies(parentId, page, viewerId) {
       const parent = await prisma.comment.findUnique({
         where: { id: parentId },
-        select: { status: true, parentId: true, poll: { select: { status: true } } },
+        select: { status: true, parentId: true, poll: { select: { status: true, author: { select: { deletedAt: true } } } } },
       });
       const parentVisible = parent && (parent.status === "ACTIVE" || parent.status === "REMOVED");
-      if (!parent || !parentVisible || parent.parentId !== null || !VISIBLE_POLL.includes(parent.poll.status as never)) return null;
+      if (!parent || !parentVisible || parent.parentId !== null ||
+          !VISIBLE_POLL.includes(parent.poll.status as never) || parent.poll.author.deletedAt !== null) return null;
       const rows = await prisma.comment.findMany({
-        where: { parentId, status: "ACTIVE", ...keyset([{ name: "createdAt", dir: "asc" }], page.after) },
+        where: { parentId, status: "ACTIVE", poll: publicPoll, ...keyset([{ name: "createdAt", dir: "asc" }], page.after) },
         select: commentSelect(viewerId),
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         take: page.limit,
@@ -183,7 +189,7 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
     },
 
     async findComment(id, viewerId) {
-      const row = await prisma.comment.findUnique({ where: { id }, select: commentSelect(viewerId) });
+      const row = await prisma.comment.findFirst({ where: { id, poll: publicPoll }, select: commentSelect(viewerId) });
       return row ? toRecord(row as Selected) : null;
     },
 
