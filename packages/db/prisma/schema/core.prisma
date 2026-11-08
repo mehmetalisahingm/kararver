@@ -154,6 +154,8 @@ model User {
   // Utku — admin.prisma (KV-21)
   notifications            Notification[]           @relation("NotificationRecipient")
   appealNoticeReceipts     ModerationAppealNoticeReceipt[]
+  appealCasesFiled         ModerationAppealCase[] @relation("AppealAppellant")
+  appealCasesResolved      ModerationAppealCase[] @relation("AppealResolver")
   notificationsCaused      Notification[]           @relation("NotificationActor")
   // Faruk — admin.prisma (KV-34, Utku'dan geçici devir)
   notificationOptOuts      NotificationTypeOptOut[]
