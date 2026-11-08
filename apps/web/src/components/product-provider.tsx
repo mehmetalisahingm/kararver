@@ -99,6 +99,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     setThemeReady(true);
   }, []);
   function toggleTheme() {
+    if (!themeReady) return;
     setTheme(previous => {
       const next = previous === "dark" ? "light" : "dark";
       try { window.localStorage.setItem("kararver:theme", next); } catch { /* Retain in-memory preference. */ }
@@ -230,7 +231,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
               theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"
             }
             onClick={toggleTheme}
-            disabled={!themeReady}
+            aria-disabled={!themeReady}
           >
             {theme === "dark" ? "☀" : "☾"}
           </button>

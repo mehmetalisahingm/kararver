@@ -70,7 +70,7 @@ test("all implemented routes: light/dark, overflow, landmarks and accessible nam
       // Session/loading headings can precede hydration of the saved theme.
       await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
       // Toggle through the product control, preserving its own theme semantics.
-      await expect(page.getByRole("button",{name:/temaya geç/})).toBeEnabled();
+      await expect(page.getByRole("button",{name:/temaya geç/})).toHaveAttribute("aria-disabled","false");
       if(await page.locator(".product").getAttribute("data-theme")!==theme) await page.getByRole("button",{name:/tema/i}).click();
       await expect(page.locator(".product")).toHaveAttribute("data-theme",theme);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${theme} ${path}`).toBe(true);
