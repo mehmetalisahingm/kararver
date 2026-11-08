@@ -72,8 +72,13 @@ export function Composer() {
       syncUser();
       setDraft(emptyDraft());
       dialog.current?.close();
-      notify(`İçeriğin yayımlandı. Bakiyenden ${publishCost} puan düşüldü.`);
-      router.push(poll.canonicalPath || `/karar/${poll.id}`);
+      if (poll.status === "UNDER_REVIEW") {
+        notify("İçeriğin moderatör incelemesine alındı; henüz herkese açık değil. Gönderim puanı bakiyenden düşürüldü.");
+        router.push("/");
+      } else {
+        notify(`İçeriğin yayımlandı. Bakiyenden ${publishCost} puan düşüldü.`);
+        router.push(poll.canonicalPath || `/karar/${poll.id}`);
+      }
     } catch (e) {
       setError((e as Error).message);
       if (e instanceof UiError) setErrors(e.fields);
