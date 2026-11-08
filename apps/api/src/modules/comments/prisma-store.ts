@@ -162,7 +162,9 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
             SELECT deleted_at FROM users WHERE id=${authorId}::uuid FOR NO KEY UPDATE`;
           if (!author || author.deleted_at) throw new ApiError("FORBIDDEN", "Silinmiş hesap yorum yazamaz.");
         const [poll] = await tx.$queryRaw<{ status: string; allow_comments: boolean; comments_closed_at: Date | null }[]>`
-          SELECT status::text, allow_comments, comments_closed_at FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
+          SELECT p.status::text, p.allow_comments, p.comments_closed_at FROM polls p
+          JOIN users owner ON owner.id = p.author_id AND owner.deleted_at IS NULL
+          WHERE p.id = ${pollId}::uuid FOR UPDATE OF p`;
         if (!poll || !VISIBLE_POLL.includes(poll.status as never)) return notFound("POLL_NOT_FOUND");
         if (poll.status === "LOCKED") return notFound("CONTENT_LOCKED");
         // Moderasyon kapatması (KV-37) sahibin allow_comments ayarından bağımsızdır; yeni yorum ve cevap engellenir.
@@ -199,6 +201,7 @@ export function createPrismaCommentStore(prisma: PrismaClient): CommentStore {
         const [row] = await tx.$queryRaw<{ author_id: string; status: string; poll_status: string }[]>`
           SELECT c.author_id::text, c.status::text, p.status::text AS poll_status
           FROM comments c JOIN polls p ON p.id = c.poll_id
+          JOIN users owner ON owner.id = p.author_id AND owner.deleted_at IS NULL
           WHERE c.id = ${id}::uuid FOR UPDATE OF c`;
         if (!row || row.status !== "ACTIVE" || !VISIBLE_POLL.includes(row.poll_status as never)) return notFound("COMMENT_NOT_FOUND");
         if (row.author_id !== authorId) return notFound("NOT_OWNER");
