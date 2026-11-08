@@ -62,6 +62,7 @@ test("a new poll can explicitly choose AFTER_VOTE without changing the public de
   await page.getByLabel("1. seçenek",{exact:true}).fill("Arama");
   await page.getByLabel("2. seçenek",{exact:true}).fill("Bildirim");
   await page.getByRole("button",{name:"2 · Yayını düzenle",exact:true}).click();
+  await page.getByLabel("Kategori",{exact:true}).selectOption({label:"Otomobil"});
   const visibility=page.getByLabel("Sonuç görünürlüğü",{exact:true});
   await expect(visibility).toHaveValue("always");
   await visibility.selectOption("after_vote");
