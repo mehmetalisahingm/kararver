@@ -259,6 +259,28 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.deepEqual(poll.community, { id: community.id, slug, name: "Test Topluluğu" });
   });
 
+  test("yeni anket eksik sonuç görünürlüğüyle oluşturulunca ALWAYS olur, eski AFTER_VOTE tercihi değişmez", async () => {
+    const privateOwner = await signUp();
+    const publicOwner = await signUp();
+    const oldPrivate = await createPoll(privateOwner.cookie, { resultsVisibility: "AFTER_VOTE" });
+    const anonymousNewBody: Record<string, unknown> = pollBody();
+    delete anonymousNewBody.resultsVisibility;
+
+    const created = await send("POST", "/polls", anonymousNewBody, publicOwner.cookie, key());
+    assert.equal(created.statusCode, 201, created.body);
+    const newPoll = PollDetail.parse(created.json().data);
+    assert.equal(newPoll.resultsVisibility, "ALWAYS");
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: newPoll.id } })).resultsVisibility, "ALWAYS");
+
+    const guestNew = PollDetail.parse((await get(`/polls/${newPoll.id}`)).json().data);
+    assert.equal(guestNew.viewer, null);
+    assert.equal(guestNew.results?.visible, true);
+    const guestExisting = PollDetail.parse((await get(`/polls/${oldPrivate.id}`)).json().data);
+    assert.equal(guestExisting.resultsVisibility, "AFTER_VOTE");
+    assert.deepEqual(guestExisting.results, { visible: false });
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: oldPrivate.id } })).resultsVisibility, "AFTER_VOTE");
+  });
+
   // ─── Okuma ve gizli sonuç ───────────────────────────────────
 
   test("misafir AFTER_VOTE sonucunu görmez; ALWAYS'ı görür; viewer null", async () => {
