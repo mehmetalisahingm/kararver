@@ -194,10 +194,12 @@ test("alternatives are separate; account changes hide ownership and another acco
     .getByLabel("Yorumun", { exact: true })
     .fill("Bu taslak sadece Ümit hesabında görünmeli.");
   await page.getByRole("button", { name: "Çıkış", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
   await page
     .locator("header")
     .getByRole("link", { name: "Giriş yap", exact: true })
     .click();
+  await expect(page).toHaveURL(/\/giris(?:\?|$)/);
   await login(page, "deniz@example.test");
   // The 09 scene deliberately hides demo shortcuts from the visual layout.
   // Activate the existing Next Link without a full navigation (which would reset DemoClient).
