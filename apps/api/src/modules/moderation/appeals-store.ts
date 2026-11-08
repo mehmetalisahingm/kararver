@@ -73,7 +73,7 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient): Moderat
             poll: { select: { authorId: true, status: true, author: { select: { deletedAt: true } } } },
           },
         });
-        if (!action || action.poll?.authorId !== userId ||
+        if (!action || !action.poll || action.poll.authorId !== userId ||
             action.action !== "REMOVE" || action.fromStatus !== "UNDER_REVIEW" ||
             action.toStatus !== "REMOVED" || action.undoOfId !== null ||
             action.poll.status !== "REMOVED" || action.poll.author.deletedAt !== null) {
