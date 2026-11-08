@@ -10,6 +10,7 @@ test("V1 refuses explicit special-category respondent questions, regardless of T
     ["Müslüman mısın?", "belief"],
     ["Hangi hastalığın var?", "health"],
     ["Sağlık durumun nasıl?", "health"],
+    ["Hangi ilacı kullanıyorsun?", "health"],
     ["HIV pozitif misin?", "health"],
     ["Etnik kökenin nedir?", "ethnicity"],
     ["Hangi sendikaya üyesin?", "membership"],
