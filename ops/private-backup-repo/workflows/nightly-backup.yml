@@ -5,7 +5,7 @@ name: Nightly encrypted backup
 # Akış:
 #   1) tek anlık döküm → ayrı, temiz PostgreSQL 18'e restore → 52 migration + tutarlılık doğrulaması;
 #   2) DOĞRULANAN AYNI döküm (sha256) ve manifest RSA açık anahtarla zarf şifrelemesiyle şifrelenir; düz döküm silinir;
-#   3) yalnız .enc dosyaları 35 gün saklanan PRIVATE artifact olur;
+#   3) yalnız .enc dosyaları 30 gün saklanan PRIVATE artifact olur;
 #   4) ANCAK yükleme başarılıysa ops_backup_runs kaydı yazılır (/admin/ops);
 #   5) yapılandırma eksikse ya da bir adım düşerse FAIL + bu repoda `backup-alarm` issue'su.
 # Kurulum ve kapılar: mehmetalisahingm/kararver docs/KV-48_BACKUP_RESTORE.md "Zamanlanmış yedek: private repo".
@@ -134,12 +134,12 @@ jobs:
           find "$OUT" -type f -name '*.dump.enc' | grep -q .
           find "$OUT" -type f -name '*.manifest.json.enc' | grep -q .
           find "$OUT" -type f -printf '%f\n'
-      - name: 3) Artifact (35 gün)
+      - name: 3) Artifact (30 gün)
         uses: actions/upload-artifact@v4
         with:
           name: kararver-db-staging-${{ github.run_id }}
           path: ${{ runner.temp }}/out
-          retention-days: 35
+          retention-days: 30
           if-no-files-found: error
       - name: 4) Yayımlandıktan SONRA yedek kaydı (/admin/ops)
         env:
