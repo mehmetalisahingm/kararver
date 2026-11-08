@@ -88,8 +88,9 @@ async function summary(tx: Tx, commentId: string, userId: string): Promise<React
 /** Tepki için yorum satırını kilitler; yorum ve anketi görünür değilse null. */
 async function lockReactable(tx: Tx, commentId: string): Promise<boolean> {
   const [row] = await tx.$queryRaw<{ ok: boolean }[]>`
-    SELECT (c.status = 'ACTIVE' AND p.status IN ('ACTIVE', 'LOCKED')) AS ok
+    SELECT (c.status = 'ACTIVE' AND p.status IN ('ACTIVE', 'LOCKED') AND owner.deleted_at IS NULL) AS ok
     FROM comments c JOIN polls p ON p.id = c.poll_id
+    JOIN users owner ON owner.id = p.author_id
     WHERE c.id = ${commentId}::uuid FOR UPDATE OF c`;
   return row?.ok === true;
 }
