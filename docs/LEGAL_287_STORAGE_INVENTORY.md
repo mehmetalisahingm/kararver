@@ -29,6 +29,14 @@ Depolama erişimi/yazımı engelliyse kabul başarı sayılmaz. Geri çekme kal�
 - Kapsanan `apps/web/src` kaynak taramasında Google Analytics/Tag Manager, reklam pikseli, iframe veya `next/script` analitik SDK entegrasyonu bulunmadı. Bu kaynak gözlemidir; Vercel/Cloudflare/Railway dashboard enjeksiyonu, CDN cookie'leri, gerçek DNS/TLS sonlandırma ve log saklama ayarları taramayla kanıtlanmaz. Hesap panelleri ve gerçek production ağ kaydı açık kabul işidir.
 - Auth oturum tablosu IP/user-agent/son görülme/sona erme/iptal alanları tutar (`core.prisma`, auth routes). Cookie TTL'si bu kayıtların otomatik silindiği anlamına gelmez. API logger cookie/authorization/set-cookie/password/token alanlarını redakte eder (`app.ts`); sağlayıcı loglarının hiç kişisel veri içermediği sonucu çıkarılmaz.
 
+## #312 aday sürümü: birinci taraf kabin iframe envanteri
+
+8 Kasım 2026 kod taraması; **yalnız #312 dalı için hazırlıktır**, henüz public/staging ağ gözlemi veya hukuki sınıflandırma değildir.
+
+- Anasayfadaki `SpaceHero`, `/experiences/cabin/index.html?embed=1` adresini **aynı origin** içindeki iframe olarak kullanır. Üç boyutlu kabin Three.js/WebGL, yerel `/experiences/cabin/textures/*` görselleri ve yerel JS bundle'ından oluşur. Kaynakta ayrıca üçüncü taraf analytics SDK, uzaktan script/iframe URL'si, `fetch`/beacon, localStorage/sessionStorage veya cookie okuma/yazma çağrısı görülmedi. Bu, platform düzeyi ağ ve trafik loglarının boş olduğu iddiası değildir.
+- `next.config.ts` genel sayfalarda `frame-ancestors 'none'` / `X-Frame-Options: DENY` kullanırken yalnız bu yerel kabin sayfası için `frame-ancestors 'self'` / `SAMEORIGIN` tanımlar. Aktarımın aynı-origin olması üçüncü taraf veri aktarımı olmadığını tek başına hukuken kanıtlamaz; gerçek sağlayıcı, CDN ve log envanteri #288'e bağlıdır.
+- İlgili URL ve bileşen #312 görsel deneyim kapsamındadır. Üretim tarayıcı ağ kaydı, iframe kaynağının gerçekten aynı origin kaldığı, beklenmedik script/haricî URL olmadığı, cookie gönderimi, klavye/erişilebilirlik ve CPU/GPU yükü #48/#53/#195 ile test edilmelidir. İleride dış içerik eklenirse bu envanter ve açık tercih/şart değerlendirmesi yeniden yapılır.
+
 ## Regresyon ve kapanış
 
 Yerel model testleri: seçim yok, ret, kabul, geri çekme, eski kayıt, bozuk/future/version/expired tercih, ilk kaynak, storage hatası, SSR ve başka sekmede değişen tercihin sonraki okumada uygulanması. Tarayıcıda temiz profil, klavye, mobil, depolama ve ağ farkı ayrıca kaydedilir. Yerel/fixture tarayıcı çalışması gerçek staging/cihaz veya hukuk onayı değildir.
