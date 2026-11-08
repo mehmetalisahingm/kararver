@@ -182,10 +182,10 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
   test("şüpheli anket 202 UNDER_REVIEW olur; misafire 404, yetkisiz onay 403; ADMIN onayıyla süre yeniden başlar", async () => {
     const owner = await signUp();
     const reviewer = await signUp();
-    await db.userRole.create({ data: { userId: reviewer.id, role: "ADMIN" } });
+    await db.userRole.create({ data: { userId: reviewer.id, role: "ADMIN", grantedById: owner.id } });
     const content = pollBody({
       title: "Siyasi partilerin trafik vaatleri nasıl değerlendirilmeli?",
-      description: "Bu soru kişisel siyasi görüş veya oy bilgisi istemez.",
+      description: "Şehir trafiği ve ulaşım projeleri üzerine genel değerlendirme.",
     });
     const idemKey = key();
     const first = await send("POST", "/polls", content, owner.cookie, idemKey);
