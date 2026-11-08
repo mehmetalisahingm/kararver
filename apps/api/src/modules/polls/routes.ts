@@ -7,6 +7,7 @@ import { ApiError } from "../../http/errors.ts";
 import { idempotencyKeyReused, readIdempotencyScope } from "../../http/idempotency.ts";
 import type { Route, RouteContext } from "../../http/route.ts";
 import { newPublicId, slugify } from "./slug.ts";
+import { detectSensitiveSurvey, type SensitiveInput } from "./sensitive-policy.ts";
 import { PollLimitError, PollReferenceError, type IdempotencyScope, type IdempotentResult, type PollPatch, type PollSettings, type PollStore } from "./store.ts";
 import { isClosed, isPubliclyVisible, toPollDetail } from "./view.ts";
 
@@ -20,6 +21,21 @@ export type PollDeps = {
 
 const HOUR_MS = 60 * 60 * 1000;
 const LOCKED_FIELDS = ["title", "description", "options", "resultsVisibility"] as const;
+
+/** Product scope, not a blanket legal ban on discussing health or politics.
+ * Block direct collection of sensitive *respondent* attributes before DB write
+ * or points are spent. No user text or sensitive category is logged or returned.
+ */
+function assertV1SensitivePolicy(input: SensitiveInput): void {
+  const risk = detectSensitiveSurvey(input);
+  if (risk) {
+    throw new ApiError(
+      "VALIDATION_ERROR",
+      "KararVer V1'de kişilerin hassas bilgilerini açığa çıkarabilecek anket veya gönderiler yayımlanamaz.",
+      [{ field: risk.field, code: "sensitive_survey_not_allowed_v1" }],
+    );
+  }
+}
 
 /** DB trigger'ının ürettiği hata (ör. KV_POLL_CONTENT_LOCKED) → sözleşme kodu; tanınmıyorsa null. */
 export function mapDbError(err: unknown): ErrorCode | null {
@@ -150,6 +166,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     // Acil durum anahtarı (KV-40): yeni anket/tartışma kapalı; başarılı isteğin tekrarı (yukarıda) etkilenmez.
     if (!settings.creationEnabled) throw new ApiError("FEATURE_DISABLED", "Yeni anket ve tartışma açma geçici olarak kapalı.");
     assertWithinLimits(body, settings);
+    assertV1SensitivePolicy(body);
     // Tartışma (#66) süresizdir; süre sınırı sadece ankete uygulanır.
     if (isPoll && (body.durationHours < settings.minDurationHours || body.durationHours > settings.maxDurationHours)) {
       throw new ApiError("VALIDATION_ERROR", `Süre ${settings.minDurationHours}–${settings.maxDurationHours} saat arasında olmalı.`, [
@@ -224,6 +241,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
       }
     }
     assertWithinLimits(body, await deps.settings());
+    assertV1SensitivePolicy(body);
     await validateReferences(ctx, { categoryId: body.categoryId });
 
     const patch: PollPatch = {};
@@ -268,6 +286,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
       throw new ApiError("FORBIDDEN", "Bu gönderi moderasyon nedeniyle kilitli.", [{ code: "content_locked" }]);
     }
     if (!isPubliclyVisible(meta)) throw new ApiError("NOT_FOUND", "İçerik bulunamadı.");
+    assertV1SensitivePolicy({ body: body.body });
     const { resourceId } = created(await store.createAddendum(params.id, body.body, scope));
     const addendum = (await store.findAddendum(resourceId))!;
     return { status: 201, body: { data: { id: addendum.id, body: addendum.body, createdAt: addendum.createdAt.toISOString() } } };
