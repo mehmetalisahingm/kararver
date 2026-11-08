@@ -16,6 +16,7 @@ import "./gravity.css";
 import "./orbital-journey.css";
 import "./mission.css";
 import "./studio.css";
+import "./refinements.css";
 
 const webUrl = new URL(process.env.WEB_URL ?? "http://localhost:3000");
 const publicIndexing = process.env.APP_ENV === "production";
