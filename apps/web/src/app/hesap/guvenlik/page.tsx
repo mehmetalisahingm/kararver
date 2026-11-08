@@ -167,7 +167,7 @@ function SecuritySettings({ userId }: { userId: string }) {
           <button className="kv-button" disabled={busy}>Kurtarma kodunu kullan</button>
         </form>}
       </>}
-      {status?.enabled && <><button className="kv-button kv-button--secondary" onClick={toggleReenroll}>Doğrulayıcıyı yenile</button>
+      {status?.enabled && <><button className="kv-button kv-button--secondary" disabled={busy} onClick={toggleReenroll}>Doğrulayıcıyı yenile</button>
         {reenrollOpen && !reenroll && <form className="screen-stack" aria-label="Doğrulayıcı yenileme" onSubmit={e => void reenrollAct(e, "begin")}>
           <p className="kv-muted">Yeni bir doğrulayıcı anahtarı ve yeni kurtarma kodları alırsın. Önce yukarıdan mevcut kodunla ya da bir kurtarma koduyla yeniden doğrula; bu onay yenilemeyi başlatırken kullanılır.</p>
           {!status.stepUpExpiresAt && <p className="kv-help">Bu oturumda geçerli bir yeniden doğrulama yok.</p>}
