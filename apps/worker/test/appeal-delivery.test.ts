@@ -22,7 +22,10 @@ describe("V1 ret bildirimi: 30 günlük gerçek teslim kanıtı (PostgreSQL)", {
 
   test("ret olayı değil gerçek kullanıcı bildirimi yazılınca saat başlar, retry tarihi sıfırlamaz ve bildirim temizliği kanıtı silmez", async () => {
     const [owner, moderator, other] = await f.users(3);
-    const poll = await f.poll({ categoryId: await f.category(), authorId: owner! });
+    const poll = await f.poll({
+      categoryId: await f.category(), authorId: owner!,
+      opensAt: new Date("2026-10-01T09:00:00.000Z"),
+    });
     const rejection = await db.moderationAction.create({
       data: {
         actorId: moderator!, action: "REMOVE", pollId: poll.id,
