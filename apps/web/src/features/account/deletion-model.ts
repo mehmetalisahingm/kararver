@@ -62,7 +62,7 @@ export function deletionError(cause: unknown): { message: string; retryable: boo
 export function deletionStatusLine(request: NonNullable<SelfDeletionPreviewView["request"]>): string {
   switch (request.status) {
     case "OPEN": return "Silme talebin açık: hesabının e-postasına gönderilen bağlantıyla onaylamadıkça hesabın silinmez.";
-    case "COMPLETED": return "Hesabın silindi.";
+    case "COMPLETED": return "Hesabın kullanıma kapatıldı. Dosya ve yedek temizliği ayrı aşamalardır.";
     case "CANCELLED": return "Son silme talebin iptal edildi.";
     case "EXPIRED": return "Son silme talebinin süresi doldu; hesabın silinmedi.";
     default: return "Son silme talebi tamamlanamadı; hesabın silinmedi.";
