@@ -40,7 +40,7 @@ test("18+ registration blocks missing, false and malformed attestations before a
     assert.ok(await h.store.findUserByEmail(account.email));
 
     const repeat = await post({ ...account, adultConfirmed: true });
-    assert.equal(repeat.statusCode, 202, repeat.body, "existing email response stays indistinguishable");
+    assert.equal(repeat.statusCode, 202, "existing email response stays indistinguishable: " + repeat.body);
   } finally {
     await h.close();
   }
