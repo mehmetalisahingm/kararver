@@ -224,6 +224,40 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { id: true },
     });
+    // No in-app delivery proof or user filing: even the real ADMIN must not
+    // freely reinstate the rejection with a forged appeal claim.
+    const noDeliveryRead = await send("GET", `/me/moderation-appeals/${rejectedAction.id}`,
+      undefined, owner.cookie);
+    assert.equal(noDeliveryRead.statusCode, 404, noDeliveryRead.body);
+    const inboxDeliveredAt = h.clock.now;
+    const appealWindow = await db.moderationAppealWindow.create({
+      data: {
+        rejectionActionId: rejectedAction.id, recipientId: owner.id,
+        notificationId: randomUUID(), deliveredAt: inboxDeliveredAt,
+        deadlineAt: new Date(inboxDeliveredAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const otherViewer = await login(await registerVerified());
+    const forbiddenRead = await send("GET", `/me/moderation-appeals/${rejectedAction.id}`, undefined, otherViewer.cookie);
+    assert.equal(forbiddenRead.statusCode, 404, forbiddenRead.body);
+    const beforeFiling = await send("GET", `/me/moderation-appeals/${rejectedAction.id}`, undefined, owner.cookie);
+    assert.equal(beforeFiling.statusCode, 200, beforeFiling.body);
+    assert.equal(beforeFiling.json().data.status, "OPEN");
+    assert.equal(beforeFiling.json().data.deadlineAt, appealWindow.deadlineAt.toISOString());
+
+    const submittedAppeal = await send("POST", `/me/moderation-appeals/${rejectedAction.id}`,
+      { reason: "Yanlış ret kararı verildi; genel ulaşım hizmeti değerlendirmesi yapıyorum." }, owner.cookie);
+    assert.equal(submittedAppeal.statusCode, 200, submittedAppeal.body);
+    assert.equal(submittedAppeal.json().data.status, "FILED");
+    assert.equal(submittedAppeal.json().data.filedAt, inboxDeliveredAt.toISOString());
+    const duplicateFiling = await send("POST", `/me/moderation-appeals/${rejectedAction.id}`,
+      { reason: "Tekrarlanan ve asıl gerekçeyi değiştirmemesi gereken başvuru." }, owner.cookie);
+    assert.equal(duplicateFiling.statusCode, 200, duplicateFiling.body);
+    assert.equal(duplicateFiling.json().data.filedAt, inboxDeliveredAt.toISOString());
+    assert.equal((await db.moderationAppealWindow.findUniqueOrThrow({
+      where: { rejectionActionId: rejectedAction.id },
+    })).filedReason, "Yanlış ret kararı verildi; genel ulaşım hizmeti değerlendirmesi yapıyorum.");
+
     const preview = await send("GET", `/admin/moderation/actions/${rejectedAction.id}/undo/preview`,
       undefined, reviewer.cookie);
     assert.equal(preview.statusCode, 200, preview.body);
