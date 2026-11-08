@@ -153,6 +153,7 @@ model User {
   settingsEdited           SystemSetting[]          @relation("SystemSettingEditor")
   // Utku — admin.prisma (KV-21)
   notifications            Notification[]           @relation("NotificationRecipient")
+  appealNoticeReceipts     ModerationAppealNoticeReceipt[]
   notificationsCaused      Notification[]           @relation("NotificationActor")
   // Faruk — admin.prisma (KV-34, Utku'dan geçici devir)
   notificationOptOuts      NotificationTypeOptOut[]
