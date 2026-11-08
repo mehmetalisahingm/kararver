@@ -114,7 +114,7 @@ export type PollRecord = {
 
 export type NewPoll = {
   /** UNDER_REVIEW is private until a human authorized RESTORE; ACTIVE is public. */
-  status: "ACTIVE" | "UNDER_REVIEW";
+  status?: "ACTIVE" | "UNDER_REVIEW";
   kind: PollKind;
   authorId: string;
   publicId: string;
