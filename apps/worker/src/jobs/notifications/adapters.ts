@@ -53,6 +53,7 @@ function draftOf(
     pollId: x.pollId,
     data: x.data,
     dedupeKey: x.dedupeKey ?? `notifications:${naturalKey(event) ?? event.id}`,
+    moderationActionId: event.type === "moderation.applied" ? event.payload.moderationActionId : undefined,
     createdAt: new Date(event.occurredAt),
   };
 }
