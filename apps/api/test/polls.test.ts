@@ -127,6 +127,7 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
   test("API V1 kişisel siyasi/dini/sağlık anketini puan kesmeden ve satır yazmadan reddeder", async () => {
     const owner = await signUp();
     const before = await db.poll.count({ where: { authorId: owner.id } });
+    const beforeCharges = await db.pointLedgerEntry.count({ where: { userId: owner.id, reason: "PUBLISH" } });
     const cases: Record<string, unknown>[] = [
       { title: "Hangi partiye oy verdin?" },
       { title: "Dinin nedir, hangi dine inanıyorsun?" },
@@ -142,6 +143,8 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
       assert.equal(JSON.stringify(response.json()).includes("partiye oy verdin"), false);
       assert.equal(await db.poll.count({ where: { authorId: owner.id } }), before,
         "reddedilen içerik hiçbir anket veya seçeneğe dönüşmemeli");
+      assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, reason: "PUBLISH" } }), beforeCharges,
+        "yasaklanan yayın puan düşürmemeli");
     }
   });
 
