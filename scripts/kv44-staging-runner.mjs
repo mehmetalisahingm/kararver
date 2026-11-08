@@ -52,7 +52,7 @@ export const MATRIX = Object.freeze([
   { id: "ACC.register", r: "R0", role: "initiator, media-operator", sev: "P1", expect: "202; 429 → BLOCKED-ratelimit (5/IP/h)", ref: "docs/KV-19_RATE_LIMIT.md:21", needle: "registerPerIpHour", rateLimit: true },
   { id: "ACC.owned", r: "R0", role: "initiator, media-operator", sev: "P0", expect: "yeni hesap yalnız USER", ref: "packages/contracts/src/domains/admin.ts:566", needle: 'id: "admin.users.list"' },
   { id: "ACC.login", r: "R0", role: "initiator, media-operator", sev: "P1", expect: "200, aynı id", ref: "packages/contracts/src/domains/auth.ts:87", needle: 'id: "auth.login"' },
-  { id: "R2.fixture.poll", r: "R2", role: "initiator", sev: "P1", expect: "201", ref: "packages/contracts/src/domains/polls.ts:187", needle: 'id: "polls.create"', rateLimit: true },
+  { id: "R2.fixture.poll", r: "R2", role: "initiator", sev: "P1", expect: "201", ref: "packages/contracts/src/domains/polls.ts:193", needle: 'id: "polls.create"', rateLimit: true },
   { id: "R2.fixture.comments", r: "R2", role: "initiator", sev: "P1", expect: `${COMMENT_COUNT}× 201 (429 → Retry-After kadar bekle)`, ref: "packages/contracts/src/domains/comments.ts:74", needle: 'id: "comments.create"', rateLimit: true },
   { id: "R2.preview", r: "R2", role: "initiator", sev: "P1", expect: `willChange=${COMMENT_COUNT}, approval.required=true`, ref: "apps/api/src/modules/moderation/bulk-routes.ts:63", needle: "approval: { required" },
   { id: "R2.open.expiring", r: "R2", role: "initiator", sev: "P0", expect: "202 PENDING (T0)", ref: "apps/api/src/modules/moderation/bulk-routes.ts:123", needle: "status: 202" },
