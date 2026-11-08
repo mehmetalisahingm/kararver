@@ -83,6 +83,9 @@ describe("14-day appeal case DB safety and moderator queue", { skip: url ? false
     assert.equal(saved.outcome, "ACCEPTED");
     assert.equal(saved.resolutionDueAt.getTime(), row.resolutionDueAt.getTime(),
       "late human decision does not mutate target or silently reject");
+    await assert.rejects(() => db.moderationAppealCase.update({
+      where: { id: row.id }, data: { status: "OPEN", outcome: null, resolvedAt: null, resolvedById: null },
+    }), /IMMUTABLE_APPEAL_RESOLUTION|Prisma/i);
     assert.equal(await db.moderationAppealCase.count({ where: { status: "OPEN", resolutionDueAt: { lt: new Date("2100-01-01") } } }), 0);
   });
 });
