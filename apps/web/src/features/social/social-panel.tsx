@@ -88,8 +88,13 @@ export function SocialPanel({ poll }: { poll: Poll }) {
     };
   }, [client, poll.id, user?.id, attempt]);
   useEffect(() => {
-    if (deleting) dialog.current?.showModal();
-    else dialog.current?.close();
+    const element = dialog.current;
+    if (!element) return;
+    if (deleting && !element.open) element.showModal();
+    if (!deleting && element.open) {
+      element.close();
+      (deleteTrigger.current?.isConnected ? deleteTrigger.current : heading.current)?.focus();
+    }
   }, [deleting]);
   useEffect(() => {
     if (!data || !window.location.hash.startsWith("#yorum-")) return;
@@ -216,7 +221,6 @@ export function SocialPanel({ poll }: { poll: Poll }) {
   }
   function cancelDelete() {
     setDeleting(null);
-    deleteTrigger.current?.focus();
   }
   async function confirmDelete() {
     if (!data || !deleting) return;
@@ -566,7 +570,7 @@ export function SocialPanel({ poll }: { poll: Poll }) {
         className="kv-dialog"
         aria-labelledby="delete-title"
         aria-describedby="delete-description"
-        onCancel={cancelDelete}
+        onCancel={event => { event.preventDefault(); cancelDelete(); }}
         onClose={() => setDeleting(null)}
       >
         <div className="screen-stack">

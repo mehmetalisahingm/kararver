@@ -148,6 +148,11 @@ test("post/comment reaction rollback, one-level replies, edit and delete failure
   const edited = page
     .locator(".social-comment")
     .filter({ hasText: "Uzun bir test sürüşü yap." });
+  // A pointer click need not focus its invoker before the modal opens.
+  await page.locator("#main").focus();
+  await edited.getByRole("button", { name: "Sil", exact: true }).evaluate(button => {
+    button.addEventListener("mousedown", event => event.preventDefault());
+  });
   await edited.getByRole("button", { name: "Sil", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "Yorumu silmek istiyor musun?" }),

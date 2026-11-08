@@ -90,6 +90,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const [gate, setGate] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
+  const pointerTrigger = useRef<HTMLElement | null>(null);
   const pathname = usePathname();
   useEffect(() => {
     try {
@@ -109,8 +110,13 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const previousPath = useRef(pathname);
   useEffect(() => {
-    if (gate) dialog.current?.showModal();
-    else dialog.current?.close();
+    const element = dialog.current;
+    if (!element) return;
+    if (gate && !element.open) element.showModal();
+    if (!gate && element.open) {
+      element.close();
+      trigger.current?.focus();
+    }
   }, [gate]);
   useEffect(() => {
     if (previousPath.current !== pathname) {
@@ -169,14 +175,14 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const setReturnTo = (path: string) => setReturn(safeReturnTo(path));
   function requireUser(path: string) {
     if (client.current()) return true;
-    trigger.current = document.activeElement as HTMLElement;
+    // WebKit pointer clicks may leave focus on the page instead of the invoker.
+    trigger.current = pointerTrigger.current ?? document.activeElement as HTMLElement;
     setReturnTo(path);
     setGate(true);
     return false;
   }
   function closeGate() {
     setGate(false);
-    trigger.current?.focus();
   }
   const context = {
     demo,
@@ -203,8 +209,14 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   return (
     <ProductContext.Provider value={context}>
       <SceneMotionProvider>
-      <div className="product" data-theme={theme} data-experience={pathname === "/" ? "gravity" : pathname === "/kesfet" || pathname === "/topluluklar" ? "mission" : "studio"} data-area={pathname.startsWith("/admin") ? "admin" : pathname === "/olustur" ? "compose" : pathname === "/bildirimler" ? "notifications" : undefined}>
-        <a className="kv-skip" href="#main">
+      <div className="product" data-theme={theme} data-experience={pathname === "/" ? "gravity" : pathname === "/kesfet" || pathname === "/topluluklar" ? "mission" : "studio"} data-area={pathname.startsWith("/admin") ? "admin" : pathname === "/olustur" ? "compose" : pathname === "/bildirimler" ? "notifications" : undefined}
+        onClickCapture={event => {
+          const control = event.target instanceof Element ? event.target.closest("button,a,input,textarea,select") : null;
+          pointerTrigger.current = control instanceof HTMLElement ? control : null;
+        }}
+        onKeyDownCapture={() => { pointerTrigger.current = null; }}
+      >
+        <a className="kv-skip" href="#main" tabIndex={0}>
           İçeriğe geç
         </a>
         <header className="app-header">
@@ -396,7 +408,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
           className="kv-dialog"
           aria-labelledby="gate-title"
           aria-describedby="gate-description"
-          onCancel={closeGate}
+          onCancel={event => { event.preventDefault(); closeGate(); }}
           onClose={() => {
             setGate(false);
           }}
