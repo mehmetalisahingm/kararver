@@ -1,5 +1,26 @@
 import { test, expect } from "@playwright/test";
 import { api, sample } from "./api";
+import AxeBuilder from "@axe-core/playwright";
+
+test("18+ declaration is keyboard operable, labeled and readable at 2x CSS zoom", async ({ page }) => {
+  await api(page);
+  await page.goto("/kayit?returnTo=%2Fhesap");
+  const checkbox = page.getByRole("checkbox", { name: /18 yaşımı doldurduğumu beyan ediyorum/ });
+  const submit = page.getByRole("button", { name: "Hesap oluştur", exact: true });
+  await expect(checkbox).toBeEnabled();
+  await expect(checkbox).not.toBeChecked();
+  await checkbox.focus();
+  await page.keyboard.press("Space");
+  await expect(checkbox).toBeChecked();
+  await expect(submit).toBeEnabled();
+  await page.keyboard.press("Space");
+  await expect(checkbox).not.toBeChecked();
+  await expect(submit).toBeDisabled();
+  await expect(page.locator("main").getByRole("link", { name: "Mevcut hesabımla giriş yap", exact: true })).toHaveAttribute("href", /returnTo=%2Fhesap/);
+  await page.evaluate(() => { document.documentElement.style.zoom = "2"; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect((await new AxeBuilder({ page }).include("main").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
+});
 
 test("register requires an explicit 18+ declaration and transmits it to API", async ({ page }) => {
   const mock = await api(page);

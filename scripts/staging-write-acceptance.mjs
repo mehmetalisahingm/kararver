@@ -47,7 +47,7 @@ export async function checkStagingWrites({ email, password, expectedSha, apply }
     check("operator.super-admin", signed.data?.data?.roles?.includes("SUPER_ADMIN"), signed.response);
     for (const suffix of ["author", "voter"]) {
       const username = `${marker}_${suffix}`, email = `${username}@example.test`, password = randomBytes(24).toString("base64url");
-      const registered = await req("/auth/register", { method: "POST", cookie: "", body: { username, email, password, displayName: "İzole güvenlik kontrolü" } });
+      const registered = await req("/auth/register", { method: "POST", cookie: "", body: { username, email, password, displayName: "İzole güvenlik kontrolü", adultConfirmed: true } });
       check(`fixture.${suffix}.register`, registered.response.status === 202, registered.response);
       const found = await req(`/admin/users?q=${encodeURIComponent(username)}`);
       const record = found.data?.data?.find(a => a.username === username);

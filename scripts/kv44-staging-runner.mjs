@@ -289,7 +289,7 @@ const randomPassword = () => randomBytes(24).toString("base64url");
 /** Synthetic USER: created once, right after R0. The password stays in this process memory only. */
 async function createSyntheticUser(ctx, op, marker, suffix, state) {
   const username = `${marker}_${suffix}`, email = `${username}@example.test`, password = randomPassword();
-  const reg = await ctx.call("/auth/register", { method: "POST", body: { username, email, password, displayName: "İzole KV44 güvenlik kontrolü" } });
+  const reg = await ctx.call("/auth/register", { method: "POST", body: { username, email, password, displayName: "İzole KV44 güvenlik kontrolü", adultConfirmed: true } });
   ctx.expect("ACC.register", reg, reg.status === 202, { note: suffix });
   const found = await ctx.call(`/admin/users?q=${encodeURIComponent(username)}`, { cookie: op.cookie });
   const user = found.data?.data?.find(u => u.username === username);

@@ -9,6 +9,7 @@ test("real auth HTTP: registration, fragment verification, cookie reload, reset 
   await page.getByLabel("Kullanıcı adı",{exact:true}).fill("umit_browser");
   await page.getByLabel("E-posta",{exact:true}).fill("umit.browser@example.test");
   await page.getByLabel("Şifre",{exact:true}).fill("Browser-password-123");
+  await page.getByRole("checkbox", { name: /18 yaşımı doldurduğumu beyan ediyorum/ }).check();
   await page.getByRole("button",{name:"Hesap oluştur",exact:true}).click();
   await expect(page.getByRole("button",{name:"Çıkış",exact:true})).toBeVisible();
   await expect(page.locator(".balance")).toContainText("20");
@@ -61,6 +62,7 @@ test("duplicate registration cannot claim success or replace the existing passwo
   await page.getByLabel("Kullanıcı adı",{exact:true}).fill(id);
   await page.getByLabel("E-posta",{exact:true}).fill(email);
   await page.getByLabel("Şifre",{exact:true}).fill(original);
+  await page.getByRole("checkbox", { name: /18 yaşımı doldurduğumu beyan ediyorum/ }).check();
   await page.getByRole("button",{name:"Hesap oluştur",exact:true}).click();
   await expect(page.getByRole("button",{name:"Çıkış",exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Çıkış",exact:true}).click();
@@ -69,6 +71,7 @@ test("duplicate registration cannot claim success or replace the existing passwo
   await page.getByLabel("Kullanıcı adı",{exact:true}).fill(`${id}_new`);
   await page.getByLabel("E-posta",{exact:true}).fill(email);
   await page.getByLabel("Şifre",{exact:true}).fill("Replacement-browser-password-123");
+  await page.getByRole("checkbox", { name: /18 yaşımı doldurduğumu beyan ediyorum/ }).check();
   await page.getByRole("button",{name:"Hesap oluştur",exact:true}).click();
   await expect(page.locator("main").getByRole("alert").filter({hasText:"Yeniden kayıt mevcut şifreni değiştirmez"})).toBeVisible();
   await expect(page.getByLabel("Şifre",{exact:true})).toHaveValue("");
