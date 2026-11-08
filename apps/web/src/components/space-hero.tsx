@@ -2,6 +2,7 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSceneMotion, useScrollScene } from "./scene-motion";
+import { OrbitalJourney } from "./orbital-journey";
 
 function CabinHero() {
   const frame = useRef<HTMLIFrameElement>(null);
@@ -46,4 +47,4 @@ function OriginalHero() {
     </div>
   </section>;
 }
-export function SpaceHero() { return <><OriginalHero /><CabinHero /></>; }
+export function SpaceHero() { return <><OriginalHero /><CabinHero /><OrbitalJourney /></>; }
