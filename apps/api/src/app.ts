@@ -317,6 +317,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     webUrl: config.webUrl,
     mediaPublicBaseUrl: config.mediaPublicBaseUrl,
     isRegistrationEnabled,
+    adultDeclarationRequired: deps.adultDeclarationRequired ?? true,
     loginGuard: limiter?.login,
     initialGrant: settings ? async () => (await settings.pointSettings()).initialGrant : undefined,
   });
