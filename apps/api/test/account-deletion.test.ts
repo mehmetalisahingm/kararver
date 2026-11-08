@@ -275,7 +275,8 @@ describe("kendi hesabını silme (postgres)", { skip: backend ? false : "TEST_DA
     const erasure = await db.accountErasure.findUniqueOrThrow({ where: { userId: u.id } });
     assert.equal(erasure.requestedById, u.id);
     assert.equal((await rows(u.id)).find((r) => r.id === live.id)!.status, "COMPLETED");
-    assert.match(mailsTo(u.email).at(-1)!.subject, /silindi/);
+    assert.match(mailsTo(u.email).at(-1)!.subject, /silme talebin işlendi/);
+    assert.match(mailsTo(u.email).at(-1)!.text, /Depolanan dosyaların temizliği/);
     assert.equal(await db.user.count({ where: { OR: [{ email: u.email }, { username: u.username }] } }), 0);
     assert.equal((await audits(u.id, "account.deletion.confirm", "apply")).length, 1);
     assert.equal((await audits(u.id, "account.deletion.manage", "request")).length >= 1, true);
