@@ -7,6 +7,8 @@ test("first guest enters the scroll experience and returning guests browse witho
   await page.goto("/");
   await expect(page.getByRole("heading",{name:"Bir fikre kapıl."})).toBeVisible();
   await page.getByRole("link",{name:/Aşağı in/}).click();
+  await expect(page).toHaveURL(/#cabin-stage$/);
+  await page.getByRole("link", {name:/Keşfetmeye devam et/}).click();
   await expect(page).toHaveURL(/#discovery-stage$/);
   await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
   await page.goto("/");
@@ -75,6 +77,10 @@ test("existing interests are preserved instead of being silently overwritten",as
   });
 
   await page.addInitScript(({categoryId})=>{
+    // Run this fixture only on the first document: auth redirects may reload the page.
+    // Re-seeding on every navigation would resurrect a draft cleared after a successful save.
+    if (sessionStorage.getItem("kv-test-welcome-seeded") === "1") return;
+    sessionStorage.setItem("kv-test-welcome-seeded", "1");
     localStorage.setItem("kv-welcome-v1","1");
     localStorage.setItem("kv-welcome-draft-v1",JSON.stringify({
       version:1,
@@ -118,6 +124,10 @@ test("post-login interests API failure keeps draft and allows retry without logg
     await r.fulfill({json: {data: {categoryIds: [categoryId]}}});
   });
   await page.addInitScript(({categoryId}) => {
+    // Run this fixture only on the first document: auth redirects may reload the page.
+    // Re-seeding on every navigation would resurrect a draft cleared after a successful save.
+    if (sessionStorage.getItem("kv-test-welcome-seeded") === "1") return;
+    sessionStorage.setItem("kv-test-welcome-seeded", "1");
     localStorage.setItem("kv-welcome-v1", "1");
     localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({
       version: 1, categoryIds: [categoryId], demoChoice: "wait", returnTo: "/",
@@ -157,6 +167,10 @@ test("401 during post-login interest save returns to login and keeps draft for a
     await r.fulfill({json: {data: {categoryIds: [categoryId]}}});
   });
   await page.addInitScript(({categoryId}) => {
+    // Run this fixture only on the first document: auth redirects may reload the page.
+    // Re-seeding on every navigation would resurrect a draft cleared after a successful save.
+    if (sessionStorage.getItem("kv-test-welcome-seeded") === "1") return;
+    sessionStorage.setItem("kv-test-welcome-seeded", "1");
     localStorage.setItem("kv-welcome-v1", "1");
     localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({
       version: 1, categoryIds: [categoryId], demoChoice: "wait", returnTo: "/",
@@ -195,6 +209,10 @@ test("registration confirms login and retains post-signup interests retry after 
     return writes === 1 ? r.fulfill({status:503,json:failure()}) : r.fulfill({json:{data:{categoryIds:[categoryId]}}});
   });
   await page.addInitScript(({categoryId}) => {
+    // Run this fixture only on the first document: auth redirects may reload the page.
+    // Re-seeding on every navigation would resurrect a draft cleared after a successful save.
+    if (sessionStorage.getItem("kv-test-welcome-seeded") === "1") return;
+    sessionStorage.setItem("kv-test-welcome-seeded", "1");
     localStorage.setItem("kv-welcome-v1","1");
     localStorage.setItem("kv-welcome-draft-v1",JSON.stringify({version:1,categoryIds:[categoryId],demoChoice:"wait",returnTo:"/"}));
   },{categoryId});
@@ -226,6 +244,10 @@ test("unverified sign-in redirects to email verification without consuming onboa
     return r.fulfill({json: {data: {categoryIds: [categoryId]}}});
   });
   await page.addInitScript(({categoryId}) => {
+    // Run this fixture only on the first document: auth redirects may reload the page.
+    // Re-seeding on every navigation would resurrect a draft cleared after a successful save.
+    if (sessionStorage.getItem("kv-test-welcome-seeded") === "1") return;
+    sessionStorage.setItem("kv-test-welcome-seeded", "1");
     localStorage.setItem("kv-welcome-v1", "1");
     localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({
       version: 1, categoryIds: [categoryId], demoChoice: "wait", returnTo: "/",
