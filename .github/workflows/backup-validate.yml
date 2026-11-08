@@ -39,7 +39,7 @@ jobs:
       - name: Private şablon fail-closed
         run: |
           grep -q 'visibility" != "private"' ops/private-backup-repo/workflows/nightly-backup.yml
-          grep -q 'retention-days: 35' ops/private-backup-repo/workflows/nightly-backup.yml
+          grep -q 'retention-days: 30' ops/private-backup-repo/workflows/nightly-backup.yml
           grep -q "BACKUP_ENCRYPT_MANIFEST: 'true'" ops/private-backup-repo/workflows/nightly-backup.yml
       - uses: actions/setup-node@v4
         with:
