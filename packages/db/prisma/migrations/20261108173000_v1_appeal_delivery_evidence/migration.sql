@@ -18,9 +18,10 @@ CREATE TABLE moderation_appeal_notice_receipts (
 CREATE INDEX moderation_appeal_notice_receipts_recipient_idx
   ON moderation_appeal_notice_receipts(recipient_id, appeal_deadline_at);
 
--- Immutability: no editing a past recipient/delivery timestamp or rewriting a
--- passed deadline. A proper signed correction needs an explicitly audited
--- compensating record and separate owner/legal decision, not UPDATE.
+-- Immutable timestamps during the retention window. DELETE is intentionally
+-- not forbidden forever: only an approved, audited retention/erasure job may
+-- remove records once every timely appeal and legal hold is resolved (#181).
+-- Retention duration must be legally approved before production rollout.
 CREATE OR REPLACE FUNCTION moderation_appeal_notice_receipts_immutable()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -29,7 +30,7 @@ END;
 $$;
 
 CREATE TRIGGER moderation_appeal_notice_receipts_immutable_trigger
-BEFORE UPDATE OR DELETE ON moderation_appeal_notice_receipts
+BEFORE UPDATE ON moderation_appeal_notice_receipts
 FOR EACH ROW EXECUTE FUNCTION moderation_appeal_notice_receipts_immutable();
 
 COMMIT;
