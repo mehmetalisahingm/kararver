@@ -43,12 +43,16 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'INVALID_APPEAL_RECEIPT: the claim must match the recipient and filing window';
   END IF;
-  IF TG_OP = 'UPDATE' AND
-     (NEW.rejection_action_id IS DISTINCT FROM OLD.rejection_action_id OR
-      NEW.appellant_id IS DISTINCT FROM OLD.appellant_id OR
-      NEW.submitted_at IS DISTINCT FROM OLD.submitted_at OR
-      NEW.resolution_due_at IS DISTINCT FROM OLD.resolution_due_at) THEN
-    RAISE EXCEPTION 'IMMUTABLE_APPEAL_FILING: claim identity and deadline cannot be changed';
+  IF TG_OP = 'UPDATE' THEN
+    IF (NEW.rejection_action_id IS DISTINCT FROM OLD.rejection_action_id OR
+        NEW.appellant_id IS DISTINCT FROM OLD.appellant_id OR
+        NEW.submitted_at IS DISTINCT FROM OLD.submitted_at OR
+        NEW.resolution_due_at IS DISTINCT FROM OLD.resolution_due_at) THEN
+      RAISE EXCEPTION 'IMMUTABLE_APPEAL_FILING: claim identity and deadline cannot be changed';
+    END IF;
+    IF OLD.status = 'RESOLVED' THEN
+      RAISE EXCEPTION 'IMMUTABLE_APPEAL_RESOLUTION: resolved claims cannot be reopened or rewritten';
+    END IF;
   END IF;
   RETURN NEW;
 END;
