@@ -299,6 +299,12 @@ export function AuthScreen({
               />
             </Field>
           )}
+          {mode === "register" && !demo && (
+            <label className="kv-check-row">
+              <input type="checkbox" name="adultConfirmed" disabled={!interactive} checked={adultConfirmed} onChange={event => setAdultConfirmed(event.target.checked)} required />
+              <span>18 yaşımı doldurduğumu beyan ediyorum. KararVer'e yalnızca 18 yaş ve üzerindeki kişiler kayıt olabilir.</span>
+            </label>
+          )}
           {demo && ["verify", "reset"].includes(mode) && (
             <Field id="code" label="Demo kodu">
               <input
