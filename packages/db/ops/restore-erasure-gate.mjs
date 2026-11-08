@@ -10,11 +10,11 @@
  * completeness, key custody, media/CDN/backup cleanup and legal exceptions
  * still need separately recorded operational/human acceptance.
  */
-import assert from "node:assert/strict";
 import { createPublicKey, verify } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 export const MAX_JOURNAL_STALENESS_MS = 10 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -95,7 +95,7 @@ function report(errorCode, values) {
   process.stdout.write(JSON.stringify({ gate: "restore-erasure", result: errorCode, ...values }) + "\n");
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === fileURLToPath(new URL(`file://${process.argv[1]}`))) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   try {
     const { values } = parseArgs({ options: {
       ledger: { type: "string" },
