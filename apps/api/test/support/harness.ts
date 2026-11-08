@@ -256,6 +256,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     mailer: { send: async (mail) => void mails.push(mail) },
     now: () => clock.now,
     isRegistrationEnabled: fixed ? async () => registrationEnabled.value : undefined,
+    adultDeclarationRequired: options.adultDeclarationRequired ?? false,
     decisionStore: backend.prisma ? createPrismaDecisionStore(backend.prisma) : undefined,
     profileStore: backend.prisma ? createPrismaProfileStore(backend.prisma) : undefined,
     shareStore: backend.prisma ? createPrismaShareStore(backend.prisma) : undefined,
