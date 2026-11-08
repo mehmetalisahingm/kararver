@@ -332,6 +332,8 @@ describe("yorumlar (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assertError(await get(`/polls/${poll.id}`), 404, "NOT_FOUND");
     assertError(await get(`/polls/${poll.id}/comments`, alice.cookie), 404, "NOT_FOUND");
     assertError(await get(`/comments/${otherComment.id}/replies`, alice.cookie), 404, "NOT_FOUND");
+    assertError(await send("POST", `/polls/${poll.id}/comments`, { body: "Yeniden yazma" }, alice.cookie), 404, "NOT_FOUND");
+    assertError(await send("PATCH", `/comments/${otherComment.id}`, { body: "Yorum güncelleme" }, alice.cookie), 404, "NOT_FOUND");
     assertError(await send("PUT", `/comments/${otherComment.id}/reaction`, { value: "LIKE" }, alice.cookie), 404, "NOT_FOUND");
     assert.equal(await db.comment.count({ where: { id: otherComment.id, body: "Sadece kişisel veri erişimiyle okunabilir yorum" } }), 1,
       "başka kullanıcının yorumu sadece anket sahibi hesabını sildi diye imha edilmez");
