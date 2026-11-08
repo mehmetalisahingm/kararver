@@ -21,6 +21,8 @@ export type AuthDeps = {
   rolesOf?: RolesOf;
   /** Sistem ayarı `registration.enabled` (KV-40, #42). Ayar servisi gelene kadar her zaman açık. */
   isRegistrationEnabled: () => Promise<boolean>;
+  /** New signups must declare 18+. Legacy test fixtures can opt out explicitly. */
+  adultDeclarationRequired: boolean;
   /** points.initialGrant (KV-40); verilmezse resmî varsayılan. */
   initialGrant?: () => Promise<number>;
   /** KV-19 (#21) başarısız giriş sınırı; verilmezse sınır yok (auth-only test düzenekleri). */
