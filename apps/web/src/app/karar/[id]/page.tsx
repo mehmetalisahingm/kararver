@@ -44,7 +44,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   return (
     <>
       <PollDetail id={id} initialPoll={poll ? mapPoll(poll) : undefined} />
-      {poll && <ShareActions routeId={id} />}
+      {(poll || process.env.APP_ENV !== "production") && <ShareActions routeId={id} />}
     </>
   );
 }
