@@ -71,6 +71,11 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
     if (!(await deps.isRegistrationEnabled())) {
       throw new ApiError("FEATURE_DISABLED", "Yeni kayıtlar şu an kapalı.");
     }
+    // Enforce at the API boundary, before hashing, account lookup or creation.
+    // This is an adult self-declaration, NOT verified age or legal consent.
+    if (deps.adultDeclarationRequired && body.adultConfirmed !== true) {
+      throw new ApiError("VALIDATION_ERROR", "KararVer'e kayıt için 18 yaşını doldurmuş olmalısın.", [{ field: "adultConfirmed", code: "adult_declaration_required" }]);
+    }
     const emailNormalized = normalizeEmail(body.email);
     const passwordHash = await hasher.hash(body.password);
     const accepted = { status: 202, body: { data: { status: "VERIFICATION_SENT" } } };
