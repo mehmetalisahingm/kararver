@@ -315,6 +315,8 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal((await summary(owner.cookie)).balance, 20);
     h.clock.advance(-75 * 60 * 60 * 1000);
 
+    // The first submission sets a 75-hour publishing cooldown; test a second, unrelated poll after it expires.
+    h.clock.advance(76 * 60 * 60 * 1000);
     const normal = await send("POST", "/polls", pollBody(), owner.cookie, `normal-${randomUUID()}`);
     assert.equal(normal.statusCode, 201, normal.body);
     assert.equal((await summary(owner.cookie)).balance, 10);
@@ -324,6 +326,7 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(takedown.statusCode, 200, takedown.body);
     assert.equal((await summary(owner.cookie)).balance, 10, "yayın sonrası kaldırmada iade yok");
     assert.equal(await db.pointLedgerEntry.count({ where: { referenceId: normalId, reason: "MODERATION_REFUND" } }), 0);
+    h.clock.advance(-76 * 60 * 60 * 1000);
 
     // Exactly 30 days is still within the filing window. After 30 days +
     // one millisecond, the user's own private endpoint must reject filing;
