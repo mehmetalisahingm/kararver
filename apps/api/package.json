@@ -12,7 +12,8 @@
     "perf:queries": "node perf/query-count.ts",
     "test": "node --test --test-concurrency=1 \"test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json",
-    "admin:bootstrap": "node src/modules/rbac/bootstrap-cli.ts"
+    "admin:bootstrap": "node src/modules/rbac/bootstrap-cli.ts",
+    "content:sensitive-triage": "node src/modules/polls/sensitive-triage-cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1141.0",
