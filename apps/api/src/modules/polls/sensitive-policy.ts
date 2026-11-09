@@ -44,7 +44,7 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
 
 /** Selection of categorical sensitive answers also reveals respondent data. */
 const SENSITIVE_ANSWERS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: RegExp }> = [
-  { category: "political", pattern: /\b(?:ak parti|chp|mhp|iyi parti|dem parti|tip|zafer partisi|yeniden refah)\b/ },
+  { category: "political", pattern: /\b(?:ak parti|chp|mhp|iyi parti|dem parti|turkiye isci partisi|zafer partisi|yeniden refah)\b/ },
   { category: "belief", pattern: /\b(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|deist)\b/ },
   { category: "health", pattern: /\b(?:diyabet|hiv|aids|kanser|depresyon|bipolar|sizofreni|otizm)\b/ },
   { category: "membership", pattern: /\b(?:sendika uyesi|dernek uyesi|vakif uyesi)\b/ },
@@ -71,7 +71,9 @@ export function detectSensitiveSurvey(input: SensitiveInput): SensitiveRisk | nu
   const choices = (input.options ?? []).map(o => normalized(o.label));
   if (choices.length >= 2 && CHOICE_PROMPT.test(question)) {
     for (const rule of SENSITIVE_ANSWERS) {
-      const index = choices.findIndex(c => rule.pattern.test(c));
+      const index = choices.findIndex(c =>
+        rule.pattern.test(c) || (rule.category === "political" && c.trim() === "tip")
+      );
       if (index !== -1) return { field: `options.${index}.label`, category: rule.category };
     }
   }
