@@ -34,6 +34,27 @@ describe("güvenlik alarmı kuralları", () => {
     }
   });
 
+  test("yalnız oturumsuz 401 dalgası panelde kalır; diğer bütün kurallar SUPER_ADMIN'e bildirir", () => {
+    assert.deepEqual(securityAlertRules.filter((r) => r.notify === false).map((r) => r.id), ["admin.unauthenticated.wave"]);
+    assert.notEqual(securityAlertRule("admin.forbidden.burst").notify, false, "403 yetki denemesi bildirilir");
+  });
+
+  test("Mehmet'in onayladığı önem, eşik ve pencereler (3 Kasım 2026)", () => {
+    const approved = {
+      "superadmin.change": ["CRITICAL", 1, 15],
+      "role.change.burst": ["CRITICAL", 3, 15],
+      "anonymize.burst": ["CRITICAL", 3, 60],
+      "sanction.burst": ["HIGH", 20, 15],
+      "account.takeover.burst": ["HIGH", 10, 15],
+      "audit.export.burst": ["HIGH", 3, 60],
+      "emergency.update": ["HIGH", 1, 15],
+      "mfa.lock.wave": ["HIGH", 5, 15],
+      "admin.forbidden.burst": ["HIGH", 10, 15],
+      "admin.unauthenticated.wave": ["HIGH", 100, 15],
+    };
+    assert.deepEqual(Object.fromEntries(securityAlertRules.map((r) => [r.id, [r.severity, r.threshold, r.windowMinutes]])), approved);
+  });
+
   test("olay yalnız sistemden, bildirim kapatılamaz ve kişisel veri taşımaz", () => {
     const def = eventCatalog["security.alert.opened"];
     assert.equal(def.actor, "system");

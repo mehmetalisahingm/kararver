@@ -2,6 +2,7 @@
 // `unknown`/`null` döner, asla 0 ya da "ok" değil (fail-safe gösterim). Eşikler KV-49 izleme tablosuyla uyumludur.
 import fs from "node:fs";
 import type { LoginLimits, OpsProbe, QueueRow } from "./probe.ts";
+import { securityAlertView } from "../security-alerts/routes.ts";
 import type { HttpSnapshot, OpsTelemetry, SecuritySnapshot } from "./telemetry.ts";
 
 export type Health = "ok" | "degraded" | "down" | "unknown";
@@ -128,19 +129,7 @@ export async function buildOpsStatus(deps: OpsStatusDeps) {
       lockedLogins: signals.ok ? signals.value.lockedLogins : null,
       adminActions24h: signals.ok ? signals.value.adminActions24h : null,
       // #185: açık ve son 24 saatte kapanan alarmlar. Avatar gösterilmez (ops görünümü).
-      alerts: alerts.ok
-        ? alerts.value.map((a) => ({
-            id: a.id,
-            rule: a.rule,
-            severity: a.severity,
-            status: a.status,
-            actor: a.actor ? { ...a.actor, avatarUrl: null } : null,
-            peakCount: a.peakCount,
-            openedAt: a.openedAt.toISOString(),
-            lastSeenAt: a.lastSeenAt.toISOString(),
-            resolvedAt: a.resolvedAt ? a.resolvedAt.toISOString() : null,
-          }))
-        : null,
+      alerts: alerts.ok ? alerts.value.map(securityAlertView) : null,
     },
     // Son yedek `db:backup` kaydından (ops_backup_runs); tatbikat kanıtı KV-48'den.
     backup: {
