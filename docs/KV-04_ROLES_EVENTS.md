@@ -71,12 +71,12 @@ route("admin.reports.resolve", async ({ params, authorize }) => {
 
 ### 1.3 İşlem kataloğu
 
-109 endpoint'in her biri tam olarak bir işleme bağlıdır. Eşlemesi olmayan endpoint, registry'de olmayan eşleme, kullanılmayan işlem veya endpoint `auth` seviyesiyle uyuşmayan kural testte kırılır.
+111 endpoint'in her biri tam olarak bir işleme bağlıdır. Eşlemesi olmayan endpoint, registry'de olmayan eşleme, kullanılmayan işlem veya endpoint `auth` seviyesiyle uyuşmayan kural testte kırılır.
 
 | Seviye | İşlemler |
 |---|---|
 | public | `account.register` · `account.login` · `account.verifyEmail` · `account.recoverPassword` · `account.emailChange.confirm` · `account.deletion.confirm` · `content.read` · `poll.share` |
-| user | `session.logout` · `account.deletion.manage` · `privacy.export.download` · `account.resendVerification` · `account.read` · `account.update` · `account.mfa` · `reaction.set` · `bookmark.set` · `bookmark.read` · `follow.set` · `interests.read` · `interests.set` · `points.read` · `report.create` · `community.join` · `community.leave` · `community.request.create` · `community.request.read` · `notification.read` · `notification.update` |
+| user | `session.logout` · `account.deletion.manage` · `privacy.export.download` · `account.resendVerification` · `account.read` · `account.update` · `account.mfa` · `reaction.set` · `bookmark.set` · `bookmark.read` · `follow.set` · `interests.read` · `interests.set` · `points.read` · `report.create` · `community.join` · `community.leave` · `community.request.create` · `community.request.read` · `notification.read` · `notification.update` · `moderation.appeal.self` |
 | verified | `account.emailChange.manage` · `poll.create` (kısıt: POSTING) · `vote.cast` (kural: selfVote) · `comment.create` (kısıt: COMMENTS) · `media.upload` (kısıt: POSTING, avatar hariç) |
 | owner | `community.owner.release` (kapsam: kendi topluluğu) · `poll.update` (kısıt: POSTING) · `poll.close` · `poll.delete` · `poll.addendum.create` (kısıt: POSTING) · `comment.update` (kısıt: COMMENTS) · `comment.delete` · `decision.set` (kısıt: POSTING) · `media.complete` (kısıt: POSTING, avatar hariç) · `media.read` |
 | moderator | `report.queue.read` (kapsam: queue) · `report.resolve` (kapsam: community) · `moderation.poll.apply` (kapsam: community) · `moderation.comment.apply` (kapsam: community) · `moderation.content.search` (kapsam: queue) · `moderation.bulk.cancel` · `moderation.content.history` (kapsam: community) · `moderation.poll.move` (kapsam: community) · `moderation.user.warn` (kapsam: community, kural: sanctionTarget) · `media.queue.read` (kapsam: queue) · `media.review` (kapsam: community) |
