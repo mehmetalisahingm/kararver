@@ -65,7 +65,7 @@ describe("izole kopyada arındırma (postgres)", { skip: base === null ? "TEST_D
     opened.push({ name, db });
     for (const u of [owner, real, generic, fake]) {
       await db.$executeRaw`INSERT INTO users (id, email, email_normalized, username, username_normalized, display_name, bio, password_hash, updated_at)
-        VALUES (${u.id}::uuid, ${u.email}, ${u.email.toLowerCase()}, ${u.username}, ${u.username}, ${u.display}, ${"bio " + u.display}, '$argon2id$x', now())`;
+        VALUES (${u.id}::uuid, ${u.email}, ${u.email.toLowerCase()}, ${u.username}, ${u.username}, ${u.display}, ${"bio " + u.display + (u.id === owner.id ? "; üçüncü kişi: " + third : "")}, '$argon2id$x', now())`;
       await db.$executeRaw`INSERT INTO sessions (id, user_id, token_hash, expires_at, ip_address, user_agent)
         VALUES (${randomUUID()}::uuid, ${u.id}::uuid, ${randomUUID().replaceAll("-", "").padEnd(64, "0")}, now() + interval '1 day', '203.0.113.7', 'Mozilla/5.0')`;
     }
@@ -143,6 +143,9 @@ describe("izole kopyada arındırma (postgres)", { skip: base === null ? "TEST_D
     const kept = u.find((x) => x.id === owner.id)!;
     assert.equal(kept.email, owner.email, "SUPER_ADMIN kimliği korunur");
     assert.equal(kept.password_hash, "$argon2id$x", "SUPER_ADMIN parolası korunur (giriş yapabilir)");
+    const [ownerBio] = await db.$queryRaw<{ bio: string | null }[]>`SELECT bio FROM users WHERE id = ${owner.id}::uuid`;
+    assert.ok(ownerBio?.bio?.includes("redacted@example.test"), "korunan rol sahibinin bio alanındaki üçüncü kişi e-postası da arındırılmalı");
+    assert.ok(!ownerBio?.bio?.includes(third), "korunan hesap bio'sunda üçüncü kişi e-postası kalmamalı");
     assert.equal(u.find((x) => x.id === real.id)!.password_hash, "!sanitized");
     // JSON anahtarı olarak bilerek bırakılan "caglaisik" hariç (anahtarlar yapısaldır, değiştirilmez).
     const text = (await dump(db)).toLowerCase().replaceAll('"caglaisik":', "");
