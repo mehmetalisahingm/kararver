@@ -49,7 +49,7 @@ const SENSITIVE_ANSWERS: ReadonlyArray<{ category: SensitiveRisk["category"]; pa
   { category: "health", pattern: /\b(?:diyabet|hiv|aids|kanser|depresyon|bipolar|sizofreni|otizm)\b/ },
   { category: "membership", pattern: /\b(?:sendika uyesi|dernek uyesi|vakif uyesi)\b/ },
 ];
-const CHOICE_PROMPT = /\b(?:hangi|hangisi|hangisisin|hangisiniz|kime|neye|oyun|tercihin|sizin|senin|misin|misiniz|kendini|hangi gruptasin|hangi gruptasiniz)\b/;
+const CHOICE_PROMPT = /\b(?:hangi|hangisi|hangisini|hangisisin|hangisiniz|kime|neye|oyun|tercihin|sizin|senin|misin|misiniz|kendini|hangi gruptasin|hangi gruptasiniz)\b/;
 
 export function detectSensitiveSurvey(input: SensitiveInput): SensitiveRisk | null {
   const fields: Array<[string, string | undefined | null]> = [
