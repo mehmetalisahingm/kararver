@@ -121,6 +121,12 @@ export const PollDetail = z.strictObject({
   canonicalPath: z.string().startsWith("/karar/"),
 });
 
+/** Only the submitting account receives this receipt. It is not a public poll DTO. */
+export const PendingPollReceipt = z.strictObject({
+  id: Id,
+  status: z.literal("UNDER_REVIEW"),
+});
+
 // ─── İstekler ─────────────────────────────────────────────────
 
 const Title = z.string().trim().min(10).max(200);
@@ -196,7 +202,7 @@ export const pollEndpoints = [
     unblocks: ["#12", "#66", "#67", "#15", "#22"],
     availability: { status: "ready" },
     request: { body: CreatePollBody },
-    responses: { 201: dataOf(PollDetail) },
+    responses: { 201: dataOf(PollDetail), 202: dataOf(PendingPollReceipt) },
     errors: [
       "INSUFFICIENT_POINTS",
       "PUBLISH_COOLDOWN",
@@ -209,7 +215,7 @@ export const pollEndpoints = [
     cache: "private",
     notes: [
       "Yayın ve 10 puanlık harcama aynı transaction'dadır; başarısız yayın puan harcamaz (#67).",
-      "Aynı Idempotency-Key + aynı gövde: ilk sonucun aynısı (201) döner, ikinci harcama olmaz. Farklı gövde: 409 IDEMPOTENCY_KEY_REUSED.",
+      "Aynı Idempotency-Key + aynı gövde: ilk 201 (public) veya 202 (inceleme) durum kodu döner; tekrar puan harcanmaz. Farklı gövde: 409 IDEMPOTENCY_KEY_REUSED.",
       "kind=DISCUSSION (#66): seçeneksiz, süresiz tartışma/soru gönderisi; options, results ve resultsVisibility null/boş, closesAt null, hiç kapanmaz. Yayın limitleri ve aynı başlık kuralı iki türde de aynıdır.",
       "Puan harcaması planlı (#67): o gelene kadar iki tür de puansız yayınlanır.",
       "mediaIds: yükleyenin kendi, REJECTED olmayan POLL görselleri; APPROVED olana kadar media dizisinde görünmez.",
