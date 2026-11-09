@@ -117,6 +117,8 @@ export type AppDeps = {
   isRegistrationEnabled?: () => Promise<boolean>;
   /** Defaults true in all deployed environments; only explicit legacy test fixtures may disable. */
   adultDeclarationRequired?: boolean;
+  /** #289 yayın anahtarı; verilmezse config.legacyAdultDeclarationEnforced (env LEGACY_ADULT_DECLARATION_ENFORCED, varsayılan false). */
+  legacyAdultDeclarationEnforced?: boolean;
   /** Verilmezse anket route'ları kaydedilmez (ör. sadece auth'u test eden düzenek). */
   pollStore?: PollStore;
   /** KV-22 public profil/private bookmark store'u; pollStore ile birlikte route'ları açar. */
@@ -267,7 +269,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerSecurity(app, config.allowedOrigins, { hsts: config.session.secure });
 
   const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper, emailVerificationRequired: config.emailVerificationRequired,
-    adultDeclarationRequired: deps.adultDeclarationRequired ?? true };
+    // Eski hesap kısıtı ayrı yayın anahtarına bağlı: web beyan ekranı gelmeden eski hesaplar katılımdan kilitlenmesin.
+    // /me.adultDeclarationRequired yine bildirir; yeni kayıttaki beyan şartı (auth routes) etkilenmez.
+    adultDeclarationRequired: (deps.adultDeclarationRequired ?? true) && (deps.legacyAdultDeclarationEnforced ?? config.legacyAdultDeclarationEnforced) };
   // Ayar kancaları: açık kanca > ayar servisi > güvenli varsayılan.
   const settings = deps.settingsService;
   const pollSettings = deps.pollSettings ?? (settings ? () => settings.pollSettings() : async () => DEFAULT_POLL_SETTINGS);

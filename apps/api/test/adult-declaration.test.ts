@@ -34,7 +34,7 @@ describe("eski hesap 18+ öz beyanı (postgres)", { skip: backend ? false : "TES
 
 
   before(async () => {
-    h = await createHarness(backend!, { adultDeclarationRequired: true });
+    h = await createHarness(backend!, { adultDeclarationRequired: true, legacyAdultDeclarationEnforced: true });
     db = h.prisma!;
     categoryId = (await db.category.create({ data: { slug: `adult-${randomUUID().slice(0, 8)}`, name: "18+ beyan testi" } })).id;
   });
@@ -118,6 +118,38 @@ describe("eski hesap 18+ öz beyanı (postgres)", { skip: backend ? false : "TES
   test("beyan uç noktası oturum ister", async () => {
     const r = await h.app.inject({ method: "POST", url: "/v1/me/adult-declaration", headers: json, payload: JSON.stringify({ adultConfirmed: true }) });
     assert.equal(r.statusCode, 401);
+  });
+});
+
+describe("yayın anahtarı kapalı: eski hesap kilitlenmez ama beyan bekleniyor görünür (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok (CI'da çalışır)" }, () => {
+  test("LEGACY_ADULT_DECLARATION_ENFORCED=false (varsayılan): oy açık, /me beyan ister, yeni kayıt şartı sürer", async () => {
+    const h = await createHarness(backend!, { adultDeclarationRequired: true });
+    try {
+      const db = h.prisma!;
+      const owner = await signUp(h, true);
+      const legacy = await signUp(h, true);
+      await db.user.update({ where: { id: legacy.id }, data: { adultDeclaredAt: null } });
+      const categoryId = (await db.category.create({ data: { slug: `adult-off-${randomUUID().slice(0, 8)}`, name: "18+ anahtar kapalı" } })).id;
+      const poll = await db.poll.create({
+        data: {
+          authorId: owner.id, categoryId, publicId: randomUUID().replaceAll("-", "").slice(0, 12), slug: "anahtar", title: "Anahtar kapalı",
+          closesAt: new Date("2031-01-01T00:00:00Z"), options: { create: [{ position: 0, label: "Evet" }, { position: 1, label: "Hayır" }] },
+        },
+        select: { id: true, options: { select: { id: true }, orderBy: { position: "asc" } } },
+      });
+      const headers = { ...json, cookie: legacy.cookie, "idempotency-key": randomUUID() };
+      const me = await h.app.inject({ method: "GET", url: "/v1/me", headers });
+      assert.equal(me.json().data.adultDeclarationRequired, true, "web beyan ekranı için bekleyen beyan bildirilir");
+      const vote = await h.app.inject({ method: "PUT", url: `/v1/polls/${poll.id}/vote`, headers, payload: JSON.stringify({ optionId: poll.options[0]!.id }) });
+      assert.ok(vote.statusCode === 200 || vote.statusCode === 201, vote.body);
+
+      const nonce = randomUUID().replaceAll("-", "").slice(0, 12);
+      const reg = await h.app.inject({ method: "POST", url: "/v1/auth/register", headers: json,
+        payload: JSON.stringify({ email: `off_${nonce}@example.test`, username: `off_${nonce}`, displayName: "Anahtar", password: "strong-test-password-18" }) });
+      assert.equal(reg.statusCode, 400, "yeni kayıtta beyan şartı yayın anahtarından bağımsızdır");
+    } finally {
+      await h.close();
+    }
   });
 });
 
