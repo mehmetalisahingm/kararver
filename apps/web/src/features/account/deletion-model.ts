@@ -27,7 +27,7 @@ export function describeDeletionLink(link: DeletionLink): { title: string; body:
   if (link.action === "confirm") {
     return {
       title: "Hesabını kalıcı olarak sil",
-      body: "Bu işlem geri alınamaz. Kişisel bilgilerin silinir, paylaşım ve yorum metinlerin kaldırılır, oyların hesabınla bağı koparılır ve bütün oturumların kapanır. Devam etmek için aşağıdaki düğmeye bas.",
+      body: "Bu işlem geri alınamaz. Hesabın kullanıma kapanır; paylaşım ve yorumların yayından kaldırılır ve oturumların sonlandırılır. Dosyaların arka planda temizlenmesi ve yedek/sınırlı hukuki kayıtların ele alınması ayrıca zaman alabilir. Devam etmek için aşağıdaki düğmeye bas.",
       button: "Hesabımı kalıcı olarak sil",
       danger: true,
     };
@@ -41,8 +41,8 @@ export function describeDeletionLink(link: DeletionLink): { title: string; body:
 }
 
 export function deletionResultMessage(kind: "deleted" | "unchanged" | "cancelled"): string {
-  if (kind === "deleted") return "Hesabın kalıcı olarak silindi. Kişisel bilgilerin kaldırıldı ve oturumların kapandı. Bu adrese son bir bildirim gönderdik.";
-  if (kind === "unchanged") return "Hesabın zaten silinmiş.";
+  if (kind === "deleted") return "Hesabına erişim kapatıldı, hesap bilgilerin temizlendi ve paylaşım/yorumların yayından kaldırıldı. Dosyaların depo temizliği arka planda devam edebilir; yedekler ve sınırlı yasal kayıtlar ayrıca ele alınır. E-postana son işlem bildirimini gönderdik.";
+  if (kind === "unchanged") return "Hesabına erişim daha önce kapatılmış; bekleyen dosya ve yedek temizliği ayrıca yürütülür.";
   return "Talep iptal edildi ve hesabındaki bütün oturumlar kapatıldı; hesabın silinmedi. Şifreni değiştirmeni öneririz.";
 }
 
@@ -62,7 +62,7 @@ export function deletionError(cause: unknown): { message: string; retryable: boo
 export function deletionStatusLine(request: NonNullable<SelfDeletionPreviewView["request"]>): string {
   switch (request.status) {
     case "OPEN": return "Silme talebin açık: hesabının e-postasına gönderilen bağlantıyla onaylamadıkça hesabın silinmez.";
-    case "COMPLETED": return "Hesabın silindi.";
+    case "COMPLETED": return "Hesabın kullanıma kapatıldı. Dosya ve yedek temizliği ayrı aşamalardır.";
     case "CANCELLED": return "Son silme talebin iptal edildi.";
     case "EXPIRED": return "Son silme talebinin süresi doldu; hesabın silinmedi.";
     default: return "Son silme talebi tamamlanamadı; hesabın silinmedi.";
