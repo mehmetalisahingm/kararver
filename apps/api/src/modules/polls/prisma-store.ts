@@ -188,8 +188,8 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
   }
 
   /** runIdempotent'in "rejected" sonucu anket işlerinde oluşmaz: ret istisna olarak fırlatılır. */
-  async function idempotent(scope: IdempotencyScope | null, work: (tx: Tx) => Promise<string>): Promise<IdempotentResult> {
-    const result = await runIdempotent(prisma, scope, 201, async (tx) => ({ ok: true as const, value: await work(tx) }));
+  async function idempotent(scope: IdempotencyScope | null, work: (tx: Tx) => Promise<string>, responseStatus: 201 | 202 = 201): Promise<IdempotentResult> {
+    const result = await runIdempotent(prisma, scope, responseStatus, async (tx) => ({ ok: true as const, value: await work(tx) }));
     if (result.kind === "rejected") throw new Error("beklenmeyen rejected sonucu");
     return result;
   }
@@ -292,6 +292,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
           data: {
             publicId: poll.publicId,
             slug: poll.slug,
+            status: poll.status ?? "ACTIVE",
             authorId: poll.authorId,
             categoryId: poll.categoryId,
             communityId: poll.communityId,
@@ -322,7 +323,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
           cost: limits.publishCostPoints,
         });
         return created.id;
-      }),
+      }, poll.status === "UNDER_REVIEW" ? 202 : 201),
 
     async updatePoll(id, patch, editor) {
       const { tagSlugs, options, ...fields } = patch;
