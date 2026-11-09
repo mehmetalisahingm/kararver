@@ -341,6 +341,25 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal(stored.description, "Şarj süresi hakkında genel yorum");
   });
 
+  test("generic RESTORE cannot publish a rejected review without audited appeal", async () => {
+    const owner = await signUp();
+    const reviewer = await signUp();
+    await db.userRole.create({ data: { userId: reviewer.id, role: "ADMIN", grantedById: owner.id } });
+    const submitted = await send("POST", "/polls", pollBody({
+      title: "Siyasi partilerin ulaşım projeleri nasıl değerlendirilmeli?",
+    }), owner.cookie, key());
+    assert.equal(submitted.statusCode, 202, submitted.body);
+    const id: string = submitted.json().data.id;
+    const denied = await send("POST", `/admin/polls/${id}/moderation`,
+      { action: "REMOVE", reason: "Ön incelemeden geçmedi." }, reviewer.cookie);
+    assert.equal(denied.statusCode, 200, denied.body);
+    const bypass = await send("POST", `/admin/polls/${id}/moderation`,
+      { action: "RESTORE", reason: "Kontrolsüz yayınlama denemesi" }, reviewer.cookie);
+    assert.equal(bypass.statusCode, 409, bypass.body);
+    const after = await db.poll.findUniqueOrThrow({ where: { id }, select: { status: true } });
+    assert.equal(after.status, "REMOVED");
+  });
+
   test("düşük riskli sıradan anket doğrudan 201 ve ACTIVE olur", async () => {
     const owner = await signUp();
     const result = await send("POST", "/polls", pollBody({ title: "Telefon batarya ömrünü nasıl buluyorsunuz?" }), owner.cookie, key());
