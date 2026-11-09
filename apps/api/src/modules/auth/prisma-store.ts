@@ -1,5 +1,6 @@
 // AuthStore'un PostgreSQL/Prisma uygulaması. Tablolar: users, sessions, auth_tokens (DATA_MODEL.md).
 import type { PrismaClient } from "@kararver/db";
+import { writeAudit } from "../audit/write.ts";
 import { grantInitialLoginPoints, PUBLISH_COST } from "../points/store.ts";
 import type { AuthStore, NewToken, UserRecord } from "./store.ts";
 
@@ -12,6 +13,7 @@ const userSelect = {
   passwordHash: true,
   status: true,
   emailVerifiedAt: true,
+  adultDeclaredAt: true,
   bio: true,
   createdAt: true,
   deletedAt: true,
@@ -136,6 +138,21 @@ export function createPrismaAuthStore(prisma: PrismaClient): AuthStore {
     async updateProfile(userId, patch) {
       const user = await prisma.user.update({ where: { id: userId }, data: patch, select: userSelect });
       return toRecord(user);
+    },
+
+    async declareAdult(userId, now, requestId) {
+      return prisma.$transaction(async (tx) => {
+        // Koşullu UPDATE: eşzamanlı iki istekte yalnız biri ilk beyanı yazar ve audit üretir.
+        const changed = await tx.user.updateMany({ where: { id: userId, deletedAt: null, adultDeclaredAt: null }, data: { adultDeclaredAt: now } });
+        if (changed.count === 1) {
+          await writeAudit(tx, {
+            source: "API", actorId: userId, action: "account.adult.declare", operation: "declare",
+            target: { type: "USER", id: userId }, before: { adultDeclared: false }, after: { adultDeclared: true }, at: now, requestId,
+          });
+        }
+        const row = await tx.user.findUnique({ where: { id: userId }, select: { adultDeclaredAt: true, deletedAt: true } });
+        return row && !row.deletedAt ? row.adultDeclaredAt : null;
+      });
     },
 
     async getPointsSummary(userId, publishCost) {
