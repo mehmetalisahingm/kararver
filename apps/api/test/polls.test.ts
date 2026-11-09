@@ -10,6 +10,7 @@ import { ErrorBody, PollDetail } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
 import { createPrismaPollStore } from "../src/modules/polls/prisma-store.ts";
 import { mapDbError } from "../src/modules/polls/routes.ts";
+import { detectSensitiveSurvey } from "../src/modules/polls/sensitive-policy.ts";
 import { PollReferenceError } from "../src/modules/polls/store.ts";
 import { slugify } from "../src/modules/polls/slug.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
@@ -193,6 +194,27 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal(updateTitle.json().error.details[0]?.code, "sensitive_survey_not_allowed_v1");
     assert.equal((await db.poll.findUniqueOrThrow({ where: { id: second.id }, select: { title: true } })).title,
       "Kültürel miras üzerine genel değerlendirme", "reddedilen PATCH başlığı veritabanına yazmaz");
+  });
+
+  test("eşzamanlı başlık ve seçenek PATCH birleşimi transaction kilidinden sonra engellenir", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie, {
+      title: "Genel tercihlerin değerlendirilmesi",
+      description: "",
+      options: [{ label: "Birinci seçenek" }, { label: "İkinci seçenek" }],
+    });
+    const [titleUpdate, optionsUpdate] = await Promise.all([
+      send("PATCH", `/polls/${poll.id}`, { title: "Hangisisin? Sana yakın olan grubu seç" }, owner.cookie),
+      send("PATCH", `/polls/${poll.id}`, {
+        options: [{ id: poll.options[0]!.id, label: "Alevi" }, { id: poll.options[1]!.id, label: "Sünni" }],
+      }, owner.cookie),
+    ]);
+    assert.deepEqual([titleUpdate.statusCode, optionsUpdate.statusCode].sort((a, b) => a - b), [200, 400],
+      "eşzamanlı masum PATCH'lerin ikisi birlikte hassas bir anket oluşturamamalı");
+    const saved = await db.poll.findUniqueOrThrow({
+      where: { id: poll.id }, select: { title: true, description: true, extraInfo: true, options: { select: { label: true } } },
+    });
+    assert.equal(detectSensitiveSurvey(saved), null, "commit sonrası hassas soru/seçenek birleşimi oluşmamalı");
   });
 
   test("genel sağlık hizmeti değerlendirmesi ve sıradan ürün anketleri otomatik olarak yasaklanmaz", async () => {
