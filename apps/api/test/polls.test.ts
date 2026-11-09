@@ -182,12 +182,13 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.deepEqual(await db.pollOption.findMany({ where: { pollId: first.id }, orderBy: { position: "asc" }, select: { label: true } }), existing,
       "reddedilen PATCH seçenekleri veritabanına yazmaz");
 
-    const second = await createPoll(owner.cookie, {
+    const secondOwner = await signUp(); // Yayın cooldown testte farklı hesabı gerektirir.
+    const second = await createPoll(secondOwner.cookie, {
       title: "Kültürel miras üzerine genel değerlendirme",
       description: "",
       options: [{ label: "Alevi" }, { label: "Sünni" }],
     });
-    const updateTitle = await send("PATCH", `/polls/${second.id}`, { title: "Hangisisin? Sana yakın olan grubu seç" }, owner.cookie);
+    const updateTitle = await send("PATCH", `/polls/${second.id}`, { title: "Hangisisin? Sana yakın olan grubu seç" }, secondOwner.cookie);
     assertError(updateTitle, 400, "VALIDATION_ERROR");
     assert.equal(updateTitle.json().error.details[0]?.code, "sensitive_survey_not_allowed_v1");
     assert.equal((await db.poll.findUniqueOrThrow({ where: { id: second.id }, select: { title: true } })).title,
