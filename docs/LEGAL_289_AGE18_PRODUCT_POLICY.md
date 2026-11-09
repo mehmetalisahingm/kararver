@@ -24,6 +24,20 @@ Bu kısa açıklama henüz onaylı/aktif kullanım koşulları, aydınlatma veya
 - [ ] Staging'de aynı SHA'da API, tarayıcı (mobil dahil), klavye/ekran okuyucu, negatif kayıt testleri çalıştırılıp #46/#48/#53'e kanıt bağlansın.
 - [ ] Gerçek iletişim kanalı ve işletmeci hukuki metinleri #285/#286'da onaylanıp yayına alınsın; #284/#54 bağımsız GO kapıları açık kalsın.
 
+## Eski hesaplarda geçiş: karar 54A teknik uygulaması (Faruk, 9 Kasım 2026)
+
+Karar: eski hesaplardan sonraki gerçek girişte **18 yaşını doldurma öz beyanı** alınır. Toplu, geri dönülmez silme veya yasak yoktur. Öz beyan gerçek yaş doğrulaması değildir.
+
+| Konu | Uygulama |
+| --- | --- |
+| Kayıt | `users.adult_declared_at` (NULL olabilir). Yeni kayıtta beyan verilirse kayıt anı yazılır, bir daha sorulmaz. Migration yalnız ekleme yapar; eski hesaplar bilerek NULL kalır, geri doldurma yapılmaz. |
+| Beyan | `POST /me/adult-declaration` `{ adultConfirmed: true }`. Yalnız `true` kabul edilir; `false`, eksik alan ve `"true"` metni 400 döner. İlk beyan zamanı korunur. Eşzamanlı isteklerde koşullu UPDATE yalnız bir kez yazar ve yalnız o ilk beyan `account.adult.declare / declare` audit kaydı üretir (aktör = kullanıcı, önce/sonra yalnız boolean). |
+| Kapsam | Beyan yokken **katılım** işlemleri (anket/tartışma açma, oy verme, yorum yazma, görsel yükleme) `403 ADULT_DECLARATION_REQUIRED` alır. **Açık kalanlar:** okuma, kendi verisini indirme, hesap silme, e-posta düzeltme (`dataRight`), çıkış, MFA ve kendi içeriğini düzenleme/silme. Kişi beyan vermeden de KVKK haklarını kullanabilir. |
+| `/me` | `adultDeclarationRequired: true` ise web beyan ekranını gösterir (UI: Ümit, #289/#286). |
+| Kapsam dışı | Beğeni, kaydetme, takip ve topluluk üyeliği (`user` seviyesi) bu ilk sürümde engellenmiyor; engellenip engellenmeyeceği #289 hukuki kapsam maddesine bağlı. Şüpheli senaryolarda insan incelemesi (54A) ayrı bir moderasyon akışıdır (#327/#290), bu değişiklikte yok. Gerçek yaş doğrulaması gerekip gerekmediği hukuken ayrıca değerlendirilecek. |
+
+Kanıt: `apps/api/test/adult-declaration.test.ts` (PostgreSQL) ve `packages/contracts/test/permissions.test.ts` (#289 bölümü). Gerçek staging hesabında çalıştırılmadı.
+
 ## Veri minimizasyonu ve kaynak
 
 18+ ürün kararı, otomatik KVKK açık rızası veya işleme şartı anlamına gelmez. Kayıt sözleşmesi için gereken veriler ile seçime bağlı analitik/pazarlama rızaları ayrı değerlendirilir. Doğum tarihi/kimlik görüntüsü gibi ağır veriler gerekli olduğuna ilişkin hukuk/teknik karar olmadan eklenmez.
