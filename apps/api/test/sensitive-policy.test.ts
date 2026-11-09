@@ -110,3 +110,23 @@ test("an addendum cannot turn earlier categorical choices into a personal-attrib
     options: base.options,
   }), { field: "options.0.label", category: "belief" });
 });
+
+test("annotated personal categories are blocked but topic-only descriptions remain allowed", () => {
+  const prompt = "Hangisisin? Sana yakın olan grubu seç";
+  for (const choices of [
+    [{ label: "Alevi mezhebi" }, { label: "Sünni mezhebi" }],
+    [{ label: "Alevi (A)" }, { label: "Sünni (B)" }],
+  ]) {
+    assert.deepEqual(detectSensitiveSurvey({ title: prompt, options: choices }),
+      { field: "options.0.label", category: "belief" });
+  }
+  for (const title of [
+    "Psikiyatrik tedavi hizmetleri ücretsiz olmalı mı?",
+    "Hangi hastalık için araştırma bütçesi artırılmalı?",
+  ]) assert.equal(detectSensitiveSurvey({ title, options: [{ label: "Katılıyorum" }, { label: "Katılmıyorum" }] }), null, title);
+
+  assert.deepEqual(detectSensitiveSurvey({ title: "Psikiyatrik tedavi görüyor musun?" }),
+    { field: "title", category: "health" });
+  assert.deepEqual(detectSensitiveSurvey({ title: "Hangi hastalığın var?" }),
+    { field: "title", category: "health" });
+});
