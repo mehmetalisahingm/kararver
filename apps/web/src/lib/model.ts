@@ -172,7 +172,7 @@ export interface ProductClient extends EngagementClient, DiscoveryClient {
   list(): Promise<Poll[]>;
   get(id: string): Promise<Poll>;
   login(email: string, password: string): Promise<User>;
-  register(name: string, email: string, password: string, username?: string): Promise<void>;
+  register(name: string, email: string, password: string, username?: string, adultConfirmed?: boolean): Promise<void>;
   verify(email: string, code: string): Promise<void>;
   requestReset(email: string): Promise<void>;
   reset(email: string, code: string, password: string): Promise<void>;

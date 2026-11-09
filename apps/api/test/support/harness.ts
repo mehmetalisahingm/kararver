@@ -1,4 +1,6 @@
 import { createPrismaDecisionStore } from "../../src/modules/decisions/prisma-store.ts";
+import { createPrismaProfileStore } from "../../src/modules/profiles/prisma-store.ts";
+import { createPrismaShareStore } from "../../src/modules/shares/prisma-store.ts";
 // Test düzeneği: uygulamayı sahte saat, mail yakalayıcı ve seçilen store ile kurar.
 // Store'a özgü test işlemleri (durum değiştirme, medya ekleme) her iki uygulamada da aynı arayüzle yapılır.
 import { spawnSync } from "node:child_process";
@@ -192,6 +194,8 @@ export type HarnessOptions = {
    * (system_settings) gelir; KV-40 testleri için. Varsayılan false: eski testler sabit ayarla çalışır.
    */
   realSettings?: boolean;
+  /** Legacy auth fixtures predate the 18+ contract. New policy tests MUST pass true. */
+  adultDeclarationRequired?: boolean;
 };
 
 export async function createHarness(factory: BackendFactory, options: HarnessOptions = {}): Promise<Harness> {
@@ -253,7 +257,10 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     mailer: { send: async (mail) => void mails.push(mail) },
     now: () => clock.now,
     isRegistrationEnabled: fixed ? async () => registrationEnabled.value : undefined,
+    adultDeclarationRequired: options.adultDeclarationRequired ?? false,
     decisionStore: backend.prisma ? createPrismaDecisionStore(backend.prisma) : undefined,
+    profileStore: backend.prisma ? createPrismaProfileStore(backend.prisma) : undefined,
+    shareStore: backend.prisma ? createPrismaShareStore(backend.prisma) : undefined,
     pollStore: backend.prisma ? createPrismaPollStore(backend.prisma) : undefined,
     searchStore: backend.prisma ? createPrismaSearchStore(backend.prisma) : undefined,
     revisionStore: backend.prisma ? createPrismaRevisionStore(backend.prisma) : undefined,

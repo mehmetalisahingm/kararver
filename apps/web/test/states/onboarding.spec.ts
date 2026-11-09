@@ -202,6 +202,7 @@ test("registration confirms login and retains post-signup interests retry after 
   await page.getByLabel("Kullanıcı adı",{exact:true}).fill("signup_retry");
   await page.getByLabel("E-posta",{exact:true}).fill("signup_retry@example.test");
   await page.getByLabel("Şifre",{exact:true}).fill("Signup-password-123");
+  await page.getByRole("checkbox",{name:/18 yaşımı doldurduğumu beyan ediyorum/}).check();
   await page.getByRole("button",{name:"Hesap oluştur",exact:true}).click();
   await expect(page.getByRole("button",{name:"İlgi alanlarını yeniden kaydet"})).toBeVisible();
   await page.getByRole("button",{name:"İlgi alanlarını yeniden kaydet"}).click();

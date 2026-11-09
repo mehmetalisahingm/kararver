@@ -1,0 +1,106 @@
+# KararVer staging: Neon PG18/storage + Render Free API/worker and test inbox.
+# The worker shares the web process lifetime: both sleep after idle, with no keep-alive.
+# The two Free web services share the workspace's 750 monthly instance hours.
+# No paid resources, managed Render database, persistent disk, or public release GO.
+services:
+  - type: web
+    name: kararver-api-free-preview
+    runtime: node
+    plan: free
+    region: frankfurt
+    repo: https://github.com/mehmetalisahingm/kararver
+    branch: main
+    autoDeployTrigger: off
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @kararver/db run db:generate && python3 -m venv .venv && .venv/bin/pip install --no-cache-dir -r apps/worker/python/requirements.txt
+    startCommand: node scripts/start-api-with-worker.mjs
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: NODE_ENV
+        value: production
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=96 --max-semi-space-size=4
+      - key: APP_ENV
+        value: staging
+      - key: APP_TIMEZONE
+        value: Europe/Istanbul
+      - key: LOG_LEVEL
+        value: info
+      - key: WEB_URL
+        value: https://kararver-staging.vercel.app
+      - key: API_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH_TOKEN_PEPPER
+        sync: false
+      - key: SESSION_COOKIE_NAME
+        value: kv_session
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_TTL_DAYS
+        value: "30"
+      - key: EMAIL_VERIFICATION_REQUIRED
+        value: "false"
+      - key: ROLE_APPROVALS_REQUIRED
+        value: "false"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: MAIL_TRANSPORT
+        value: mailpit_api
+      - key: MAIL_FROM
+        sync: false
+      - key: MAILPIT_SEND_URL
+        value: https://kararver-mailpit-free-preview.onrender.com
+      - key: MAILPIT_SEND_AUTH
+        sync: false
+      - key: MEDIA_PUBLIC_BASE_URL
+        value: https://kararver-staging.vercel.app/api/media-public
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: eu-central-1
+      - key: S3_FORCE_PATH_STYLE
+        value: "true"
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET_PRIVATE
+        value: kararver-staging-uploads-private
+      - key: S3_BUCKET_PUBLIC
+        value: kararver-staging-media-public
+      - key: JOBS_ENABLED
+        value: "true"
+      - key: MODERATION_PYTHON
+        value: /opt/render/project/src/.venv/bin/python
+      - key: MEDIA_WORKER_CONCURRENCY
+        value: "1"
+      - key: BACKUP_ENABLED
+        value: "false"
+
+  - type: web
+    name: kararver-mailpit-free-preview
+    runtime: image
+    image:
+      url: docker.io/axllent/mailpit:v1.33.0
+    plan: free
+    region: frankfurt
+    envVars:
+      - key: MP_UI_BIND_ADDR
+        value: 0.0.0.0:10000
+      - key: MP_SMTP_BIND_ADDR
+        value: 127.0.0.1:1025
+      - key: MP_UI_AUTH
+        sync: false
+      - key: MP_SEND_API_AUTH
+        sync: false
+      - key: MP_MAX_MESSAGES
+        value: "100"
+      - key: MP_MAX_AGE
+        value: 24h
+      - key: MP_DATABASE
+        value: /tmp/mailpit.db
+      - key: MP_ALLOWED_HOSTS
+        value: kararver-mailpit-free-preview.onrender.com

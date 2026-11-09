@@ -1,9 +1,9 @@
 // Staging KVKK auth boundary smoke. Never creates accounts, sends mail or downloads personal data.
 // Full privileged request -> worker -> Mailpit -> user download acceptance remains a separate signed-in test.
 import assert from "node:assert/strict";
+import { stagingOrigins } from "./staging-origins.mjs";
 
-const api = (process.env.STAGING_API_URL || "https://api-staging-45cb.up.railway.app").replace(/\/$/, "");
-const web = (process.env.STAGING_WEB_URL || "https://kararver-staging.vercel.app").replace(/\/$/, "");
+const { api, web } = stagingOrigins();
 const expectedSha = process.env.EXPECTED_RELEASE_SHA || "";
 const timeoutMs = 15000;
 

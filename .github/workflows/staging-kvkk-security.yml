@@ -16,5 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      - name: Wait for Free staging cold start (bounded, no credentials)
+        run: node scripts/kv44-staging-runner.mjs --preflight
       - name: Verify staging health and unauthenticated KVKK endpoints
         run: node scripts/staging-kvkk-smoke.mjs

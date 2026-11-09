@@ -2,7 +2,13 @@
 
 **Araç:** [`scripts/kv44-staging-runner.mjs`](../scripts/kv44-staging-runner.mjs) · **Test:** `pnpm security:test` (ağsız, sahte staging ile) · **Durum:** araç hazır, staging'de **hiç çalıştırılmadı**. Beta kararı [KV-44_SECURITY_ACCEPTANCE.md](KV-44_SECURITY_ACCEPTANCE.md) üzerinden ayrıca verilir.
 
+**Hedef (#301):** Web ve API origin'i `scripts/staging-origins.mjs`'ten gelir: varsayılan `https://kararver-staging.vercel.app` ve `https://kararver-api-free-preview.onrender.com`. `STAGING_WEB_URL` / `STAGING_API_URL` verilebilir, ama yalnız izin listesindeki origin kabul edilir; eski Railway dahil başka değer araç açılırken hata verir ve hiçbir istek gitmez. Aynı modülü `staging-session-acceptance.mjs` ve `staging-write-acceptance.mjs` de kullanır.
+
+**Render Free uykusu:** API ve worker aynı Free serviste çalışır, 15 dakika trafik gelmezse ikisi birlikte uyur. Araç `--preflight` ve R0'da `/health`'i ağ hatası ve 502/503/504 için en çok 90 saniye, 5 saniye arayla yeniden dener (kimlik bilgisi göndermez; sıcak serviste tek istek). Süre dolarsa FAIL verir. Yine de başlangıçtan önce `/health` 200 ve `worker=ready` görülene kadar servis uyandırılır, çünkü bekleme penceredeki süreden yer. Pencere boyunca 15 dakikadan uzun boşluk bırakılmaz: T+31 beklemesinde worker uyursa zamanlanmış işler (ör. süresi dolan onaylar) çalışmaz, koşan biri `/health`'i ~10 dakikada bir çağırır.
+
 ## 1. İlkeler
+
+Staging güvenlik ve KVKK workflow'ları kontrollerden önce aynı sınırlı `--preflight` adımını kullanır. Staging monitor de önce bu adımı dener; başarısızlıkta normal sağlık/alarm denetimine devam eder. Production izlemesi değişmez. Bu bir sürekli uyanık tutma döngüsü değildir; gerçek kesintiler ve yanlış durum kodları başarısız kalır.
 
 - **Başkasının kimlik bilgisi başka makineye gitmez.** Her kişi yalnız kendi rolünü, kendi makinesinde, kendi env'iyle çalıştırır. Roller arası yalnız maskeli değerler (run id, marker, kimliklerin ilk 8 karakteri) ekrandan okunup argümanla verilir.
 - **Sentetik hesap yalnız iki tane:** yazar USER (initiator makinesinde) ve medya USER (media-operator makinesinde). Yönetici rolünde sentetik hesap açılmaz, hiçbir hesaba rol atanmaz. Hesaplar her makinede R0'dan hemen sonra, tek seferde açılır. Kayıt limiti (5/IP/saat) aşılırsa sonuç **BLOCKED-ratelimit** olur, NO-GO değil.
@@ -71,7 +77,7 @@ Kaynak sütunu gerçek kod satırıdır; `kv44-staging-runner.test.mjs` her sat�
 | ID | R | Rol | Sev | Beklenen | Kaynak | K |
 |---|---|---|---|---|---|---|
 | R0.pinned | R0 | hepsi (R4 hariç) | P0 | STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification | `.github/workflows/staging-monitor.yml:135` | |
-| R0.release | R0 | hepsi | P0 | 200 status=ok env=staging, sha = KV44_EXPECTED_SHA | `apps/api/src/app.ts:517` | |
+| R0.release | R0 | hepsi | P0 | 200 status=ok env=staging, sha = KV44_EXPECTED_SHA | `apps/api/src/app.ts:520` | |
 | R0.login | R0 | hepsi | P0 | 200 + kv_session | `packages/contracts/src/domains/auth.ts:87` | |
 | R0.role | R0 | hepsi | P0 | /me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN) | `packages/contracts/src/domains/auth.ts:240` | |
 | ACC.register | R0 | initiator, media-operator | P1 | 202; 429 → BLOCKED-ratelimit (5/IP/saat) | `docs/KV-19_RATE_LIMIT.md:21` | |

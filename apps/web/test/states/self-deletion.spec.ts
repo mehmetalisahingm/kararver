@@ -15,7 +15,7 @@ test("the deletion link cleans the fragment, waits for an explicit click and sho
   await expect(page).toHaveURL(/\/hesap\/silme-onayi$/);
   expect(requests).toBe(0);
   await page.getByRole("button", { name: "Hesabımı kalıcı olarak sil", exact: true }).click();
-  await expect(page.getByText(/kalıcı olarak silindi/)).toBeVisible();
+  await expect(page.getByText(/Hesabına erişim kapatıldı/)).toBeVisible();
   expect(requests).toBe(1);
   expect(mock.unexpected).toEqual([]);
 });
