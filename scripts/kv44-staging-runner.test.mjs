@@ -34,6 +34,7 @@ function fakeStaging(over = {}) {
     const path = u.pathname.replace(/^\/api\/v1/, "");
     const me = viewer(init);
     if (path === "/auth/register") {
+      assert.equal(body.adultConfirmed, true, "synthetic QA registrations must explicitly declare adult policy");
       if (++s.registered > 5) return err(429, "RATE_LIMITED");
       s.users.set(body.email, { id: uuid(seq++), username: body.username, roles: ["USER"], password: body.password });
       return json(202, { data: { status: "VERIFICATION_SENT" } });
