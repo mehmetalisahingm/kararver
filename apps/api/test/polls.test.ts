@@ -166,6 +166,34 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal(await db.pollAddendum.count({ where: { pollId: poll.id } }), 0);
   });
 
+  test("V1 hassas veri kuralı PATCH ile parça parça aşılamaz (seçenek sonra başlık ve tersi)", async () => {
+    const owner = await signUp();
+    const first = await createPoll(owner.cookie, {
+      title: "Hangisisin? Sana yakın olan grubu seç",
+      description: "",
+      options: [{ label: "Birinci seçenek" }, { label: "İkinci seçenek" }],
+    });
+    const existing = await db.pollOption.findMany({ where: { pollId: first.id }, orderBy: { position: "asc" }, select: { label: true } });
+    const updateOptions = await send("PATCH", `/polls/${first.id}`, {
+      options: [{ id: first.options[0]!.id, label: "Alevi" }, { id: first.options[1]!.id, label: "Sünni" }],
+    }, owner.cookie);
+    assertError(updateOptions, 400, "VALIDATION_ERROR");
+    assert.equal(updateOptions.json().error.details[0]?.code, "sensitive_survey_not_allowed_v1");
+    assert.deepEqual(await db.pollOption.findMany({ where: { pollId: first.id }, orderBy: { position: "asc" }, select: { label: true } }), existing,
+      "reddedilen PATCH seçenekleri veritabanına yazmaz");
+
+    const second = await createPoll(owner.cookie, {
+      title: "Kültürel miras üzerine genel değerlendirme",
+      description: "",
+      options: [{ label: "Alevi" }, { label: "Sünni" }],
+    });
+    const updateTitle = await send("PATCH", `/polls/${second.id}`, { title: "Hangisisin? Sana yakın olan grubu seç" }, owner.cookie);
+    assertError(updateTitle, 400, "VALIDATION_ERROR");
+    assert.equal(updateTitle.json().error.details[0]?.code, "sensitive_survey_not_allowed_v1");
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: second.id }, select: { title: true } })).title,
+      "Kültürel miras üzerine genel değerlendirme", "reddedilen PATCH başlığı veritabanına yazmaz");
+  });
+
   test("genel sağlık hizmeti değerlendirmesi ve sıradan ürün anketleri otomatik olarak yasaklanmaz", async () => {
     const owner = await signUp();
     const first = await createPoll(owner.cookie, {
