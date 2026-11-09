@@ -7,6 +7,7 @@ import { assertNoCommittedKey, findIdempotentResult, runIdempotent } from "../..
 import { writeEvent } from "../events/write.ts";
 import { spendPublishPoints } from "../points/store.ts";
 import { writeRevision } from "../revisions/write.ts";
+import { detectSensitiveSurvey } from "./sensitive-policy.ts";
 import {
   PollLimitError,
   PollReferenceError,
@@ -328,6 +329,28 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
       await prisma.$transaction(async (tx) => {
         // Satır kilidi: aynı ankete eşzamanlı iki düzenleme sürüm numarasında çakışmaz.
         await tx.$queryRaw`SELECT 1 FROM polls WHERE id = ${id}::uuid FOR UPDATE`;
+        // Same-row serialization: two individually innocent concurrent PATCH requests must
+        // not jointly publish a sensitive question + sensitive answers. Validate the
+        // effective persisted state INSIDE the transaction, after FOR UPDATE.
+        const persisted = await tx.poll.findUniqueOrThrow({
+          where: { id }, select: { title: true, description: true, extraInfo: true },
+        });
+        const effectiveOptions = options ?? await tx.pollOption.findMany({
+          where: { pollId: id }, select: { label: true }, orderBy: { position: "asc" },
+        });
+        const risk = detectSensitiveSurvey({
+          title: fields.title ?? persisted.title,
+          description: fields.description === undefined ? persisted.description : fields.description,
+          extraInfo: fields.extraInfo === undefined ? persisted.extraInfo : fields.extraInfo,
+          options: effectiveOptions,
+        });
+        if (risk) {
+          throw new ApiError(
+            "VALIDATION_ERROR",
+            "KararVer V1'de kişilerin hassas bilgilerini açığa çıkarabilecek içerikler yayımlanamaz.",
+            [{ field: risk.field, code: "sensitive_survey_not_allowed_v1" }],
+          );
+        }
         if (Object.keys(fields).length > 0) await tx.poll.update({ where: { id }, data: fields });
         if (tagSlugs) await replaceTags(tx, id, tagSlugs);
         if (options) {
