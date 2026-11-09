@@ -72,3 +72,16 @@ test("matching returns only category and field, never supplied private text", ()
   assert.ok(!serialized.includes("oy verdin"));
   assert.ok(!serialized.includes("Hangi partiye"));
 });
+
+test("ordinary 'tip' descriptions are not mistaken for a political party; exact TİP still blocks", () => {
+  const title = "Hangisini tercih edersin?";
+  assert.equal(detectSensitiveSurvey({ title, options: [{ label: "Spor tip" }, { label: "Klasik tip" }] }), null);
+  assert.deepEqual(
+    detectSensitiveSurvey({ title, options: [{ label: "TİP" }, { label: "CHP" }] }),
+    { field: "options.0.label", category: "political" },
+  );
+  assert.deepEqual(
+    detectSensitiveSurvey({ title, options: [{ label: "Türkiye İşçi Partisi" }, { label: "Diğer" }] }),
+    { field: "options.0.label", category: "political" },
+  );
+});
