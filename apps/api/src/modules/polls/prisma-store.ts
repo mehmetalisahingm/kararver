@@ -8,6 +8,7 @@ import { writeEvent } from "../events/write.ts";
 import { spendPublishPoints } from "../points/store.ts";
 import { writeRevision } from "../revisions/write.ts";
 import { detectSensitiveSurvey } from "./sensitive-policy.ts";
+import { screenV1Publication } from "./risk-review.ts";
 import {
   PollLimitError,
   PollReferenceError,
@@ -334,7 +335,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
         // not jointly publish a sensitive question + sensitive answers. Validate the
         // effective persisted state INSIDE the transaction, after FOR UPDATE.
         const persisted = await tx.poll.findUniqueOrThrow({
-          where: { id }, select: { title: true, description: true, extraInfo: true },
+          where: { id }, select: { title: true, description: true, extraInfo: true, status: true, kind: true },
         });
         const effectiveOptions = options ?? await tx.pollOption.findMany({
           where: { pollId: id }, select: { label: true }, orderBy: { position: "asc" },
@@ -350,6 +351,27 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
             "VALIDATION_ERROR",
             "KararVer V1'de kişilerin hassas bilgilerini açığa çıkarabilecek içerikler yayımlanamaz.",
             [{ field: risk.field, code: "sensitive_survey_not_allowed_v1" }],
+          );
+        }
+        // #327: POST queues uncertain content. A later PATCH must NOT make that
+        // same content public without review. Until an edit-review workflow exists,
+        // reject the edit atomically rather than exposing it on an ACTIVE poll.
+        if (persisted.status === "ACTIVE" || persisted.status === "LOCKED") {
+          const linkedMedia = await tx.pollMedia.findMany({
+            where: { pollId: id }, select: { mediaId: true },
+          });
+          const screening = screenV1Publication({
+            kind: persisted.kind, title: fields.title ?? persisted.title,
+            description: fields.description === undefined ? persisted.description : fields.description,
+            extraInfo: fields.extraInfo === undefined ? persisted.extraInfo : fields.extraInfo,
+            options: effectiveOptions,
+            tagSlugs: tagSlugs ?? [],
+            mediaIds: linkedMedia.map(m => m.mediaId),
+          });
+          if (screening.action === "REVIEW") throw new ApiError(
+            "VALIDATION_ERROR",
+            "Bu değişiklik yayın öncesi inceleme gerektiriyor; mevcut yayımlanmış ankette doğrudan uygulanamaz.",
+            [{ field: "description", code: "moderation_review_required" }],
           );
         }
         if (Object.keys(fields).length > 0) await tx.poll.update({ where: { id }, data: fields });
