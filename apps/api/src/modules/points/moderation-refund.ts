@@ -36,6 +36,13 @@ export async function refundRejectedReviewPoints(
   if (!publish) return 0;
   const amount = -publish.delta;
 
+  // Lock the author row before the points account, matching auth and publish
+  // transactions. The ledger FK may otherwise take a user key-share lock
+  // AFTER this path locks points, producing a cross-transaction deadlock.
+  const authors = await tx.$queryRaw<{ id: string }[]>`
+    SELECT id::text AS id FROM users WHERE id = ${input.authorId}::uuid FOR UPDATE`;
+  if (authors.length !== 1) throw new Error("refund_author_missing");
+
   // Do not upsert here: a deleted account must not be resurrected or receive
   // new balances. If a charged account is unexpectedly gone, fail the entire
   // moderation transaction rather than silently losing the refund.
