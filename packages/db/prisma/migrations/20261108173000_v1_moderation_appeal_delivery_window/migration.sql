@@ -4,8 +4,8 @@
 -- is durably written for the rightful recipient. Repeated worker retries keep
 -- the first receipt (ON CONFLICT DO NOTHING).
 CREATE TABLE moderation_appeal_windows (
-  rejection_action_id uuid PRIMARY KEY REFERENCES moderation_actions(id) ON DELETE RESTRICT,
-  recipient_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  rejection_action_id uuid PRIMARY KEY REFERENCES moderation_actions(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  recipient_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
   notification_id uuid NOT NULL,
   delivered_at timestamptz(3) NOT NULL,
   deadline_at timestamptz(3) NOT NULL,
