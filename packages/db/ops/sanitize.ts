@@ -194,7 +194,7 @@ async function textColumns(tx: Pick<PrismaClient, "$queryRawUnsafe">): Promise<C
        FROM information_schema.columns c JOIN information_schema.tables t USING (table_schema, table_name)
       WHERE c.table_schema = 'public' AND t.table_type = 'BASE TABLE'
         AND c.data_type IN ('text', 'character varying', 'jsonb')
-        AND c.table_name NOT IN ('users', '_prisma_migrations')
+        AND (c.table_name NOT IN ('users', '_prisma_migrations') OR (c.table_name = 'users' AND c.column_name = 'bio'))
       ORDER BY 1, 2`,
   );
   return rows.map((r) => ({ table: r.table, column: r.column, json: r.data_type === "jsonb", maxLength: r.max === null ? null : Number(r.max) }));
@@ -310,7 +310,7 @@ export async function sanitize(target: string, { apply, roleHolders = "keep" }: 
           );
           if (roleHolders === "demote") report.demotedRoles = await tx.$executeRawUnsafe(`DELETE FROM user_roles WHERE user_id IN (SELECT id FROM kv_real)`);
 
-          // 4. Doğrulama (bağımsız genel e-posta taraması dahil) ve tutarlılık, commit'ten ÖNCE.
+          // 4. Doğrulama (users.bio dahil genel e-posta taraması) ve tutarlılık, commit'ten ÖNCE.
           let identifiers = 0;
           let foreignEmails = 0;
           for (const c of await textColumns(tx)) {
