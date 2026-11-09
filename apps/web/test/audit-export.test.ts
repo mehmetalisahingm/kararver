@@ -7,7 +7,7 @@ import type { AuditRecord } from "../src/features/admin/admin-client.ts";
 const row = (examples.find(x => x.endpoint === "admin.audit.list" && x.name === "ok")!.body as { data: AuditRecord[] }).data[0];
 
 test("CSV neutralizes formula prefixes, whitespace escapes, quotes, commas and line breaks", () => {
-  for (const text of ["=HYPERLINK(\"https://example.test\")", "+1+1", "-1+1", "@SUM(1)", "\t=1+1", " \u200B=1+1", "\rmalicious", "\nmalicious"])
+  for (const text of ["=HYPERLINK(\"https://example.test\")", "+1+1", "-1+1", "@SUM(1)", "\t=1+1", " \u200B=1+1", "\u2060=1+1", "\u202E=1+1", "\u2066=1+1", "\rmalicious", "\nmalicious"])
     assert.ok(auditCsvCell(text).startsWith('"\''), text);
   assert.equal(auditCsvCell('Yorum, "alıntı"\nyeni satır'), '"Yorum, ""alıntı""\nyeni satır"');
 });

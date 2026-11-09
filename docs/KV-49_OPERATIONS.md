@@ -31,11 +31,24 @@
 
 ## Deploy ve rollback
 
+**Migration kapısı (#301, 3 Kasım 2026; Neon + Render Free):** Render Free'de deploy öncesi komut yoktur; autodeploy kapalıdır.
+- **Açılış kapısı:** `scripts/start-api-with-worker.mjs`, API ve worker'ı açmadan önce `packages/db/ops/migration-gate.ts`'i çalıştırır. Bu adım **salt okur**, migration çalıştırmaz.
+- **Kapıdan geçmeyen durumlar:** bu sürümün migration'ı uygulanmamış, yarım kalmış migration var ya da DB'ye 15 sn'de ulaşılamıyor. Bu durumlarda **hiçbir süreç başlamaz** (çıkış 1). Render sağlık kontrolü geçmediği için önceki sürüm yayında kalır.
+- **Rollback:** DB'de olup bu sürümde olmayan migration varsa (rollback) başlar ve uyarır; expand/contract kuralı.
+- **Kim uygular:** API ve worker hiçbir zaman kendiliğinden `migrate deploy` çalıştırmaz. Migration yalnız kontrollü adımda uygulanır:
+  1. güncel yedek + ayrı DB'ye restore doğrulaması (KV-48);
+  2. bekleyen migration listesi ve `db:check-migrations` (yıkıcı ifade denetimi);
+  3. doğrudan (pooler olmayan) bağlantıyla `db:deploy`;
+  4. kapının geçtiğinin doğrulanması;
+  5. aynı SHA'nın Render'a deploy'u ve `/health` → `release.sha` eşleşmesi.
+
 **Deploy (staging):**
 1. `main`'e merge.
-2. Railway build eder ve `pnpm --filter @kararver/db run db:deploy` ile migration'ları uygular.
-3. Yeni sürüm `/health` 200 dönerse trafik ona geçer.
+2. Bekleyen migration varsa yukarıdaki kontrollü adım; yoksa doğrudan 3.
+3. Render'da elle deploy (autodeploy kapalı). Yeni sürüm açılış kapısından ve `/health` 200'den geçerse trafik ona geçer.
 4. Doğrulama: `GET /health` → `release.sha` merge edilen commit mi? `worker.status = ready` mı?
+
+> Railway dönemi (21 Ekim'e kadar): migration'lar Railway'in pre-deploy adımında (`db:deploy`) otomatik uygulanıyordu. Railway servisleri durduruldu (#297).
 
 **Rollback (uygulama):** Railway'de önceki başarılı deployment yeniden deploy edilir (dashboard → Deployments → Redeploy, ya da `railway redeploy`). `/health` → `release.sha` önceki SHA olmalı.
 - **Migration'lar geri alınmaz:** Prisma'da down migration yok; eski sürüm yeni şemayla çalışır (expand/contract kuralı, KV-48). Eski sürümün `db:deploy` adımı yeni migration'ları zaten uygulanmış bulur.
@@ -118,11 +131,14 @@ Bakım modu ve acil durum anahtarlarının değiştirilmesi bu API'de yoktur; KV
 
 ## Olay müdahalesi
 
+Güvenlik olayı, kişisel veri şüphesi, secret rotasyonu ve acil uyarı/üstlenme kuralları (8 Kasım kararları 41A–50A) ayrı runbook'tadır: **[OPS_INCIDENT_RESPONSE.md](OPS_INCIDENT_RESPONSE.md)**. Bu bölüm hizmet olayları (S3) için kısa akıştır.
+
 | Rol | Kişi | Görev |
 |---|---|---|
 | Operasyon sahibi (ilk müdahale) | Faruk | Alarmı karşılar, etkiyi belirler, rollback ya da restore uygular |
-| Güvenlik / erişim gözden geçireni | Utku | Güvenlik olayında oturum iptali, yaptırım, secret rotasyonu |
-| Ürün ve yayın kararı | Mehmet | Production yayını, bakım modu, kullanıcı iletişimi |
+| Birincil güvenlik sorumlusu | Ümit (yedek: Mert, yalnız bağımsız onayla ve en fazla 8 saat) | Güvenlik olayında oturum ve erişim kararları; olayın panelden üstlenilmesi |
+| Güvenlik incelemesi | Utku | Bağımsız inceleme, secret rotasyonunun gözden geçirilmesi |
+| Ürün ve yayın kararı | Mehmet | Production yayını, bakım modu, kullanıcı iletişimi, resmî bildirim kararı |
 | Medya ve moderasyon | Mert | Görsel hattı ve moderasyon kuyruğu sorunları |
 
 **Akış:**

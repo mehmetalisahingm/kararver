@@ -34,7 +34,7 @@ jobs:
       ALARM_LABEL: ${{ matrix.target }}-alarm
       # Production alarmı yedek sorumluya da gider (ilk sorumlu ulaşılamazsa).
       RESPONDERS: "${{ matrix.target == 'production' && '@farukkemree · yedek: @mehmetalisahingm' || '@farukkemree' }}"
-      API_URL: ${{ matrix.target == 'staging' && (vars.STAGING_API_URL || 'https://api-staging-45cb.up.railway.app') || vars.PROD_API_URL }}
+      API_URL: ${{ matrix.target == 'staging' && (vars.STAGING_API_URL || 'https://kararver-api-free-preview.onrender.com') || vars.PROD_API_URL }}
       WEB_URL: ${{ matrix.target == 'staging' && (vars.STAGING_WEB_URL || 'https://kararver-staging.vercel.app') || vars.PROD_WEB_URL }}
       # Worker heartbeat'i 10 sn'de bir yazılır; 3 dakikadan eskiyse durmuş sayılır (/health ile aynı eşik, WORKER_OK_SECONDS).
       MAX_WORKER_AGE_MS: "180000"
@@ -49,6 +49,21 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - uses: actions/checkout@v4
+        if: matrix.target == 'staging'
+      - uses: actions/setup-node@v4
+        if: matrix.target == 'staging'
+        with:
+          node-version-file: .nvmrc
+      - name: Free staging soğuk açılışını bekle
+        if: matrix.target == 'staging' && steps.target.outputs.skip != 'true'
+        # Gerçek kesintide aşağıdaki sağlık adımı alarmı üretmeye devam eder.
+        continue-on-error: true
+        run: node scripts/kv44-staging-runner.mjs --preflight
+        env:
+          STAGING_API_URL: ${{ env.API_URL }}
+          STAGING_WEB_URL: ${{ env.WEB_URL }}
 
       - name: Sağlık kontrolü
         id: health
@@ -188,9 +203,11 @@ jobs:
           elif [[ "$STAGING_SHA" =~ ^[0-9a-f]{12}$ ]] && [[ "$green_sha" =~ ^[0-9a-f]{40}$ ]] && [ "${green_sha:0:12}" != "$STAGING_SHA" ]; then
             # "ahead": yeşil commit staging'in ilerisinde. "behind"/"identical": staging daha yeni ya da aynı (alarm yok).
             # Yalnız API/worker'ı etkileyen değişiklik sayılır: web (Vercel), doküman ve workflow değişikliği API deploy'u gerektirmez.
+            # Container dosyaları (#309) da sayılmaz: staging Render'da `runtime: node` ile çalışır, imajı kullanmaz.
+            # Staging Docker imajına geçerse (render.yaml runtime: image/docker) bu istisna kaldırılmalı.
             relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$STAGING_SHA...$green_sha" --jq '.status' 2>/dev/null || echo "bilinmiyor")
             api_changes=$(gh api "repos/$GITHUB_REPOSITORY/compare/$STAGING_SHA...$green_sha" --jq '.files[].filename' 2>/dev/null \
-              | grep -Ev '^(apps/web/|docs/|\.github/)|\.md$' | wc -l || echo 0)
+              | grep -Ev '^(apps/web/|docs/|\.github/)|\.md$|^Dockerfile$|^\.dockerignore$' | wc -l || echo 0)
             lag_min=$(( (now - $(date -u -d "$green_at" +%s)) / 60 ))
             if [ "$relation" = "ahead" ] && [ "$api_changes" -gt 0 ] && [ "$lag_min" -ge "$DEPLOY_LAG_MAX_MIN" ]; then
               problems+=("staging main'in gerisinde: çalışan ${STAGING_SHA}, CI'ı yeşil son main ${green_sha:0:12} (${lag_min} dk önce, API'yi etkileyen ${api_changes} dosya)")

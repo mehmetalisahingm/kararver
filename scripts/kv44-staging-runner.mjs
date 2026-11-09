@@ -8,7 +8,7 @@
  *
  *   --new-run                                    offline: prints a run id
  *   --check-env [--as <role>] [--window-start <ISO>]   offline: missing env names (never values) and window times
- *   --preflight                                  GET /health + GET /v1/config only, no credentials
+ *   --preflight                                  GET /health (cold-start retry) + GET /v1/config only, no credentials
  *   --as initiator      --phase open|cleanup     R0, author account, R2 requests (T0), self_approval; R4 cleanup
  *   --as owner          --target <8> --marker <m> [--legacy-approval <id>]    R1
  *   --as media-operator --phase run|cleanup      R0, media USER, R3; R4 media cleanup
@@ -25,9 +25,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { crc32, deflateSync } from "node:zlib";
+import { stagingOrigins } from "./staging-origins.mjs";
 
-export const WEB = "https://kararver-staging.vercel.app";
-export const API = "https://api-staging-45cb.up.railway.app";
+export const { web: WEB, api: API } = stagingOrigins();
 export const REPO = "mehmetalisahingm/kararver";
 export const ROLES = Object.freeze(["initiator", "owner", "media-operator", "approver"]);
 const MIN = 60_000;
@@ -45,13 +45,13 @@ const MD = "packages/contracts/src/domains/media.ts";
  * `na` = may close as UYGULANAMAZ-staging; `k` = KV44 plan mapping (empty until kv44-plan.md is found).
  */
 export const MATRIX = Object.freeze([
-  { id: "R0.pinned", r: "R0", role: "all", sev: "P0", expect: "STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification", ref: ".github/workflows/staging-monitor.yml:135", needle: "STAGING_PINNED_SHA: ${{ vars.STAGING_PINNED_SHA }}" },
-  { id: "R0.release", r: "R0", role: "all", sev: "P0", expect: "200 status=ok env=staging, sha = KV44_EXPECTED_SHA", ref: "apps/api/src/app.ts:507", needle: 'app.get("/health"' },
-  { id: "R0.login", r: "R0", role: "all", sev: "P0", expect: "200 + kv_session", ref: "packages/contracts/src/domains/auth.ts:87", needle: 'id: "auth.login"' },
-  { id: "R0.role", r: "R0", role: "all", sev: "P0", expect: "/me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN)", ref: "packages/contracts/src/domains/auth.ts:240", needle: 'id: "me.get"' },
+  { id: "R0.pinned", r: "R0", role: "all", sev: "P0", expect: "STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification", ref: ".github/workflows/staging-monitor.yml:150", needle: "STAGING_PINNED_SHA: ${{ vars.STAGING_PINNED_SHA }}" },
+  { id: "R0.release", r: "R0", role: "all", sev: "P0", expect: "200 status=ok env=staging, sha = KV44_EXPECTED_SHA", ref: "apps/api/src/app.ts:510", needle: 'app.get("/health"' },
+  { id: "R0.login", r: "R0", role: "all", sev: "P0", expect: "200 + kv_session", ref: "packages/contracts/src/domains/auth.ts:89", needle: 'id: "auth.login"' },
+  { id: "R0.role", r: "R0", role: "all", sev: "P0", expect: "/me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN)", ref: "packages/contracts/src/domains/auth.ts:242", needle: 'id: "me.get"' },
   { id: "ACC.register", r: "R0", role: "initiator, media-operator", sev: "P1", expect: "202; 429 → BLOCKED-ratelimit (5/IP/h)", ref: "docs/KV-19_RATE_LIMIT.md:21", needle: "registerPerIpHour", rateLimit: true },
   { id: "ACC.owned", r: "R0", role: "initiator, media-operator", sev: "P0", expect: "yeni hesap yalnız USER", ref: "packages/contracts/src/domains/admin.ts:588", needle: 'id: "admin.users.list"' },
-  { id: "ACC.login", r: "R0", role: "initiator, media-operator", sev: "P1", expect: "200, aynı id", ref: "packages/contracts/src/domains/auth.ts:87", needle: 'id: "auth.login"' },
+  { id: "ACC.login", r: "R0", role: "initiator, media-operator", sev: "P1", expect: "200, aynı id", ref: "packages/contracts/src/domains/auth.ts:89", needle: 'id: "auth.login"' },
   { id: "R2.fixture.poll", r: "R2", role: "initiator", sev: "P1", expect: "201", ref: "packages/contracts/src/domains/polls.ts:187", needle: 'id: "polls.create"', rateLimit: true },
   { id: "R2.fixture.comments", r: "R2", role: "initiator", sev: "P1", expect: `${COMMENT_COUNT}× 201 (429 → Retry-After kadar bekle)`, ref: "packages/contracts/src/domains/comments.ts:74", needle: 'id: "comments.create"', rateLimit: true },
   { id: "R2.preview", r: "R2", role: "initiator", sev: "P1", expect: `willChange=${COMMENT_COUNT}, approval.required=true`, ref: "apps/api/src/modules/moderation/bulk-routes.ts:63", needle: "approval: { required" },
@@ -73,7 +73,7 @@ export const MATRIX = Object.freeze([
   { id: "R3.not-public", r: "R3", role: "media-operator", sev: "P0", expect: "anonim /media-public 404, imza sızıntısı yok", ref: "apps/api/src/modules/media/public-routes.ts:12", needle: "/media-public/m/:file" },
   { id: "R2.resolve", r: "R2", role: "approver", sev: "P1", expect: "8 karakter → tek talep, başlatan ben değilim", ref: `${MC}:855`, needle: 'id: "admin.moderation.bulkApprovals.list"' },
   { id: "R2.stepup_required", r: "R2", role: "approver", sev: "P0", expect: "403 FORBIDDEN stepup_required", ref: `${BR}:121`, needle: 'code: "stepup_required"' },
-  { id: "R2.stepup", r: "R2", role: "approver", sev: "P1", expect: "200 stepUpExpiresAt", ref: "packages/contracts/src/domains/auth.ts:231", needle: 'id: "me.mfa.stepup"' },
+  { id: "R2.stepup", r: "R2", role: "approver", sev: "P1", expect: "200 stepUpExpiresAt", ref: "packages/contracts/src/domains/auth.ts:233", needle: 'id: "me.mfa.stepup"' },
   { id: "R2.approve", r: "R2", role: "approver", sev: "P0", expect: "200 APPROVED", ref: `${BR}:138`, needle: "status: 200" },
   { id: "R2.closed.reapprove", r: "R2", role: "approver", sev: "P0", expect: "409 CONFLICT closed", ref: `${BR}:111`, needle: '"closed"' },
   { id: "R2.expired.view", r: "R2", role: "approver", sev: "P1", expect: "T+31'de status EXPIRED", ref: `${BR}:22`, needle: '"EXPIRED"' },
@@ -235,7 +235,30 @@ export function readPinnedSha({ exec = execFile } = {}) {
 }
 
 /** R0: pin (skipped in cleanup, the pin is removed at window end), release, login, role. Every phase starts with it. */
-async function r0(ctx, { http = fetch, env, pinnedSha = readPinnedSha }, roleOk, { pin = true } = {}) {
+/** Render Free sleeps after 15 idle minutes; a cold start must not read as a security failure. */
+export const WARMUP = Object.freeze({ budgetMs: 90_000, intervalMs: 5_000, wakingStatuses: Object.freeze([502, 503, 504]) });
+
+/**
+ * GET /health, retrying only transport errors and 502/503/504 until WARMUP.budgetMs. No credentials; a warm service gets one
+ * request. Any other status returns at once. When the budget ends the last response is returned (or the error rethrown),
+ * so a service that stays down still FAILs in the caller.
+ */
+export async function healthAfterWarmup(http, { pause = sleep, now = Date.now } = {}) {
+  const deadline = Number(now()) + WARMUP.budgetMs;
+  const maxAttempts = Math.ceil(WARMUP.budgetMs / WARMUP.intervalMs);
+  for (let attempt = 1; ; attempt++) {
+    let res = null, error = null;
+    try {
+      const remainingMs = Math.max(1, Math.min(15_000, deadline - Number(now())));
+      res = await http(API + "/health", { method: "GET", redirect: "manual", credentials: "omit", headers: { accept: "application/json" }, signal: AbortSignal.timeout(remainingMs) });
+    } catch (err) { error = err; }
+    if (res && !WARMUP.wakingStatuses.includes(res.status)) return res;
+    if (attempt >= maxAttempts || Number(now()) + WARMUP.intervalMs >= deadline) { if (res) return res; throw error; }
+    await pause(WARMUP.intervalMs);
+  }
+}
+
+async function r0(ctx, { http = fetch, env, pinnedSha = readPinnedSha, pause, now }, roleOk, { pin = true } = {}) {
   const sha = env.KV44_EXPECTED_SHA ?? "";
   if (!/^[a-f0-9]{40}$/.test(sha) || !env.KV44_EMAIL || !env.KV44_PASSWORD) throw new Error("KV44_EXPECTED_SHA (40 hex), KV44_EMAIL and KV44_PASSWORD are required");
   if (pin) {
@@ -246,7 +269,7 @@ async function r0(ctx, { http = fetch, env, pinnedSha = readPinnedSha }, roleOk,
     ctx.expect("R0.pinned", null, valid && sha.startsWith(pinned),
       { note: !pinned ? "STAGING_PINNED_SHA sabitlenmemiş" : !valid ? "STAGING_PINNED_SHA geçersiz" : `pinned ${pinned.slice(0, 12)}` });
   }
-  const health = await http(API + "/health", { redirect: "manual", credentials: "omit", signal: AbortSignal.timeout(15_000) });
+  const health = await healthAfterWarmup(http, { pause, now });
   let state = null; try { state = await health.json(); } catch {}
   const release = state?.release?.sha ?? null;
   ctx.setRelease(release);
@@ -266,7 +289,7 @@ const randomPassword = () => randomBytes(24).toString("base64url");
 /** Synthetic USER: created once, right after R0. The password stays in this process memory only. */
 async function createSyntheticUser(ctx, op, marker, suffix, state) {
   const username = `${marker}_${suffix}`, email = `${username}@example.test`, password = randomPassword();
-  const reg = await ctx.call("/auth/register", { method: "POST", body: { username, email, password, displayName: "İzole KV44 güvenlik kontrolü" } });
+  const reg = await ctx.call("/auth/register", { method: "POST", body: { username, email, password, displayName: "İzole KV44 güvenlik kontrolü", adultConfirmed: true } });
   ctx.expect("ACC.register", reg, reg.status === 202, { note: suffix });
   const found = await ctx.call(`/admin/users?q=${encodeURIComponent(username)}`, { cookie: op.cookie });
   const user = found.data?.data?.find(u => u.username === username);
@@ -561,11 +584,13 @@ async function approver(ctx, deps, args, win) {
 
 // --- preflight / merge ---------------------------------------------------------------------------------------------
 /** Credential-free GET /health and GET /v1/config only. */
-export async function preflight(http = fetch) {
+export async function preflight(http = fetch, { pause, now } = {}) {
   const checks = [];
   const get = async (id, path, ok) => {
     try {
-      const res = await http(API + path, { method: "GET", redirect: "manual", credentials: "omit", headers: { accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
+      const res = id === "health"
+        ? await healthAfterWarmup(http, { pause, now })
+        : await http(API + path, { method: "GET", redirect: "manual", credentials: "omit", headers: { accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
       let data = null; try { data = await res.json(); } catch {}
       const pass = ok(res, data);
       checks.push({ id, result: pass ? "PASS" : "FAIL", status: res.status, ...(id === "health" ? { release: data?.release?.sha ?? null, env: data?.release?.env ?? null } : {}) });
@@ -660,7 +685,7 @@ export async function main(argv, deps = {}) {
     } else log("pencere: --window-start verilmedi");
     return bad.length ? 1 : 0;
   }
-  if (args.preflight) { const r = await preflight(deps.http); log(JSON.stringify(r, null, 2)); return r.pass ? 0 : 1; }
+  if (args.preflight) { const r = await preflight(deps.http, deps); log(JSON.stringify(r, null, 2)); return r.pass ? 0 : 1; }
   if (args.merge) {
     if (!RUN_ID.test(args.run ?? "")) throw new Error("--merge needs --run");
     const { report, md } = mergeEvidence(join(deps.root ?? evidenceRoot(), args.run));

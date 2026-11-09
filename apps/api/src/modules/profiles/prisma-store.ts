@@ -34,7 +34,7 @@ export function createPrismaProfileStore(prisma: PrismaClient): ProfileStore {
 
       const [polls, comments] = await Promise.all([
         prisma.poll.aggregate({
-          where: { authorId: user.id, status: { in: [...VISIBLE] } },
+          where: { authorId: user.id, status: { in: [...VISIBLE] }, author: { deletedAt: null } },
           _count: { _all: true },
           _sum: { voteCount: true },
         }),
@@ -43,7 +43,7 @@ export function createPrismaProfileStore(prisma: PrismaClient): ProfileStore {
             authorId: user.id,
             status: "ACTIVE",
             deletedAt: null,
-            poll: { status: { in: [...VISIBLE] } },
+            poll: { status: { in: [...VISIBLE] }, author: { deletedAt: null } },
           },
         }),
       ]);
@@ -64,7 +64,7 @@ export function createPrismaProfileStore(prisma: PrismaClient): ProfileStore {
 
     async listPublicPollIds(userId, after, limit) {
       return prisma.poll.findMany({
-        where: { authorId: userId, status: { in: [...VISIBLE] }, ...createdAtKeyset(after) },
+        where: { authorId: userId, status: { in: [...VISIBLE] }, author: { deletedAt: null }, ...createdAtKeyset(after) },
         select: { id: true, createdAt: true },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: limit,
@@ -77,7 +77,7 @@ export function createPrismaProfileStore(prisma: PrismaClient): ProfileStore {
           authorId: userId,
           status: "ACTIVE",
           deletedAt: null,
-          poll: { status: { in: [...VISIBLE] } },
+          poll: { status: { in: [...VISIBLE] }, author: { deletedAt: null } },
           ...createdAtKeyset(after),
         },
         select: {

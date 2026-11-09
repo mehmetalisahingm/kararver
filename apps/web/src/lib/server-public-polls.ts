@@ -10,9 +10,12 @@ export function webBaseUrl(): URL {
   return new URL(process.env.WEB_URL ?? "http://localhost:3000");
 }
 
-export async function loadPublicPoll(routeId: string): Promise<ReturnType<typeof PollDetail.parse> | null> {
+export async function loadPublicPoll(routeId: string, options: { strict?: boolean } = {}): Promise<ReturnType<typeof PollDetail.parse> | null> {
   const api = apiBaseUrl();
-  if (!api) return null;
+  if (!api) {
+    if (options.strict) throw new Error("public_poll_api_not_configured");
+    return null;
+  }
 
   const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(routeId);
   const publicId = routeId.match(/-([A-Za-z0-9]{8})$/)?.[1];
@@ -23,10 +26,15 @@ export async function loadPublicPoll(routeId: string): Promise<ReturnType<typeof
     : `${api}/polls/lookup?publicId=${encodeURIComponent(publicId!)}`;
   try {
     const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
-    if (!response.ok) return null;
+    if (response.status === 404 || response.status === 403) return null;
+    if (!response.ok) throw new Error("public_poll_api_unavailable");
     const parsed = dataOf(PollDetail).safeParse(await response.json());
-    return parsed.success ? parsed.data.data : null;
-  } catch {
+    if (!parsed.success) throw new Error("public_poll_invalid_projection");
+    return parsed.data.data;
+  } catch (error) {
+    // A deleted/hidden poll is a true 404, but transient API failures must
+    // not become fake 404s that Google interprets as permanent removal.
+    if (options.strict) throw error;
     return null;
   }
 }

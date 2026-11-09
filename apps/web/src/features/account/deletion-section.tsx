@@ -65,7 +65,7 @@ export function DeletionSection({ client }: { client: ApiClient }) {
       <div>
         <span className="eyebrow">TEHLİKELİ BÖLGE</span>
         <h2 id="deletion-title">Hesabımı sil</h2>
-        <p className="kv-muted">Silme geri alınamaz. Kişisel bilgilerin silinir, paylaşım ve yorum metinlerin kaldırılır, oyların hesabınla bağı koparılır ve oturumların kapanır.</p>
+        <p className="kv-muted">Silme onayı geri alınamaz. Hesabın kullanıma kapanır; anket ve yorumların yayından kaldırılır, oturumların kapatılır. Dosya, yedek ve yasal saklama istisnalarının temizliği ayrı aşamalarda doğrulanır.</p>
       </div>
       {!preview.enabled ? <p className="kv-muted">Hesap silme şu an kapalı. Silme talebi için destek ile iletişime geç.</p> : (
         <>

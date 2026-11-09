@@ -13,7 +13,7 @@ const COLUMNS = ["id", "createdAt UTC", "source", "actorId", "actorUsername", "a
 /** Her alan tırnaklı (RFC 4180). Tablolama programının formül sayabileceği başlangıçlara apostrof eklenir. */
 export function auditCsvCell(value: unknown): string {
   let text = value == null ? "" : String(value);
-  if (/^[\s﻿​-‏]*[=+\-@]/u.test(text) || /^[\t\r\n]/.test(text)) text = "'" + text;
+  if (/^[\s\uFEFF\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069]*[=+\-@]/u.test(text) || /^[\t\r\n]/.test(text)) text = "'" + text;
   return `"${text.replaceAll('"', '""')}"`;
 }
 
