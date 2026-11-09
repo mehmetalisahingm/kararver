@@ -13,6 +13,7 @@ import { mapDbError } from "../src/modules/polls/routes.ts";
 import { detectSensitiveSurvey } from "../src/modules/polls/sensitive-policy.ts";
 import { PollReferenceError } from "../src/modules/polls/store.ts";
 import { slugify } from "../src/modules/polls/slug.ts";
+import { findExpired } from "../../worker/src/jobs/polls/expire.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
 const HOUR = 60 * 60 * 1000;
@@ -269,6 +270,69 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
   });
 
 
+  // ─── V1 seçici yayın öncesi inceleme ────────────────────────
+
+  test("şüpheli anket 202 UNDER_REVIEW olur; misafire 404, yetkisiz onay 403; ADMIN onayıyla süre yeniden başlar", async () => {
+    const owner = await signUp();
+    const reviewer = await signUp();
+    await db.userRole.create({ data: { userId: reviewer.id, role: "ADMIN", grantedById: owner.id } });
+    const content = pollBody({
+      title: "Siyasi partilerin trafik vaatleri nasıl değerlendirilmeli?",
+      description: "Şehir trafiği ve ulaşım projeleri üzerine genel değerlendirme.",
+    });
+    const idemKey = key();
+    const first = await send("POST", "/polls", content, owner.cookie, idemKey);
+    assert.equal(first.statusCode, 202, first.body);
+    assert.deepEqual(Object.keys(first.json().data).sort(), ["id", "status"]);
+    assert.equal(first.json().data.status, "UNDER_REVIEW");
+    const pendingId: string = first.json().data.id;
+    const saved = await db.poll.findUniqueOrThrow({ where: { id: pendingId }, select: { status: true, opensAt: true, closesAt: true } });
+    assert.equal(saved.status, "UNDER_REVIEW");
+
+    assertError(await get(`/polls/${pendingId}`), 404, "NOT_FOUND");
+    assertError(await get(`/polls/${pendingId}`, owner.cookie), 404, "NOT_FOUND");
+    const repeated = await send("POST", "/polls", content, owner.cookie, idemKey);
+    assert.equal(repeated.statusCode, 202, repeated.body);
+    assert.equal(repeated.json().data.id, pendingId);
+    assert.equal(await db.poll.count({ where: { authorId: owner.id } }), 1);
+    // Core poll harness intentionally runs with publishCostPoints=0; charge
+    // accounting under real 10-point settings is independently covered by
+    // points.test.ts. An identical 202 replay must never add ledger entries.
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, reason: "PUBLISH" } }), 0,
+      "inceleme makbuzunun idempotent tekrarı yeni işlem yaratmaz");
+
+    const attempts = { action: "RESTORE", reason: "Riskli olmayan genel kamu hizmeti sorusu olarak incelendi." };
+    assertError(await send("POST", `/admin/polls/${pendingId}/moderation`, attempts, owner.cookie), 403, "FORBIDDEN");
+    const queue = await get("/admin/polls?status=UNDER_REVIEW", reviewer.cookie);
+    assert.equal(queue.statusCode, 200, queue.body);
+    assert.ok(queue.json().data.some((row: { id: string }) => row.id === pendingId));
+
+    h.clock.advance(73 * HOUR);
+    // An unpublished poll must NEVER emit a poll.closed event while queued,
+    // even if its original pre-review closesAt is now in the past.
+    const expiredCandidates = await findExpired(db, new Date(h.clock.now.getTime() - 10 * 24 * HOUR), h.clock.now, 1000);
+    assert.equal(expiredCandidates.includes(pendingId), false);
+    const accepted = await send("POST", `/admin/polls/${pendingId}/moderation`, attempts, reviewer.cookie);
+    assert.equal(accepted.statusCode, 200, accepted.body);
+    assert.equal(accepted.json().data.status, "ACTIVE");
+    const published = await db.poll.findUniqueOrThrow({ where: { id: pendingId }, select: { status: true, opensAt: true, closesAt: true } });
+    assert.equal(published.status, "ACTIVE");
+    assert.equal(published.opensAt.getTime(), h.clock.now.getTime(), "oylama süresi moderatör onayında başlamalı");
+    assert.equal(published.closesAt!.getTime() - published.opensAt.getTime(), 72 * HOUR);
+    assert.equal((await get(`/polls/${pendingId}`)).statusCode, 200);
+    // Idempotency receipts expire before this 73h clock jump; the
+    // same-key replay was already proven above while the receipt was valid.
+    h.clock.advance(-73 * HOUR);
+  });
+
+  test("düşük riskli sıradan anket doğrudan 201 ve ACTIVE olur", async () => {
+    const owner = await signUp();
+    const result = await send("POST", "/polls", pollBody({ title: "Telefon batarya ömrünü nasıl buluyorsunuz?" }), owner.cookie, key());
+    assert.equal(result.statusCode, 201, result.body);
+    assert.equal(PollDetail.parse(result.json().data).status, "ACTIVE");
+  });
+
+
   // ─── Oluşturma ──────────────────────────────────────────────
 
   test("anket oluşturma 201; sahip sonucu görür ama oy veremez", async () => {
@@ -378,7 +442,7 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal(discussion.json().data.kind, "DISCUSSION");
   });
 
-  test("görseller: sadece kendi POLL görselin; APPROVED olan görünür, bekleyen görünmez", async () => {
+  test("görseller: yalnız sahip görsel ekler, APPROVED dahil bütün görselli anketler ön incelemeye girer", async () => {
     const owner = await signUp();
     const other = await signUp();
     const approved = await h.addMedia(owner.id, { purpose: "POLL", status: "APPROVED" });
@@ -390,9 +454,14 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     for (const mediaIds of [[rejected.id], [avatar.id], [foreign.id]]) {
       assertError(await send("POST", "/polls", pollBody({ mediaIds }), owner.cookie, key()), 409, "MEDIA_NOT_USABLE");
     }
-    const poll = await createPoll(owner.cookie, { mediaIds: [pending.id, approved.id] });
-    assert.deepEqual(poll.media.map((m) => m.id), [approved.id]);
-    assert.equal(poll.coverImage?.url, `http://cdn.test/media/${approved.publicKey}`);
+    const submitted = await send("POST", "/polls", pollBody({ mediaIds: [pending.id, approved.id] }), owner.cookie, key());
+    assert.equal(submitted.statusCode, 202, submitted.body);
+    assert.deepEqual(Object.keys(submitted.json().data).sort(), ["id", "status"], "review receipt never carries media URLs");
+    const reviewId = submitted.json().data.id as string;
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: reviewId } })).status, "UNDER_REVIEW");
+    assertError(await get(`/polls/${reviewId}`), 404, "NOT_FOUND");
+    // Media can contain sensitive text; it is shown publicly only after a
+    // moderator approves the poll AND media approval has completed.
   });
 
   test("topluluk: üye olmayan 403, bilinmeyen topluluk 400, üye paylaşabilir", async () => {
