@@ -46,7 +46,7 @@ const MD = "packages/contracts/src/domains/media.ts";
  */
 export const MATRIX = Object.freeze([
   { id: "R0.pinned", r: "R0", role: "all", sev: "P0", expect: "STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification", ref: ".github/workflows/staging-monitor.yml:150", needle: "STAGING_PINNED_SHA: ${{ vars.STAGING_PINNED_SHA }}" },
-  { id: "R0.release", r: "R0", role: "all", sev: "P0", expect: "200 status=ok env=staging, sha = KV44_EXPECTED_SHA", ref: "apps/api/src/app.ts:510", needle: 'app.get("/health"' },
+  { id: "R0.release", r: "R0", role: "all", sev: "P0", expect: "200 status=ok env=staging, sha = KV44_EXPECTED_SHA", ref: "apps/api/src/app.ts:513", needle: 'app.get("/health"' },
   { id: "R0.login", r: "R0", role: "all", sev: "P0", expect: "200 + kv_session", ref: "packages/contracts/src/domains/auth.ts:89", needle: 'id: "auth.login"' },
   { id: "R0.role", r: "R0", role: "all", sev: "P0", expect: "/me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN)", ref: "packages/contracts/src/domains/auth.ts:242", needle: 'id: "me.get"' },
   { id: "ACC.register", r: "R0", role: "initiator, media-operator", sev: "P1", expect: "202; 429 → BLOCKED-ratelimit (5/IP/h)", ref: "docs/KV-19_RATE_LIMIT.md:21", needle: "registerPerIpHour", rateLimit: true },
