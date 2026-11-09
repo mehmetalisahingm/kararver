@@ -92,6 +92,12 @@ export function Composer() {
         <p className="kv-muted">
           Bir anket aç veya seçenek eklemeden bir tartışma başlat.
         </p>
+        <p className="kv-help" role="note">
+          KararVer V1'de kullanıcıların siyasi görüşünü, dinini, sağlık durumunu,
+          etnik kökenini veya benzer hassas kişisel bilgilerini açığa çıkaran
+          anketler ve gönderiler yayımlanamaz. Genel ürün ve hizmet
+          değerlendirmeleri yapılabilir. Lütfen kişisel hassas bilgi isteme.
+        </p>
       </div>
       <nav aria-label="Oluşturma adımları">
         <ol className={styles.steps}>{[["compose-story","1 · Sorunu hazırla"],["compose-settings","2 · Yayını düzenle"],["compose-media","3 · Görseller ve önizleme"]].map(([target,label])=><li key={target}><button type="button" onClick={()=>document.getElementById(target)?.focus()}>{label}</button></li>)}</ol>
