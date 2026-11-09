@@ -35,6 +35,7 @@ export function AuthScreen({
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
+  const [adultConfirmed, setAdultConfirmed] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -146,7 +147,11 @@ export function AuthScreen({
         await finishSignIn();
       }
       if (mode === "register") {
-        await client.register(name, email, password, username);
+        if (!demo && !adultConfirmed) {
+          setError("Kayıt için 18 yaşını doldurmuş olman gerekiyor.");
+          return;
+        }
+        await client.register(name, email, password, username, adultConfirmed);
         if (demo) {
           router.push(`/dogrula${emailSuffix}`);
         } else {
@@ -294,6 +299,12 @@ export function AuthScreen({
               />
             </Field>
           )}
+          {mode === "register" && !demo && (
+            <label className="kv-check-row">
+              <input type="checkbox" name="adultConfirmed" disabled={!interactive} checked={adultConfirmed} onChange={event => setAdultConfirmed(event.target.checked)} required />
+              <span>18 yaşımı doldurduğumu beyan ediyorum. KararVer'e yalnızca 18 yaş ve üzerindeki kişiler kayıt olabilir.</span>
+            </label>
+          )}
           {demo && ["verify", "reset"].includes(mode) && (
             <Field id="code" label="Demo kodu">
               <input
@@ -313,7 +324,7 @@ export function AuthScreen({
           )}
           {!demo && ["verify", "reset"].includes(mode) && <p className="kv-help">{code ? "E-postadaki bağlantı alındı. İşlemi tamamlamak için onayla." : "E-postana gönderilen bağlantıyı açmalısın."}</p>}
           <ErrorMessage message={error} />
-          <button className="kv-button" disabled={!interactive || busy || (!demo && ["verify", "reset"].includes(mode) && !code)} aria-busy={!interactive || busy}>
+          <button className="kv-button" disabled={!interactive || busy || (!demo && mode === "register" && !adultConfirmed) || (!demo && ["verify", "reset"].includes(mode) && !code)} aria-busy={!interactive || busy}>
             {busy
               ? "İşlem sürüyor…"
               : mode === "login"

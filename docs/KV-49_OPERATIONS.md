@@ -110,11 +110,14 @@ Bakım modu ve acil durum anahtarlarının değiştirilmesi bu API'de yoktur; KV
 
 ## Olay müdahalesi
 
+Güvenlik olayı, kişisel veri şüphesi, secret rotasyonu ve acil uyarı/üstlenme kuralları (8 Kasım kararları 41A–50A) ayrı runbook'tadır: **[OPS_INCIDENT_RESPONSE.md](OPS_INCIDENT_RESPONSE.md)**. Bu bölüm hizmet olayları (S3) için kısa akıştır.
+
 | Rol | Kişi | Görev |
 |---|---|---|
 | Operasyon sahibi (ilk müdahale) | Faruk | Alarmı karşılar, etkiyi belirler, rollback ya da restore uygular |
-| Güvenlik / erişim gözden geçireni | Utku | Güvenlik olayında oturum iptali, yaptırım, secret rotasyonu |
-| Ürün ve yayın kararı | Mehmet | Production yayını, bakım modu, kullanıcı iletişimi |
+| Birincil güvenlik sorumlusu | Ümit (yedek: Mert, yalnız bağımsız onayla ve en fazla 8 saat) | Güvenlik olayında oturum ve erişim kararları; olayın panelden üstlenilmesi |
+| Güvenlik incelemesi | Utku | Bağımsız inceleme, secret rotasyonunun gözden geçirilmesi |
+| Ürün ve yayın kararı | Mehmet | Production yayını, bakım modu, kullanıcı iletişimi, resmî bildirim kararı |
 | Medya ve moderasyon | Mert | Görsel hattı ve moderasyon kuyruğu sorunları |
 
 **Akış:**

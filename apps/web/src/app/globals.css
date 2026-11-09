@@ -347,6 +347,28 @@ progress::-webkit-progress-value {
   margin: 12px auto;
   padding: 32px;
 }
+.auth-card .kv-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  padding: 14px;
+  border: 1px solid var(--kv-border);
+  border-radius: 10px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.auth-card .kv-check-row input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--kv-primary);
+}
+.auth-card .kv-check-row:focus-within {
+  outline: 2px solid var(--kv-primary);
+  outline-offset: 2px;
+}
 .demo-note {
   font-size: 12px;
   color: var(--kv-muted);

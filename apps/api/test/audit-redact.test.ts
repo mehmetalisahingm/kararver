@@ -12,11 +12,12 @@ describe("audit özet temizliği (#185)", () => {
       "recoveryCodes", "apiKey", "api_key", "API-KEY", "apikey", "cookie", "cookies", "session", "sessionToken",
       "sessionId", "email", "emailNormalized", "ip", "IP", "ipAddress", "IPAddress", "clientIp", "last_ip", "ip4",
       "userAgent", "user_agent", "useragent", "User-Agent",
+      "authorization", "Authorization", "authorizationHeader", "credentials", "bearer", "jwt", "privateKey", "private_key", "accessKey", "access_key",
     ]) assert.ok(isSensitiveKey(key), key);
   });
 
   test("zararsız alanlar kelime eşleşmesi sayesinde gizlenmez", () => {
-    for (const key of ["description", "recipient", "membership", "ownership", "zip", "footprint", "status", "keyword", "agentName", "user", "sanctionType", "hashtag", "tokenizer"])
+    for (const key of ["description", "recipient", "membership", "ownership", "zip", "footprint", "status", "keyword", "agentName", "user", "sanctionType", "hashtag", "tokenizer", "accessibility", "privateDiscussion"])
       assert.ok(!isSensitiveKey(key), key);
   });
 
@@ -39,6 +40,14 @@ describe("audit özet temizliği (#185)", () => {
       count: 3,
     });
     assert.deepEqual(input, copy, "girdi değişmez");
+  });
+
+  test("eski audit kaydındaki alternatif yetkilendirme sırları gizlenir", () => {
+    const result = redactAuditSummary({
+      oauth: { authorizationHeader: "Bearer abc", private_key: "secret-key", accessKeys: ["x"] },
+      credential: "legacy", status: "ACTIVE",
+    });
+    assert.deepEqual(result, { oauth: { authorizationHeader: REDACTED, private_key: REDACTED, accessKeys: REDACTED }, credential: REDACTED, status: "ACTIVE" });
   });
 
   test("null ve ilkel değerler olduğu gibi döner", () => {
