@@ -66,17 +66,26 @@ export function assertIsolatedRestoreTarget(target, live) {
 }
 
 /**
- * Check the complete signed set, bounded query size, with NO writes. Current
- * strict requirement: no surviving user/content/session/media row under ANY
- * of the journaled IDs. Historic legal operation records are assessed
- * separately; a tombstoned user is still retained data, not an anonymous stat.
+ * Check the complete signed set, bounded query size, with NO writes.
+ *
+ * Two separate results, both fail closed:
+ * - `resurrected`: state that only exists BEFORE an erasure ran (live account,
+ *   unremoved content, sessions/tokens/MFA, votes, published media, ready
+ *   export). This is what a pre-erasure snapshot looks like -> exit 2.
+ * - `retained`: any row at all under a journaled ID, including the tombstones
+ *   today's account-erasure flow intentionally keeps (user row with
+ *   deleted_at, REMOVED polls/comments, REJECTED media). Strict #321 target:
+ *   still blocks (exit 3) until physical deletion lands, but it is no longer
+ *   indistinguishable from a resurrected account.
+ * A tombstoned user is still retained data, not an anonymous stat.
  */
 export async function checkNoResurrection(db, subjectIds) {
-  const counts = { restoredUsers: 0, authoredPolls: 0, authoredComments: 0, linkedVotes: 0, sessions: 0, authTokens: 0, mediaAssets: 0 };
+  const retained = { restoredUsers: 0, authoredPolls: 0, authoredComments: 0, linkedVotes: 0, sessions: 0, authTokens: 0, mediaAssets: 0 };
+  const resurrected = { liveUsers: 0, liveAuthoredPolls: 0, liveAuthoredComments: 0, linkedVotes: 0, sessions: 0, authTokens: 0, mfaCredentials: 0, publishedMedia: 0, readyExports: 0 };
   for (let i = 0; i < subjectIds.length; i += 250) {
     const chunk = subjectIds.slice(i, i + 250);
     const whereId = { in: chunk };
-    const found = await Promise.all([
+    const kept = await Promise.all([
       db.user.count({ where: { id: whereId } }),
       db.poll.count({ where: { authorId: whereId } }),
       db.comment.count({ where: { authorId: whereId } }),
@@ -85,9 +94,23 @@ export async function checkNoResurrection(db, subjectIds) {
       db.authToken.count({ where: { userId: whereId } }),
       db.mediaAsset.count({ where: { uploaderId: whereId } }),
     ]);
-    Object.keys(counts).forEach((key, j) => { counts[key] += found[j]; });
+    Object.keys(retained).forEach((key, j) => { retained[key] += kept[j]; });
+    const live = await Promise.all([
+      db.user.count({ where: { id: whereId, deletedAt: null } }),
+      db.poll.count({ where: { authorId: whereId, OR: [{ deletedAt: null }, { status: { not: "REMOVED" } }] } }),
+      db.comment.count({ where: { authorId: whereId, OR: [{ deletedAt: null }, { status: { not: "REMOVED" } }] } }),
+      kept[3],
+      kept[4],
+      kept[5],
+      db.userMfaCredential.count({ where: { userId: whereId } }),
+      db.mediaAsset.count({ where: { uploaderId: whereId, OR: [{ publicObjectKey: { not: null } }, { status: { not: "REJECTED" } }] } }),
+      db.dataExport.count({ where: { userId: whereId, status: "READY" } }),
+    ]);
+    Object.keys(resurrected).forEach((key, j) => { resurrected[key] += live[j]; });
   }
-  return { safe: Object.values(counts).every(v => v === 0), counts };
+  const none = counts => Object.values(counts).every(v => v === 0);
+  const noResurrection = none(resurrected);
+  return { safe: noResurrection && none(retained), noResurrection, resurrected, retained, counts: retained };
 }
 
 function report(errorCode, values) {
@@ -116,8 +139,12 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     const db = createPrismaClient(process.env.RESTORE_DATABASE_URL);
     try {
       const outcome = await checkNoResurrection(db, subject.subjectIds);
-      report(outcome.safe ? "READ_ONLY_VERIFIED_PENDING_HUMAN_GO" : "BLOCKED_RESURRECTED_DATA", { checkedSubjects: subject.subjectIds.length, ...outcome.counts });
-      if (!outcome.safe) process.exitCode = 2;
+      const result = !outcome.noResurrection ? "BLOCKED_RESURRECTED_DATA"
+        : !outcome.safe ? "BLOCKED_RETAINED_TOMBSTONES" : "READ_ONLY_VERIFIED_PENDING_HUMAN_GO";
+      report(result, { checkedSubjects: subject.subjectIds.length, resurrected: outcome.resurrected, retained: outcome.retained });
+      // 2: pre-erasure data is back (never promote). 3: only erasure tombstones remain (#321 strict target, still NO-GO).
+      if (!outcome.noResurrection) process.exitCode = 2;
+      else if (!outcome.safe) process.exitCode = 3;
     } finally {
       await db.$disconnect();
     }
