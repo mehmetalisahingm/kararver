@@ -325,6 +325,22 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     h.clock.advance(-73 * HOUR);
   });
 
+  test("ACTIVE anketin PATCH ile riskli link eklemesi 400 olur ve herkese açık içerik değişmez", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie, {
+      title: "Telefon batarya ömrünü nasıl buluyorsunuz?",
+      description: "Şarj süresi hakkında genel yorum",
+    });
+    const response = await send("PATCH", `/polls/${poll.id}`,
+      { description: "Daha fazla bilgi: https://example.com" }, owner.cookie);
+    assertError(response, 400, "VALIDATION_ERROR");
+    const stored = await db.poll.findUniqueOrThrow({
+      where: { id: poll.id }, select: { description: true, status: true },
+    });
+    assert.equal(stored.status, "ACTIVE");
+    assert.equal(stored.description, "Şarj süresi hakkında genel yorum");
+  });
+
   test("düşük riskli sıradan anket doğrudan 201 ve ACTIVE olur", async () => {
     const owner = await signUp();
     const result = await send("POST", "/polls", pollBody({ title: "Telefon batarya ömrünü nasıl buluyorsunuz?" }), owner.cookie, key());
