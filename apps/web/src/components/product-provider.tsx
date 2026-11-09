@@ -209,7 +209,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   return (
     <ProductContext.Provider value={context}>
       <SceneMotionProvider>
-      <div className="product" data-theme={theme} data-experience={pathname === "/" ? "gravity" : pathname === "/kesfet" || pathname === "/topluluklar" ? "mission" : "studio"} data-area={pathname.startsWith("/admin") ? "admin" : pathname === "/olustur" ? "compose" : pathname === "/bildirimler" ? "notifications" : undefined}
+      <div className="product" data-theme={theme} data-experience={pathname === "/" ? "gravity" : pathname === "/kesfet" || pathname === "/topluluklar" ? "mission" : "studio"} data-area={pathname.startsWith("/admin") ? "admin" : pathname === "/olustur" ? "compose" : pathname === "/bildirimler" ? "notifications" : ["/kayit", "/giris", "/sifremi-unuttum", "/sifre-yenile", "/dogrula"].includes(pathname) ? "auth" : undefined}
         onClickCapture={event => {
           const control = event.target instanceof Element ? event.target.closest("button,a,input,textarea,select") : null;
           pointerTrigger.current = control instanceof HTMLElement ? control : null;
