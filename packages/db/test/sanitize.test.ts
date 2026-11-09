@@ -170,6 +170,24 @@ describe("izole kopyada arındırma (postgres)", { skip: base === null ? "TEST_D
     assert.deepEqual([again.realUsers - again.retainedRoleHolders, Object.keys(again.rewritten).length], [0, 0], "ikinci çalıştırma değişiklik yapmaz");
   });
 
+  test("kısa görünen ad ve sınırdaki varchar değeri iz bırakmadan arındırılır", async () => {
+    const { url, db, pollId } = await fixture("short_bounded");
+    const shortId = randomUUID();
+    await db.$executeRaw`INSERT INTO users (id, email, email_normalized, username, username_normalized, display_name, password_hash, updated_at)
+      VALUES (${shortId}::uuid, 'su.account@gmail.com', 'su.account@gmail.com', 'shortperson', 'shortperson', 'Su', '$argon2id$x', now())`;
+    const original = "Su " + "x".repeat(197);
+    assert.equal(original.length, 200);
+    await db.$executeRaw`UPDATE polls SET title = ${original}, updated_at = now() WHERE id = ${pollId}::uuid`;
+    const preview = await sanitize(url, { apply: false });
+    assert.ok(preview.ok && !preview.applied, "dry-run must verify even with expanding replacements");
+    const applied = await sanitize(url, { apply: true });
+    assert.ok(applied.applied && applied.ok);
+    const [poll] = await db.$queryRaw<{ title: string }[]>`SELECT title FROM polls WHERE id = ${pollId}::uuid`;
+    assert.ok(poll!.title.startsWith("user_"), "short display name should be replaced");
+    assert.equal(poll!.title.length, 200, "expanded synthetic identifiers must respect varchar(200)");
+    assert.ok(!poll!.title.includes("Su "), "short display name must not remain visible");
+  });
+
   test("demote: gerçek rol sahipleri de arındırılır, rol satırları silinir; test alanlı rol kalır", async () => {
     const { url, db } = await fixture("demote");
     const r = await sanitize(url, { apply: true, roleHolders: "demote" });
