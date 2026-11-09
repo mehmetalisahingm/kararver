@@ -270,7 +270,9 @@ export async function sanitize(target: string, { apply, roleHolders = "keep" }: 
               `user_${hex.slice(0, 20)}@example.test`,
               `u${hex.slice(0, 8)}`,
               c.username.length >= 3 ? escapeRe(c.username) : null,
-              c.display.length >= 3 ? (sameAsUser ? escapeRe(c.display) : caseInsensitivePattern(c.display)) : null,
+              // Even 1–2 character display names must be scrubbed AND verified.
+              // They may over-redact coincidental words in an isolated test copy.
+              c.display.length > 0 ? (sameAsUser ? escapeRe(c.display) : caseInsensitivePattern(c.display)) : null,
               c.username.length >= 3 ? escapeRe(c.username.toLowerCase()) : null,
             );
           }
@@ -293,8 +295,13 @@ export async function sanitize(target: string, { apply, roleHolders = "keep" }: 
             const mode = modeOf(c);
             const scrub = mode === "slug" ? `pg_temp.kv_scrub_slug(${q(c.column)})` : c.json ? `pg_temp.kv_scrub_json(${q(c.column)})` : `pg_temp.kv_scrub_text(${q(c.column)})`;
             const probe = c.json ? `pg_temp.kv_json_strings(${q(c.column)})` : `${q(c.column)}::text`;
+            // Restored data can already use the full varchar length. Preserve the
+            // existing bound when a synthetic identifier expands a value; this
+            // is an intentionally lossy, isolated test copy, never a live DB.
+            if (c.maxLength !== null && (!Number.isInteger(c.maxLength) || c.maxLength < 1)) throw new Error("invalid_column_length");
+            const boundedScrub = c.maxLength === null ? scrub : `left(${scrub}, ${c.maxLength})`;
             const n = await tx.$executeRawUnsafe(
-              `UPDATE ${q(c.table)} SET ${q(c.column)} = ${scrub}
+              `UPDATE ${q(c.table)} SET ${q(c.column)} = ${boundedScrub}
                 WHERE ${q(c.column)} IS NOT NULL AND pg_temp.kv_has_trace(${probe}, '${mode}')`,
             );
             if (n > 0) report.rewritten[`${c.table}.${c.column}`] = n;
