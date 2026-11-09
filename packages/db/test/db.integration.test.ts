@@ -200,6 +200,7 @@ describe("migration", () => {
         "community_memberships_owner_guard",
         "domain_events_immutable",
         "moderation_actions_append_only",
+        "moderation_appeal_windows_immutable_receipt",
         "point_ledger_entries_append_only",
         "poll_options_check_kind",
         "poll_options_guard_locked",
