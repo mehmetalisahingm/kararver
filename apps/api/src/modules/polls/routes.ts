@@ -7,6 +7,7 @@ import { ApiError } from "../../http/errors.ts";
 import { idempotencyKeyReused, readIdempotencyScope } from "../../http/idempotency.ts";
 import type { Route, RouteContext } from "../../http/route.ts";
 import { newPublicId, slugify } from "./slug.ts";
+import { screenV1Publication } from "./risk-review.ts";
 import { detectSensitiveSurvey, type SensitiveInput } from "./sensitive-policy.ts";
 import { PollLimitError, PollReferenceError, type IdempotencyScope, type IdempotentResult, type PollPatch, type PollSettings, type PollStore } from "./store.ts";
 import { isClosed, isPubliclyVisible, toPollDetail } from "./view.ts";
@@ -160,13 +161,16 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     const prior = await store.findIdempotentResult(scope);
     if (prior) {
       const { resourceId } = created(prior);
-      return { status: 201, body: { data: await detail({ id: resourceId }, viewer) } };
+      return prior.kind === "replayed" && prior.status === 202
+        ? { status: 202, body: { data: { id: resourceId, status: "UNDER_REVIEW" } } }
+        : { status: 201, body: { data: await detail({ id: resourceId }, viewer) } };
     }
     const settings = await deps.settings();
     // Acil durum anahtarı (KV-40): yeni anket/tartışma kapalı; başarılı isteğin tekrarı (yukarıda) etkilenmez.
     if (!settings.creationEnabled) throw new ApiError("FEATURE_DISABLED", "Yeni anket ve tartışma açma geçici olarak kapalı.");
     assertWithinLimits(body, settings);
     assertV1SensitivePolicy(body);
+    const review = screenV1Publication(body);
     // Tartışma (#66) süresizdir; süre sınırı sadece ankete uygulanır.
     if (isPoll && (body.durationHours < settings.minDurationHours || body.durationHours > settings.maxDurationHours)) {
       throw new ApiError("VALIDATION_ERROR", `Süre ${settings.minDurationHours}–${settings.maxDurationHours} saat arasında olmalı.`, [
@@ -179,6 +183,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
     const publicId = await uniquePublicId();
     const result = await withReferenceErrors(() => store.createPoll(
       {
+        status: review.action === "REVIEW" ? "UNDER_REVIEW" : "ACTIVE",
         kind: body.kind,
         authorId: viewer!.id,
         publicId,
@@ -202,6 +207,9 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
       settings,
     ));
     const { resourceId } = created(result);
+    if (result.kind === "replayed" ? result.status === 202 : review.action === "REVIEW") {
+      return { status: 202, body: { data: { id: resourceId, status: "UNDER_REVIEW" } } };
+    }
     return { status: 201, body: { data: await detail({ id: resourceId }, viewer) } };
   });
 
