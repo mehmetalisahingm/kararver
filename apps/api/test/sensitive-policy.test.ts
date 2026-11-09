@@ -85,3 +85,28 @@ test("ordinary 'tip' descriptions are not mistaken for a political party; exact 
     { field: "options.0.label", category: "political" },
   );
 });
+
+test("non-personal research and public-service choices remain allowed", () => {
+  assert.equal(detectSensitiveSurvey({
+    title: "Hangi alanda araştırmaya daha fazla bütçe ayrılmalı?",
+    options: [{ label: "Kanser araştırmaları" }, { label: "Uzay araştırmaları" }],
+  }), null);
+  assert.equal(detectSensitiveSurvey({
+    title: "Kültürel miras üzerine genel değerlendirme",
+    options: [{ label: "Alevi" }, { label: "Sünni" }],
+  }), null);
+});
+
+test("an addendum cannot turn earlier categorical choices into a personal-attribute question", () => {
+  const base = {
+    title: "Kültürel miras üzerine genel değerlendirme",
+    options: [{ label: "Alevi" }, { label: "Sünni" }],
+  };
+  assert.deepEqual(detectSensitiveSurvey({ ...base, addenda: ["Hangisisin? Sana yakın olan grubu seç"] }),
+    { field: "options.0.label", category: "belief" });
+  assert.deepEqual(detectSensitiveSurvey({
+    title: "Kültürel miras üzerine genel değerlendirme",
+    addenda: ["Hangisisin? Sana yakın olan grubu seç"],
+    options: base.options,
+  }), { field: "options.0.label", category: "belief" });
+});
