@@ -14,6 +14,7 @@ export type SensitiveInput = {
   body?: string;
   options?: readonly { label: string }[];
   tagSlugs?: readonly string[];
+  addenda?: readonly string[];
 };
 export type SensitiveRisk = { field: string; category: "political" | "belief" | "health" | "ethnicity" | "membership" | "sexual" | "justice" | "biometric" };
 
@@ -42,19 +43,23 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
   { category: "biometric", pattern: /\b(?:parmak izin|parmak izini|yuz tanima verin|genetik verin|genetik test sonucunuz|dna sonucunu|dna bilgilerini)\b/ },
 ];
 
-/** Selection of categorical sensitive answers also reveals respondent data. */
+/** Categorical choices alone do not prove that we ask about a respondent's attributes.
+ * Require a self-referential question and a categorical answer label; general
+ * research/services topics like "Kanser araştırmaları" must remain allowed.
+ */
 const SENSITIVE_ANSWERS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: RegExp }> = [
-  { category: "political", pattern: /\b(?:ak parti|chp|mhp|iyi parti|dem parti|turkiye isci partisi|zafer partisi|yeniden refah)\b/ },
-  { category: "belief", pattern: /\b(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|deist)\b/ },
-  { category: "health", pattern: /\b(?:diyabet|hiv|aids|kanser|depresyon|bipolar|sizofreni|otizm)\b/ },
-  { category: "membership", pattern: /\b(?:sendika uyesi|dernek uyesi|vakif uyesi)\b/ },
+  { category: "political", pattern: /^(?:ak parti|chp|mhp|iyi parti|dem parti|turkiye isci partisi|tip|zafer partisi|yeniden refah)$/ },
+  { category: "belief", pattern: /^(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|deist)$/ },
+  { category: "health", pattern: /^(?:diyabet|hiv|aids|kanser|depresyon|bipolar|sizofreni|otizm)$/ },
+  { category: "membership", pattern: /^(?:sendika uyesi|dernek uyesi|vakif uyesi)$/ },
 ];
-const CHOICE_PROMPT = /\b(?:hangi|hangisi|hangisini|hangisisin|hangisiniz|kime|neye|oyun|tercihin|sizin|senin|misin|misiniz|kendini|hangi gruptasin|hangi gruptasiniz)\b/;
+const PERSONAL_CHOICE_PROMPT = /\b(?:hangisisin|hangisiniz|hangi gruptasin|hangi gruptasiniz|hangisini tercih edersin|hangisini secersin|hangisini tercih ediyorsun|hangi gruba aitsin|sana yakin olan grubu sec|kendini|senin|sizin|sen hangi|siz hangi|sende|kime oy verirsin|hangi dine mensupsun)\b/;
 
 export function detectSensitiveSurvey(input: SensitiveInput): SensitiveRisk | null {
   const fields: Array<[string, string | undefined | null]> = [
     ["title", input.title], ["description", input.description],
     ["extraInfo", input.extraInfo], ["body", input.body],
+    ...(input.addenda ?? []).map((body, i): [string, string] => [`addenda.${i}.body`, body]),
     ...(input.options ?? []).map((o, i): [string, string] => [`options.${i}.label`, o.label]),
   ];
   for (const [field, source] of fields) {
@@ -67,13 +72,11 @@ export function detectSensitiveSurvey(input: SensitiveInput): SensitiveRisk | nu
 
   // A question like "Hangisisin?" + "Alevi / Sünni" discloses a belief
   // even though no sensitive keyword appears in the title.
-  const question = normalized([input.title, input.description, input.extraInfo].filter(Boolean).join(" "));
-  const choices = (input.options ?? []).map(o => normalized(o.label));
-  if (choices.length >= 2 && CHOICE_PROMPT.test(question)) {
+  const question = normalized([input.title, input.description, input.extraInfo, input.body, ...(input.addenda ?? [])].filter(Boolean).join(" "));
+  const choices = (input.options ?? []).map(o => normalized(o.label).trim());
+  if (choices.length >= 2 && PERSONAL_CHOICE_PROMPT.test(question)) {
     for (const rule of SENSITIVE_ANSWERS) {
-      const index = choices.findIndex(c =>
-        rule.pattern.test(c) || (rule.category === "political" && c.trim() === "tip")
-      );
+      const index = choices.findIndex(c => rule.pattern.test(c));
       if (index !== -1) return { field: `options.${index}.label`, category: rule.category };
     }
   }
