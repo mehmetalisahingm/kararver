@@ -6,12 +6,15 @@
 <link rel="stylesheet" href="./style.css"><link rel="icon" href="data:,">
 <body>
 <main id="scene" aria-label="Etkileşimli üç boyutlu mekik kabini"></main>
+<div id="word-stage" role="group" aria-label="Yer çekiminden etkilenen fikirler" hidden></div>
 <header><a class="brand" href="/" target="_top">kararver<span>®</span></a><div class="mission"><i></i> YÖRÜNGEDEYİZ <span>408 KM / DÜNYA</span></div><button id="pause" aria-label="Hareketi durdur" aria-pressed="false">Ⅱ</button></header>
 <div class="intro"><span>BAŞKA BİR BAKIŞ MÜMKÜN.</span><h1>Bir fikre<br><em>kapıl.</em></h1><p>Bir anlığına,<br>her şeyi serbest bırak.</p></div>
+<div class="word-intro"><span>FİKİRLER DE HAREKET EDER</span><p>Kelimeleri tut, bırak.<br>Sonra yer çekimini değiştir.</p></div>
+<div class="experience-switch" role="group" aria-label="Kabin deneyimi"><button id="mode-words" type="button" aria-pressed="false" disabled>Yazılar</button><button id="mode-objects" type="button" aria-pressed="true">Nesneler</button></div>
 <div id="loading" role="status">Kabine giriyoruz<span></span></div>
 <aside class="state" aria-live="polite"><span id="state-label">SERBEST SÜZÜLÜŞ</span><strong id="g-value">0.00<small>g</small></strong></aside>
 <footer>
-<div class="hint"><span>01 / KÜÇÜK BİR DENEY</span><p>Bir nesneyi tut. Sürükle. Bırak.</p><small id="selected">Sonra yer çekimini aç.</small></div>
+<div class="hint"><span>01 / KÜÇÜK BİR DENEY</span><p id="hint-copy">Bir nesneyi tut. Sürükle. Bırak.</p><small id="selected">Sonra yer çekimini aç.</small></div>
 <div class="actions"><button id="gravity" aria-pressed="false" disabled><span>↓</span> Yer çekimini aktif et</button><button id="reset" aria-label="Deneyi sıfırla" disabled>↺</button></div>
 <details class="settings"><summary>Kabini keşfet ↗</summary><div><button id="room">Yalnız ortam</button><button id="objects">Tüm nesneler</button><button id="angle">Bakış açısı</button><label>Nesne <select id="pick" aria-label="Hareket ettirilecek nesne"><option value="">Seç</option value="astronaut">Astronot</option><option value="apple">Elma</option><option value="laptop">Laptop</option><option value="water">Su</option><option value="milk">Süt</option></select></label><label><input type="checkbox" id="copy" checked> Yazılar</label><p>Bakış açısı düğmesiyle kabini incele.<br>Seçili nesne: ok tuşları · Bırak: Esc</p></div></details>
 </footer>

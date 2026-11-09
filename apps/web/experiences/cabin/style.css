@@ -5,3 +5,24 @@
 button:disabled{opacity:.45;cursor:default}.settings select{background:#202b26;color:#edece3;border:1px solid #c5d3b848;border-radius:3px;margin-left:10px;padding:5px;font:inherit}#loading[role=alert]{flex-direction:column;gap:20px}#loading[role=alert] button{background:#d6e8a7;border:0;border-radius:3px;padding:12px 20px;color:#202819}
 
 body[data-embedded=true] header{inset:100px 26px auto;justify-content:flex-end}body[data-embedded=true] header :is(.brand,.mission){display:none}
+
+/* Two independent experiments share the cabin without changing the original objects. */
+.experience-switch{position:absolute;z-index:3;top:94px;right:38px;display:flex;padding:4px;border:1px solid #d7e4c745;border-radius:999px;background:#101915b8;backdrop-filter:blur(18px)}
+.experience-switch button{border:0;border-radius:999px;background:transparent;padding:8px 15px;color:#d6dfd0;font-size:11px}
+.experience-switch button[aria-pressed=true]{background:#d6e8a7;color:#182119}
+body[data-embedded=true] .experience-switch{top:100px;left:26px;right:auto}
+#word-stage{position:absolute;z-index:2;inset:23% 6% 25%;overflow:hidden;pointer-events:none;touch-action:none}
+#word-stage[hidden]{display:none}
+.floating-word{position:absolute;top:0;left:0;max-width:90%;padding:4px 7px;border:0;background:transparent;color:#f3f1e5;white-space:nowrap;pointer-events:auto;touch-action:none;cursor:grab;text-shadow:0 4px 22px #000d,0 1px 3px #000;font-size:clamp(20px,3.4vw,48px);font-weight:600;letter-spacing:-.055em;line-height:1.05;will-change:transform}
+.floating-word:nth-child(2),.floating-word:nth-child(5){color:#e4efb2;font-family:Georgia,serif;font-weight:400;font-style:italic}
+.floating-word:nth-child(3){font-size:clamp(19px,2.8vw,40px)}
+.floating-word:nth-child(4){font-size:clamp(25px,4vw,56px)}
+.floating-word.is-held{cursor:grabbing;color:#efffc1;text-shadow:0 0 24px #d6e8a788,0 4px 20px #000}
+.floating-word:focus-visible{outline:2px solid #d7ed9c;outline-offset:4px;border-radius:4px}
+.word-intro{display:none;position:absolute;left:6%;top:15%;pointer-events:none;text-shadow:0 2px 12px #000c}
+.word-intro span{font-size:9px;letter-spacing:1.8px;color:#d8e9ad}
+.word-intro p{margin:11px 0 0;font-size:13px;line-height:1.45;color:#e7e9dc}
+body[data-mode=words] .word-intro{display:block}
+body[data-mode=words] .intro,body[data-mode=words] .settings :is(#room,#objects,label:has(#pick)){display:none}
+body[data-mode=words].no-copy .word-intro{display:none}
+@media(max-width:700px){.experience-switch{top:74px;right:20px}.experience-switch button{padding:8px 13px;font-size:10px}body[data-embedded=true] .experience-switch{top:100px;left:20px}.word-intro{left:23px;top:18%}.word-intro span{font-size:8px}.word-intro p{font-size:11px;margin-top:7px}#word-stage{inset:29% 5% 27%}.floating-word{font-size:clamp(20px,6vw,28px)}.floating-word:nth-child(3){font-size:clamp(18px,5.4vw,25px)}.floating-word:nth-child(4){font-size:clamp(23px,7vw,32px)}}
