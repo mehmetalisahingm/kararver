@@ -529,6 +529,12 @@ export const examples: Example[] = [
   {"endpoint":"admin.communities.requests.list","name":"ok","request":{"query":{"status":"PENDING"}},"status":200,"body":{"data":[{"id":"01998b9a-0000-7000-8000-000000000096","requesterId":"01998b9a-0000-7000-8000-000000000002","communityId":null,"name":"Yeni Topluluk","slug":"yeni-topluluk","description":null,"categoryId":null,"status":"PENDING","rejectionReason":null,"approvedAt":null,"approvalDeadline":null,"closedAt":null,"memberCount":0,"createdAt":"2026-09-27T09:00:00.000Z"}]}},
   {"endpoint":"admin.communities.requests.decide","name":"ok","request":{"params":{"id":"01998b9a-0000-7000-8000-000000000096"},"body":{"decision":"APPROVE","reason":"Kurallara uygun"}},"status":200,"body":{"data":{"id":"01998b9a-0000-7000-8000-000000000096","requesterId":"01998b9a-0000-7000-8000-000000000002","communityId":"01998b9a-0000-7000-8000-000000000011","name":"Yeni Topluluk","slug":"yeni-topluluk","description":null,"categoryId":null,"status":"APPROVED","rejectionReason":null,"approvedAt":"2026-09-27T09:00:00.000Z","approvalDeadline":"2026-10-04T09:00:00.000Z","closedAt":null,"memberCount":1,"createdAt":"2026-09-27T09:00:00.000Z"}}},
 
+  // ── user-owned moderation appeal window: synthetic confirmed notification delivery ──
+  { endpoint: "me.moderationAppeals.get", name: "delivered", request: { params: { id: AUDIT } }, status: 200,
+    body: data({ rejectionActionId: AUDIT, deliveredAt: T0, deadlineAt: "2026-10-27T09:00:00.000Z", filedAt: null, status: "OPEN" }) },
+  { endpoint: "me.moderationAppeals.file", name: "filed", request: { params: { id: AUDIT }, body: { reason: "İncelemenin yanlış olduğunu düşünüyorum." } }, status: 200,
+    body: data({ rejectionActionId: AUDIT, deliveredAt: T0, deadlineAt: "2026-10-27T09:00:00.000Z", filedAt: T1, status: "FILED" }) },
+
   // ── notifications ──
   { endpoint: "notifications.list", name: "ok", request: { query: { unreadOnly: "true" } }, status: 200, body: page([notification]) },
   { endpoint: "notifications.unreadCount", name: "ok", status: 200, body: data({ count: 3 }) },
