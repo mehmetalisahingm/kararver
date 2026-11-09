@@ -227,3 +227,27 @@ body:has(.product[data-experience="studio"]) .privacy-preferences button { color
   .studio-motion { color:CanvasText; background:Canvas; }
   .legal-public { color:CanvasText; background:Canvas; }
 }
+
+/* Auth/recovery forms use a readable single-column workspace even at 200% zoom.
+   Hiding decorative sidebars avoids horizontal overflow without clipping content. */
+.product[data-experience="studio"][data-area="auth"] .app-layout {
+  display: block;
+  width: min(100%, 600px);
+  max-width: 600px;
+  margin-inline: auto;
+  padding-inline: clamp(14px, 3vw, 24px);
+  box-sizing: border-box;
+}
+.product[data-experience="studio"][data-area="auth"] :is(.app-sidebar, .app-aside) { display: none; }
+.product[data-experience="studio"][data-area="auth"] .app-header { flex-wrap: wrap; }
+.product[data-experience="studio"][data-area="auth"] .auth-card {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+.product[data-experience="studio"][data-area="auth"] .auth-card :is(input, button, label) {
+  min-width: 0;
+  max-width: 100%;
+}
