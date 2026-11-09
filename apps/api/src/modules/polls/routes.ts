@@ -228,20 +228,28 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
       );
     }
 
+    // Validate the complete projected poll, not only PATCH fields. Otherwise a
+    // neutral question + sensitive option labels (or the reverse) can bypass V1 policy.
+    const current = await store.findPoll({ id: params.id }, null);
+    if (!current) throw new ApiError("NOT_FOUND", "İçerik bulunamadı.");
     if (body.options) {
       const labels = body.options.map((o: { label: string }) => o.label.toLocaleLowerCase("tr"));
       if (new Set(labels).size !== labels.length) {
         throw new ApiError("VALIDATION_ERROR", "Seçenekler birbirinden farklı olmalı.", [{ field: "options", code: "duplicate" }]);
       }
-      const current = await store.findPoll({ id: params.id }, null);
-      const known = new Set(current!.options.map((o) => o.id));
+      const known = new Set(current.options.map((o) => o.id));
       const ids = body.options.flatMap((o: { id?: string }) => (o.id ? [o.id] : []));
       if (ids.some((id: string) => !known.has(id)) || new Set(ids).size !== ids.length) {
         throw new ApiError("VALIDATION_ERROR", "Seçenek bu ankete ait değil.", [{ field: "options", code: "unknown_option" }]);
       }
     }
     assertWithinLimits(body, await deps.settings());
-    assertV1SensitivePolicy(body);
+    assertV1SensitivePolicy({
+      title: body.title ?? current.title,
+      description: body.description === undefined ? current.description : body.description,
+      extraInfo: body.extraInfo === undefined ? current.extraInfo : body.extraInfo,
+      options: body.options ?? current.options.map((option) => ({ label: option.label })),
+    });
     await validateReferences(ctx, { categoryId: body.categoryId });
 
     const patch: PollPatch = {};
