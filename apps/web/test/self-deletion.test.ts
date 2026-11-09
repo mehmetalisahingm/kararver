@@ -29,9 +29,13 @@ test("bağlantı metni: silme geri alınamazlığı açıkça söyler ve tehlike
   assert.notEqual(confirm.title, cancel.title);
 });
 
-test("sonuç metinleri: silindi oturumların kapandığını, iptal güvenlik önerisini söyler", () => {
-  assert.match(deletionResultMessage("deleted"), /kalıcı olarak silindi/);
-  assert.match(deletionResultMessage("unchanged"), /zaten silinmiş/);
+test("sonuç metni hesap erişimini açıklar, depo/yedek temizliği bitmeden tüm veriler silindi demez", () => {
+  const deleted = deletionResultMessage("deleted");
+  assert.match(deleted, /erişim kapatıldı/);
+  assert.match(deleted, /depo temizliği|Dosyaların depo temizliği/i);
+  assert.match(deleted, /yedekler/i);
+  assert.doesNotMatch(deleted, /Hesabın kalıcı olarak silindi/);
+  assert.match(deletionResultMessage("unchanged"), /erişim daha önce kapatılmış/);
   assert.match(deletionResultMessage("cancelled"), /şifreni değiştir/i);
 });
 
