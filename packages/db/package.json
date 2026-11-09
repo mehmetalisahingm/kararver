@@ -12,7 +12,7 @@
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "typecheck": "tsc -p tsconfig.json",
-    "test:db": "node --test --test-concurrency=1 test/db.integration.test.ts test/ops.test.ts test/migration-gate.test.ts",
+    "test:db": "node --test --test-concurrency=1 test/db.integration.test.ts test/ops.test.ts test/migration-gate.test.ts test/restore-erasure-gate.test.mjs",
     "db:backup": "node ops/backup.ts",
     "db:restore": "node ops/restore.ts",
     "db:verify": "node ops/verify.ts",
