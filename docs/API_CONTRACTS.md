@@ -141,6 +141,8 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 
 | Endpoint | Yetki | Başarı | Idempotency | Sağlayıcı | Tüketici | Açtığı iş | Durum |
 |---|---|---|---|---|---|---|---|
+| `GET /me/moderation-appeals/:id`<br>Kendi ret bildiriminin teyitli teslim ve son itiraz tarihini oku · `me.moderationAppeals.get` | U | 200 | — | Mert `moderation` | Ümit (itiraz ve bildirim UI) | #290 #327 | hazır |
+| `POST /me/moderation-appeals/:id`<br>30 gün içinde tek seferlik moderasyon itirazını kaydet · `me.moderationAppeals.file` | U | 200 | doğal | Mert `moderation` | Ümit (itiraz başvurusu) | #290 #327 | hazır |
 | `POST /reports`<br>İçerik veya kullanıcı raporu · `reports.create` | U | 202 | doğal | Mert `reports` | Ümit (rapor modalı) | #26 | hazır |
 | `GET /admin/reports`<br>Moderasyon kuyruğu · `admin.reports.list` | M | 200 | — | Mert `reports` | Mert (admin moderasyon UI, KV-37) | #26 #39 | hazır |
 | `POST /admin/reports/:id/resolve`<br>Raporu sonuçlandır · `admin.reports.resolve` | M | 200 | doğal | Mert `reports` | Mert (admin moderasyon UI, KV-37) | #26 | hazır |
@@ -323,6 +325,8 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
 | #185 | `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `POST /admin/audit/export` |
 | #186 | `GET /admin/ops` |
+| #290 | `GET /me/moderation-appeals/:id`, `POST /me/moderation-appeals/:id` |
+| #327 | `GET /me/moderation-appeals/:id`, `POST /me/moderation-appeals/:id` |
 <!-- END:unblocks -->
 
 Bağımlılığı olmayan KV-03 tüketicileri: #8 (KV-06, mock fixture ve CI) bu paketin `examples` ve şemalarını mock sunucu için kullanır; #6 (KV-04) olay ve yetki sözleşmesini bu envanterdeki `auth` seviyeleriyle eşler.
