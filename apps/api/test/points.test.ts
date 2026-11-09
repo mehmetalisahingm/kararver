@@ -211,13 +211,75 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal((await summary(owner.cookie)).balance, 20);
     assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "MODERATION_REFUND" } }), 1);
 
-    // Reopening after refund is forbidden until the owner decides whether
-    // appeal reinstatement should re-charge points.
+    // A plain ADMIN RESTORE is NOT an accepted appeal. The reversal must
+    // refer to the specific, still-latest human rejection via preview/digest.
     const restore = await send("POST", `/admin/polls/${pollId}/moderation`,
       { action: "RESTORE", reason: "Karara itiraz" }, reviewer.cookie);
     assert.equal(restore.statusCode, 409, restore.body);
     assert.equal((await db.poll.findUniqueOrThrow({ where: { id: pollId } })).status, "REMOVED");
     assert.equal((await summary(owner.cookie)).balance, 20);
+
+    const rejectedAction = await db.moderationAction.findFirstOrThrow({
+      where: { pollId, action: "REMOVE", fromStatus: "UNDER_REVIEW", toStatus: "REMOVED" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { id: true },
+    });
+    const preview = await send("GET", `/admin/moderation/actions/${rejectedAction.id}/undo/preview`,
+      undefined, reviewer.cookie);
+    assert.equal(preview.statusCode, 200, preview.body);
+    assert.equal(preview.json().data.outcome, "WILL_UNDO");
+    const digest: string = preview.json().data.digest;
+    const unauthorizedUndo = await send("POST", `/admin/moderation/actions/${rejectedAction.id}/undo`,
+      { digest, reason: "Karara itiraz kabul edildi" }, owner.cookie);
+    assert.equal(unauthorizedUndo.statusCode, 403, unauthorizedUndo.body);
+
+    // The same moderator must not accidentally restore a poll for a banned
+    // user, nor one edited to solicit forbidden respondent details.
+    await db.user.update({ where: { id: owner.id }, data: { status: "BANNED" } });
+    const bannedUndo = await send("POST", `/admin/moderation/actions/${rejectedAction.id}/undo`,
+      { digest, reason: "Bu kullanıcı yasaklıyken yayımlama denemesi" }, reviewer.cookie);
+    assert.equal(bannedUndo.statusCode, 409, bannedUndo.body);
+    await db.user.update({ where: { id: owner.id }, data: { status: "ACTIVE" } });
+
+    await db.poll.update({ where: { id: pollId }, data: { title: "Hangi partiye oy verdin?" } });
+    const sensitiveUndo = await send("POST", `/admin/moderation/actions/${rejectedAction.id}/undo`,
+      { digest, reason: "Hassas veriyi açıkça soran anketi açma denemesi" }, reviewer.cookie);
+    assert.equal(sensitiveUndo.statusCode, 409, sensitiveUndo.body);
+    await db.poll.update({ where: { id: pollId }, data: { title: pendingBody.title } });
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: pollId } })).status, "REMOVED");
+    assert.equal((await summary(owner.cookie)).balance, 20);
+
+    const beforeRestore = await db.poll.findUniqueOrThrow({
+      where: { id: pollId }, select: { opensAt: true, closesAt: true },
+    });
+    h.clock.advance(75 * 60 * 60 * 1000);
+    const appealAccepted = await send("POST", `/admin/moderation/actions/${rejectedAction.id}/undo`,
+      { digest, reason: "Yanlış ön moderasyon reddi: itiraz kabul edildi." }, reviewer.cookie);
+    assert.equal(appealAccepted.statusCode, 200, appealAccepted.body);
+    assert.equal(appealAccepted.json().data.outcome.status, "ACTIVE");
+    const reopened = await db.poll.findUniqueOrThrow({ where: { id: pollId } });
+    assert.equal(reopened.status, "ACTIVE");
+    assert.equal(reopened.opensAt.getTime(), h.clock.now.getTime());
+    assert.equal(reopened.closesAt!.getTime() - reopened.opensAt.getTime(),
+      beforeRestore.closesAt!.getTime() - beforeRestore.opensAt.getTime(),
+      "itirazla ücretsiz yayımlanan ankete tam oylama süresi verilir");
+    assert.equal((await send("GET", `/polls/${pollId}`)).statusCode, 200);
+    assert.equal((await summary(owner.cookie)).balance, 20,
+      "yanlış ret iadesi kullanıcıda kalır, yeniden 10 puan kesilmez");
+
+    const appealAction = await db.moderationAction.findFirstOrThrow({
+      where: { pollId, action: "RESTORE", undoOfId: rejectedAction.id },
+      select: { fromStatus: true, toStatus: true, undoOfId: true },
+    });
+    assert.deepEqual(appealAction, { fromStatus: "REMOVED", toStatus: "ACTIVE", undoOfId: rejectedAction.id });
+    const duplicateAppeal = await send("POST", `/admin/moderation/actions/${rejectedAction.id}/undo`,
+      { digest, reason: "Tekrarlanan itiraz kabulü" }, reviewer.cookie);
+    assert.equal(duplicateAppeal.statusCode, 409, duplicateAppeal.body);
+    assert.equal(await db.moderationAction.count({ where: { pollId, action: "RESTORE", undoOfId: rejectedAction.id } }), 1);
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "PUBLISH" } }), 1);
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "MODERATION_REFUND" } }), 1);
+    assert.equal((await summary(owner.cookie)).balance, 20);
+    h.clock.advance(-75 * 60 * 60 * 1000);
 
     const normal = await send("POST", "/polls", pollBody(), owner.cookie, `normal-${randomUUID()}`);
     assert.equal(normal.statusCode, 201, normal.body);
