@@ -105,6 +105,8 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
         usernameNormalized: body.username,
         displayName: body.displayName,
         passwordHash,
+        // #289: beyan kayıt anında kalıcı yazılır; sonraki girişte tekrar sorulmaz.
+        adultDeclaredAt: body.adultConfirmed === true ? now() : null,
       },
       verification.record,
     );
@@ -149,7 +151,7 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
     );
     cookies.set(reply, raw);
     // İlk giriş puanı (#67, 20 puan) puan defteriyle birlikte gelecek; tablo henüz yok.
-    return { status: 200, body: { data: toMe(user, deps.mediaPublicBaseUrl, await rolesOf(user.id), session.emailVerificationRequired) } };
+    return { status: 200, body: { data: toMe(user, deps.mediaPublicBaseUrl, await rolesOf(user.id), session.emailVerificationRequired, deps.adultDeclarationRequired) } };
   });
 
   route("auth.logout", async ({ viewer, reply }) => {

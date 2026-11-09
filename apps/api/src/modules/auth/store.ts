@@ -14,6 +14,8 @@ export type UserRecord = {
   passwordHash: string;
   status: UserStatus;
   emailVerifiedAt: Date | null;
+  /** #289 54A: 18+ öz beyanının ilk verildiği an; null = beyan yok (eski hesap). */
+  adultDeclaredAt: Date | null;
   bio: string | null;
   /** Sadece APPROVED avatarın public object key'i; aksi halde null. */
   avatarPublicKey: string | null;
@@ -30,6 +32,8 @@ export type NewUser = {
   usernameNormalized: string;
   displayName: string;
   passwordHash: string;
+  /** Kayıtta 18+ beyanı verildiyse kayıt anı (#289). */
+  adultDeclaredAt?: Date | null;
 };
 
 export type NewToken = { purpose: TokenPurpose; tokenHash: string; expiresAt: Date };
@@ -73,6 +77,11 @@ export interface AuthStore {
   /** Kullanıcının kendi, AVATAR amaçlı ve REJECTED olmayan görseli mi? */
   isUsableAvatar(userId: string, mediaId: string): Promise<boolean>;
   updateProfile(userId: string, patch: ProfilePatch): Promise<UserRecord>;
+  /**
+   * #289 54A: 18+ öz beyanını kaydeder. İlk beyan zamanı korunur (idempotent); yalnız ilk kayıtta audit yazılır.
+   * Silinmiş hesapta null döner.
+   */
+  declareAdult(userId: string, now: Date, requestId?: string): Promise<Date | null>;
 
   /** V1 #67: yayın puanı bakiyesi ve append-only hareket listesi. */
   /** publishCost: points.publishCost (KV-40); verilmezse resmî varsayılan. */

@@ -80,6 +80,8 @@ model User {
   passwordHash       String     @map("password_hash")
   status             UserStatus @default(ACTIVE)
   emailVerifiedAt    DateTime?  @map("email_verified_at") @db.Timestamptz(3)
+  /// #289 54A: 18+ öz beyanının ilk verildiği an. NULL = beyan yok (eski hesap); kimlik veya gerçek yaş doğrulaması DEĞİLDİR.
+  adultDeclaredAt    DateTime?  @map("adult_declared_at") @db.Timestamptz(3)
   bio                String?    @db.VarChar(300)
   avatarMediaId      String?    @map("avatar_media_id") @db.Uuid
   lastLoginAt        DateTime?  @map("last_login_at") @db.Timestamptz(3)

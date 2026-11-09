@@ -30,9 +30,9 @@ const hash = await createArgon2Hasher().hash(PERF.password);
 const NOW = "now()";
 
 await run("kullanıcılar", `
-  INSERT INTO users (id, email, email_normalized, username, username_normalized, display_name, password_hash, email_verified_at, updated_at)
+  INSERT INTO users (id, email, email_normalized, username, username_normalized, display_name, password_hash, email_verified_at, adult_declared_at, updated_at)
   SELECT gen_random_uuid(), 'perf' || i || '@perf.test', 'perf' || i || '@perf.test', 'perf' || i, 'perf' || i, 'Perf ' || i,
-    '${hash}', ${NOW}, ${NOW}
+    '${hash}', ${NOW}, ${NOW}, ${NOW}
   FROM generate_series(1, ${PERF.users}) i`);
 
 // Gönderiler son 30 güne yayılır; anketlerin süresi 1–30 gün (bir kısmı kapanmış). Her 10 gönderiden biri tartışma.
