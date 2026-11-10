@@ -23,6 +23,8 @@ test("telafi çiftleri: yalnız kararın önceki duruma tam dönüşünü sağla
   const comment = (action: string, fromStatus: string | null) => inverseDecision({ kind: "comments", action, fromStatus });
   assert.equal(poll("HIDE", "ACTIVE"), "RESTORE");
   assert.equal(poll("REMOVE", "ACTIVE"), "RESTORE");
+  assert.equal(poll("REMOVE", "UNDER_REVIEW"), "RESTORE", "wrongful pre-publication rejection is reversible via audited appeal");
+  assert.equal(comment("REMOVE", "UNDER_REVIEW"), null, "comment removal is not a poll appeal");
   assert.equal(poll("RESTORE", "HIDDEN"), "HIDE");
   assert.equal(poll("RESTORE", "REMOVED"), "REMOVE");
   assert.equal(poll("LOCK", "ACTIVE"), "UNLOCK");
