@@ -377,6 +377,21 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal(stored.description, "Şarj süresi hakkında genel yorum");
   });
 
+  test("published poll cannot bypass review through addenda or subsequent PATCH", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie, { title: "Telefon batarya ömrü nasıl?" });
+    const blocked = await send("POST", `/polls/${poll.id}/addenda`, { body: "Bilgi: https://example.com" }, owner.cookie);
+    assertError(blocked, 400, "VALIDATION_ERROR");
+    assert.equal(await db.pollAddendum.count({ where: { pollId: poll.id } }), 0);
+    // Synthetic legacy data: PATCH must recheck existing addenda too.
+    await db.pollAddendum.create({ data: { pollId: poll.id, body: "Bilgi: https://example.com" } });
+    const edit = await send("PATCH", `/polls/${poll.id}`, { title: "Telefon şarjı yeterli mi?" }, owner.cookie);
+    assertError(edit, 400, "VALIDATION_ERROR");
+    const stored = await db.poll.findUniqueOrThrow({ where: { id: poll.id }, select: { title: true, status: true } });
+    assert.equal(stored.title, "Telefon batarya ömrü nasıl?");
+    assert.equal(stored.status, "ACTIVE");
+  });
+
   test("generic RESTORE cannot publish a rejected review without audited appeal", async () => {
     const owner = await signUp();
     const reviewer = await signUp();
