@@ -23,6 +23,10 @@ export function appealWindow(
   if (!Number.isFinite(deliveredAt.getTime()) || !Number.isFinite(submittedAt.getTime())) {
     throw new RangeError("invalid appeal clock");
   }
+  // A future receipt does not make a filing valid before delivery occurred.
+  if (submittedAt.getTime() < deliveredAt.getTime()) {
+    return { state: "NOT_DELIVERED", deadlineAt: null };
+  }
   const deadlineAt = new Date(deliveredAt.getTime() + APPEAL_WINDOW_MS);
   return submittedAt.getTime() <= deadlineAt.getTime()
     ? { state: "OPEN", deadlineAt }
