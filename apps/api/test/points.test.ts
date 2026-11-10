@@ -246,6 +246,11 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
       { digest, reason: "Hassas veriyi açıkça soran anketi açma denemesi" }, reviewer.cookie);
     assert.equal(sensitiveUndo.statusCode, 409, sensitiveUndo.body);
     await db.poll.update({ where: { id: pollId }, data: { title: pendingBody.title } });
+    const unsafeAddendum = await db.pollAddendum.create({ data: { pollId, body: "Hangi partiye oy verdin?" } });
+    const addendumUndo = await send("POST", `/admin/moderation/actions/${rejectedAction.id}/undo`,
+      { digest, reason: "Hassas ek açıklama içeren anketi açma denemesi" }, reviewer.cookie);
+    assert.equal(addendumUndo.statusCode, 409, addendumUndo.body);
+    await db.pollAddendum.delete({ where: { id: unsafeAddendum.id } });
     assert.equal((await db.poll.findUniqueOrThrow({ where: { id: pollId } })).status, "REMOVED");
     assert.equal((await summary(owner.cookie)).balance, 20);
 
