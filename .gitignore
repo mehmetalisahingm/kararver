@@ -48,6 +48,8 @@ output/playwright/
 
 # KV-44 (#46): yerel kesinti kabul testi çıktıları (pnpm outage:test -- --out ...)
 outage-sonuc*.json
+apps/web/release-results/
+apps/web/release-report/
 
 # Generated standalone cabin bundle; source and texture assets are versioned.
 apps/web/public/experiences/cabin/assets/

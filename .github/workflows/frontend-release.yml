@@ -1,0 +1,39 @@
+name: Frontend release acceptance
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  release-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      CI: 'true'
+      KV_BROWSER: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @kararver/web exec playwright install --with-deps ${{ matrix.browser }}
+      - name: Four-width release matrix on this exact checkout
+        run: pnpm --filter @kararver/web exec playwright test -c playwright.release.config.ts
+      - name: Real local HTTP crawler and removal regression
+        if: matrix.browser == 'chromium'
+        run: pnpm --filter @kararver/web exec playwright test -c playwright.public-read.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-${{ matrix.browser }}-${{ github.sha }}
+          path: |
+            apps/web/release-results
+            apps/web/release-report
+          if-no-files-found: error

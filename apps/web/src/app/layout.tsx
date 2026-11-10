@@ -50,6 +50,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <Suspense fallback={null}><SourceAttribution /></Suspense>
         <div className="site-content">
+          {/* Route screens own their loading states. A root loading boundary
+              would commit 200 before public-poll 404/5xx is known. */}
           <SiteShell legalLinks={links}>
             {children}
           </SiteShell>

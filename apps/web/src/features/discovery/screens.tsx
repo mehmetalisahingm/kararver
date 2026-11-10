@@ -403,6 +403,7 @@ function FeedBody({
               <Link href="/kesfet" className="kv-button kv-button--secondary">
                 Tüm içeriklere dön
               </Link>
+              {!query.q && <Link href="/olustur" className="kv-button">İlk soruyu sor</Link>}
             </div>
           )}
         </>

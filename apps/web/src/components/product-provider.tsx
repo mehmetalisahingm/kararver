@@ -92,6 +92,9 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const trigger = useRef<HTMLElement | null>(null);
   const pointerTrigger = useRef<HTMLElement | null>(null);
   const pathname = usePathname();
+  // The server supplies only the anonymous API projection on these routes.
+  // Do not hide that public HTML behind client-only session restoration.
+  const publicPollRead = pathname.startsWith("/karar/");
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem("kararver:theme");
@@ -315,7 +318,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
               {message}
             </div>
             {pathname !== "/" && pathname !== "/kesfet" && pathname !== "/topluluklar" && <StudioAtmosphere pathname={pathname} unread={unreadNotifications} />}
-            {sessionReady ? <Fragment key={(pathname === "/giris" || pathname === "/kayit") ? "auth-session" : (user?.id ?? "guest")}>{children}</Fragment> : <div className="kv-card kv-state">
+            {sessionReady || publicPollRead ? <Fragment key={(pathname === "/giris" || pathname === "/kayit") ? "auth-session" : (user?.id ?? "guest")}>{children}</Fragment> : <div className="kv-card kv-state">
               <h1>{sessionError ? "Bağlantı kurulamadı." : "Oturum kontrol ediliyor…"}</h1>
               {sessionError && <><p role="alert">{sessionError}</p><button className="kv-button" onClick={() => retrySession(n => n + 1)}>Tekrar dene</button></>}
             </div>}
