@@ -230,6 +230,60 @@ describe("bildirim tüketicisi (postgres)", { skip: url ? false : "TEST_DATABASE
     assert.deepEqual(await recipientsOf(self.id), []);
   });
 
+  test("V1 ret bildirimi INBOX'a fiilen yazıldığında 30 günlük kanıt bir kez tutulur; event zamanı başlangıç değildir", async () => {
+    const [owner, moderator] = await f.users(2);
+    const poll = await pollBy(owner);
+    const rejection = await db.moderationAction.create({
+      data: { actorId: moderator!, pollId: poll.id, action: "REMOVE",
+        fromStatus: "UNDER_REVIEW", toStatus: "REMOVED", reason: "Manuel ret kararı" },
+    });
+    const e = event("moderation.applied", { type: "POLL", id: poll.id }, moderator!,
+      { moderationActionId: rejection.id, action: "REMOVE",
+        fromStatus: "UNDER_REVIEW", toStatus: "REMOVED", reportId: null });
+    const before = Date.now();
+    await deliver(e);
+    const after = Date.now();
+    const notice = await db.notification.findFirstOrThrow({ where: { eventId: e.id, recipientId: owner! } });
+    const receipts = await db.moderationAppealNoticeReceipt.findMany({ where: { moderationActionId: rejection.id } });
+    assert.equal(receipts.length, 1);
+    const receipt = receipts[0]!;
+    assert.equal(receipt.recipientId, owner);
+    assert.equal(receipt.notificationId, notice.id);
+    assert.ok(receipt.deliveredAt.getTime() >= before - 1000 && receipt.deliveredAt.getTime() <= after + 1000);
+    assert.notEqual(receipt.deliveredAt.getTime(), new Date(e.occurredAt).getTime(), "event time is not delivery");
+    assert.equal(receipt.appealDeadlineAt.getTime() - receipt.deliveredAt.getTime(), 30 * DAY);
+    await deliver(e);
+    assert.equal(await db.moderationAppealNoticeReceipt.count({ where: { moderationActionId: rejection.id } }), 1);
+    assert.equal((await db.moderationAppealNoticeReceipt.findUniqueOrThrow({ where: { moderationActionId: rejection.id } })).deliveredAt.getTime(),
+      receipt.deliveredAt.getTime(), "retry must not reset appeal window");
+  });
+
+  test("non-review moderation REMOVE and undelivered rejected notices never manufacture an appeal clock", async () => {
+    const [owner, moderator] = await f.users(2);
+    const poll = await pollBy(owner);
+    const ordinary = await db.moderationAction.create({
+      data: { actorId: moderator!, pollId: poll.id, action: "REMOVE",
+        fromStatus: "ACTIVE", toStatus: "REMOVED", reason: "Yayından sonra kaldırıldı" },
+    });
+    const regularEvent = event("moderation.applied", { type: "POLL", id: poll.id }, moderator!,
+      { moderationActionId: ordinary.id, action: "REMOVE", fromStatus: "ACTIVE", toStatus: "REMOVED", reportId: null });
+    await deliver(regularEvent);
+    assert.equal(await db.moderationAppealNoticeReceipt.count({ where: { moderationActionId: ordinary.id } }), 0);
+
+    const pending = await db.moderationAction.create({
+      data: { actorId: moderator!, pollId: poll.id, action: "REMOVE",
+        fromStatus: "UNDER_REVIEW", toStatus: "REMOVED", reason: "Ön moderasyon reddi" },
+    });
+    const rejectedEvent = event("moderation.applied", { type: "POLL", id: poll.id }, moderator!,
+      { moderationActionId: pending.id, action: "REMOVE",
+        fromStatus: "UNDER_REVIEW", toStatus: "REMOVED", reportId: null });
+    await db.user.update({ where: { id: owner! }, data: { status: "BANNED" } });
+    await deliver(rejectedEvent);
+    assert.equal(await db.notification.count({ where: { recipientId: owner!, eventId: rejectedEvent.id } }), 0);
+    assert.equal(await db.moderationAppealNoticeReceipt.count({ where: { moderationActionId: pending.id } }), 0,
+      "undelivered notice must not start the appeal clock");
+  });
+
   test("community.featured: yalnız anket sahibine (üyelere değil), aktör gizli", async () => {
     const [owner, admin] = await f.users(2);
     const poll = await pollBy(owner);

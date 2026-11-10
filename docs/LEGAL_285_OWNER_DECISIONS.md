@@ -1,3 +1,9 @@
+## 8 Kasım 2026 — moderasyon reddine itiraz için 30 günlük BAŞVURU süresi
+
+**Mehmet'in kesin işletmeci kararı:** KararVer V1'de anketin ön moderasyon reddine ürün içi itiraz, **ret bildiriminin kullanıcıya ulaşmasından itibaren 30 gün** içinde yapılır. Karar/outbox tarihi süreyi başlatmaz; V1 uygulama içi zorunlu bildirim **ilgili kullanıcının özel inbox'ına transaction commit ile kaydedildiğinde** ulaşmış sayılır. 720 saat sonu dahil, sunucu başvuru zamanı esas; başvuru süresinde yapılmışsa sonuçlandırma gecikmesi başvuruyu düşürmez. Başvuru ve teslim kanıtı eksikse otomatik “süre doldu” reddi yok.
+
+[30 günlük teknik, bildirim, veri güvenliği, saklama ve KVKK kabul dosyası](LEGAL_290_30_DAY_APPEAL_NOTICE_DELIVERY_2026_11_08.md). **Ürün içi itiraz KVKK ilgili kişinin kanuni başvurusundan ayrı**. Gerçek kayıt/itiraz UI + hukuk ve staging #290/#285/#53 açık, release #54 NO-GO.
+
 ## 8 Kasım 2026 — hatalı ön moderasyon reddine itiraz kabulünde ücretsiz yayın
 
 **Mehmet'in kesin kararı:** Şüpheli anketin ön moderasyon başvurusunda 10 puan kesilir; ret sonrası bir kez 10 puan iade edilir. İtiraz haklı bulunup yanlış ret düzeltilirse **aynı anket ücretsiz yeniden yayımlanır**, iade edilen 10 puan kullanıcıda kalır; yeniden kesinti, otomatik iade geri alma veya yeni anket talebi yok. [Teknik, test, KVKK ve operasyona dair kabul belgesi](LEGAL_327_FREE_ACCEPTED_APPEAL_REINSTATEMENT_2026_11_08.md).

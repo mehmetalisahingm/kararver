@@ -279,8 +279,8 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "PUBLISH" } }), 1);
     assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "MODERATION_REFUND" } }), 1);
     assert.equal((await summary(owner.cookie)).balance, 20);
-    h.clock.advance(-75 * 60 * 60 * 1000);
-
+    // Keep simulated time advanced for the next publish: the publication
+    // cooldown must not be bypassed by rewinding the test clock.
     const normal = await send("POST", "/polls", pollBody(), owner.cookie, `normal-${randomUUID()}`);
     assert.equal(normal.statusCode, 201, normal.body);
     assert.equal((await summary(owner.cookie)).balance, 10);
@@ -290,6 +290,7 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(takedown.statusCode, 200, takedown.body);
     assert.equal((await summary(owner.cookie)).balance, 10, "yayın sonrası kaldırmada iade yok");
     assert.equal(await db.pointLedgerEntry.count({ where: { referenceId: normalId, reason: "MODERATION_REFUND" } }), 0);
+    h.clock.advance(-75 * 60 * 60 * 1000);
   });
 
   test("ledger sayfalı okunur ve DB'de UPDATE/DELETE edilemez", async () => {

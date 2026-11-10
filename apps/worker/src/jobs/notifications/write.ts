@@ -28,6 +28,8 @@ export type NotificationDraft = {
   pollId: string | null;
   data: Record<string, NotificationScalar>;
   dedupeKey: string;
+  /** Only for moderation notices. Stored server-side; not exposed as a notification body field. */
+  moderationActionId?: string;
   /** = event.occurredAt: olaylar sırasız işlense de liste doğru sırada görünür. */
   createdAt: Date;
 };
@@ -42,13 +44,48 @@ export async function writeNotifications(tx: Tx, draft: NotificationDraft, recip
   // Dilim başına tek INSERT (createMany 1000 satırda ~4 kat yavaş; 50k ölçümü: docs/KV-21_NOTIFICATIONS.md §6.3).
   // Kolon eşlemesi elle: notifications-sql.test.ts satırı Prisma ile geri okuyup bütün kolonları karşılaştırır.
   const ids = allowed.map(() => newEventId(draft.createdAt));
-  return tx.$executeRaw`
+  const written = await tx.$executeRaw`
     INSERT INTO notifications (id, recipient_id, type, event_id, actor_id, subject_type, subject_id, poll_id, data, dedupe_key, created_at)
     SELECT n.id, n.recipient_id, ${draft.type}::notification_type, ${draft.eventId}::uuid, ${draft.actorId}::uuid,
            ${draft.subject.type}, ${draft.subject.id}::uuid, ${draft.pollId}::uuid, ${JSON.stringify(draft.data)}::jsonb,
            ${draft.dedupeKey}, ${draft.createdAt.toISOString()}::timestamptz
     FROM unnest(${ids}::uuid[], ${[...allowed]}::uuid[]) AS n(id, recipient_id)
     ON CONFLICT (recipient_id, dedupe_key) DO NOTHING`;
+
+  if (draft.type === "MODERATION_APPLIED" &&
+      draft.data.action === "REMOVE" && draft.data.toStatus === "REMOVED" &&
+      draft.moderationActionId) {
+    // This proof is inserted only AFTER the mandatory notice is committed to
+    // the intended user's in-app inbox, not when a moderation action/outbox
+    // event is merely created. SAME worker transaction, so rollback leaves no
+    // fake receipt. A retry keeps the original timestamp (ON CONFLICT).
+    //
+    // Notification.created_at is the event's timestamp, NOT delivery time.
+    // Use the DB statement clock once for both delivery and 720h deadline.
+    await tx.$executeRaw`
+      WITH delivered AS (
+        SELECT ma.id AS action_id, n.recipient_id, n.id AS notification_id,
+               clock_timestamp()::timestamptz(3) AS arrived_at
+        FROM moderation_actions ma
+        JOIN polls p ON p.id = ma.poll_id
+        JOIN notifications n ON n.subject_id = ma.poll_id
+          AND n.subject_type = 'POLL'
+          AND n.type = 'MODERATION_APPLIED'
+          AND n.recipient_id = p.author_id
+          AND n.event_id = ${draft.eventId}::uuid
+          AND n.dedupe_key = ${draft.dedupeKey}
+        WHERE ma.id = ${draft.moderationActionId}::uuid
+          AND ma.action = 'REMOVE' AND ma.from_status = 'UNDER_REVIEW'
+          AND ma.to_status = 'REMOVED'
+      )
+      INSERT INTO moderation_appeal_notice_receipts
+        (moderation_action_id, recipient_id, notification_id, delivered_at, appeal_deadline_at)
+      SELECT action_id, recipient_id, notification_id, arrived_at,
+             arrived_at + INTERVAL '720 hours'
+      FROM delivered
+      ON CONFLICT (moderation_action_id) DO NOTHING`;
+  }
+  return written;
 }
 
 /** Verilen kullanıcılardan bildirim alabilecek olanlar (ortak süzgeç). */
