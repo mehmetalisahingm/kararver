@@ -238,3 +238,25 @@ node scripts/staging-drill.mjs switch    # API sağlıklı ve smoke geçene kada
 ```
 
 CI'da `pnpm test`, ops testlerini de koşar. Database işi PostgreSQL 17 `pg_dump` ve `pg_restore` araçlarını doğrular; yoksa resmi PGDG deposundan istemci kurar ve `PG_BIN` ile testlere verir. Araç kurulamazsa iş başarısız olur. Yerelde istemci veya test DB yoksa eski atlama kuralı sürer; bu gerçek staging restore kabulü değildir. Kurulum kaynağı: [PostgreSQL resmi Ubuntu yönergesi](https://www.postgresql.org/download/linux/ubuntu/).
+
+## İzole şifreli restore tatbikatı (#375)
+
+`apps/api/test/restore-drill.test.ts`, yukarıdaki adımları **tek zincirde** ve yalnız sentetik veriyle koşar. Yalnız `TEST_DATABASE_URL`'in yanındaki `<test>_drill_src` ve `<test>_drill_restore` veritabanlarına dokunur; anahtar çifti testte üretilir ve diske yazılmaz.
+
+| Adım | Ne gösterir |
+| --- | --- |
+| Migration'lı kaynak → `backup` → zarf şifreleme (`KVBK1`), düz döküm silinir | Sunucu tarafında yalnız şifreli dosya kalır |
+| Yedekten **sonra** bir hesap anonimleştirilir | Restore edilen kopya o anın öncesindedir |
+| Yanlış anahtar, kesik dosya, değiştirilmiş dosya | Üçü de reddedilir; hedef adla düz metin ve geçici çözme klasörü kalmaz |
+| `assertIsolatedRestoreTarget` | Canlı DB'yi gösteren, karantina adı taşımayan, uzak veya eksik hedef reddedilir |
+| Çöz → boş hedefe restore → manifestle birebir; dolu hedefe ikinci restore reddedilir | Bütünlük |
+| `migrationGate` | Restore edilen şema repodaki migration'larla aynı; bir migration eksikse kapı kapanır ve eksik adı raporlar |
+| `checkNoResurrection` (1) | Silinen hesap e-postası, oturumu ve yorumuyla **geri gelmiş**: `BLOCKED_RESURRECTED_DATA` (exit 2) durumu |
+| Restore runbook'u 7. adım: günlükteki kimlik yeniden anonimleştirilir; ikinci uygulama `unchanged` | Silme tekrarı idempotent |
+| `checkNoResurrection` (2) | Dirilen veri yok; yalnız #321'in bilinçli tombstone'ları kalır: `BLOCKED_RETAINED_TOMBSTONES` (exit 3), hâlâ NO-GO. Günlükte olmayan kontrol hesabı etkilenmez |
+
+**Sınırlar:** Tatbikat, kendi silme yolunu (`self`) kullanır. Runbook'taki yönetici yolu ek olarak MFA step-up ister; aynı anonimleştirme transaction'ı çalışır. Gerçek private yedek reposu, gerçek anahtar sahipliği, imzalı silme günlüğü (#321) ve staging/Neon üzerinde restore bu testin dışındadır. Bunlar tamamlanmadan bu test "restore kabulü" sayılmaz.
+
+```bash
+TEST_DATABASE_URL=... PG_BIN=/path/to/postgresql-17/bin node --test apps/api/test/restore-drill.test.ts
+```
