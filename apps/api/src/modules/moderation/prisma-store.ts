@@ -190,11 +190,11 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   if (releasingReview) {
     const content = await tx.poll.findUniqueOrThrow({
       where: { id: input.id },
-      select: { title: true, description: true, extraInfo: true, options: { select: { label: true } } },
+      select: { title: true, description: true, extraInfo: true, options: { select: { label: true } }, addenda: { select: { body: true } } },
     });
     // A human reversal may correct a mistaken risk flag, but it cannot
     // override V1's categorical ban on collecting sensitive respondent data.
-    if (detectSensitiveSurvey(content)) return { kind: "conflict", reason: "invalid_transition" };
+    if (detectSensitiveSurvey({ ...content, addenda: content.addenda.map(a => a.body) })) return { kind: "conflict", reason: "invalid_transition" };
     // A moderator may not make the poll public before every linked image has
     // passed media moderation. Previously approved images remain governed by
     // their independent media revoke/hide pipeline.
