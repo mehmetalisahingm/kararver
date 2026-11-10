@@ -258,6 +258,42 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal(detectSensitiveSurvey(saved), null, "commit sonrası hassas soru/seçenek birleşimi oluşmamalı");
   });
 
+  test("ek açıklama ve sonraki PATCH hassas seçenek kontrolünü atlatamaz (postgres)", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie, {
+      title: "Kültürel miras üzerine genel değerlendirme",
+      options: [{ label: "Alevi" }, { label: "Sünni" }],
+    });
+    const addendum = await send("POST", `/polls/${poll.id}/addenda`,
+      { body: "Hangisisin? Sana yakın olan grubu seç" }, owner.cookie);
+    assertError(addendum, 400, "VALIDATION_ERROR");
+    assert.equal(await db.pollAddendum.count({ where: { pollId: poll.id } }), 0);
+
+    const secondOwner = await signUp();
+    const second = await createPoll(secondOwner.cookie, {
+      title: "Kültürel miras üzerine genel değerlendirme",
+      options: [{ label: "Birinci seçenek" }, { label: "İkinci seçenek" }],
+    });
+    const innocentAddendum = await send("POST", `/polls/${second.id}/addenda`,
+      { body: "Hangisisin? Sana yakın olan grubu seç" }, secondOwner.cookie);
+    assert.equal(innocentAddendum.statusCode, 201, innocentAddendum.body);
+    const patched = await send("PATCH", `/polls/${second.id}`, {
+      options: [{ id: second.options[0]!.id, label: "Alevi" }, { id: second.options[1]!.id, label: "Sünni" }],
+    }, secondOwner.cookie);
+    assertError(patched, 400, "VALIDATION_ERROR");
+    const saved = await db.pollOption.findMany({
+      where: { pollId: second.id }, select: { label: true }, orderBy: { position: "asc" },
+    });
+    assert.deepEqual(saved.map((x) => x.label), ["Birinci seçenek", "İkinci seçenek"]);
+
+    const thirdOwner = await signUp();
+    const general = await createPoll(thirdOwner.cookie, {
+      title: "Hangi alanda araştırmaya daha fazla bütçe ayrılmalı?",
+      options: [{ label: "Kanser araştırmaları" }, { label: "Uzay araştırmaları" }],
+    });
+    assert.ok(general.id, "genel araştırma tercihleri bir sağlık durumu beyanı değildir");
+  });
+
   test("genel sağlık hizmeti değerlendirmesi ve sıradan ürün anketleri otomatik olarak yasaklanmaz", async () => {
     const owner = await signUp();
     const first = await createPoll(owner.cookie, {
@@ -339,6 +375,21 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     });
     assert.equal(stored.status, "ACTIVE");
     assert.equal(stored.description, "Şarj süresi hakkında genel yorum");
+  });
+
+  test("published poll cannot bypass review through addenda or subsequent PATCH", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie, { title: "Telefon batarya ömrü nasıl?" });
+    const blocked = await send("POST", `/polls/${poll.id}/addenda`, { body: "Bilgi: https://example.com" }, owner.cookie);
+    assertError(blocked, 400, "VALIDATION_ERROR");
+    assert.equal(await db.pollAddendum.count({ where: { pollId: poll.id } }), 0);
+    // Synthetic legacy data: PATCH must recheck existing addenda too.
+    await db.pollAddendum.create({ data: { pollId: poll.id, body: "Bilgi: https://example.com" } });
+    const edit = await send("PATCH", `/polls/${poll.id}`, { title: "Telefon şarjı yeterli mi?" }, owner.cookie);
+    assertError(edit, 400, "VALIDATION_ERROR");
+    const stored = await db.poll.findUniqueOrThrow({ where: { id: poll.id }, select: { title: true, status: true } });
+    assert.equal(stored.title, "Telefon batarya ömrü nasıl?");
+    assert.equal(stored.status, "ACTIVE");
   });
 
   test("generic RESTORE cannot publish a rejected review without audited appeal", async () => {

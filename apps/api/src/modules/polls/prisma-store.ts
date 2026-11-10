@@ -340,11 +340,15 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
         const effectiveOptions = options ?? await tx.pollOption.findMany({
           where: { pollId: id }, select: { label: true }, orderBy: { position: "asc" },
         });
+        const persistedAddenda = await tx.pollAddendum.findMany({
+          where: { pollId: id }, select: { body: true }, orderBy: { createdAt: "asc" },
+        });
         const risk = detectSensitiveSurvey({
           title: fields.title ?? persisted.title,
           description: fields.description === undefined ? persisted.description : fields.description,
           extraInfo: fields.extraInfo === undefined ? persisted.extraInfo : fields.extraInfo,
           options: effectiveOptions,
+          addenda: persistedAddenda.map((a) => a.body),
         });
         if (risk) {
           throw new ApiError(
@@ -365,6 +369,7 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
             description: fields.description === undefined ? persisted.description : fields.description,
             extraInfo: fields.extraInfo === undefined ? persisted.extraInfo : fields.extraInfo,
             options: effectiveOptions,
+            addenda: persistedAddenda.map(a => a.body),
             tagSlugs: tagSlugs ?? [],
             mediaIds: linkedMedia.map(m => m.mediaId),
           });
@@ -407,6 +412,40 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
 
     createAddendum: (pollId, body, scope) =>
       idempotent(scope, async (tx) => {
+        // Serialize with PATCH. No addendum can turn existing options into an
+        // identity question, and no later PATCH can exploit an earlier addendum.
+        await tx.$queryRaw`SELECT 1 FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
+        const poll = await tx.poll.findUniqueOrThrow({
+          where: { id: pollId }, select: { title: true, description: true, extraInfo: true, kind: true, status: true },
+        });
+        const options = await tx.pollOption.findMany({
+          where: { pollId }, select: { label: true }, orderBy: { position: "asc" },
+        });
+        const existing = await tx.pollAddendum.findMany({
+          where: { pollId }, select: { body: true }, orderBy: { createdAt: "asc" },
+        });
+        const risk = detectSensitiveSurvey({
+          ...poll, options, addenda: [...existing.map((a) => a.body), body],
+        });
+        if (risk) throw new ApiError(
+          "VALIDATION_ERROR",
+          "KararVer V1'de kişilerin hassas bilgilerini açığa çıkarabilecek içerikler yayımlanamaz.",
+          [{ field: risk.field, code: "sensitive_survey_not_allowed_v1" }],
+        );
+        // A published poll cannot bypass prepublication review through an
+        // addendum. Check the persisted projection under the same row lock as PATCH.
+        if (poll.status === "ACTIVE" || poll.status === "LOCKED") {
+          const linkedMedia = await tx.pollMedia.findMany({ where: { pollId }, select: { mediaId: true } });
+          const screening = screenV1Publication({
+            kind: poll.kind, title: poll.title, description: poll.description, extraInfo: poll.extraInfo,
+            options, addenda: [...existing.map(a => a.body), body], mediaIds: linkedMedia.map(m => m.mediaId),
+          });
+          if (screening.action === "REVIEW") throw new ApiError(
+            "VALIDATION_ERROR",
+            "Bu ek açıklama yayın öncesi inceleme gerektiriyor; doğrudan yayımlanamaz.",
+            [{ field: "body", code: "moderation_review_required" }],
+          );
+        }
         const addendum = await tx.pollAddendum.create({ data: { pollId, body }, select: { id: true } });
         return addendum.id;
       }),

@@ -28,3 +28,10 @@ test("multiple risk signals are de-duplicated and contain no user text or sensit
   assert.deepEqual(out.signals, ["MEDIA_PENDING_HUMAN_CONTEXT", "EXTERNAL_LINK", "POSSIBLE_SENSITIVE_CONTEXT"]);
   assert.doesNotMatch(JSON.stringify(out), /example\.com|Siyasi tartışma/i);
 });
+
+test("existing and new addenda are screened alongside the published poll", () => {
+  const base = { kind: "POLL" as const, title: "Telefon bataryası nasıl?", options: [{ label: "İyi" }, { label: "Kötü" }] };
+  assert.equal(screenV1Publication({ ...base, addenda: ["Güvenli bir ek bilgi"] }).action, "PUBLISH");
+  assert.deepEqual(screenV1Publication({ ...base, addenda: ["Bilgi: https://example.com"] }),
+    { action: "REVIEW", signals: ["EXTERNAL_LINK"] });
+});
