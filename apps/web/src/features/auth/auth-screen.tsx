@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -38,6 +38,8 @@ export function AuthScreen({
   const [adultConfirmed, setAdultConfirmed] = useState(false);
   const [needsAdultDeclaration, setNeedsAdultDeclaration] = useState(false);
   const [legacyAdultConfirmed, setLegacyAdultConfirmed] = useState(false);
+  const legacyDeclaration = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (needsAdultDeclaration) legacyDeclaration.current?.focus(); }, [needsAdultDeclaration, user?.id]);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -236,11 +238,11 @@ export function AuthScreen({
         hesap: deniz@example.test. Yeni kayıt .test uzantılı olmalı. Kod:{" "}
         <strong>123456</strong>. Gerçek e-posta gönderilmez.
       </div>}
-      {needsAdultDeclaration && !demo ? (
+      {needsAdultDeclaration && !demo && user ? (
         <form className="screen-stack" onSubmit={submitLegacyAdultDeclaration}>
           <p role="status">Giriş başarılı. Hesabınla oy vermek, yorum yapmak veya anket yayımlamak için 18 yaşını doldurduğunu beyan etmen gerekiyor.</p>
           <label className="kv-check-row">
-            <input type="checkbox" name="legacyAdultConfirmed" disabled={!interactive || busy}
+            <input ref={legacyDeclaration} type="checkbox" name="legacyAdultConfirmed" disabled={!interactive || busy}
               checked={legacyAdultConfirmed} onChange={event => setLegacyAdultConfirmed(event.target.checked)} required />
             <span>18 yaşımı doldurduğumu beyan ediyorum. Bu bir öz beyandır, kimlik doğrulaması değildir.</span>
           </label>

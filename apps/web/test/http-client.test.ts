@@ -9,6 +9,23 @@ function fixture(endpoint: string, name: string) { return structuredClone(exampl
 function reply(endpoint: string, name: string) { const e = fixture(endpoint, name); return new Response(e.body === null ? null : JSON.stringify(e.body), { status: e.status }); }
 const detail = (fixture("polls.get", "guest-hidden").body as {data: {id: string; options: {id: string}[]}}).data;
 
+for (const outcome of ["expired", "still-required"] as const) test(`adult confirmation does not succeed when server restoration is ${outcome}`, async () => {
+  const client = new ApiClient("http://api.test", async (url, init) => {
+    if (String(url).endsWith("/me/adult-declaration")) {
+      assert.deepEqual(JSON.parse(String(init?.body)), { adultConfirmed: true });
+      return new Response(JSON.stringify({ data: { declaredAt: "2026-11-10T12:00:00Z" } }));
+    }
+    if (String(url).endsWith("/me")) {
+      if (outcome === "expired") return new Response(JSON.stringify({ error: { code: "UNAUTHENTICATED", message: "Session expired", details: [] }, requestId: "synthetic-adult" }), { status: 401 });
+      const body = structuredClone(examples.find(e => e.endpoint === "me.get" && e.status === 200)!.body) as { data: { adultDeclarationRequired?: boolean } };
+      body.data.adultDeclarationRequired = true;
+      return new Response(JSON.stringify(body));
+    }
+    return reply("points.get", "ok");
+  });
+  await assert.rejects(client.confirmAdultDeclaration(), (e: UiError) => e.code === (outcome === "expired" ? "UNAUTHENTICATED" : "DECLARATION_PENDING"));
+});
+
 test("HTTP uses credentialed no-store requests and preserves idempotency across retry", async () => {
   const seen: RequestInit[] = [];
   const client = new ApiClient("http://api.test", async (_url, init) => { seen.push(init!); return reply("polls.create", "poll"); });
