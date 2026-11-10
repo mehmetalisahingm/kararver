@@ -14,6 +14,7 @@ export type SensitiveInput = {
   body?: string;
   options?: readonly { label: string }[];
   tagSlugs?: readonly string[];
+  addenda?: readonly string[];
 };
 export type SensitiveRisk = { field: string; category: "political" | "belief" | "health" | "ethnicity" | "membership" | "sexual" | "justice" | "biometric" };
 
@@ -34,7 +35,7 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
   // Religion, denominations and philosophical belief about the respondent.
   { category: "belief", pattern: /\b(?:hangi|hangi bir|ne|senin|sizin) (?:dine|dini|din|mezhep|inanc|inanca)\b|\b(?:dinin|mezhebin|inancin|felsefi inancin) (?:ne|nedir)\b|\b(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|dindar) (?:misin|misiniz|miydin|miydiniz)\b/ },
   // Personal diagnoses, prescriptions, psychological/physical conditions.
-  { category: "health", pattern: /\b(?:hangi|ne|nasil bir) (?:hastalik|tani|teshis)(?:in|iniz|i|yi|lari|lar)?\b|\b(?:hangi|ne) ilac(?:i|lari)? (?:kullaniyorsun|kullaniyorsunuz|kullandin|kullandiniz|aliyorsun|aliyorsunuz)\b|\bhangi tedavi(?:yi)? (?:gordun|gordunuz|aliyorsun|aliyorsunuz)\b|\b(?:saglik durumun|saglik durumunuz|hastaligin var|hastaliginiz var|tani aldiniz mi|tani aldin mi|hiv pozitif misin|hamile misin|engelin var mi|depresyonda misin|psikiyatrik tedavi)\b|\b(?:hastalik|ilac|tedavi) (?:kullaniyor musun|goruyor musun|gecirdin mi|tani(?:si|n) var mi)\b/ },
+  { category: "health", pattern: /\b(?:hangi|ne|nasil bir) (?:hastaligin|hastaliginiz|tanin|taniniz|teshisin|teshisiniz)\b|\b(?:hangi|ne) ilac(?:i|lari)? (?:kullaniyorsun|kullaniyorsunuz|kullandin|kullandiniz|aliyorsun|aliyorsunuz)\b|\bhangi tedavi(?:yi)? (?:gordun|gordunuz|aliyorsun|aliyorsunuz)\b|\b(?:saglik durumun|saglik durumunuz|hastaligin var|hastaliginiz var|tani aldiniz mi|tani aldin mi|hiv pozitif misin|hamile misin|engelin var mi|depresyonda misin|psikiyatrik tedavi (?:goruyor musun|gordun mu|aldin mi|gordunuz mu|aliyorsun|aliyorsunuz))\b|\b(?:hastalik|ilac|tedavi) (?:kullaniyor musun|goruyor musun|gecirdin mi|tani(?:si|n) var mi)\b/ },
   { category: "ethnicity", pattern: /\b(?:etnik kokenin|etnik kokeniniz|hangi irktan|hangi etnik koken|irkin ne|irkiniz ne|soyunun kokeni|hangi milliyettensin)\b/ },
   { category: "membership", pattern: /\b(?:hangi sendika(?:ya)?|sendika uyesi misin|sendika uyesi misiniz|hangi dernege uyesin|vakif uyesi misin|dernek uyesi misin)\b/ },
   { category: "sexual", pattern: /\b(?:cinsel hayatin|cinsel yasamin|cinsel yonelimin|cinsel deneyimin|cinsel iliskin oldu mu|kiminle cinsel|cinsel partner sayin)\b/ },
@@ -42,19 +43,23 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
   { category: "biometric", pattern: /\b(?:parmak izin|parmak izini|yuz tanima verin|genetik verin|genetik test sonucunuz|dna sonucunu|dna bilgilerini)\b/ },
 ];
 
-/** Selection of categorical sensitive answers also reveals respondent data. */
+/** Categorical choices alone do not prove that we ask about a respondent's attributes.
+ * Require a self-referential question and a categorical answer label; general
+ * research/services topics like "Kanser araştırmaları" must remain allowed.
+ */
 const SENSITIVE_ANSWERS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: RegExp }> = [
-  { category: "political", pattern: /\b(?:ak parti|chp|mhp|iyi parti|dem parti|turkiye isci partisi|zafer partisi|yeniden refah)\b/ },
-  { category: "belief", pattern: /\b(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|deist)\b/ },
-  { category: "health", pattern: /\b(?:diyabet|hiv|aids|kanser|depresyon|bipolar|sizofreni|otizm)\b/ },
-  { category: "membership", pattern: /\b(?:sendika uyesi|dernek uyesi|vakif uyesi)\b/ },
+  { category: "political", pattern: /^(?:ak parti|chp|mhp|iyi parti|dem parti|turkiye isci partisi|tip|zafer partisi|yeniden refah)(?: (?:a|b|c|d|partisi|grubu|secenegi))?$/ },
+  { category: "belief", pattern: /^(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|deist)(?: (?:a|b|c|d|mezhebi|inanci|grubu|secenegi))?$/ },
+  { category: "health", pattern: /^(?:diyabet|hiv|aids|kanser|depresyon|bipolar|sizofreni|otizm)(?: (?:a|b|c|d|hastasi|grubu|secenegi))?$/ },
+  { category: "membership", pattern: /^(?:sendika uyesi|dernek uyesi|vakif uyesi)$/ },
 ];
-const CHOICE_PROMPT = /\b(?:hangi|hangisi|hangisini|hangisisin|hangisiniz|kime|neye|oyun|tercihin|sizin|senin|misin|misiniz|kendini|hangi gruptasin|hangi gruptasiniz)\b/;
+const PERSONAL_CHOICE_PROMPT = /\b(?:hangisisin|hangisiniz|hangi gruptasin|hangi gruptasiniz|hangisini tercih edersin|hangisini secersin|hangisini tercih ediyorsun|hangi gruba aitsin|sana yakin olan grubu sec|kendini|senin|sizin|sen hangi|siz hangi|sende|kime oy verirsin|hangi dine mensupsun)\b/;
 
 export function detectSensitiveSurvey(input: SensitiveInput): SensitiveRisk | null {
   const fields: Array<[string, string | undefined | null]> = [
     ["title", input.title], ["description", input.description],
     ["extraInfo", input.extraInfo], ["body", input.body],
+    ...(input.addenda ?? []).map((body, i): [string, string] => [`addenda.${i}.body`, body]),
     ...(input.options ?? []).map((o, i): [string, string] => [`options.${i}.label`, o.label]),
   ];
   for (const [field, source] of fields) {
@@ -67,13 +72,11 @@ export function detectSensitiveSurvey(input: SensitiveInput): SensitiveRisk | nu
 
   // A question like "Hangisisin?" + "Alevi / Sünni" discloses a belief
   // even though no sensitive keyword appears in the title.
-  const question = normalized([input.title, input.description, input.extraInfo].filter(Boolean).join(" "));
-  const choices = (input.options ?? []).map(o => normalized(o.label));
-  if (choices.length >= 2 && CHOICE_PROMPT.test(question)) {
+  const question = normalized([input.title, input.description, input.extraInfo, input.body, ...(input.addenda ?? [])].filter(Boolean).join(" "));
+  const choices = (input.options ?? []).map(o => normalized(o.label).trim());
+  if (choices.length >= 2 && PERSONAL_CHOICE_PROMPT.test(question)) {
     for (const rule of SENSITIVE_ANSWERS) {
-      const index = choices.findIndex(c =>
-        rule.pattern.test(c) || (rule.category === "political" && c.trim() === "tip")
-      );
+      const index = choices.findIndex(c => rule.pattern.test(c));
       if (index !== -1) return { field: `options.${index}.label`, category: rule.category };
     }
   }
