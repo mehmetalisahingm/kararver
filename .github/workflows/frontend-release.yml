@@ -36,4 +36,5 @@ jobs:
           path: |
             apps/web/release-results
             apps/web/release-report
+            apps/web/public-read-results
           if-no-files-found: error

@@ -50,6 +50,7 @@ output/playwright/
 outage-sonuc*.json
 apps/web/release-results/
 apps/web/release-report/
+apps/web/public-read-results/
 
 # Generated standalone cabin bundle; source and texture assets are versioned.
 apps/web/public/experiences/cabin/assets/
