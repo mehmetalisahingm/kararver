@@ -15,6 +15,7 @@ export type ReviewInput = {
   description?: string | null;
   extraInfo?: string | null;
   options?: readonly { label: string }[];
+  addenda?: readonly string[];
   tagSlugs?: readonly string[];
   mediaIds?: readonly string[];
 };
@@ -41,6 +42,7 @@ export function screenV1Publication(input: ReviewInput): ReviewDecision {
   const parts = [
     input.title, input.description ?? "", input.extraInfo ?? "",
     ...(input.options ?? []).map(option => option.label),
+    ...(input.addenda ?? []),
   ];
   if (parts.some(text => LINK.test(text))) signals.push("EXTERNAL_LINK");
   if (parts.some(text => SENSITIVE_CONTEXT.test(normalized(text)))) signals.push("POSSIBLE_SENSITIVE_CONTEXT");
