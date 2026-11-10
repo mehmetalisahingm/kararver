@@ -1,6 +1,22 @@
+## 8 Kasım 2026 — yeni anketlerde sonuç görünürlüğü kararı
+
+Mehmet'in kesin ürün kararı: **Yeni anketlerde `ALWAYS` (herkese açık sonuçlar) varsayılan**; daha önce oluşturulmuş ve `AFTER_VOTE` seçilmiş anketler **otomatik değiştirilmez**. Yeni anket sahibi yine `AFTER_VOTE` seçebilir. Misafirler yalnız mevcut görünürlük projeksiyonunun izin verdiği sonuçlara erişebilir; kişiye bağlanabilir tekil oy/veri geçmişi veya gizli anketlerin yeniden görünmesi bu karara dahil değil. [Teknik, SEO, KVKK ve kabul matrisi](LEGAL_52_PUBLIC_RESULTS_DEFAULT_2026_11_08.md). #52/#53/#285/#289 ve #54 kabulü kapanmadı.
+
 # #285 — İşletmeci kararı ve veri işleme karar paketi
 
 1 Kasım 2026. Bağlantılar: #284, #285–#291, #181, #183, #51/#53/#54. Bu dosya teknik hazırlık ve açık karar kaydıdır; onaylı aydınlatma/sözleşme metni veya hukuki kabul değildir.
+
+## 8 Kasım — 18+ ürün politikası (yeni, kesin karar)
+
+Mehmet, KararVer'de **yeni kayıtların 18 yaş ve üzeriyle sınırlandırılmasını** seçti. Bu ürün kuralı, genel bir yasal yaş eşiği olduğu iddiası değildir. Teknik ürün kararı ve güçlü yaş doğrulaması arasındaki fark, mevcut hesapların geçişi ve hukuki değerlendirmede kalan #289 kapıları [ayrı dosyada](LEGAL_289_AGE18_PRODUCT_POLICY.md) açıklıdır. #285/#286 yasal metinleri onaylanmadan bu ürün tercihi tek başına hukuki GO değildir.
+
+İletişim için `karariniverdestek@gmail.com` hesabı açılacağı bildirildi. **Açıldığı ve işletildiği henüz onaylanmadığından** önceki eksik/henüz public olmayan kanal durumu sürer.
+
+## 8 Kasım 2026 — hesap ve içerik silme işletmeci kararı
+
+Mehmet'in yeni kararı: Hesabını silen kişinin **hesabı, yazdığı anketler ve yorumları** silinsin; yalnız **geri ilişkilendirilemeyen anonim toplu istatistikler** kalabilsin. Kanuni saklama zorunlulukları (ör. imha işlem kaydı) ayrı, amaçla sınırlı ve açıklanmış istisna olarak değerlendirilir; anonim istatistik diye gösterilmez.
+
+Karar ve mevcut kod arasındaki **uyumsuzluklar** (anket/yorum tombstone DB satırları, tekil oy zamanları/event geçmişi, async medya, yedek/restore ve audit retention) [#181 uygulama karar dokümanında](LEGAL_181_OWNER_ERASURE_POLICY_2026_11_08.md) listelendi. Silme feature flag'i ve gerçek kullanıcı verisi bu karar kaydı nedeniyle açılıp silinmedi. #181/#285/#287/#288/#53/#54 kapıları kapanmadı. Tam uygulamayı destekleyen gerçek DB/cihaz/yedek ve hukuki kabul olmadan GO verilmez.
 
 ## Hesap sahibinden alınmış gerçek karar
 

@@ -27,6 +27,15 @@ Depolama erişimi/yazımı engelliyse kabul başarı sayılmaz. Geri çekme kal�
 - `modules/shares/routes.ts`: paylaş düğmesi paylaşım kaydı ve `?src=<uuid>` bağlantısı üretir. Bu PR bu kullanıcı işlemini kaldırmaz. `readShareAttribution` için üretim frontend tüketicisi bulunmadı; bu PR kayıt/okuma kapısını düzeltir, yeni analytics veya conversion endpoint'i eklemez. Sunucudaki paylaşım/ürün olaylarının amacı ve hukuki şartı ayrıca açık.
 - `SourceAttribution` ve tercih bileşeni fetch, beacon veya üçüncü taraf SDK çağırmaz. Özel bir analytics ağı uç noktası eklenmedi. URL'deki `src` web/proxy erişiminde görülebilir; bunu tarayıcı tercihi sunucu loglarından silemez. Sunucu/proxy log politikası #285/#288 ile ayrıca kabul edilir.
 - 1 Kasım'daki **main** kaynak taramasında Google Analytics/Tag Manager, reklam pikseli, iframe veya `next/script` analitik SDK entegrasyonu bulunmadı. **#312 aday sürümü kendi origin'inde ayrı bir 3D kabin iframe'i ekler; aşağıdaki ek envanter buna ilişkindir.** Bu kaynak gözlemidir; Vercel/Cloudflare/Railway dashboard enjeksiyonu, CDN cookie'leri, gerçek DNS/TLS sonlandırma ve log saklama ayarları taramayla kanıtlanmaz. Hesap panelleri ve gerçek production ağ kaydı açık kabul işidir.
+- **Tarayıcının bağlandığı origin'ler (Faruk, ağ/sağlayıcı; 9 Kasım, main `2e9db35`):**
+
+  | İstek | Tarayıcının bağlandığı yer | Sağlayıcı / bölge | Taşınan |
+  | --- | --- | --- | --- |
+  | Sayfa, statik dosyalar, `/api/*`, onaylı görsel (`/api/media-public`) | Aynı origin (Vercel); Vercel `/api`'yi sunucu tarafında Render API'ye aktarır | Vercel (bölge doğrulanmalı) → Render Frankfurt | Çerez, IP, user-agent, istek içeriği |
+  | **Görsel yükleme** (presigned PUT) | **Doğrudan depolama uç noktası** (`S3_ENDPOINT`). API URL'yi üretir, dosya Vercel/Render'dan geçmez | Neon Object Storage, `eu-central-1` | Görsel dosyası, IP, user-agent. API çerezi gönderilmez |
+  | Paylaş → WhatsApp / X | `wa.me`, `twitter.com`: **yalnız kullanıcı tıklayınca** yeni sekme; önceden istek yok | Meta, X | Paylaşılan bağlantı |
+
+  `apps/web/src`, `public` ve `next.config.ts` taramasında başka dış origin, harici font, CDN script'i, analitik/telemetri/hata izleme paketi (`@vercel/analytics`, Sentry, PostHog vb.) yok. CSP yalnız `frame-ancestors`/`base-uri`/`form-action`/`object-src` kısıtlıyor. Kaynak gözlemidir; Vercel panelinden enjekte edilebilecek özellikler (Web Analytics, Speed Insights) panelde kapalı olduğu doğrulanmalı. Sağlayıcı ve aktarım ayrıntısı: [LEGAL_288_PROVIDER_TRANSFER_INVENTORY.md](LEGAL_288_PROVIDER_TRANSFER_INVENTORY.md).
 - Auth oturum tablosu IP/user-agent/son görülme/sona erme/iptal alanları tutar (`core.prisma`, auth routes). Cookie TTL'si bu kayıtların otomatik silindiği anlamına gelmez. API logger cookie/authorization/set-cookie/password/token alanlarını redakte eder (`app.ts`); sağlayıcı loglarının hiç kişisel veri içermediği sonucu çıkarılmaz.
 
 ## #312 aday sürümü: birinci taraf kabin iframe envanteri

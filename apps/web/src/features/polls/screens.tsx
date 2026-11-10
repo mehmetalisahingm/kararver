@@ -18,10 +18,10 @@ const planetStyle = (index: number): CSSProperties => ({
   "--planet-hue": "0deg",
 } as CSSProperties);
 
-export function PollDetail({ id }: { id: string }) {
+export function PollDetail({ id, initialPoll }: { id: string; initialPoll?: Poll }) {
   const { client, user, selections, select, requireUser, notify, syncUser } =
     useProduct();
-  const [poll, setPoll] = useState<Poll | null>(null);
+  const [poll, setPoll] = useState<Poll | null>(initialPoll ?? null);
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
@@ -38,7 +38,7 @@ export function PollDetail({ id }: { id: string }) {
   }, [launched]);
   useEffect(() => {
     let active = true;
-    setPoll(null);
+    setPoll(initialPoll ?? null);
     setSaved(false);
     setLoadError("");
     client
@@ -66,7 +66,7 @@ export function PollDetail({ id }: { id: string }) {
     return () => {
       active = false;
     };
-  }, [client, id, user?.id, attempt]);
+  }, [client, id, user?.id, attempt, initialPoll]);
   async function vote() {
     if (!selections[id]) {
       setError("Bir seçenek seçmelisin.");
@@ -174,6 +174,14 @@ export function PollDetail({ id }: { id: string }) {
         )}
         <h1>{poll.title}</h1>
         <p className="kv-muted">{poll.description}</p>
+        {!user && (
+          <p className="kv-help">
+            Anketleri ve izin verilen sonuçları üye olmadan inceleyebilirsin.
+            Oy vermek veya yorum yazmak için 18 yaşını doldurmuş bir hesapla{" "}
+            <Link href={`/giris?returnTo=${encodeURIComponent(`/karar/${id}`)}`}>giriş yap</Link>
+            {" "}ya da <Link href={`/kayit?returnTo=${encodeURIComponent(`/karar/${id}`)}`}>hesap oluştur</Link>.
+          </p>
+        )}
         {poll.kind === "poll" && (
           <>
             <div className="choice-sound"><button type="button" aria-pressed={sound} onClick={() => setSound(value => !value)}>{sound ? "♪ Ses açık" : "♪ Ses kapalı"}</button><span>Seçim sesi · isteğe bağlı</span></div>

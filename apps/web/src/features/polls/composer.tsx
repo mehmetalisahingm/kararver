@@ -294,9 +294,10 @@ export function Composer() {
                   })
                 }
               >
+                <option value="always">Herkese açık (varsayılan)</option>
                 <option value="after_vote">Oy verdikten sonra</option>
-                <option value="always">Herkese açık</option>
               </select>
+              <p className="kv-help">Yeni anketlerde sonuçlar varsayılan olarak herkese açıktır. İstersen yayımlamadan önce oy sonrası gösterimi seçebilirsin; eski anketlerin değişmez.</p>
             </Field>
           </>
         )}
