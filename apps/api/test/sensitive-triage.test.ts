@@ -17,7 +17,7 @@ const url = resolveTestDatabaseUrl(path.resolve(import.meta.dirname, "../../..")
 describe("hassas içerik envanteri (postgres)", { skip: backend && url ? false : "TEST_DATABASE_URL yok (CI'da çalışır)" }, () => {
   let db: PrismaClient;
   let dir: string;
-  const ids = { user: "", category: "", sensitivePoll: "", neutralPoll: "", addendum: "", sensitiveComment: "", neutralComment: "" };
+  const ids = { user: "", category: "", sensitivePoll: "", neutralPoll: "", combinedPoll: "", combinedAddendum: "", addendum: "", sensitiveComment: "", neutralComment: "" };
   const SECRET_TEXT = "Hangisisin TRIAGE-METNI";
 
   before(async () => {
@@ -39,6 +39,8 @@ describe("hassas içerik envanteri (postgres)", { skip: backend && url ? false :
     // API (#326) artık bunları kabul etmez; bu satırlar kuraldan ÖNCE yazılmış eski içeriği temsil eder.
     ids.sensitivePoll = (await poll(`${SECRET_TEXT}?`, ["Alevi", "Sünni"])).id;
     ids.neutralPoll = (await poll("Hangi kahveyi seversin?", ["Filtre", "Türk kahvesi"])).id;
+    ids.combinedPoll = (await poll("Genel bir soru", ["Alevi", "Sünni"])).id;
+    ids.combinedAddendum = (await db.pollAddendum.create({ data: { pollId: ids.combinedPoll, body: "Hangisisin?" } })).id;
     ids.addendum = (await db.pollAddendum.create({ data: { pollId: ids.neutralPoll, body: "Bu arada siyasi görüşün ne?" } })).id;
     ids.sensitiveComment = (await db.comment.create({ data: { pollId: ids.neutralPoll, authorId: ids.user, body: "Sen kime oy verdin?" } })).id;
     ids.neutralComment = (await db.comment.create({ data: { pollId: ids.neutralPoll, authorId: ids.user, body: "Ben filtre kahve içerim." } })).id;
@@ -48,8 +50,8 @@ describe("hassas içerik envanteri (postgres)", { skip: backend && url ? false :
     await rm(dir, { recursive: true, force: true });
     if (!db) return;
     await db.comment.deleteMany({ where: { authorId: ids.user } });
-    await db.pollAddendum.deleteMany({ where: { pollId: { in: [ids.sensitivePoll, ids.neutralPoll] } } });
-    await db.pollOption.deleteMany({ where: { pollId: { in: [ids.sensitivePoll, ids.neutralPoll] } } });
+    await db.pollAddendum.deleteMany({ where: { pollId: { in: [ids.sensitivePoll, ids.neutralPoll, ids.combinedPoll] } } });
+    await db.pollOption.deleteMany({ where: { pollId: { in: [ids.sensitivePoll, ids.neutralPoll, ids.combinedPoll] } } });
     await db.poll.deleteMany({ where: { authorId: ids.user } });
     await db.category.deleteMany({ where: { id: ids.category } });
     await db.user.deleteMany({ where: { id: ids.user } });
@@ -62,11 +64,15 @@ describe("hassas içerik envanteri (postgres)", { skip: backend && url ? false :
     const mine = new Map(hits.filter((h) => Object.values(ids).includes(h.id)).map((h) => [h.id, h]));
     assert.deepEqual(
       [...mine.values()].map((h) => [h.kind, h.category]).sort(),
-      [["addendum", "political"], ["comment", "political"], ["poll", "belief"]],
+      [["addendum", "political"], ["comment", "political"], ["poll", "belief"], ["poll", "belief"], ["poll", "political"]],
     );
     assert.equal(mine.get(ids.sensitivePoll)?.field, "options.0.label");
     assert.equal(mine.get(ids.sensitivePoll)?.status, "ACTIVE");
-    assert.equal(mine.has(ids.neutralPoll), false);
+    // A risky addendum is one addendum hit and also flags its parent poll;
+    // counts are per content kind, not unique poll totals across kinds.
+    assert.equal(mine.get(ids.neutralPoll)?.field, "addenda.0.body");
+    assert.equal(mine.get(ids.combinedPoll)?.field, "options.0.label");
+    assert.equal(mine.has(ids.combinedAddendum), false);
     assert.equal(mine.has(ids.neutralComment), false);
     assert.ok(summary.poll.scanned >= 2 && summary.comment.scanned >= 2 && summary.addendum.scanned >= 1);
     assert.ok(summary.poll.flagged >= 1 && summary.poll.byCategory.belief! >= 1);
