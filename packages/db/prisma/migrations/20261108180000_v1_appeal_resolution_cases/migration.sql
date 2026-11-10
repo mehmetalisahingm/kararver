@@ -19,7 +19,7 @@ CREATE TABLE moderation_appeal_cases (
   CONSTRAINT moderation_appeal_cases_state_check
     CHECK ((status IN ('OPEN','IN_REVIEW') AND resolved_at IS NULL AND outcome IS NULL AND resolved_by_id IS NULL)
       OR (status = 'RESOLVED' AND resolved_at IS NOT NULL AND resolved_at >= submitted_at
-          AND outcome IN ('ACCEPTED','REJECTED') AND resolved_by_id IS NOT NULL)),
+          AND outcome IS NOT NULL AND outcome IN ('ACCEPTED','REJECTED') AND resolved_by_id IS NOT NULL)),
   CONSTRAINT moderation_appeal_cases_unique_author_action
     UNIQUE (rejection_action_id, appellant_id)
 );

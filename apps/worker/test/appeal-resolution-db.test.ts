@@ -74,6 +74,13 @@ describe("14-day appeal case DB safety and moderator queue", { skip: url ? false
 
   test("resolved case records reason-free outcome; SLA overrun does not auto-dispose unresolved appeals", async () => {
     const row = await db.moderationAppealCase.findFirstOrThrow({ where: { rejectionActionId: actionId, appellantId: author } });
+    await assert.rejects(() => db.moderationAppealCase.update({
+      where: { id: row.id },
+      data: { status: "RESOLVED", outcome: null,
+        resolvedAt: new Date(row.submittedAt.getTime() + 15 * DAY), resolvedById: moderator },
+    }), /moderation_appeal_cases_state_check|Prisma/i);
+    const stillOpen = await db.moderationAppealCase.findUniqueOrThrow({ where: { id: row.id } });
+    assert.equal(stillOpen.status, "OPEN", "a missing outcome cannot close the case");
     await db.moderationAppealCase.update({
       where: { id: row.id },
       data: { status: "RESOLVED", outcome: "ACCEPTED",
