@@ -53,6 +53,7 @@ import { createPrismaBulkModerationStore } from "../../src/modules/moderation/bu
 import { createPrismaSpamScoreStore } from "../../src/modules/spam-score/routes.ts";
 import { createPrismaBulkApprovalStore } from "../../src/modules/moderation/bulk-approval.ts";
 import { createPrismaModerationStore } from "../../src/modules/moderation/prisma-store.ts";
+import { createPrismaModerationAppealStore } from "../../src/modules/moderation/appeals-store.ts";
 import { createPrismaReportStore } from "../../src/modules/reports/prisma-store.ts";
 import { createPrismaTrendStore } from "../../src/modules/trends/prisma-store.ts";
 import { createPrismaRevisionStore } from "../../src/modules/revisions/prisma-store.ts";
@@ -278,6 +279,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     onboardingStore: backend.prisma ? createPrismaOnboardingStore(backend.prisma) : undefined,
     reportStore: backend.prisma ? createPrismaReportStore(backend.prisma) : undefined,
     moderationStore: backend.prisma ? createPrismaModerationStore(backend.prisma) : undefined,
+    moderationAppealStore: backend.prisma ? createPrismaModerationAppealStore(backend.prisma) : undefined,
     bulkModerationStore: backend.prisma ? createPrismaBulkModerationStore(backend.prisma) : undefined,
     bulkApprovalStore: backend.prisma ? createPrismaBulkApprovalStore(backend.prisma) : undefined,
     spamScoreStore: backend.prisma ? createPrismaSpamScoreStore(backend.prisma) : undefined,

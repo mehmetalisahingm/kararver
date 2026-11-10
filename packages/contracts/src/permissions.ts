@@ -102,6 +102,7 @@ export const actions = Object.freeze({
   "community.leave": rule("user", "Topluluktan ayrılma"),
   "notification.read": rule("user", "Bildirim ve tercih okuma"),
   "notification.update": rule("user", "Okundu, tercih ve sessize alma"),
+  "moderation.appeal.self": rule("user", "Yalnız kendi ret bildirimi ve 30 günlük itiraz dosyası"),
 
   // ── verified: user + e-posta doğrulanmış ──
   "account.emailChange.manage": rule("verified", "Kendi e-posta değişimini başlatma, görme ve iptal etme (#181)"),
@@ -338,6 +339,8 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.communities.moderators.put": "community.moderator.assign",
   "admin.communities.moderators.delete": "community.moderator.assign",
 
+  "me.moderationAppeals.get": "moderation.appeal.self",
+  "me.moderationAppeals.file": "moderation.appeal.self",
   "notifications.list": "notification.read",
   "notifications.unreadCount": "notification.read",
   "notifications.markRead": "notification.update",
