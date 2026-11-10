@@ -31,7 +31,7 @@ Staging test ortamıdır; gerçek kullanıcı verisi bulunmamalı. Taşıma kayd
 | Sağlayıcı | Rol (teknik) | Veri | Bölge (kaynak) | Sözleşme/DPA durumu |
 | --- | --- | --- | --- | --- |
 | Neon (PostgreSQL 18, Free) | DB barındırma | K1–K6 | **Doğrulanmalı.** Repoda DB bölgesi yok; aynı projedeki depolama `eu-central-1` (aşağıda), DB'nin de orada olduğu varsayılmamalı | Doğrulanmalı (Free planda DPA erişimi ve kapsamı) |
-| Neon Object Storage (Free) | Medya depolama. **Tarayıcı yüklemede doğrudan bağlanır** (presigned PUT, `S3_ENDPOINT`); görüntüleme Vercel proxy'si üzerinden | K4; yüklemede kullanıcının IP'si ve user-agent'ı (K9) doğrudan Neon'a gider | `S3_REGION=eu-central-1` (`render.yaml`) | Doğrulanmalı |
+| Neon Object Storage (Free) | Medya depolama. **Tarayıcı iki durumda doğrudan bağlanır:** yükleme (presigned PUT, `S3_ENDPOINT`) ve moderasyon panelindeki önizleme (presigned GET, 5 dk). Onaylı görselin herkese açık görüntülenmesi Vercel proxy'si üzerinden | K4; yüklemede kullanıcının, önizlemede moderatörün IP'si ve user-agent'ı (K9) doğrudan Neon'a gider | `S3_REGION=eu-central-1` (`render.yaml`) | Doğrulanmalı |
 | Render (Free, `kararver-api-free-preview`) | API + worker barındırma | K1–K7 bellekte/işlemde, K9 | `region: frankfurt` (`render.yaml`) | Doğrulanmalı (Free) |
 | Render (Free, Mailpit test kutusu) | Test e-postası | K7 (yalnız test alıcıları) | `region: frankfurt` | Doğrulanmalı. **Production e-postası değildir** |
 | Vercel (Hobby) | Web + `/api` proxy | K9; proxy üzerinden bütün API trafiği ve çerez; onaylı medya proxy'si | **Doğrulanmalı.** Repoda fonksiyon bölgesi ayarı yok (`vercel.json` yok) | Doğrulanmalı (Hobby; ticari kullanım kısıtı #51) |
