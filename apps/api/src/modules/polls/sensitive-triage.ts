@@ -34,11 +34,13 @@ export async function triageSensitiveContent(tx: Tx, onHit: (hit: TriageHit) => 
       where: after ? { id: { gt: after } } : {},
       orderBy: { id: "asc" },
       take: BATCH,
-      select: { id: true, status: true, title: true, description: true, extraInfo: true, options: { select: { label: true }, orderBy: { position: "asc" } } },
+      select: { id: true, status: true, title: true, description: true, extraInfo: true, options: { select: { label: true }, orderBy: { position: "asc" } }, addenda: { select: { body: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
     });
     for (const p of polls) {
       summary.poll.scanned += 1;
-      const risk = detectSensitiveSurvey({ title: p.title, description: p.description, extraInfo: p.extraInfo, options: p.options });
+      // One poll hit at most, even if several fields match. A separately risky
+      // addendum remains its own hit in the addendum scan below.
+      const risk = detectSensitiveSurvey({ title: p.title, description: p.description, extraInfo: p.extraInfo, options: p.options, addenda: p.addenda.map(a => a.body) });
       if (risk) await record({ kind: "poll", id: p.id, pollId: p.id, status: p.status, category: risk.category, field: risk.field });
     }
     if (polls.length < BATCH) break;
