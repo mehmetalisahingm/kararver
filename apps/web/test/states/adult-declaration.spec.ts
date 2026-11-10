@@ -3,6 +3,34 @@ import AxeBuilder from "@axe-core/playwright";
 import { api, sample, failure } from "./api";
 
 const path = "/hesap/yas-beyani?returnTo=%2Folustur";
+for (const expired of [false, true]) test(`login declaration preserves onboarding continuation, expiry=${expired}`, async ({ page }) => {
+  const mock = await api(page); let signedIn = false; let declared = false; let writes = 0;
+  const categoryId = sample("categories.list").data[0].id;
+  await page.addInitScript(categoryId => localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({ version: 1, categoryIds: [categoryId], demoChoice: "write", returnTo: "/olustur" })), categoryId);
+  mock.handlers.set("auth.login", r => { signedIn = true; const body = sample("auth.login"); body.data.adultDeclarationRequired = true; return r.fulfill({ json: body }); });
+  mock.handlers.set("me.get", r => { if (!signedIn || (expired && declared)) return r.fulfill({ status: 401, json: failure("UNAUTHENTICATED") }); const body = sample("me.get"); body.data.adultDeclarationRequired = !declared; return r.fulfill({ json: body }); });
+  mock.handlers.set("interests.get", r => r.fulfill({ json: { data: { categoryIds: [] } } }));
+  mock.handlers.set("interests.put", r => { writes++; expect(r.request().postDataJSON()).toEqual({ categoryIds: [categoryId] }); return r.fulfill({ json: { data: { categoryIds: [categoryId] } } }); });
+  mock.handlers.set("me.adultDeclaration.confirm", r => { declared = true; return r.fulfill({ json: { data: { declaredAt: "2026-11-10T12:00:00Z" } } }); });
+  await page.goto("/giris?returnTo=%2Folustur&onboarding=1");
+  await page.getByLabel("E-posta", { exact: true }).fill("legacy-onboarding@example.test");
+  await page.getByLabel("Şifre", { exact: true }).fill("synthetic-test-password");
+  await page.getByRole("button", { name: "Giriş yap", exact: true }).click();
+  const checkbox = page.getByRole("checkbox", { name: /18 yaşımı doldurduğumu beyan ediyorum/ });
+  await expect(checkbox).toBeFocused(); await page.keyboard.press("Space");
+  await page.getByRole("button", { name: "18+ beyanını kaydet ve devam et" }).click();
+  if (expired) {
+    await expect(page.getByRole("button", { name: "Giriş yap", exact: true })).toBeVisible();
+    await expect(page.locator("main").getByRole("alert")).toContainText("Oturumun sona erdi");
+    expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).not.toBeNull();
+    expect(writes).toBe(0);
+  } else {
+    await expect(page).toHaveURL(/\/olustur$/);
+    expect(writes).toBe(1);
+    expect(await page.evaluate(() => localStorage.getItem("kv-welcome-draft-v1"))).toBeNull();
+  }
+  expect(mock.unexpected).toEqual([]);
+});
 for (const fault of ["server", "network", "forbidden"] as const) test(`restored legacy account ${fault}, retry and verified returnTo`, async ({ page }, info) => {
   const mock = await api(page); let declared = false; let failing = true; let writes = 0;
   mock.handlers.set("me.get", r => { const body = sample("me.get"); body.data.adultDeclarationRequired = !declared; return r.fulfill({ json: body }); });

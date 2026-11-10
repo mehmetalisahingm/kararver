@@ -78,10 +78,10 @@ test("legacy account signs in and explicitly declares 18+ before a participation
   await page.getByLabel("E-posta", { exact: true }).fill("older@example.test");
   await page.getByLabel("Şifre", { exact: true }).fill("Old-account-strong-password");
   await page.getByRole("button", { name: "Giriş yap", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "18+ yaş beyanı" })).toBeVisible();
-  await expect(page).toHaveURL(/\/hesap\/yas-beyani/);
+  await expect(page.getByText("Giriş başarılı. Hesabınla oy vermek", { exact: false })).toBeVisible();
+  await expect(page).toHaveURL(/\/giris/);
   const declaration = page.getByRole("checkbox", { name: /18 yaşımı doldurduğumu beyan ediyorum/ });
-  const submit = page.getByRole("button", { name: "Beyanı kaydet ve devam et" });
+  const submit = page.getByRole("button", { name: "18+ beyanını kaydet ve devam et" });
   await expect(declaration).not.toBeChecked();
   await expect(submit).toBeDisabled();
   expect(submissions).toBe(0);
