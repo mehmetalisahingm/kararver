@@ -6,7 +6,11 @@ const deliveredAt = new Date("2026-11-08T15:00:00.000Z");
 test("appeal countdown is exactly 30 days from notice inbox DELIVERY, never the rejection time", () => {
   const deadlineAt = new Date(deliveredAt.getTime() + APPEAL_WINDOW_MS);
   assert.equal(deadlineAt.toISOString(), "2026-12-08T15:00:00.000Z");
+  const beforeDelivery = new Date(deliveredAt.getTime() - 1);
+  assert.deepEqual(appealWindow(deliveredAt, beforeDelivery), { state: "NOT_DELIVERED", deadlineAt: null });
+  assert.equal(filedInTime(deliveredAt, beforeDelivery), false);
   assert.deepEqual(appealWindow(deliveredAt, new Date(deliveredAt)), { state: "OPEN", deadlineAt });
+  assert.equal(filedInTime(deliveredAt, new Date(deliveredAt)), true);
   assert.deepEqual(appealWindow(deliveredAt, deadlineAt), { state: "OPEN", deadlineAt });
   assert.deepEqual(appealWindow(deliveredAt, new Date(deadlineAt.getTime() + 1)), { state: "EXPIRED", deadlineAt });
 });
