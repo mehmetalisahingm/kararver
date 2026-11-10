@@ -257,6 +257,7 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
       description: body.description === undefined ? current.description : body.description,
       extraInfo: body.extraInfo === undefined ? current.extraInfo : body.extraInfo,
       options: body.options ?? current.options.map((option) => ({ label: option.label })),
+      addenda: current.addenda.map((addendum) => addendum.body),
     });
     await validateReferences(ctx, { categoryId: body.categoryId });
 
@@ -302,7 +303,15 @@ export function registerPollRoutes(route: Route, deps: PollDeps): void {
       throw new ApiError("FORBIDDEN", "Bu gönderi moderasyon nedeniyle kilitli.", [{ code: "content_locked" }]);
     }
     if (!isPubliclyVisible(meta)) throw new ApiError("NOT_FOUND", "İçerik bulunamadı.");
-    assertV1SensitivePolicy({ body: body.body });
+    // An addendum can turn previously neutral, sensitive categorical choices
+    // into a personal-attribute question; the store repeats this under a row lock.
+    const persisted = await store.findPoll({ id: params.id }, null);
+    if (!persisted) throw new ApiError("NOT_FOUND", "İçerik bulunamadı.");
+    assertV1SensitivePolicy({
+      title: persisted.title, description: persisted.description, extraInfo: persisted.extraInfo,
+      options: persisted.options, body: body.body,
+      addenda: persisted.addenda.map((addendum) => addendum.body),
+    });
     const { resourceId } = created(await store.createAddendum(params.id, body.body, scope));
     const addendum = (await store.findAddendum(resourceId))!;
     return { status: 201, body: { data: { id: addendum.id, body: addendum.body, createdAt: addendum.createdAt.toISOString() } } };
