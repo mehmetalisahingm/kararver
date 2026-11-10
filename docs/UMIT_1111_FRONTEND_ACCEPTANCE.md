@@ -19,14 +19,14 @@ playwright test -c playwright.public-read.config.ts
 tsc --noEmit
 ```
 
-Release config 360/390/768/1440px, motor başına 36 case çalıştırır. Ayrı workflow üç motoru aynı checkout üzerinde çalıştırır; root Foundation'daki mevcut 401/403, MFA/çift onay, bütün ekran state'leri, iki sekmede tercih ve onaylı izole yasal metin testleri kaldırılmadı. Yeni testler eski pakette çift koşmamak için ayrı config'tedir.
+Release config 360/390/768/1440px, motor başına 40 case çalıştırır. Ayrı workflow üç motoru aynı checkout üzerinde çalıştırır; root Foundation'daki mevcut 401/403, MFA/çift onay, bütün ekran state'leri, iki sekmede tercih ve onaylı izole yasal metin testleri kaldırılmadı. Yeni testler eski pakette çift koşmamak için ayrı config'tedir.
 
 | İş | Teknik kanıt | Gerçek kapsam sınırı |
 | --- | --- | --- |
 | #367 | Misafir/kayıt/USER tercih ret→kabul→geri çekme→reload; storage SecurityError ve quota; 2x CSS zoom, klavye/axe; anonim network-origin ve storage-key/cookie-attribute JSON | Varsayılan özel Playwright context'leri; sağlayıcı paneli, gerçek tarayıcı gizli mod politikaları veya hukuki onay değildir. Onaylı paket yokken placeholder yayımlanmaz. |
 | #368 | 4 genişlik, reduced-motion, kontrast/axe, 44px temel kontrol hedefleri, modal dönüşü; mevcut loading/empty/401/403/500/retry matrisine ek | Fiziksel iPhone/Safari/VoiceOver, Android/TalkBack, NVDA ve beta GO yapılmadı. |
 | #369 | 15 açık sentetik kartta API sırası, uzun başlık, medyasız görünüm ve gizli sonuç; empty/arama/profil/kategori/trend/doğrudan linkte eski içerik yok | Bunlar gerçek 15 anketin yayımlanması veya canlı toplu kaldırma değildir. CDN/OG cache purge, Search Console ve dış paylaşım servislerinin cache'i test edilmedi. |
-| #370 | 409/429/500 yetki recheck hatasında sıfır privileged read, açık retry; API reddedilen/bekleyen kritik modalda yanlış başarı yok | Test adapterindeki rol yanıtı gerçek rol verme değildir. Canlı SUPER_ADMIN/MFA ve bağlı güvenlik PR'larının işletim kabulü Mehmet'tedir. |
+| #370 | 409/429/500 ve browser timedout abort yetki recheck hatasında sıfır privileged read, açık retry; API reddedilen/bekleyen kritik modalda yanlış başarı yok | Test adapterindeki rol yanıtı gerçek rol verme değildir. Canlı SUPER_ADMIN/MFA ve bağlı güvenlik PR'larının işletim kabulü Mehmet'tedir. |
 
 Yerel ilk release turu üç motorda 32/32 geçti. Ağ/çok ekran removal ekleri ayrıca üç motorda 16/16 doğrulandı; son 44px kontrolü ve root SSR düzeltmesi sonrası kesin birleşik sonuç PR/CI'dan okunmalıdır. Crawler suite gerçek localhost HTTP isteğiyle (JavaScript çalıştırmadan) public body+OG 200, removed 404+noindex/eski başlık yok, upstream 503'te gerçek 5xx kontrol eder; 3/3 geçti. Bu bir production Next build/staging testi değildir: `next dev` altında `APP_ENV=production` routing politikası ve izole HTTP API adapteri kullanır.
 
