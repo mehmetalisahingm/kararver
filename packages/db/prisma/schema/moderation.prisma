@@ -349,6 +349,7 @@ model ModerationAppealNoticeReceipt {
 
   action ModerationAction @relation(fields: [moderationActionId], references: [id], onDelete: Restrict)
   recipient User @relation(fields: [recipientId], references: [id], onDelete: Restrict)
+  appealCases ModerationAppealCase[]
 
   @@index([recipientId, appealDeadlineAt], map: "moderation_appeal_notice_receipts_recipient_idx")
   @@map("moderation_appeal_notice_receipts")
