@@ -313,7 +313,6 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "PUBLISH" } }), 1);
     assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: pollId, reason: "MODERATION_REFUND" } }), 1);
     assert.equal((await summary(owner.cookie)).balance, 20);
-    h.clock.advance(-75 * 60 * 60 * 1000);
 
     // The first submission sets a 75-hour publishing cooldown; test a second, unrelated poll after it expires.
     h.clock.advance(76 * 60 * 60 * 1000);
@@ -326,12 +325,12 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(takedown.statusCode, 200, takedown.body);
     assert.equal((await summary(owner.cookie)).balance, 10, "yayın sonrası kaldırmada iade yok");
     assert.equal(await db.pointLedgerEntry.count({ where: { referenceId: normalId, reason: "MODERATION_REFUND" } }), 0);
-    h.clock.advance(-76 * 60 * 60 * 1000);
 
     // Exactly 30 days is still within the filing window. After 30 days +
     // one millisecond, the user's own private endpoint must reject filing;
     // the moderator decision time or outbox occurredAt must not override it.
-    const deadlineOwner = await login(await registerVerified());
+    const deadlineAccount = await registerVerified();
+    const deadlineOwner = await login(deadlineAccount);
     const late = await send("POST", "/polls", {
       ...pollBody(), title: `Siyasi partilerin trafik projeleri tartışması ${++titleSeq}`,
     }, deadlineOwner.cookie, `deadline-${randomUUID()}`);
@@ -351,20 +350,43 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
         deadlineAt: new Date(deliveredAt.getTime() + 30 * 24 * 60 * 60 * 1000),
       },
     });
-    h.clock.advance(30 * 24 * 60 * 60 * 1000 + 1);
-    const tooLate = await send("POST", `/me/moderation-appeals/${rejectionId}`,
-      { reason: "Bu itiraz son tarihten bir milisaniye sonra gönderildi." }, deadlineOwner.cookie);
-    assert.equal(tooLate.statusCode, 409, tooLate.body);
-    assert.equal(tooLate.json().error.details[0].code, "appeal_window_closed");
-    assert.equal((await send("GET", `/me/moderation-appeals/${rejectionId}`, undefined, deadlineOwner.cookie)).json().data.status, "EXPIRED");
-    assert.equal((await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: rejectionId } })).filedAt, null);
-    h.clock.advance(-(30 * 24 * 60 * 60 * 1000 + 1));
+    // Use a separate rejection for the exact-boundary success. The first filing
+    // is naturally idempotent, so reusing it cannot test a later failed filing.
+    const boundaryAccount = await registerVerified();
+    const boundaryOwner = await login(boundaryAccount);
+    const boundaryPoll = await send("POST", "/polls", {
+      ...pollBody(), title: `Siyasi partilerin ulaşım seçenekleri ${++titleSeq}`,
+    }, boundaryOwner.cookie, `boundary-${randomUUID()}`);
+    assert.equal(boundaryPoll.statusCode, 202, boundaryPoll.body);
+    const boundaryPollId: string = boundaryPoll.json().data.id;
+    const boundaryRejection = await send("POST", `/admin/polls/${boundaryPollId}/moderation`,
+      { action: "REMOVE", reason: "Son başvuru anı için bağımsız ret." }, reviewer.cookie);
+    assert.equal(boundaryRejection.statusCode, 200, boundaryRejection.body);
+    const boundaryRejectionId = (await db.moderationAction.findFirstOrThrow({
+      where: { pollId: boundaryPollId, action: "REMOVE", fromStatus: "UNDER_REVIEW" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    })).id;
+    await db.moderationAppealWindow.create({ data: {
+      rejectionActionId: boundaryRejectionId, recipientId: boundaryOwner.id,
+      notificationId: randomUUID(), deliveredAt,
+      deadlineAt: new Date(deliveredAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+    } });
     h.clock.advance(30 * 24 * 60 * 60 * 1000);
-    const lastInstant = await send("POST", `/me/moderation-appeals/${rejectionId}`,
-      { reason: "Son başvuru anında kullanıcı tarafından yapılan itiraz kabul edilmeli." }, deadlineOwner.cookie);
+    // The original session's 30-day TTL has elapsed. Reauthenticate so these
+    // requests exercise the appeal deadline rather than fail at authentication.
+    const boundarySession = await login(boundaryAccount);
+    const lastInstant = await send("POST", `/me/moderation-appeals/${boundaryRejectionId}`,
+      { reason: "Son başvuru anında kullanıcı tarafından yapılan itiraz kabul edilmeli." }, boundarySession.cookie);
     assert.equal(lastInstant.statusCode, 200, lastInstant.body);
     assert.equal(lastInstant.json().data.status, "FILED");
-    h.clock.advance(-30 * 24 * 60 * 60 * 1000);
+    h.clock.advance(1);
+    const lateSession = await login(deadlineAccount);
+    const tooLate = await send("POST", `/me/moderation-appeals/${rejectionId}`,
+      { reason: "Bu itiraz son tarihten bir milisaniye sonra gönderildi." }, lateSession.cookie);
+    assert.equal(tooLate.statusCode, 409, tooLate.body);
+    assert.equal(tooLate.json().error.details[0].code, "appeal_window_closed");
+    assert.equal((await send("GET", `/me/moderation-appeals/${rejectionId}`, undefined, lateSession.cookie)).json().data.status, "EXPIRED");
+    assert.equal((await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: rejectionId } })).filedAt, null);
   });
 
   test("ledger sayfalı okunur ve DB'de UPDATE/DELETE edilemez", async () => {
