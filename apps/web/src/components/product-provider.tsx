@@ -161,6 +161,10 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   };
   const setReturnTo = (path: string) => setReturn(safeReturnTo(path));
   function requireUser(path: string) {
+    if (client.current()?.adultDeclarationRequired) {
+      router.push(`/hesap/yas-beyani?returnTo=${encodeURIComponent(safeReturnTo(path))}`);
+      return false;
+    }
     if (client.current()) return true;
     trigger.current = document.activeElement as HTMLElement;
     setReturnTo(path);

@@ -36,8 +36,6 @@ export function AuthScreen({
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [adultConfirmed, setAdultConfirmed] = useState(false);
-  const [needsAdultDeclaration, setNeedsAdultDeclaration] = useState(false);
-  const [legacyAdultConfirmed, setLegacyAdultConfirmed] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -130,7 +128,7 @@ export function AuthScreen({
     // A pre-policy account may sign in but cannot publish, vote or comment until
     // it makes an explicit 18+ declaration. Do not redirect to an unusable page.
     if (!demo && client.current()?.adultDeclarationRequired) {
-      setNeedsAdultDeclaration(true);
+      router.push(`/hesap/yas-beyani?returnTo=${encodeURIComponent(destination)}`);
       return;
     }
     if (onboarding || hasWelcomeDraft) {
@@ -144,26 +142,6 @@ export function AuthScreen({
     notify(onboarding || hasWelcomeDraft ? "Giriş yaptın. KararVer akışın hazır." : "Giriş yaptın. Seçimin korunuyor; işlemi tamamlamak için yeniden onayla.");
     router.push(destination);
   }
-  async function submitLegacyAdultDeclaration(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy || !legacyAdultConfirmed || !(client instanceof ApiClient)) return;
-    setBusy(true);
-    setError("");
-    try {
-      const updated = await client.confirmAdultDeclaration();
-      syncUser();
-      if (updated?.adultDeclarationRequired) throw new Error("18+ beyanı henüz doğrulanamadı. Yeniden dene.");
-      setNeedsAdultDeclaration(false);
-      setLegacyAdultConfirmed(false);
-      await finishSignIn();
-    } catch (reason) {
-      setNeedsAdultDeclaration(true);
-      setError((reason as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -236,24 +214,7 @@ export function AuthScreen({
         hesap: deniz@example.test. Yeni kayıt .test uzantılı olmalı. Kod:{" "}
         <strong>123456</strong>. Gerçek e-posta gönderilmez.
       </div>}
-      {needsAdultDeclaration && !demo ? (
-        <form className="screen-stack" onSubmit={submitLegacyAdultDeclaration}>
-          <p role="status">Giriş başarılı. Hesabınla oy vermek, yorum yapmak veya anket yayımlamak için 18 yaşını doldurduğunu beyan etmen gerekiyor.</p>
-          <label className="kv-check-row">
-            <input type="checkbox" name="legacyAdultConfirmed" disabled={!interactive || busy}
-              checked={legacyAdultConfirmed} onChange={event => setLegacyAdultConfirmed(event.target.checked)} required />
-            <span>18 yaşımı doldurduğumu beyan ediyorum. Bu bir öz beyandır, kimlik doğrulaması değildir.</span>
-          </label>
-          <ErrorMessage message={error} />
-          <button type="submit" className="kv-button" disabled={!interactive || busy || !legacyAdultConfirmed}>
-            {busy ? "Kaydediliyor…" : "18+ beyanını kaydet ve devam et"}
-          </button>
-          <button type="button" className="kv-button kv-button--secondary" disabled={busy} onClick={() => {
-            void client.logout().then(() => { syncUser(); setNeedsAdultDeclaration(false); setLegacyAdultConfirmed(false); })
-              .catch(reason => setError((reason as Error).message));
-          }}>Beyan vermeden çıkış yap</button>
-        </form>
-      ) : postLoginError ? (
+      {postLoginError ? (
         <div className="screen-stack" role="alert">
           <p>Giriş başarılı, ancak ilgi alanların kaydedilemedi: {postLoginError}</p>
           <p className="kv-muted">Seçimlerin korunuyor. Yeniden deneyebilir veya açıkça daha sonra ayarlamayı seçebilirsin.</p>
