@@ -14,13 +14,16 @@ for(const scenario of ["hidden","public","locked"] as const) test(`premium poll 
   await page.route("https://cover.test/**",r=>fail?r.abort():r.fulfill({contentType:"image/svg+xml",body:'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><rect width="800" height="500" fill="#82796c"/></svg>'}));
   await page.goto("/kesfet");const article=page.locator(".discovery-results > article");
   await expect(article).toHaveCount(1);
+  await article.scrollIntoViewIfNeeded();
   await expect(article.getByRole("button",{name:"Kapak görselini tekrar yükle"})).toBeVisible();
+  await expect(article.locator('svg[aria-hidden="true"]')).toBeVisible();
   if(scenario==="public")await expect(article.getByText("20 oy",{exact:true})).toBeVisible();
   else {await expect(article.getByText("Sonuçlar oy verdikten sonra görünür.")).toBeVisible();await expect(article.getByRole("progressbar")).toHaveCount(0);}
   if(scenario==="locked")await expect(article.getByText("Kilitli",{exact:true})).toBeVisible();
   fail=false;await article.getByRole("button",{name:"Kapak görselini tekrar yükle"}).click();
   await expect(article.getByText("Anket görseli yükleniyor…")).toHaveCount(0);
   await expect(article.getByRole("img")).toBeVisible();
+  await expect(article.locator('svg[aria-hidden="true"]')).toHaveCount(0);
   for(const theme of ["light","dark"]){
     if(await page.locator(".product").getAttribute("data-theme")!==theme)await page.getByRole("button",{name:/temaya geç/}).click();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -30,14 +33,29 @@ for(const scenario of ["hidden","public","locked"] as const) test(`premium poll 
   expect(mock.unexpected).toEqual([]);
 });
 
+test("comparison table stays inside mobile layout and supports keyboard scrolling",async({page})=>{
+  await api(page);
+  await page.goto(`/karar/${sample("polls.get").data.id}`);
+  const region=page.getByRole("region",{name:"Seçenek karşılaştırma tablosu"});
+  await expect(region).toBeVisible();
+  await region.focus();
+  await expect(region).toBeFocused();
+  if(await region.evaluate(el=>el.scrollWidth>el.clientWidth)) {
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(()=>region.evaluate(el=>el.scrollLeft)).toBeGreaterThan(0);
+  }
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
 test("guided composer keeps draft and previews settings before explicit publication",async({page},info)=>{
   const mock=await api(page);let publishes=0;
   mock.handlers.set("polls.create",async r=>{publishes++;await r.fulfill({status:201,json:sample("polls.get")});});
   await page.goto("/olustur");
   await page.getByLabel("Sorun",{exact:true}).fill("Yeni tasarım için hangi renk daha iyi?");
+  await expect.poll(()=>page.locator(".studio-draft-ink").evaluate(element=>Number(getComputedStyle(element).opacity))).toBeGreaterThan(0);
   await page.getByLabel("1. seçenek",{exact:true}).fill("Şampanya");
   await page.getByLabel("2. seçenek",{exact:true}).fill("Antrasit");
-  await page.getByRole("button",{name:"2 · Yayını düzenle",exact:true}).click();
+  await page.getByRole("navigation",{name:"Oluşturma adımları"}).getByRole("button",{name:/02.*Yayını düzenle/}).click();
   await expect(page.locator("#compose-settings")).toBeFocused();
   await page.getByLabel("Kategori",{exact:true}).selectOption({label:"Otomobil"});
   await page.getByLabel("Anket süresi",{exact:true}).selectOption({label:"7 gün"});
@@ -61,7 +79,8 @@ test("a new poll can explicitly choose AFTER_VOTE without changing the public de
   await page.getByLabel("Sorun",{exact:true}).fill("Bu hafta hangi özelliği geliştirmeliyiz?");
   await page.getByLabel("1. seçenek",{exact:true}).fill("Arama");
   await page.getByLabel("2. seçenek",{exact:true}).fill("Bildirim");
-  await page.getByRole("button",{name:"2 · Yayını düzenle",exact:true}).click();
+  await page.getByRole("navigation",{name:"Oluşturma adımları"}).getByRole("button",{name:/02.*Yayını düzenle/}).click();
+  await expect(page.locator("#compose-settings")).toBeFocused();
   await page.getByLabel("Kategori",{exact:true}).selectOption({label:"Otomobil"});
   const visibility=page.getByLabel("Sonuç görünürlüğü",{exact:true});
   await expect(visibility).toHaveValue("always");

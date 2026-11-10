@@ -2,6 +2,7 @@
 import Link from "next/link";
 import type { Poll } from "../../lib/model";
 import { PollCover } from "./poll-cover";
+import { IllustratedScene, visualTopic } from "../../components/visual-story";
 import styles from "./polls.module.css";
 export function PollCard({ poll }: { poll: Poll }) {
   const cover=poll.gallery?.find(item=>item.status==="ready");
@@ -29,11 +30,19 @@ export function PollCard({ poll }: { poll: Poll }) {
                 : "Anket"}
         </span>
       </div>
+      {!cover && !poll.options.some((option) => option.image) && (
+        <div className="kv-poll-visual" data-illustration="true">
+          <IllustratedScene topic={visualTopic(poll.category || poll.title)} />
+        </div>
+      )}
       <h2>
         <Link href={poll.canonicalPath || `/karar/${poll.id}`}>{poll.title}</Link>
       </h2>
       {poll.description && <p className={`kv-muted ${styles.description}`}>{poll.description}</p>}
-      {cover?.status==="ready" && <PollCover key={cover.src} src={cover.src} alt={cover.alt}/>}
+      {cover?.status==="ready" && (
+        <PollCover key={cover.src} src={cover.src} alt={cover.alt}
+          fallback={<IllustratedScene topic={visualTopic(poll.category || poll.title)} />} />
+      )}
       {poll.options.some((o) => o.image) && (
         <div className="photo-options">
           {poll.options.map((o) => (
