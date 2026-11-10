@@ -8,7 +8,9 @@
  * Negatifler: yanlış anahtar, kesik ve değiştirilmiş şifreli dosya (düz metin bırakılmaz), dolu hedefe restore,
  * eksik migration (eski şema), canlı DB'yi gösteren veya karantina adı taşımayan restore hedefi.
  *
- * Yalnız TEST_DATABASE_URL'nin yanındaki "<test>_drill_src" / "<test>_drill_restore" veritabanlarına dokunur.
+ * Hedefler bağlantıdan ÖNCE doğrulanır (yerel host, sorgusuz URL, "_test" taban adı, güvenli identifier) ve
+ * çalışmaya özel adlar alır: "<test>_drill_<run>_src" / "<test>_drill_<run>_restore". Yalnız bu çalışmanın
+ * oluşturduğu veritabanları silinir; önceden var olan bir ad asla düşürülmez.
  * Production, staging, gerçek yedek veya anahtar kullanılmaz; anahtar çifti testte üretilir ve bellekte kalır.
  */
 import assert from "node:assert/strict";
@@ -46,6 +48,58 @@ function toolMajor(): number | null {
   const m = r.stdout?.match(/(\d+)\.\d+/);
   return r.status === 0 && m ? Number(m[1]) : null;
 }
+const IDENT = /^[a-z][a-z0-9_]{0,62}$/;
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * Bağlantıdan ve her türlü DROP/CREATE'ten ÖNCE çalışır; hata = hiç bağlantı yok.
+ * Uzak host, host yönlendiren sorgu parametreleri (?host=, ?options=), _test olmayan taban ve SQL'e
+ * güvenle gömülemeyen adlar reddedilir. Adlar çalışmaya özeldir.
+ */
+function planDrill(rawUrl: string, runId: string) {
+  const url = new URL(rawUrl);
+  if (!["postgresql:", "postgres:"].includes(url.protocol)) throw new Error("drill_not_postgres");
+  if (!LOCAL_HOSTS.has(url.hostname)) throw new Error("drill_not_local");
+  if (url.search || url.hash) throw new Error("drill_url_query_not_allowed");
+  const name = decodeURIComponent(url.pathname.slice(1));
+  if (!IDENT.test(name) || !name.endsWith("_test")) throw new Error("drill_base_not_test");
+  if (!/^[0-9a-f]{8}$/.test(runId)) throw new Error("drill_run_id_invalid");
+  const src = `${name}_drill_${runId}_src`;
+  const restore = `${name}_drill_${runId}_restore`;
+  if (![src, restore].every((n) => IDENT.test(n))) throw new Error("drill_name_invalid");
+  return { adminUrl: withDatabase(rawUrl, "postgres"), src, restore, srcUrl: withDatabase(rawUrl, src), restoreUrl: withDatabase(rawUrl, restore) };
+}
+
+/** Doğrulama geçmeden bağlantı fabrikası hiç çağrılmaz. */
+function openDrill<T>(rawUrl: string, runId: string, connect: (adminUrl: string) => T) {
+  const plan = planDrill(rawUrl, runId);
+  return { plan, admin: connect(plan.adminUrl) };
+}
+
+describe("tatbikat hedef koruması (bağlantısız)", () => {
+  const ok = "postgresql://u:p@127.0.0.1:5432/kararver_ci_test";
+  test("uzak, yönlendirilmiş, _test olmayan veya kaçışsız hedefte bağlantı fabrikası hiç çağrılmaz", () => {
+    let connects = 0;
+    const connect = () => { connects++; return null; };
+    const bad: [string, RegExp][] = [
+      ["postgresql://u:p@db.example.test:5432/kararver_test", /drill_not_local/],
+      ["postgresql://u:p@10.0.0.5:5432/kararver_test", /drill_not_local/],
+      ["postgresql://u:p@127.0.0.1:5432/kararver_test?host=db.example.test", /drill_url_query_not_allowed/],
+      ["postgresql://u:p@127.0.0.1:5432/kararver_test?options=-c%20search_path%3Dx", /drill_url_query_not_allowed/],
+      ["postgresql://u:p@127.0.0.1:5432/kararver", /drill_base_not_test/],
+      ["postgresql://u:p@127.0.0.1:5432/kararver_test%22%3B%20DROP%20DATABASE%20x%3B%20--_test", /drill_base_not_test/],
+      ["mysql://u:p@127.0.0.1:5432/kararver_test", /drill_not_postgres/],
+    ];
+    for (const [url, err] of bad) assert.throws(() => openDrill(url, "0123abcd", connect), err, url);
+    assert.throws(() => openDrill(ok, "x; DROP", connect), /drill_run_id_invalid/);
+    assert.equal(connects, 0, "reddedilen hiçbir hedefe bağlanılmadı");
+    const { plan } = openDrill(ok, "0123abcd", connect);
+    assert.equal(connects, 1);
+    assert.equal(plan.src, "kararver_ci_test_drill_0123abcd_src");
+    assert.equal(plan.restore, "kararver_ci_test_drill_0123abcd_restore");
+  });
+});
+
 const base = baseUrl();
 const major = base ? toolMajor() : null;
 const skip = base === null ? "TEST_DATABASE_URL yok (CI'da çalışır)"
@@ -53,9 +107,12 @@ const skip = base === null ? "TEST_DATABASE_URL yok (CI'da çalışır)"
   : major < 17 ? `pg_dump ${major} sunucudan eski (17 gerekir)` : false;
 
 describe("izole restore tatbikatı: yedek → şifre → restore → kapılar → silme tekrarı (postgres)", { skip }, () => {
-  const baseName = base ? decodeURIComponent(new URL(base).pathname.slice(1)) : "";
-  const srcUrl = base ? withDatabase(base, `${baseName}_drill_src`) : "";
-  const restoreUrl = base ? withDatabase(base, `${baseName}_drill_restore`) : "";
+  const runId = randomUUID().replaceAll("-", "").slice(0, 8);
+  let srcUrl = "";
+  let restoreUrl = "";
+  let plan: ReturnType<typeof planDrill>;
+  /** Yalnız bu çalışmanın oluşturduğu veritabanları; cleanup başka hiçbir adı düşürmez. */
+  const owned = new Set<string>();
   const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 3072, publicKeyEncoding: { type: "spki", format: "pem" }, privateKeyEncoding: { type: "pkcs8", format: "pem" } });
   const other = generateKeyPairSync("rsa", { modulusLength: 3072, publicKeyEncoding: { type: "spki", format: "pem" }, privateKeyEncoding: { type: "pkcs8", format: "pem" } });
   let admin: PrismaClient;
@@ -63,14 +120,23 @@ describe("izole restore tatbikatı: yedek → şifre → restore → kapılar �
   let dir: string;
   let gate: GateModule;
 
-  const drop = (url: string) => admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${decodeURIComponent(new URL(url).pathname.slice(1))}" WITH (FORCE)`);
+  const exists = async (name: string) =>
+    (await admin.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_database WHERE datname = ${name}`)[0]!.n > 0;
+  /** Önceden var olan adı sahiplenmez: CREATE başarısızsa iz bırakmadan reddeder. */
+  async function createOwned(name: string) {
+    assert.ok(IDENT.test(name));
+    if (await exists(name)) throw new Error("drill_target_exists");
+    await admin.$executeRawUnsafe(`CREATE DATABASE "${name}"`);
+    owned.add(name);
+  }
 
   before(async () => {
-    assert.ok(baseName.endsWith("_test"), "tatbikat yalnız _test veritabanının yanında çalışır");
+    // Doğrulama ilk bağlantıdan önce; reddedilirse hiçbir şey açılmaz/silinmez.
+    ({ plan, admin } = openDrill(base!, runId, (url) => createPrismaClient(url)));
+    ({ srcUrl, restoreUrl } = plan);
     gate = (await import(gatePath)) as GateModule;
-    admin = createPrismaClient(withDatabase(base!, "postgres"));
-    for (const u of [srcUrl, restoreUrl]) await drop(u);
-    await admin.$executeRawUnsafe(`CREATE DATABASE "${baseName}_drill_src"`);
+    assert.equal(await exists(plan.restore), false, "çalışmaya özel restore hedefi önceden yok");
+    await createOwned(plan.src);
     const prismaCli = createRequire(path.join(dbPackage, "package.json")).resolve("prisma/build/index.js");
     const r = spawnSync(process.execPath, [prismaCli, "migrate", "deploy"], { cwd: dbPackage, env: { ...process.env, DATABASE_URL: srcUrl }, encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr || r.stdout);
@@ -81,7 +147,7 @@ describe("izole restore tatbikatı: yedek → şifre → restore → kapılar �
   after(async () => {
     await src?.$disconnect();
     if (admin) {
-      for (const u of [srcUrl, restoreUrl]) await drop(u);
+      for (const name of owned) if (IDENT.test(name)) await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
       await admin.$disconnect();
     }
     if (dir) await rm(dir, { recursive: true, force: true });
@@ -148,6 +214,7 @@ describe("izole restore tatbikatı: yedek → şifre → restore → kapılar �
     // ── 3. Çöz → boş izole hedefe restore → manifestle birebir.
     await decryptFile(enc, out, privateKey);
     const report = await restore(out, restoreUrl);
+    owned.add(plan.restore);
     assert.deepEqual(report.diffs, []);
     assert.ok(report.ok, JSON.stringify(report));
     await assert.rejects(restore(out, restoreUrl), /boş değil/, "dolu hedefe ikinci restore reddedilir");
@@ -196,6 +263,20 @@ describe("izole restore tatbikatı: yedek → şifre → restore → kapılar �
       assert.deepEqual(stale.pending, [last!.migration_name]);
     } finally {
       await restored.$disconnect();
+    }
+  });
+
+  test("önceden var olan hedef adı sahiplenilmez ve cleanup onu düşürmez", async () => {
+    const foreign = `${plan.src.replace(/_src$/, "")}_foreign_restore`;
+    assert.ok(IDENT.test(foreign));
+    await admin.$executeRawUnsafe(`CREATE DATABASE "${foreign}"`);
+    try {
+      await assert.rejects(createOwned(foreign), /drill_target_exists/);
+      assert.equal(owned.has(foreign), false);
+      assert.equal(await exists(foreign), true, "var olan veritabanı silinmedi");
+    } finally {
+      // Bu test kendi oluşturduğu yabancı veritabanını kendisi kaldırır; tatbikat cleanup'ı ona dokunmaz.
+      await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${foreign}" WITH (FORCE)`);
     }
   });
 });

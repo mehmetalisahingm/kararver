@@ -241,7 +241,7 @@ CI'da `pnpm test`, ops testlerini de koşar. Database işi PostgreSQL 17 `pg_dum
 
 ## İzole şifreli restore tatbikatı (#375)
 
-`apps/api/test/restore-drill.test.ts`, yukarıdaki adımları **tek zincirde** ve yalnız sentetik veriyle koşar. Yalnız `TEST_DATABASE_URL`'in yanındaki `<test>_drill_src` ve `<test>_drill_restore` veritabanlarına dokunur; anahtar çifti testte üretilir ve diske yazılmaz.
+`apps/api/test/restore-drill.test.ts`, yukarıdaki adımları **tek zincirde** ve yalnız sentetik veriyle koşar. Hedef, ilk bağlantıdan önce doğrulanır: yerel host, sorgusuz URL, `_test` taban adı ve güvenli identifier. Uzak ya da yönlendirilmiş hedefte hiç bağlanmaz. Çalışmaya özel `<test>_drill_<run>_src` ve `_restore` veritabanlarını açar ve yalnız kendi açtıklarını siler; önceden var olan bir adı sahiplenmez. Anahtar çifti testte üretilir ve diske yazılmaz.
 
 | Adım | Ne gösterir |
 | --- | --- |
