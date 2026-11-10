@@ -123,21 +123,6 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   if (next === "invalid") return { kind: "conflict", reason: "invalid_transition" };
   if (next === "same") return { kind: "unchanged", outcome: outcome(row.status, excluded) };
   if (row.status === "REMOVED" && !input.actorIsAdmin) return { kind: "forbidden", reason: "admin_required" };
-  // A never-published UNDER_REVIEW submission that was rejected must not be
-  // exposed through a generic RESTORE. The later, audited appeal undo flow
-  // has its own exact-action/authorization and media release gate.
-  if (row.status === "REMOVED" && next === "ACTIVE") {
-    const latest = await tx.moderationAction.findFirst({
-      where: { pollId: input.id },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      select: { fromStatus: true, toStatus: true },
-    });
-    if (latest?.fromStatus === "UNDER_REVIEW" && latest.toStatus === "REMOVED") {
-      return { kind: "conflict", reason: "invalid_transition" };
-    }
-  }
-
-
   // A rejected review poll is FREE to reinstate after a proven wrong
   // decision. Direct RESTORE is deliberately NOT equivalent to an appeal:
   // require an ADMIN+ version-checked single-decision undo of the ORIGINAL
