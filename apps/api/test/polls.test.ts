@@ -392,6 +392,45 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.equal(stored.status, "ACTIVE");
   });
 
+  test("concurrent safe addendum and option edits cannot combine into an exposed sensitive poll", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie, {
+      title: "Kültürel miras üzerine genel değerlendirme",
+      options: [{ label: "Birinci seçenek" }, { label: "İkinci seçenek" }],
+    });
+
+    // Each operation is safe against the old snapshot on its own. Whichever
+    // commits second must be rejected under the poll row lock after recomputing
+    // the effective title/options/addenda projection.
+    const [addendum, edit] = await Promise.all([
+      send("POST", `/polls/${poll.id}/addenda`, { body: "Hangisisin? Sana yakın olan grubu seç" }, owner.cookie),
+      send("PATCH", `/polls/${poll.id}`, {
+        options: [
+          { id: poll.options[0]!.id, label: "Alevi" },
+          { id: poll.options[1]!.id, label: "Sünni" },
+        ],
+      }, owner.cookie),
+    ]);
+    const statuses = [addendum.statusCode, edit.statusCode];
+    assert.equal(statuses.filter(status => status === 400).length, 1,
+      `exactly one conflicting edit must be rejected: ${JSON.stringify(statuses)}`);
+    assert.equal(statuses.filter(status => status === 200 || status === 201).length, 1);
+
+    const saved = await db.poll.findUniqueOrThrow({
+      where: { id: poll.id },
+      select: {
+        title: true, description: true, extraInfo: true, status: true,
+        options: { select: { label: true }, orderBy: { position: "asc" } },
+        addenda: { select: { body: true }, orderBy: { createdAt: "asc" } },
+      },
+    });
+    assert.equal(saved.status, "ACTIVE");
+    assert.equal(detectSensitiveSurvey({
+      title: saved.title, description: saved.description, extraInfo: saved.extraInfo,
+      options: saved.options, addenda: saved.addenda.map(a => a.body),
+    }), null, "concurrent mutations must never publish a sensitive respondent poll");
+  });
+
   test("generic RESTORE cannot publish a rejected review without audited appeal", async () => {
     const owner = await signUp();
     const reviewer = await signUp();
