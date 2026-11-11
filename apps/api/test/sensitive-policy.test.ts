@@ -130,3 +130,24 @@ test("annotated personal categories are blocked but topic-only descriptions rema
   assert.deepEqual(detectSensitiveSurvey({ title: "Hangi hastalığın var?" }),
     { field: "title", category: "health" });
 });
+
+
+test("direct sensitive respondent prompts in polite Turkish are rejected without blocking neutral topics", () => {
+  const blocked = [
+    ["İnancınız nedir?", "belief"],
+    ["Mezhebiniz nedir?", "belief"],
+    ["Cinsel yöneliminiz nedir?", "sexual"],
+    ["Sabıka kaydınız var mı?", "justice"],
+    ["Parmak iziniz nedir?", "biometric"],
+    ["Parmak izinizi paylaşır mısınız?", "biometric"],
+  ] as const;
+  for (const [title, category] of blocked) {
+    const result = detectSensitiveSurvey({ title });
+    assert.deepEqual(result, { field: "title", category }, title);
+  }
+  for (const title of [
+    "İnanç özgürlüğü hakkında kamu hizmetleri nasıl iyileştirilmeli?",
+    "Sabıka kayıtlarına erişim prosedürü nasıl geliştirilmeli?",
+    "Parmak izi sensörleri daha hızlı çalışmalı mı?",
+  ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
+});
