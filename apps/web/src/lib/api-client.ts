@@ -1,4 +1,4 @@
-import { DataExportPackage, SelfDeletionDone, SelfDeletionPreview, SelfDeletionStarted, EmailChangeCancelled, EmailChangeConfirmed, EmailChangeStarted, EmailChangeView, DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
+import { DataExportPackage, SelfDeletionDone, SelfDeletionPreview, SelfDeletionStarted, EmailChangeCancelled, EmailChangeConfirmed, EmailChangeStarted, EmailChangeView, DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PendingPollReceipt, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
 import { AdminClient } from "../features/admin/admin-client.ts";
 import { CommunityClient, ReportClient } from "../features/community/community-client.ts";
@@ -224,9 +224,11 @@ export class ApiClient implements ProductClient {
       options: draft.options.map((label) => ({ label: label.trim() })),
     };
     try {
-      const poll = mapPoll(dataOf(PollDetail).parse(await this.http.request("polls.create", { body, key })).data);
+      const response = await this.http.request("polls.create", { body, key });
+      const pending = dataOf(PendingPollReceipt).safeParse(response);
       if (this.user) await this.refreshPoints().catch(() => null);
-      return poll;
+      if (pending.success) return pending.data.data;
+      return mapPoll(dataOf(PollDetail).parse(response).data);
     } catch (error) {
       if (this.user && error instanceof UiError && error.code === "INSUFFICIENT_POINTS") await this.refreshPoints().catch(() => null);
       throw error;

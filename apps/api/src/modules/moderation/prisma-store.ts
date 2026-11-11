@@ -83,8 +83,8 @@ async function expectationFails(tx: Tx, input: ApplyInput, currentStatus: Conten
 }
 
 async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
-  const [row] = await tx.$queryRaw<{ status: ContentStatus; trend_excluded_at: Date | null; comments_closed_at: Date | null; community_id: string | null }[]>`
-    SELECT status::text AS status, trend_excluded_at, comments_closed_at, community_id::text AS community_id
+  const [row] = await tx.$queryRaw<{ status: ContentStatus; trend_excluded_at: Date | null; comments_closed_at: Date | null; community_id: string | null; opens_at: Date; closes_at: Date | null }[]>`
+    SELECT status::text AS status, trend_excluded_at, comments_closed_at, community_id::text AS community_id, opens_at, closes_at
       FROM polls WHERE id = ${input.id}::uuid FOR UPDATE`;
   if (!row) return { kind: "not_found" };
   if (await tx.accountErasure.count({ where: { user: { polls: { some: { id: input.id } } } } }))
@@ -121,11 +121,47 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   if (next === "invalid") return { kind: "conflict", reason: "invalid_transition" };
   if (next === "same") return { kind: "unchanged", outcome: outcome(row.status, excluded) };
   if (row.status === "REMOVED" && !input.actorIsAdmin) return { kind: "forbidden", reason: "admin_required" };
+  // A never-published UNDER_REVIEW submission that was rejected must not be
+  // exposed through a generic RESTORE. The later, audited appeal undo flow
+  // has its own exact-action/authorization and media release gate.
+  if (row.status === "REMOVED" && next === "ACTIVE") {
+    const latest = await tx.moderationAction.findFirst({
+      where: { pollId: input.id },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { fromStatus: true, toStatus: true },
+    });
+    if (latest?.fromStatus === "UNDER_REVIEW" && latest.toStatus === "REMOVED") {
+      return { kind: "conflict", reason: "invalid_transition" };
+    }
+  }
 
+
+  // A pending poll's advertised voting duration starts when a moderator
+  // publishes it, not when its review queue submission was created.
+  const releasingReview = row.status === "UNDER_REVIEW" && next === "ACTIVE";
+  if (releasingReview) {
+    // A moderator may not make the poll public before every linked image has
+    // passed media moderation. Previously approved images remain governed by
+    // their independent media revoke/hide pipeline.
+    const pendingMedia = await tx.$queryRaw<{ id: string }[]>`
+      SELECT pm.media_id::text AS id FROM poll_media pm
+      JOIN media_assets ma ON ma.id = pm.media_id
+      WHERE pm.poll_id = ${input.id}::uuid AND ma.status <> 'APPROVED'
+      LIMIT 1`;
+    if (pendingMedia.length) return { kind: "conflict", reason: "invalid_transition" };
+  }
+  const durationMs = row.closes_at === null ? null : Math.max(0, row.closes_at.getTime() - row.opens_at.getTime());
   await tx.poll.update({
     where: { id: input.id },
     // REMOVED ⇔ deleted_at dolu; geri yüklemede boşalır.
-    data: { status: next, deletedAt: next === "REMOVED" ? input.now : row.status === "REMOVED" ? null : undefined },
+    data: {
+      status: next,
+      deletedAt: next === "REMOVED" ? input.now : row.status === "REMOVED" ? null : undefined,
+      ...(releasingReview ? {
+        opensAt: input.now,
+        closesAt: durationMs === null ? null : new Date(input.now.getTime() + durationMs),
+      } : {}),
+    },
   });
   const trail = await recordTrail(tx, input, row.status, next, snap(row.status, excluded, closed), snap(next, excluded, closed));
   return { kind: "applied", outcome: outcome(next, excluded), trail };
