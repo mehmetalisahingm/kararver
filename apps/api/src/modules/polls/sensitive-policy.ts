@@ -33,14 +33,14 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
   // Respondent's voting behaviour, political party or political views.
   { category: "political", pattern: /\b(?:siyasi|politik) (?:gorus(?:un|unuz|leriniz)?|tercih(?:in|iniz)?)\b|\b(?:hangi|hangi bir|ne|senin|sizin) (?:siyasi )?parti(?:ye|yi|den|nin|ye oy)?\b|\b(?:oy verdin|oy verdiniz|oy veriyorsun|oy vereceksin|oy vereceksiniz|kime oy veriyorsun|kime oy vereceksin)\b|\b(?:parti|siyasi hareket) (?:uyesi|uyeligin|uyesi misin)\b/ },
   // Religion, denominations and philosophical belief about the respondent.
-  { category: "belief", pattern: /\b(?:hangi|hangi bir|ne|senin|sizin) (?:dine|dini|din|mezhep|inanc|inanca)\b|\b(?:dinin|mezhebin|inancin|felsefi inancin) (?:ne|nedir)\b|\b(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|dindar) (?:misin|misiniz|miydin|miydiniz)\b/ },
+  { category: "belief", pattern: /\b(?:hangi|hangi bir|ne|senin|sizin) (?:dine|dini|din|mezhep|inanc|inanca)\b|\b(?:dinin|dininiz|mezhebin|mezhebiniz|inancin|inanciniz|felsefi inancin|felsefi inanciniz) (?:ne|nedir)\b|\b(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|dindar) (?:misin|misiniz|miydin|miydiniz)\b/ },
   // Personal diagnoses, prescriptions, psychological/physical conditions.
   { category: "health", pattern: /\b(?:hangi|ne|nasil bir) (?:hastaligin|hastaliginiz|tanin|taniniz|teshisin|teshisiniz)\b|\b(?:hangi|ne) ilac(?:i|lari)? (?:kullaniyorsun|kullaniyorsunuz|kullandin|kullandiniz|aliyorsun|aliyorsunuz)\b|\bhangi tedavi(?:yi)? (?:gordun|gordunuz|aliyorsun|aliyorsunuz)\b|\b(?:saglik durumun|saglik durumunuz|hastaligin var|hastaliginiz var|tani aldiniz mi|tani aldin mi|hiv pozitif misin|hamile misin|engelin var mi|depresyonda misin|psikiyatrik tedavi (?:goruyor musun|gordun mu|aldin mi|gordunuz mu|aliyorsun|aliyorsunuz))\b|\b(?:hastalik|ilac|tedavi) (?:kullaniyor musun|goruyor musun|gecirdin mi|tani(?:si|n) var mi)\b/ },
   { category: "ethnicity", pattern: /\b(?:etnik kokenin|etnik kokeniniz|hangi irktan|hangi etnik koken|irkin ne|irkiniz ne|soyunun kokeni|hangi milliyettensin)\b/ },
   { category: "membership", pattern: /\b(?:hangi sendika(?:ya)?|sendika uyesi misin|sendika uyesi misiniz|hangi dernege uyesin|vakif uyesi misin|dernek uyesi misin)\b/ },
-  { category: "sexual", pattern: /\b(?:cinsel hayatin|cinsel yasamin|cinsel yonelimin|cinsel deneyimin|cinsel iliskin oldu mu|kiminle cinsel|cinsel partner sayin)\b/ },
-  { category: "justice", pattern: /\b(?:sabikan var mi|sabika kaydin|ceza mahkumiyetin|hapse girdin mi|cezaevine girdin mi|guvenlik tedbiri aldin mi)\b/ },
-  { category: "biometric", pattern: /\b(?:parmak izin|parmak izini|yuz tanima verin|genetik verin|genetik test sonucunuz|dna sonucunu|dna bilgilerini)\b/ },
+  { category: "sexual", pattern: /\b(?:cinsel hayatin|cinsel yasamin|cinsel yonelimin|cinsel yoneliminiz|cinsel deneyimin|cinsel iliskin oldu mu|kiminle cinsel|cinsel partner sayin)\b/ },
+  { category: "justice", pattern: /\b(?:sabikan var mi|sabika kaydin|sabika kaydiniz|ceza mahkumiyetin|hapse girdin mi|cezaevine girdin mi|guvenlik tedbiri aldin mi)\b/ },
+  { category: "biometric", pattern: /\b(?:parmak izin|parmak iziniz|parmak izini|parmak izinizi|yuz tanima verin|genetik verin|genetik test sonucunuz|dna sonucunu|dna bilgilerini)\b/ },
 ];
 
 /** Categorical choices alone do not prove that we ask about a respondent's attributes.
