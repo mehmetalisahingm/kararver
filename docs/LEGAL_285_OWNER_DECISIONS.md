@@ -2,6 +2,12 @@
 
 Mehmet'in kesin ürün kararı: **Yeni anketlerde `ALWAYS` (herkese açık sonuçlar) varsayılan**; daha önce oluşturulmuş ve `AFTER_VOTE` seçilmiş anketler **otomatik değiştirilmez**. Yeni anket sahibi yine `AFTER_VOTE` seçebilir. Misafirler yalnız mevcut görünürlük projeksiyonunun izin verdiği sonuçlara erişebilir; kişiye bağlanabilir tekil oy/veri geçmişi veya gizli anketlerin yeniden görünmesi bu karara dahil değil. [Teknik, SEO, KVKK ve kabul matrisi](LEGAL_52_PUBLIC_RESULTS_DEFAULT_2026_11_08.md). #52/#53/#285/#289 ve #54 kabulü kapanmadı.
 
+## 8 Kasım 2026 — moderasyon reddinde uygulama içi yayın puanının iadesi
+
+**Mehmet kararı:** Gönderim sırasında **10 KararVer puanı** kesilir. `UNDER_REVIEW` konumundaki şüpheli anket moderatör tarafından `REMOVE` ile reddedilirse **gerçek kesilen tutar yalnız bir kez** kredi olarak geri verilir. Bunun nakit/para iadesi olmadığı; yetkisiz ret, normal public anketin kaldırılması, sıfır maliyetli gönderi veya yinelenen taleplerde ilave puan üretilemeyeceği; `PUBLISH` ile `MODERATION_REFUND` hareketlerinin append-only defterde ve aynı DB transaction'ında tutulacağı [uygulama/hukuki kararda](LEGAL_327_REJECTED_REVIEW_POINTS_REFUND_2026_11_08.md) ayrıntılı. Önceki kararlar (V1 ücretsiz/reklamsız, 18+, misafir erişimi, hassas içerik yasak, risk bazlı moderasyon) sürer.
+
+**İtiraz sonrası geri açma** henüz karara bağlanmadı; daha önce kredi edilmiş `REMOVED` anketin puan düşmeden kamuya açılması şimdilik kapalı. PR #333 taslak, #328/#326 bağımlı; staging/hukuk #53/#285/#290, yayın #54 NO-GO devam eder.
+
 ## 8 Kasım 2026 — V1 hassas kişisel veri soran anketleri açmama kararı
 
 Mehmet'in **kesin ürün kararı**: KararVer V1'de siyasi görüş, din/mezhep, sağlık veya benzeri hassas kişisel bilgileri açıklamaya yönlendiren anketler **yayımlanmaz**. Kategori listesi ve güncel KVKK m.6 yorumuna ilişkin ayrım, API korumasının kapsamı ve eksikleri [V1 hassas anket karar dosyasında](LEGAL_285_V1_SENSITIVE_SURVEY_POLICY_2026_11_08.md). Genel bir konunun tartışılması ile katılımcının kendi özel nitelikli verisini istemek aynı kabul edilmez.
