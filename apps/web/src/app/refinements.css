@@ -14,18 +14,18 @@
   color: var(--kv-text);
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
-/* Pin theme-matched field surfaces and text together after the generic input rule.
-   This avoids WebKit retaining the other theme's background during a switch (#368). */
-.product[data-theme="light"] :is(input.kv-input:not([type="file"]), textarea.kv-input, select.kv-input) {
-  background-color: #f3f0e9;
-  color: #292826;
+/* Keep the studio's own light/dark control colors in sync when WebKit switches themes (#368).
+   The studio palette differs from the base palette; these paired values prevent mixed-theme contrast. */
+.product[data-experience="studio"][data-theme="light"] :is(input.kv-input:not([type="file"]), textarea.kv-input, select.kv-input) {
+  background-color: #e4e4d7;
+  color: #20281f;
 }
-.product[data-theme="dark"] :is(input.kv-input:not([type="file"]), textarea.kv-input, select.kv-input) {
-  background-color: #302c26;
-  color: #f7f2e8;
+.product[data-experience="studio"][data-theme="dark"] :is(input.kv-input:not([type="file"]), textarea.kv-input, select.kv-input) {
+  background-color: #242929;
+  color: #f1f0e7;
 }
-.product[data-theme="light"] select.kv-input { -webkit-text-fill-color: #292826; }
-.product[data-theme="dark"] select.kv-input { -webkit-text-fill-color: #f7f2e8; }
+.product[data-experience="studio"][data-theme="light"] select.kv-input { -webkit-text-fill-color: #20281f; }
+.product[data-experience="studio"][data-theme="dark"] select.kv-input { -webkit-text-fill-color: #f1f0e7; }
 .product[data-theme] textarea.kv-input { min-height: 124px; resize: vertical; }
 .product[data-theme] :is(input.kv-input:not([type="file"]), textarea.kv-input, select.kv-input, .discovery-search input, .discovery-search select):hover { border-color: var(--kv-accent); }
 .product[data-theme] :is(input.kv-input:not([type="file"]), textarea.kv-input, select.kv-input, .discovery-search input, .discovery-search select):focus-visible {
