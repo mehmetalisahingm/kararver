@@ -469,6 +469,29 @@ describe("hesap anonimleştirme (postgres)", { skip: backend ? false : "TEST_DAT
     }
   });
 
+  test("#372 §3: kişiye bağlanan olaylar (aktör, USER konusu, payload, natural_key) teslimleriyle silinir; başkasının olayı kalır", async () => {
+    const user = await signUp();
+    const other = await signUp();
+    const event = (data: { type: string; actorId: string | null; subjectType: string; subjectId: string; payload: Record<string, unknown>; naturalKey?: string }) =>
+      db.domainEvent.create({ data: { id: randomUUID(), version: 1, occurredAt: h.clock.now, ...data, payload: data.payload as never } });
+    const mine = [
+      await event({ type: "comment.created", actorId: user.id, subjectType: "COMMENT", subjectId: randomUUID(), payload: { pollId: randomUUID() } }),
+      await event({ type: "sanction.applied", actorId: other.id, subjectType: "USER", subjectId: user.id, payload: { sanctionId: randomUUID() } }),
+      await event({ type: "vote.invalidated", actorId: other.id, subjectType: "POLL", subjectId: randomUUID(), payload: { voteId: randomUUID(), voterId: user.id, optionId: randomUUID() } }),
+      await event({ type: "vote.submitted", actorId: null, subjectType: "POLL", subjectId: randomUUID(), payload: {}, naturalKey: `vote.submitted:${randomUUID()}:${user.id}` }),
+    ];
+    await db.eventDelivery.create({ data: { eventId: mine[0]!.id, consumer: "notifications", nextAttemptAt: h.clock.now } });
+    const keep = await event({ type: "comment.created", actorId: other.id, subjectType: "COMMENT", subjectId: randomUUID(), payload: { pollId: randomUUID() } });
+    await db.eventDelivery.create({ data: { eventId: keep.id, consumer: "notifications", nextAttemptAt: h.clock.now } });
+
+    assert.equal((await erase(user)).statusCode, 200);
+    assert.equal(await db.domainEvent.count({ where: { id: { in: mine.map((e) => e.id) } } }), 0);
+    assert.equal(await db.eventDelivery.count({ where: { eventId: mine[0]!.id } }), 0, "teslim satırları da gider");
+    assert.equal(await db.domainEvent.count({ where: { OR: [{ actorId: user.id }, { subjectType: "USER", subjectId: user.id }] } }), 0);
+    assert.equal(await db.domainEvent.count({ where: { id: keep.id } }), 1, "başkasının olayı silinmez");
+    assert.equal(await db.eventDelivery.count({ where: { eventId: keep.id } }), 1);
+  });
+
   test("avatar yayından kalkar (REJECTED, public anahtar boş) ve hazır veri paketi geçersiz olur (anahtar ve token silinir)", async () => {
     const { user, avatar, exportRow } = await rich();
     assert.equal((await erase(user)).statusCode, 200);
