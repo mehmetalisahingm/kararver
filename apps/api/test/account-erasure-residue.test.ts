@@ -1,7 +1,8 @@
 /**
  * #372 bağımsız denetim — hesap anonimleştirmesinden sonra kalan izler (#181/#321).
- * Değişmez kural: silinen hesabın kimliği ile oy seçimi hiçbir tabloda birlikte kalmaz ve kalan "anonim" oy kaydı
- * zaman damgasıyla kişiye geri bağlanamaz. `todo` işaretliler bugün AÇIK (#372 ikinci rapor); kapandıkça işaret kaldırılır.
+ * Değişmez kural: silinen hesabın kimliği olay kuyruğunda (domain_events) kalmaz ve kalan "anonim" oy kaydı
+ * zaman damgasıyla kişiye geri bağlanamaz. Not: main'de oy ucu henüz vote.* olayı yazmıyor (votes/routes.ts:
+ * "outbox ile gelir"); o geldiğinde aynı kural oy seçimini (optionId) de kapsamalı. `todo` işaretliler bugün AÇIK (#372 ikinci rapor); kapandıkça işaret kaldırılır.
  * Gerçek PostgreSQL gerektirir (TEST_DATABASE_URL veya .env). Veriler sentetiktir.
  */
 import assert from "node:assert/strict";
@@ -69,7 +70,7 @@ describe("hesap anonimleştirmesinden sonra kalan izler (postgres)", { skip: bac
     });
   }
 
-  /** Gerçek oy ucu: oy, vote_events ve domain_events aynı yoldan yazılır. */
+  /** Gerçek oy ucu: oy ve vote_events aynı yoldan yazılır. */
   async function vote(voter: User, pollId: string, optionId: string) {
     const res = await send("PUT", `/polls/${pollId}/vote`, { optionId }, voter.cookie);
     assert.ok([200, 201].includes(res.statusCode), res.body);
@@ -89,24 +90,28 @@ describe("hesap anonimleştirmesinden sonra kalan izler (postgres)", { skip: bac
   });
   after(async () => { await h?.close(); });
 
-  test("kontrol: oy ucu, oy veren kimliği ve seçimiyle bir olay yazar (aşağıdaki testler boş geçmesin)", async () => {
+  /** Gerçek yorum ucu: comment.created olayı yorum sahibini actor_id olarak yazar. */
+  async function comment(author: User, pollId: string) {
+    const res = await send("POST", `/polls/${pollId}/comments`, { body: "Bu konuda düşüncem farklı." }, author.cookie);
+    assert.equal(res.statusCode, 201, res.body);
+  }
+
+  test("kontrol: yorum ucu, yazanın kimliğiyle bir olay yazar (aşağıdaki test boş geçmesin)", async () => {
     const author = await signUp();
-    const voter = await signUp();
+    const commenter = await signUp();
     const p = await poll(author.id);
-    await vote(voter, p.id, p.options[1]!.id);
-    const events = await db.domainEvent.findMany({ where: { actorId: voter.id, subjectId: p.id } });
-    assert.ok(events.length >= 1, "vote.* olayı yazılmadı; test kurgusu geçersiz");
-    assert.ok(events.some((e) => JSON.stringify(e.payload).includes(p.options[1]!.id)));
+    await comment(commenter, p.id);
+    assert.ok(await db.domainEvent.count({ where: { actorId: commenter.id, type: "comment.created" } }) >= 1, "comment.created yazılmadı; kurgu geçersiz");
   });
 
   test("silmeden sonra domain_events'te kişinin kimliği kalmaz (actor_id, natural_key)", { todo: "AÇIK (#372 §3): hesap silme domain_events'e dokunmuyor" }, async () => {
     const author = await signUp();
-    const voter = await signUp();
+    const commenter = await signUp();
     const p = await poll(author.id);
-    await vote(voter, p.id, p.options[0]!.id);
-    assert.equal((await erase(voter)).statusCode, 200);
-    assert.equal(await db.domainEvent.count({ where: { actorId: voter.id } }), 0, "actor_id silinen hesabı gösteriyor");
-    assert.equal(await db.domainEvent.count({ where: { naturalKey: { contains: voter.id } } }), 0, "natural_key silinen hesabın kimliğini taşıyor");
+    await comment(commenter, p.id);
+    assert.equal((await erase(commenter)).statusCode, 200);
+    assert.equal(await db.domainEvent.count({ where: { actorId: commenter.id } }), 0, "actor_id silinen hesabı gösteriyor");
+    assert.equal(await db.domainEvent.count({ where: { naturalKey: { contains: commenter.id } } }), 0, "natural_key silinen hesabın kimliğini taşıyor");
   });
 
   test("teslim edilemeyen (dispatch_error) olaylar da silmede temizlenir; saklama dışında süresiz kalmaz", { todo: "AÇIK (#372 §3): dispatch_error'lı olaylar cleanup'ta hiç silinmiyor, silme de dokunmuyor" }, async () => {
@@ -114,8 +119,8 @@ describe("hesap anonimleştirmesinden sonra kalan izler (postgres)", { skip: bac
     const id = randomUUID();
     await db.domainEvent.create({
       data: {
-        id, type: "vote.submitted", version: 1, occurredAt: new Date(), actorId: voter.id, subjectType: "POLL", subjectId: randomUUID(),
-        payload: { optionId: randomUUID(), discoverySource: null }, dispatchError: "test: parse_failed",
+        id, type: "comment.created", version: 1, occurredAt: new Date(), actorId: voter.id, subjectType: "COMMENT", subjectId: randomUUID(),
+        payload: { pollId: randomUUID() }, dispatchError: "test: parse_failed",
       },
     });
     assert.equal((await erase(voter)).statusCode, 200);
