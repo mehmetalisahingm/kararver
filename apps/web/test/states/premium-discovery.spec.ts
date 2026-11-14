@@ -25,8 +25,8 @@ test("premium discovery, community, profile and notification surfaces support bo
         expect(width,"admin content retains the available page width").toBeGreaterThan(page.viewportSize()!.width*.7);
         // #368: admin field foreground and background must agree before the axe audit.
         const themeField=page.locator("select.kv-input").first();
-        await expect(themeField).toHaveCSS("background-color",theme==="light"?"rgb(243, 240, 233)":"rgb(48, 44, 38)");
-        await expect(themeField).toHaveCSS("color",theme==="light"?"rgb(41, 40, 38)":"rgb(247, 242, 232)");
+        await expect(themeField).toHaveCSS("background-color",theme==="light"?"rgb(228, 228, 215)":"rgb(36, 41, 41)");
+        await expect(themeField).toHaveCSS("color",theme==="light"?"rgb(32, 40, 31)":"rgb(241, 240, 231)");
       }
       expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations,`${path} ${theme}`).toEqual([]);
       await page.screenshot({path:info.outputPath(`${path.slice(1).replaceAll("/","-")}-${theme}.png`)});
