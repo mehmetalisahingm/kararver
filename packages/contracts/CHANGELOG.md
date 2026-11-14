@@ -9,6 +9,12 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.42.0 — 2026-11-06 (Faruk, #300 MFA anahtar taşıma denetimi)
+
+Kırıcı değişiklik yok: yeni sistem işlemi.
+
+- **Eklendi:** `systemAuditActions` içine `security.mfa.rekey` (tek tür `rekey`, kaynak CLI, aktörsüz). `mfa:rekey --apply` taşınan her hesap için aynı transaction'da bir kayıt yazar; özet yalnız `cipherVersion` 1 → 2, sır içermez.
+
 ## 1.41.0 — 2026-10-24 (Utku, #185 audit sonuç süzgeci, dilim 3)
 
 Kırıcı değişiklik yok: yeni isteğe bağlı süzgeç ve yanıtta yeni alan.
