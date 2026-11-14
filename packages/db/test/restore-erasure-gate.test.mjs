@@ -107,6 +107,25 @@ test("erasure tombstones are retained data (still NO-GO) but are NOT reported as
   assert.equal(r.retained.actorEvents, 1, "#372: events under a journaled actor are retained data");
 });
 
+test("#389 review: events where the erased person is the USER subject (sanction, role) are counted too", async () => {
+  const other = "00000000-0000-4000-8000-000000000009";
+  const r = await checkNoResurrection(fakeDb({ domainEvent: [
+    { actorId: other, subjectType: "USER", subjectId: userId, type: "user.sanctioned" },
+    { actorId: other, subjectType: "POLL", subjectId: userId, type: "poll.removed" }, // same UUID text, different subject type
+    { actorId: other, subjectType: "USER", subjectId: other, type: "user.role.changed" },
+  ] }), [userId]);
+  assert.equal(r.retained.actorEvents, 1);
+  assert.equal(r.safe, false);
+});
+
+test("#389 review: every counter is reported under its own name (no positional shift)", async () => {
+  const t = tombstone();
+  t.session = [{ userId }];
+  const r = await checkNoResurrection(fakeDb(t), [userId]);
+  assert.deepEqual(r.retained, { restoredUsers: 1, authoredPolls: 1, authoredComments: 1, linkedVotes: 0, sessions: 1, authTokens: 0, mediaAssets: 1, actorEvents: 1 });
+  assert.deepEqual(r.resurrected, { liveUsers: 0, liveAuthoredPolls: 0, liveAuthoredComments: 0, linkedVotes: 0, sessions: 1, authTokens: 0, mfaCredentials: 0, publishedMedia: 0, readyExports: 0 });
+});
+
 test("#372 events alone (no other row) still block promotion as retained data", async () => {
   const r = await checkNoResurrection(fakeDb({ domainEvent: [{ actorId: userId, type: "comment.created" }] }), [userId]);
   assert.equal(r.noResurrection, true);
