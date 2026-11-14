@@ -65,13 +65,22 @@ suite("#180/#291 doğrulayıcı yenileme (PostgreSQL)", () => {
 
   test("step-up yokken, yanlış parolayla ya da MFA kapalıyken başlatılamaz; ayrı anahtar yoksa başlatılamaz", async () => {
     const before = await credential();
+    // #373 P1: parola kahini yok. Step-up'sız doğru parola, step-up'sız yanlış parola ve step-up'lı yanlış parola
+    // aynı durum kodunu, hata kodunu ve metni alır.
+    const shape = (r: Awaited<ReturnType<typeof request>>) => {
+      const { error } = r.json();
+      return { status: r.statusCode, code: error.code, message: error.message, details: error.details };
+    };
     const noStepup = await request("POST", "/me/mfa/reenroll", { password }, cookie);
     assert.equal(noStepup.statusCode, 403, noStepup.body);
-    assert.equal(noStepup.json().error.details[0].code, "stepup_required");
+    assert.equal(noStepup.json().error.details[0].code, "reauth_failed");
+    const noStepupWrong = await request("POST", "/me/mfa/reenroll", { password: "yanlis-parola-1234" }, cookie);
+    assert.deepEqual(shape(noStepupWrong), shape(noStepup), "step-up yokken parolanın doğruluğu yanıttan anlaşılmaz");
     assert.equal((await request("POST", "/me/mfa/reenroll", { password })).statusCode, 401);
 
     assert.equal((await stepUp(oldSecret)).statusCode, 200);
-    assert.equal((await request("POST", "/me/mfa/reenroll", { password: "yanlis-parola-1234" }, cookie)).statusCode, 403);
+    const wrong = await request("POST", "/me/mfa/reenroll", { password: "yanlis-parola-1234" }, cookie);
+    assert.deepEqual(shape(wrong), shape(noStepup), "step-up'lı yanlış parola da aynı yanıt");
     const after = await credential();
     assert.equal(after.reenrollSecretCipher, null, "reddedilen başlatma bekleyen sır yazmaz");
     assert.deepEqual(Buffer.from(after.secretCipher), Buffer.from(before.secretCipher));
@@ -178,5 +187,70 @@ suite("#180/#291 doğrulayıcı yenileme (PostgreSQL)", () => {
     for (const value of [...secrets, ...oldCodes, ...newCodes, Buffer.from(c.secretCipher).toString("hex"), Buffer.from(c.secretCipher).toString("base64")])
       assert.equal(text.toLowerCase().includes(value.toLowerCase()), false);
     assert.equal(/secret|code/i.test(text.replace(/recoveryCodes(Issued|Revoked)/g, "")), false);
+  });
+
+  test("başka oturumdan yeni başlatma bekleyen sırrın yerine geçer; ilk oturum onaylayamaz", async () => {
+    // Önceki testte `other` bekleyen bir yenileme başlattı (secrets'in son elemanı).
+    const pendingFromOther = secrets.at(-1)!;
+    h.clock.advance(30_000);
+    assert.equal((await request("POST", "/me/mfa/reenroll/confirm", { code: codeFor(pendingFromOther) }, cookie)).statusCode, 403,
+      "bekleyen sır başlatan oturuma bağlı");
+    assert.equal((await stepUp(newSecret)).statusCode, 200);
+    const replaced = await request("POST", "/me/mfa/reenroll", { password }, cookie);
+    assert.equal(replaced.statusCode, 200, replaced.body);
+    const c = await credential();
+    const own = await h.prisma!.session.findFirstOrThrow({ where: { userId, revokedAt: null }, orderBy: { createdAt: "asc" } });
+    assert.equal(c.reenrollSessionId, own.id, "bekleyen alan artık ilk oturuma ait");
+    h.clock.advance(30_000);
+    assert.equal((await request("POST", "/me/mfa/reenroll/confirm", { code: codeFor(pendingFromOther) }, other)).statusCode, 403,
+      "yerine geçilen sır, kendi oturumunda da onaylanamaz");
+    assert.equal((await stepUp(newSecret)).statusCode, 200, "etkin sır değişmedi");
+  });
+});
+
+suite("#373 parola soran MFA uçlarında deneme sınırı (PostgreSQL)", () => {
+  let h: Harness;
+  const password = "ornek-guclu-parola-1234";
+  async function request(method: "GET" | "POST", path: string, body?: unknown, session?: string) {
+    return h.app.inject({ method, url: "/v1" + path, headers: { origin: WEB_ORIGIN,
+      ...(body !== undefined ? { "content-type": "application/json" } : {}), ...(session ? { cookie: session } : {}) },
+      payload: body === undefined ? undefined : JSON.stringify(body) });
+  }
+  before(async () => { h = await createHarness(backend!, { mfaKey: KEY }); });
+  after(async () => { await h?.close(); });
+
+  test("kurulum, kurtarma ve yenileme tek sayacı paylaşır: hesap başına saatte 5, sonra 429; başka hesap etkilenmez", async () => {
+    const account = async () => {
+      const id = randomUUID().replaceAll("-", "").slice(0, 12);
+      const email = "rl_mfa_" + id + "@example.test";
+      assert.equal((await request("POST", "/auth/register", { email, username: "rm_" + id, displayName: "Sınır", password })).statusCode, 202);
+      assert.equal((await request("POST", "/auth/email/verify", { token: tokenFrom(h.mails.at(-1)!) })).statusCode, 200);
+      const r = await request("POST", "/auth/login", { email, password });
+      return sessionCookie(r.headers["set-cookie"] as string);
+    };
+    const victim = await account();
+    const bystander = await account();
+    h.rateLimitSettings.mfaReauthPerHour = 5;
+    try {
+      const wrong = "yanlis-parola-1234";
+      const attempts = [
+        () => request("POST", "/me/mfa/setup", { password: wrong }, victim),
+        () => request("POST", "/me/mfa/recover", { password: wrong, code: "0".repeat(32) }, victim),
+        () => request("POST", "/me/mfa/reenroll", { password: wrong }, victim),
+        () => request("POST", "/me/mfa/setup", { password: wrong }, victim),
+        () => request("POST", "/me/mfa/recover", { password: wrong, code: "0".repeat(32) }, victim),
+      ];
+      for (const attempt of attempts) assert.notEqual((await attempt()).statusCode, 429);
+      for (const path of ["/me/mfa/setup", "/me/mfa/reenroll"]) {
+        const limited = await request("POST", path, { password }, victim);
+        assert.equal(limited.statusCode, 429, limited.body);
+        assert.equal(limited.json().error.code, "RATE_LIMITED");
+      }
+      assert.equal((await request("POST", "/me/mfa/setup", { password }, bystander)).statusCode, 200, "sayaç hesap başına");
+      h.clock.advance(60 * 60_000);
+      assert.equal((await request("POST", "/me/mfa/setup", { password }, victim)).statusCode, 200, "saat dönünce açılır");
+    } finally {
+      h.rateLimitSettings.mfaReauthPerHour = 1_000_000;
+    }
   });
 });

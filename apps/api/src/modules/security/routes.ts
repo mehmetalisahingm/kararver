@@ -5,6 +5,13 @@ import type { Route } from "../../http/route.ts";
 import type { PasswordHasher } from "../auth/crypto.ts";
 import type { MfaStore } from "./store.ts";
 
+/**
+ * #373 (Utku) P1: parola soran MFA uçları parola kahini olmamalı. Oturumu çalınan biri yanlış/doğru parolayı hata
+ * kodundan ayırt edememeli; bu yüzden parola ve ikinci etken redleri aynı yanıtı verir. Deneme sayısı ayrıca
+ * hız sınırıyla (ENDPOINT_RULES "mfa.reauth.hour") sınırlıdır.
+ */
+const reauthFailed = () => new ApiError("FORBIDDEN", "Kimliğin yeniden doğrulanamadı. Bilgileri kontrol edip tekrar dene.", [{ code: "reauth_failed" }]);
+
 export function registerMfaRoutes(route: Route, deps: {
   store: MfaStore; hasher: PasswordHasher; now: () => Date;
 }): void {
@@ -16,7 +23,7 @@ export function registerMfaRoutes(route: Route, deps: {
   route("me.mfa.setup", async ({ viewer, body, request }) => {
     if (!viewer!.emailVerified) throw new ApiError("FORBIDDEN", "E-posta doğrulanmış olmalı.");
     const ok = await deps.hasher.verify(viewer!.user.passwordHash, body.password);
-    if (!ok) throw new ApiError("FORBIDDEN", "Kimlik yeniden doğrulanamadı.");
+    if (!ok) throw reauthFailed();
     const result = await deps.store.begin({ userId: viewer!.id, sessionId: viewer!.sessionId,
       email: viewer!.user.email, now: deps.now(), requestId: request.id });
     if (result.kind === "session") throw new ApiError("UNAUTHENTICATED", "Oturum geçersiz.");
@@ -37,25 +44,28 @@ export function registerMfaRoutes(route: Route, deps: {
     return { status: 200, body: { data: { stepUpExpiresAt: result.expiresAt.toISOString() } } };
   });
   route("me.mfa.recover", async ({ viewer, body, request }) => {
-    if (!(await deps.hasher.verify(viewer!.user.passwordHash, body.password)))
-      throw new ApiError("FORBIDDEN", "Kimlik yeniden doğrulanamadı.");
+    // Yanlış parola ile yanlış kurtarma kodu aynı yanıtı verir (parola kahini yok).
+    if (!(await deps.hasher.verify(viewer!.user.passwordHash, body.password))) throw reauthFailed();
     const result = await deps.store.recover({ userId: viewer!.id, sessionId: viewer!.sessionId,
       code: body.code, now: deps.now(), requestId: request.id });
-    if (result.kind !== "verified") throw new ApiError("FORBIDDEN", "Kurtarma doğrulaması başarısız.");
+    if (result.kind !== "verified") throw reauthFailed();
     return { status: 200, body: { data: { stepUpExpiresAt: result.expiresAt.toISOString() } } };
   });
   // #180/#291 doğrulayıcı yenileme: eski sır onaya kadar geçerli; kullanıcı kilitlenmez.
   route("me.mfa.reenroll.begin", async ({ viewer, body, request }) => {
-    if (!(await deps.hasher.verify(viewer!.user.passwordHash, body.password)))
-      throw new ApiError("FORBIDDEN", "Kimlik yeniden doğrulanamadı.");
+    // #373 P1: ikinci etken (taze step-up) parolaDAN ÖNCE. Step-up'sız istekte parola hiç denenmez; step-up'sız ve
+    // yanlış parolalı istek aynı yanıtı alır. MFA etkin değilse parola da denenmez.
+    const state = await deps.store.status(viewer!.id, viewer!.sessionId, deps.now());
+    if (!state.enabled) throw new ApiError("CONFLICT", "MFA etkin değil.", [{ code: "mfa_not_enabled" }]);
+    if (!state.stepUpExpiresAt) throw reauthFailed();
+    if (!(await deps.hasher.verify(viewer!.user.passwordHash, body.password))) throw reauthFailed();
     const result = await deps.store.reenrollBegin({ userId: viewer!.id, sessionId: viewer!.sessionId,
       email: viewer!.user.email, now: deps.now(), requestId: request.id });
     if (result.kind === "session") throw new ApiError("UNAUTHENTICATED", "Oturum geçersiz.");
     if (result.kind === "not_enabled") throw new ApiError("CONFLICT", "MFA etkin değil.", [{ code: "mfa_not_enabled" }]);
     if (result.kind === "key_required")
       throw new ApiError("CONFLICT", "Doğrulayıcı yenileme bu ortamda henüz açık değil.", [{ code: "mfa_key_required" }]);
-    if (result.kind !== "created") // stepup_required
-      throw new ApiError("FORBIDDEN", "Önce doğrulayıcı kodunla kimliğini doğrula.", [{ code: "stepup_required" }]);
+    if (result.kind !== "created") throw reauthFailed(); // stepup_required: eşzamanlı istek step-up'ı tüketti
     return { status: 200, body: { data: { secret: result.secret, uri: result.uri,
       expiresAt: result.expiresAt.toISOString() } } };
   });

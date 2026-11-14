@@ -207,7 +207,8 @@ export const authEndpoints = [
     availability: { status: "ready" }, request: { body: z.strictObject({ password: Password }) },
     responses: { 200: dataOf(z.strictObject({ secret: z.string(), uri: z.string(), expiresAt: Timestamp })) },
     errors: ["FORBIDDEN", "CONFLICT"], idempotency: "none", cache: "private",
-    notes: ["Secret ve URI yalnız setup cevabında döner; UI loglamaz, saklamaz. Setup 10 dakika geçerli. Etkin MFA üzerine yazılamaz."],
+    notes: ["Secret ve URI yalnız setup cevabında döner; UI loglamaz, saklamaz. Setup 10 dakika geçerli. Etkin MFA üzerine yazılamaz.",
+      "Yanlış parola 403 `reauth_failed`. Parola soran MFA uçları (kurulum, kurtarma, yenileme) tek sayacı paylaşır: hesap başına saatte `limits.mfaReauthPerHour` (5) istek, sonra 429."],
   }),
   defineEndpoint({
     id: "me.mfa.confirm", domain: "auth", method: "POST", path: "/me/mfa/confirm",
@@ -225,7 +226,8 @@ export const authEndpoints = [
     request: { body: z.strictObject({ password: Password, code: z.string().regex(/^[a-fA-F0-9]{32}$/) }) },
     responses: { 200: dataOf(z.strictObject({ stepUpExpiresAt: Timestamp })) },
     errors: ["FORBIDDEN"], idempotency: "none", cache: "private",
-    notes: ["Kod yalnız bir kere kullanılabilir; TOTP kurulumu kaldırılmaz. Kodlar yalnız kurulum onayında gösterilir, loglanmaz."],
+    notes: ["Kod yalnız bir kere kullanılabilir; TOTP kurulumu kaldırılmaz. Kodlar yalnız kurulum onayında gösterilir, loglanmaz.",
+      "Yanlış parola ile yanlış kurtarma kodu aynı yanıtı verir (403 `reauth_failed`); parolanın doğruluğu yanıttan anlaşılmaz. Parola soran MFA uçları (kurulum, kurtarma, yenileme) tek sayacı paylaşır: hesap başına saatte `limits.mfaReauthPerHour` (5) istek, sonra 429."],
   }),
   defineEndpoint({
     id: "me.mfa.reenroll.begin", domain: "auth", method: "POST", path: "/me/mfa/reenroll",
@@ -235,7 +237,8 @@ export const authEndpoints = [
     responses: { 200: dataOf(z.strictObject({ secret: z.string(), uri: z.string(), expiresAt: Timestamp })) },
     errors: ["FORBIDDEN", "CONFLICT"], idempotency: "none", cache: "private",
     notes: [
-      "Parola ve bu oturumda taze, kullanılmamış MFA step-up gerekir (TOTP ya da kurtarma kodu); başlatma step-up'ı tüketir. Yoksa 403 `stepup_required`.",
+      "Bu oturumda taze, kullanılmamış MFA step-up (TOTP ya da kurtarma kodu) ve parola gerekir; başlatma step-up'ı tüketir. Step-up parolaDAN ÖNCE denetlenir: step-up yoksa parola hiç denenmez. Step-up eksikliği ve yanlış parola aynı yanıtı verir (403 `reauth_failed`).",
+      "Parola soran MFA uçları (kurulum, kurtarma, yenileme) tek sayacı paylaşır: hesap başına saatte `limits.mfaReauthPerHour` (5) istek, sonra 429.",
       "Yeni sır etkin kaydın yanında ayrı, oturuma bağlı bekleyen alanda 10 dakika tutulur. Eski sır ve eski kurtarma kodları onaya kadar geçerli; kullanıcı kilitlenmez.",
       "MFA etkin değilse 409 `mfa_not_enabled`; sunucuda ayrı MFA anahtarı (MFA_ENCRYPTION_KEY) yoksa 409 `mfa_key_required` (yeni sır eski pepper'a bağlanmaz).",
       "Secret ve URI yalnız bu cevapta döner; UI loglamaz, saklamaz. Yeni başlatma bekleyen eskisinin yerine geçer.",

@@ -9,6 +9,12 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.43.1 — 2026-11-14 (Faruk, #373 Utku P1)
+
+- `me.mfa.reenroll.begin`: step-up parolaDAN ÖNCE denetlenir. Step-up eksikliği ile yanlış parola aynı 403 `reauth_failed` yanıtını verir. `stepup_required` ayrıntı kodu bu uçta kalktı; web bu koda bağlı değildi.
+- `me.mfa.recover` / `me.mfa.setup`: yanlış parola (ve kurtarmada yanlış kod) 403 `reauth_failed` döner; parola kahini kalmadı.
+- Yeni ayar `limits.mfaReauthPerHour` (1–100, varsayılan 5): üç uç ortak sayaçla hesap başına saatte sınırlanır (429).
+
 ## 1.43.0 — 2026-11-07 (Faruk, #180/#291 doğrulayıcı yenileme)
 
 Kırıcı değişiklik yok: iki yeni endpoint, iki yeni audit türü.
