@@ -103,10 +103,6 @@
 }
 .product .kv-input:focus { border-color: var(--kv-primary); }
 .product .kv-input:focus-visible { outline-offset: 2px; }
-/* Keep field foreground and background together on WebKit theme switches (#368).
-   WebKit can temporarily retain the previous themed surface if it is only a custom property. */
-.product[data-theme="light"] .kv-input { background: #fff; color: #292826; }
-.product[data-theme="dark"] .kv-input { background: #23211d; color: #f7f2e8; }
 .product[data-theme="light"] .kv-badge {
   background: var(--kv-soft); border-color: #e2c991; color: var(--kv-accent);
 }
