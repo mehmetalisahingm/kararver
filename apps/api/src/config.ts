@@ -18,6 +18,11 @@ const Env = z.object({
   EMAIL_VERIFICATION_REQUIRED: bool.default(true),
   /** Enables critical role enforcement only after 2 verified SUPER_ADMIN enrollments. */
   ROLE_APPROVALS_REQUIRED: bool.default(false),
+  /**
+   * #289 54A yayın anahtarı: true iken 18+ beyanı olmayan ESKİ hesaplar katılım işlemlerinde 403 ADULT_DECLARATION_REQUIRED alır.
+   * Web beyan ekranı (POST /me/adult-declaration) yayına girmeden açılmamalı; yeni kayıttaki beyan şartı bu anahtardan bağımsızdır.
+   */
+  LEGACY_ADULT_DECLARATION_ENFORCED: bool.default(false),
   MAIL_TRANSPORT: z.enum(["console", "smtp", "mailpit_api"]).default("console"),
   MAIL_FROM: z.string().min(3),
   // MAIL_TRANSPORT=smtp iken zorunlu: smtp://kullanici:parola@host:587 (STARTTLS) veya smtps://...:465 (TLS).
@@ -70,6 +75,8 @@ export type Config = {
   authTokenPepper: string;
   emailVerificationRequired?: boolean;
   roleApprovalsRequired: boolean;
+  /** #289: eski hesaplarda katılım kısıtı açık mı (yeni kayıt şartından bağımsız). */
+  legacyAdultDeclarationEnforced: boolean;
   mail: MailConfig;
   /** KV-19 hız sınırı açık mı (staging/production'da zorunlu). */
   rateLimitEnabled: boolean;
@@ -156,6 +163,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     authTokenPepper: e.AUTH_TOKEN_PEPPER,
     emailVerificationRequired: e.EMAIL_VERIFICATION_REQUIRED,
     roleApprovalsRequired: e.ROLE_APPROVALS_REQUIRED,
+    legacyAdultDeclarationEnforced: e.LEGACY_ADULT_DECLARATION_ENFORCED,
     mail:
       e.MAIL_TRANSPORT === "smtp"
         ? { transport: "smtp", from: e.MAIL_FROM, smtpUrl: e.SMTP_URL, requireTls: deployed }

@@ -593,3 +593,30 @@ describe("statusFromSanctions (users.status senkronu, KV-33)", () => {
     assert.throws(() => statusFromSanctions([at("SUSPEND", "bozuk")], NOW), /Geçersiz zaman/);
   });
 });
+
+describe("#289 18+ öz beyanı (karar 54A)", () => {
+  const verified = (Object.keys(actions) as ActionId[]).filter((id) => actions[id].level === "verified");
+
+  test("beyanı açıkça olmayan hesap katılım işlemlerinde ADULT_DECLARATION_REQUIRED alır", () => {
+    const participation = verified.filter((id) => !actions[id].dataRight);
+    assert.deepEqual([...participation].sort(), ["comment.create", "media.upload", "poll.create", "vote.cast"]);
+    for (const id of participation) {
+      const d = preauthorize(actor({ adultDeclared: false }), id, NOW);
+      assert.equal(d.allowed, false, id);
+      assert.equal(!d.allowed && d.code, "ADULT_DECLARATION_REQUIRED", id);
+    }
+  });
+
+  test("veri hakları, okuma ve hesap işlemleri beyan olmadan da açık", () => {
+    for (const id of ["account.emailChange.manage", "account.read", "account.update", "account.deletion.manage", "privacy.export.download", "account.adult.declare"] as ActionId[]) {
+      assert.equal(preauthorize(actor({ adultDeclared: false }), id, NOW).allowed, true, id);
+    }
+  });
+
+  test("e-posta kontrolü önce gelir; alanı vermeyen çağıran ve beyanlı hesap etkilenmez", () => {
+    const d = preauthorize(actor({ adultDeclared: false, emailVerified: false }), "poll.create", NOW);
+    assert.equal(!d.allowed && d.code, "EMAIL_NOT_VERIFIED");
+    assert.equal(preauthorize(actor(), "poll.create", NOW).allowed, true);
+    assert.equal(preauthorize(actor({ adultDeclared: true }), "vote.cast", NOW).allowed, true);
+  });
+});

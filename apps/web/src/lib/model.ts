@@ -9,6 +9,8 @@ export type User = {
   name: string;
   email: string;
   verified: boolean;
+  /** Eski hesabın katılım işlemleri için 18+ öz beyanı bekleniyor. */
+  adultDeclarationRequired?: boolean;
   balance: number | null;
   publishCost?: number | null;
   username?: string;
