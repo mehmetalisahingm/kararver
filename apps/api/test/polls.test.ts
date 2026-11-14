@@ -10,6 +10,7 @@ import { ErrorBody, PollDetail } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
 import { createPrismaPollStore } from "../src/modules/polls/prisma-store.ts";
 import { mapDbError } from "../src/modules/polls/routes.ts";
+import { detectSensitiveSurvey } from "../src/modules/polls/sensitive-policy.ts";
 import { PollReferenceError } from "../src/modules/polls/store.ts";
 import { slugify } from "../src/modules/polls/slug.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
@@ -161,6 +162,148 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
     assert.deepEqual(PollDetail.parse(detail.json().data).results, { visible: false });
     assert.doesNotMatch(JSON.stringify(detail.json()), /"total":|\\"votes\\":/);
   });
+
+  // ─── V1 hassas kişisel veri toplama yasağı (#285 / #290) ───
+
+  test("API V1 kişisel siyasi/dini/sağlık anketini puan kesmeden ve satır yazmadan reddeder", async () => {
+    const owner = await signUp();
+    const before = await db.poll.count({ where: { authorId: owner.id } });
+    const beforeCharges = await db.pointLedgerEntry.count({ where: { userId: owner.id, reason: "PUBLISH" } });
+    const cases: Record<string, unknown>[] = [
+      { title: "Hangi partiye oy verdin?" },
+      { title: "Dinin nedir, hangi dine inanıyorsun?" },
+      { title: "Sağlık durumun nasıl?" },
+      { title: "Sen hangi gruptasın?", options: [{ label: "Müslüman" }, { label: "Ateist" }] },
+      { description: "Hangi hastalığın var?" },
+      { extraInfo: "Siyasi görüşün nedir?" },
+    ];
+    for (const changed of cases) {
+      const response = await send("POST", "/polls", pollBody(changed), owner.cookie, key());
+      assertError(response, 400, "VALIDATION_ERROR");
+      assert.equal(response.json().error.details[0]?.code, "sensitive_survey_not_allowed_v1");
+      assert.equal(JSON.stringify(response.json()).includes("partiye oy verdin"), false);
+      assert.equal(await db.poll.count({ where: { authorId: owner.id } }), before,
+        "reddedilen içerik hiçbir anket veya seçeneğe dönüşmemeli");
+      assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, reason: "PUBLISH" } }), beforeCharges,
+        "yasaklanan yayın puan düşürmemeli");
+    }
+  });
+
+  test("anket güncelleme, tartışma oluşturma ve ek açıklama hassas veri toplama arka kapısı olamaz", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie);
+    const before = await db.poll.findUniqueOrThrow({ where: { id: poll.id }, select: { description: true, title: true } });
+    const update = await send("PATCH", `/polls/${poll.id}`, { description: "Sağlık durumun nasıl?" }, owner.cookie);
+    assertError(update, 400, "VALIDATION_ERROR");
+    assert.deepEqual(await db.poll.findUniqueOrThrow({ where: { id: poll.id }, select: { description: true, title: true } }), before);
+
+    const discussion = await send("POST", "/polls", {
+      kind: "DISCUSSION", title: "Hangi dine mensupsun?", categoryId,
+    }, owner.cookie, key());
+    assertError(discussion, 400, "VALIDATION_ERROR");
+
+    const addendum = await send("POST", `/polls/${poll.id}/addenda`, { body: "Dinin nedir?" }, owner.cookie);
+    assertError(addendum, 400, "VALIDATION_ERROR");
+    assert.equal(await db.pollAddendum.count({ where: { pollId: poll.id } }), 0);
+  });
+
+  test("V1 hassas veri kuralı PATCH ile parça parça aşılamaz (seçenek sonra başlık ve tersi)", async () => {
+    const owner = await signUp();
+    const first = await createPoll(owner.cookie, {
+      title: "Hangisisin? Sana yakın olan grubu seç",
+      description: "",
+      options: [{ label: "Birinci seçenek" }, { label: "İkinci seçenek" }],
+    });
+    const existing = await db.pollOption.findMany({ where: { pollId: first.id }, orderBy: { position: "asc" }, select: { label: true } });
+    const updateOptions = await send("PATCH", `/polls/${first.id}`, {
+      options: [{ id: first.options[0]!.id, label: "Alevi" }, { id: first.options[1]!.id, label: "Sünni" }],
+    }, owner.cookie);
+    assertError(updateOptions, 400, "VALIDATION_ERROR");
+    assert.equal(updateOptions.json().error.details[0]?.code, "sensitive_survey_not_allowed_v1");
+    assert.deepEqual(await db.pollOption.findMany({ where: { pollId: first.id }, orderBy: { position: "asc" }, select: { label: true } }), existing,
+      "reddedilen PATCH seçenekleri veritabanına yazmaz");
+
+    const secondOwner = await signUp(); // Yayın cooldown testte farklı hesabı gerektirir.
+    const second = await createPoll(secondOwner.cookie, {
+      title: "Kültürel miras üzerine genel değerlendirme",
+      description: "",
+      options: [{ label: "Alevi" }, { label: "Sünni" }],
+    });
+    const updateTitle = await send("PATCH", `/polls/${second.id}`, { title: "Hangisisin? Sana yakın olan grubu seç" }, secondOwner.cookie);
+    assertError(updateTitle, 400, "VALIDATION_ERROR");
+    assert.equal(updateTitle.json().error.details[0]?.code, "sensitive_survey_not_allowed_v1");
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: second.id }, select: { title: true } })).title,
+      "Kültürel miras üzerine genel değerlendirme", "reddedilen PATCH başlığı veritabanına yazmaz");
+  });
+
+  test("eşzamanlı başlık ve seçenek PATCH birleşimi transaction kilidinden sonra engellenir", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie, {
+      title: "Genel tercihlerin değerlendirilmesi",
+      description: "",
+      options: [{ label: "Birinci seçenek" }, { label: "İkinci seçenek" }],
+    });
+    const [titleUpdate, optionsUpdate] = await Promise.all([
+      send("PATCH", `/polls/${poll.id}`, { title: "Hangisisin? Sana yakın olan grubu seç" }, owner.cookie),
+      send("PATCH", `/polls/${poll.id}`, {
+        options: [{ id: poll.options[0]!.id, label: "Alevi" }, { id: poll.options[1]!.id, label: "Sünni" }],
+      }, owner.cookie),
+    ]);
+    assert.deepEqual([titleUpdate.statusCode, optionsUpdate.statusCode].sort((a, b) => a - b), [200, 400],
+      "eşzamanlı masum PATCH'lerin ikisi birlikte hassas bir anket oluşturamamalı");
+    const saved = await db.poll.findUniqueOrThrow({
+      where: { id: poll.id }, select: { title: true, description: true, extraInfo: true, options: { select: { label: true } } },
+    });
+    assert.equal(detectSensitiveSurvey(saved), null, "commit sonrası hassas soru/seçenek birleşimi oluşmamalı");
+  });
+
+  test("ek açıklama ve sonraki PATCH hassas seçenek kontrolünü atlatamaz (postgres)", async () => {
+    const owner = await signUp();
+    const poll = await createPoll(owner.cookie, {
+      title: "Kültürel miras üzerine genel değerlendirme",
+      options: [{ label: "Alevi" }, { label: "Sünni" }],
+    });
+    const addendum = await send("POST", `/polls/${poll.id}/addenda`,
+      { body: "Hangisisin? Sana yakın olan grubu seç" }, owner.cookie);
+    assertError(addendum, 400, "VALIDATION_ERROR");
+    assert.equal(await db.pollAddendum.count({ where: { pollId: poll.id } }), 0);
+
+    const secondOwner = await signUp();
+    const second = await createPoll(secondOwner.cookie, {
+      title: "Kültürel miras üzerine genel değerlendirme",
+      options: [{ label: "Birinci seçenek" }, { label: "İkinci seçenek" }],
+    });
+    const innocentAddendum = await send("POST", `/polls/${second.id}/addenda`,
+      { body: "Hangisisin? Sana yakın olan grubu seç" }, secondOwner.cookie);
+    assert.equal(innocentAddendum.statusCode, 201, innocentAddendum.body);
+    const patched = await send("PATCH", `/polls/${second.id}`, {
+      options: [{ id: second.options[0]!.id, label: "Alevi" }, { id: second.options[1]!.id, label: "Sünni" }],
+    }, secondOwner.cookie);
+    assertError(patched, 400, "VALIDATION_ERROR");
+    const saved = await db.pollOption.findMany({
+      where: { pollId: second.id }, select: { label: true }, orderBy: { position: "asc" },
+    });
+    assert.deepEqual(saved.map((x) => x.label), ["Birinci seçenek", "İkinci seçenek"]);
+
+    const thirdOwner = await signUp();
+    const general = await createPoll(thirdOwner.cookie, {
+      title: "Hangi alanda araştırmaya daha fazla bütçe ayrılmalı?",
+      options: [{ label: "Kanser araştırmaları" }, { label: "Uzay araştırmaları" }],
+    });
+    assert.ok(general.id, "genel araştırma tercihleri bir sağlık durumu beyanı değildir");
+  });
+
+  test("genel sağlık hizmeti değerlendirmesi ve sıradan ürün anketleri otomatik olarak yasaklanmaz", async () => {
+    const owner = await signUp();
+    const first = await createPoll(owner.cookie, {
+      title: "Sağlık Bakanlığı randevu hizmeti nasıl iyileştirilebilir?",
+      options: [{ label: "Mobil uygulama" }, { label: "Web sitesi" }],
+    });
+    assert.ok(first.id);
+    const publicView = await get(`/polls/${first.id}`);
+    assert.equal(publicView.statusCode, 200);
+  });
+
 
   // ─── Oluşturma ──────────────────────────────────────────────
 

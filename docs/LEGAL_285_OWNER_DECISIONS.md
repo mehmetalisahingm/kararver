@@ -2,6 +2,12 @@
 
 Mehmet'in kesin ürün kararı: **Yeni anketlerde `ALWAYS` (herkese açık sonuçlar) varsayılan**; daha önce oluşturulmuş ve `AFTER_VOTE` seçilmiş anketler **otomatik değiştirilmez**. Yeni anket sahibi yine `AFTER_VOTE` seçebilir. Misafirler yalnız mevcut görünürlük projeksiyonunun izin verdiği sonuçlara erişebilir; kişiye bağlanabilir tekil oy/veri geçmişi veya gizli anketlerin yeniden görünmesi bu karara dahil değil. [Teknik, SEO, KVKK ve kabul matrisi](LEGAL_52_PUBLIC_RESULTS_DEFAULT_2026_11_08.md). #52/#53/#285/#289 ve #54 kabulü kapanmadı.
 
+## 8 Kasım 2026 — V1 hassas kişisel veri soran anketleri açmama kararı
+
+Mehmet'in **kesin ürün kararı**: KararVer V1'de siyasi görüş, din/mezhep, sağlık veya benzeri hassas kişisel bilgileri açıklamaya yönlendiren anketler **yayımlanmaz**. Kategori listesi ve güncel KVKK m.6 yorumuna ilişkin ayrım, API korumasının kapsamı ve eksikleri [V1 hassas anket karar dosyasında](LEGAL_285_V1_SENSITIVE_SURVEY_POLICY_2026_11_08.md). Genel bir konunun tartışılması ile katılımcının kendi özel nitelikli verisini istemek aynı kabul edilmez.
+
+Yeni anket ve tartışma gövdesi, değişiklik ve ek açıklama için **taslak server-side kural** hazırlandı; yalnız basit kalıpları yakalar. Eski içerik, yüklenen görsel, yorum, dolaylı sorular, bütün diller, küçük grup/tekil oy çıkarımı, şikâyet/itiraz ve saklama-imha koruması için #183/#290/#321/#53 ayrı kabul gerektirir. **Tüm hassas içeriklerin engellendiği, onaylı hukuki metin veya public GO iddia edilmez.** Ürün kararı geçmiş kullanıcı içeriğini topluca silme yetkisi değildir.
+
 # #285 — İşletmeci kararı ve veri işleme karar paketi
 
 1 Kasım 2026. Bağlantılar: #284, #285–#291, #181, #183, #51/#53/#54. Bu dosya teknik hazırlık ve açık karar kaydıdır; onaylı aydınlatma/sözleşme metni veya hukuki kabul değildir.
