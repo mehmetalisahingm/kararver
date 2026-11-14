@@ -10,7 +10,7 @@ test("guest can read; cancel gate stays put; login returns without automatically
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Senin için" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bugünün kararları" })).toBeVisible();
   await expect(page.locator("dialog")).not.toBeVisible();
   await page
     .getByRole("link", { name: "Anketi incele", exact: true })
@@ -20,11 +20,17 @@ test("guest can read; cancel gate stays put; login returns without automatically
     page.getByText("Sonuçlar oy verdikten sonra görünür."),
   ).toBeVisible();
   await page.getByLabel("Uzaktan çalışma", { exact: true }).check();
+  // Exercise WebKit's pointer behavior even on platforms that focus buttons.
+  await page.locator("#main").focus();
+  await page.getByRole("button", { name: "Oyumu onayla" }).evaluate(button => {
+    button.addEventListener("mousedown", event => event.preventDefault());
+  });
   await page.getByRole("button", { name: "Oyumu onayla" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page
     .getByRole("button", { name: "Şimdilik gezinmeye devam et" })
     .click();
+  await expect(page.getByRole("button", { name: "Oyumu onayla" })).toBeFocused();
   await expect(page).toHaveURL(/\/karar\/calisma-sekli$/);
   await expect(
     page.getByLabel("Uzaktan çalışma", { exact: true }),

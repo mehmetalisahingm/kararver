@@ -2,14 +2,20 @@
 import { Fragment, createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiClient } from "../lib/api-client";
 import type { DemoClient } from "../lib/demo-client";
-import { WelcomeEntry } from "../features/onboarding/welcome-entry";
-import { hasWelcomeSeen } from "../lib/welcome-draft";
+import { SpaceHero } from "./space-hero";
+import { SceneMotionProvider } from "./scene-motion";
+import { StudioAtmosphere } from "./studio-atmosphere";
 import { emptyDraft, safeReturnTo } from "../lib/model";
 import type { Draft, ProductClient, User } from "../lib/model";
 import type { CommentDraft } from "../features/social/model";
+
+const MissionScene = dynamic(() => import("./mission-scene").then(module => module.MissionScene), {
+  loading: () => <div className="mission-scene" aria-busy="true"><div className="mission-viewport" /></div>,
+});
 
 type Context = {
   demo: boolean;
@@ -68,7 +74,6 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   });
   // Demo forms also wait for hydration so early input cannot be discarded.
   const [sessionReady, setSessionReady] = useState(false);
-  const [welcomeSeen, setWelcomeSeen] = useState<boolean | null>(null);
   const [sessionError, setSessionError] = useState("");
   const [sessionAttempt, retrySession] = useState(0);
   const [user, setUser] = useState<User | null>(null);
@@ -80,30 +85,41 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const [message, notify] = useState("");
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [returnTo, setReturn] = useState("/");
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [themeReady, setThemeReady] = useState(false);
   const [gate, setGate] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
+  const pointerTrigger = useRef<HTMLElement | null>(null);
   const pathname = usePathname();
+  // The server supplies only the anonymous API projection on these routes.
+  // Do not hide that public HTML behind client-only session restoration.
+  const publicPollRead = pathname.startsWith("/karar/");
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem("kararver:theme");
       if (saved === "light" || saved === "dark") setTheme(saved);
-    } catch { /* Private browsing or restricted storage: use safe light default. */ }
+    } catch { /* Retain the default theme when storage is unavailable. */ }
+    setThemeReady(true);
   }, []);
   function toggleTheme() {
+    if (!themeReady) return;
     setTheme(previous => {
       const next = previous === "dark" ? "light" : "dark";
       try { window.localStorage.setItem("kararver:theme", next); } catch { /* Retain in-memory preference. */ }
       return next;
     });
   }
-  useEffect(() => { setWelcomeSeen(hasWelcomeSeen()); }, [pathname]);
   const router = useRouter();
   const previousPath = useRef(pathname);
   useEffect(() => {
-    if (gate) dialog.current?.showModal();
-    else dialog.current?.close();
+    const element = dialog.current;
+    if (!element) return;
+    if (gate && !element.open) element.showModal();
+    if (!gate && element.open) {
+      element.close();
+      trigger.current?.focus();
+    }
   }, [gate]);
   useEffect(() => {
     if (previousPath.current !== pathname) {
@@ -162,14 +178,14 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const setReturnTo = (path: string) => setReturn(safeReturnTo(path));
   function requireUser(path: string) {
     if (client.current()) return true;
-    trigger.current = document.activeElement as HTMLElement;
+    // WebKit pointer clicks may leave focus on the page instead of the invoker.
+    trigger.current = pointerTrigger.current ?? document.activeElement as HTMLElement;
     setReturnTo(path);
     setGate(true);
     return false;
   }
   function closeGate() {
     setGate(false);
-    trigger.current?.focus();
   }
   const context = {
     demo,
@@ -191,31 +207,46 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       setCommentDrafts((old) => ({ ...old, [key]: value })),
   };
   if (pathname === "/basla") return <ProductContext.Provider value={context}>{children}</ProductContext.Provider>;
-  if (!demo && sessionReady && !user && pathname === "/" && welcomeSeen === null)
-    return <ProductContext.Provider value={context}><main id="main" aria-busy="true" /></ProductContext.Provider>;
-  if (!demo && sessionReady && !user && pathname === "/" && welcomeSeen === false)
-    return <ProductContext.Provider value={context}><WelcomeEntry returnTo="/" onExplore={() => setWelcomeSeen(true)} /></ProductContext.Provider>;
   // Giriş sonrası interests kaydı hata verirse AuthScreen retry UI'sı kalmalı.
   // Oturum geçişi sırasında giriş sayfasını remount etmek hata/taslak durumunu kaybettirir.
   return (
     <ProductContext.Provider value={context}>
-      <div className="product" data-theme={theme}>
-        <a className="kv-skip" href="#main">
+      <SceneMotionProvider>
+      <div className="product" data-theme={theme} data-experience={pathname === "/" ? "gravity" : pathname === "/kesfet" || pathname === "/topluluklar" ? "mission" : "studio"} data-area={pathname.startsWith("/admin") ? "admin" : pathname === "/olustur" ? "compose" : pathname === "/bildirimler" ? "notifications" : ["/kayit", "/giris", "/sifremi-unuttum", "/sifre-yenile", "/dogrula"].includes(pathname) ? "auth" : undefined}
+        onClickCapture={event => {
+          const control = event.target instanceof Element ? event.target.closest("button,a,input,textarea,select") : null;
+          pointerTrigger.current = control instanceof HTMLElement ? control : null;
+        }}
+        onKeyDownCapture={() => { pointerTrigger.current = null; }}
+      >
+        <a className="kv-skip" href="#main" tabIndex={0}>
           İçeriğe geç
         </a>
         <header className="app-header">
           <Link href="/" className="brand">
-            <span aria-hidden="true">✓</span>Kararver
+            <span aria-hidden="true">↗</span>KararVer
           </Link>
           <span className="header-caption">
             Birlikte düşün. Kendin karar ver.
           </span>
+          <nav className="space-header-nav" aria-label="Üst gezinme">
+            {[["/", "Ana Sayfa"], ["/kesfet", "Keşfet"], ["/yukselenler", "Trendler"], ["/topluluklar", "Topluluklar"]].map(([href, label]) =>
+              <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}>{label}</Link>
+            )}
+          </nav>
+          <form className="space-header-search" role="search" aria-label="Üst menü araması" action="/kesfet">
+            <label className="space-search-label" htmlFor="header-search">Anketlerde ara</label>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="10" cy="10" r="6" /><path d="m15 15 5 5" /></svg>
+            <input id="header-search" name="q" type="search" placeholder="Anketlerde ara…" minLength={2} maxLength={100} required />
+            <button type="submit" aria-label="Üst menüde ara">↗</button>
+          </form>
           <button
             className="kv-button kv-button--ghost"
             aria-label={
               theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"
             }
             onClick={toggleTheme}
+            aria-disabled={!themeReady}
           >
             {theme === "dark" ? "☀" : "☾"}
           </button>
@@ -246,7 +277,10 @@ export function ProductProvider({ children }: { children: ReactNode }) {
             </Link>
           )}
         </header>
-        <div className="app-layout">
+        <main id="main" tabIndex={-1} className="space-main">
+          {pathname === "/" && <SpaceHero />}
+          {(pathname === "/kesfet" || pathname === "/topluluklar") && <MissionScene key={pathname} kind={pathname === "/kesfet" ? "landing" : "launch"} />}
+          <div className="app-layout" id={pathname === "/kesfet" || pathname === "/topluluklar" ? "mission-content" : undefined} tabIndex={pathname === "/kesfet" || pathname === "/topluluklar" ? -1 : undefined}>
           <aside className="app-sidebar" aria-label="Ana gezinme">
             <nav aria-label="Masaüstü navigasyonu">
               {navigation.map((n) => (
@@ -278,16 +312,17 @@ export function ProductProvider({ children }: { children: ReactNode }) {
               Topluluğa katıl
             </Link>
           </aside>
-          <main id="main" tabIndex={-1}>
+          <div className="app-main">
             {demo && <p className="demo-banner">Demo ortamı · Örnek veriler, sayfa yenilendiğinde sıfırlanır. Gerçek hesap veya işlem değildir.</p>}
             <div className="announcement" role="status">
               {message}
             </div>
-            {sessionReady ? <Fragment key={(pathname === "/giris" || pathname === "/kayit") ? "auth-session" : (user?.id ?? "guest")}>{children}</Fragment> : <div className="kv-card kv-state">
+            {pathname !== "/" && pathname !== "/kesfet" && pathname !== "/topluluklar" && <StudioAtmosphere pathname={pathname} unread={unreadNotifications} />}
+            {sessionReady || publicPollRead ? <Fragment key={(pathname === "/giris" || pathname === "/kayit") ? "auth-session" : (user?.id ?? "guest")}>{children}</Fragment> : <div className="kv-card kv-state">
               <h1>{sessionError ? "Bağlantı kurulamadı." : "Oturum kontrol ediliyor…"}</h1>
               {sessionError && <><p role="alert">{sessionError}</p><button className="kv-button" onClick={() => retrySession(n => n + 1)}>Tekrar dene</button></>}
             </div>}
-          </main>
+          </div>
           <aside className="app-aside" aria-label="Topluluk önerileri">
             <div className="kv-card kv-stack">
               <span className="eyebrow">TOPLULUĞUN GÜNDEMİ</span>
@@ -352,7 +387,8 @@ export function ProductProvider({ children }: { children: ReactNode }) {
               </details>
             )}
           </aside>
-        </div>
+          </div>
+        </main>
         <nav className="app-mobile" aria-label="Mobil navigasyon">
           {navigation.map((n) => (
             <Link
@@ -375,7 +411,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
           className="kv-dialog"
           aria-labelledby="gate-title"
           aria-describedby="gate-description"
-          onCancel={closeGate}
+          onCancel={event => { event.preventDefault(); closeGate(); }}
           onClose={() => {
             setGate(false);
           }}
@@ -411,6 +447,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
           </div>
         </dialog>
       </div>
+      </SceneMotionProvider>
     </ProductContext.Provider>
   );
 }

@@ -193,6 +193,8 @@ export type HarnessOptions = {
    * (system_settings) gelir; KV-40 testleri için. Varsayılan false: eski testler sabit ayarla çalışır.
    */
   realSettings?: boolean;
+  /** Legacy auth fixtures predate the 18+ contract. New policy tests MUST pass true. */
+  adultDeclarationRequired?: boolean;
 };
 
 export async function createHarness(factory: BackendFactory, options: HarnessOptions = {}): Promise<Harness> {
@@ -254,6 +256,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     mailer: { send: async (mail) => void mails.push(mail) },
     now: () => clock.now,
     isRegistrationEnabled: fixed ? async () => registrationEnabled.value : undefined,
+    adultDeclarationRequired: options.adultDeclarationRequired ?? false,
     decisionStore: backend.prisma ? createPrismaDecisionStore(backend.prisma) : undefined,
     profileStore: backend.prisma ? createPrismaProfileStore(backend.prisma) : undefined,
     shareStore: backend.prisma ? createPrismaShareStore(backend.prisma) : undefined,
