@@ -120,7 +120,8 @@ describe("hesap anonimleştirmesinden sonra kalan izler (postgres)", { skip: bac
     await db.domainEvent.create({
       data: {
         id, type: "comment.created", version: 1, occurredAt: new Date(), actorId: voter.id, subjectType: "COMMENT", subjectId: randomUUID(),
-        payload: { pollId: randomUUID() }, dispatchError: "test: parse_failed",
+        // CHECK domain_events_dispatch_error_check: hatalı olay da dispatch denemesi görmüş olmalı.
+        payload: { pollId: randomUUID() }, dispatchedAt: new Date(), dispatchError: "test: parse_failed",
       },
     });
     assert.equal((await erase(voter)).statusCode, 200);
