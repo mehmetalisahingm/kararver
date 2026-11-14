@@ -23,6 +23,10 @@ test("premium discovery, community, profile and notification surfaces support bo
       if(path==="/admin") {
         const width=await page.locator(".app-main").evaluate(element=>element.getBoundingClientRect().width);
         expect(width,"admin content retains the available page width").toBeGreaterThan(page.viewportSize()!.width*.7);
+        // #368: light text must not briefly sit on the previous dark form surface in WebKit.
+        const themeField=page.locator("select.kv-input").first();
+        await expect(themeField).toHaveCSS("background-color",theme==="light"?"rgb(255, 255, 255)":"rgb(35, 33, 29)");
+        await expect(themeField).toHaveCSS("color",theme==="light"?"rgb(41, 40, 38)":"rgb(247, 242, 232)");
       }
       expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations,`${path} ${theme}`).toEqual([]);
       await page.screenshot({path:info.outputPath(`${path.slice(1).replaceAll("/","-")}-${theme}.png`)});
