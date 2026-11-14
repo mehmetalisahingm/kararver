@@ -26,11 +26,12 @@ describe("18+ öz beyanı sınır durumları (postgres)", { skip: backend ? fals
   });
   after(async () => { await h?.close(); });
 
-  const login = async (email: string) => {
+  const signIn = async (email: string) => {
     const res = await h.app.inject({ method: "POST", url: "/v1/auth/login", headers: json, payload: JSON.stringify({ email, password: PASSWORD }) });
     assert.equal(res.statusCode, 200, res.body);
-    return sessionCookie(res.headers["set-cookie"]);
+    return { id: res.json().data.id as string, cookie: sessionCookie(res.headers["set-cookie"]) };
   };
+  const login = async (email: string) => (await signIn(email)).cookie;
 
   /** Kural öncesi açılmış hesabı taklit eder: kayıtta beyan verilir, sonra beyan kaydı silinir. */
   async function legacyAccount() {
@@ -41,8 +42,7 @@ describe("18+ öz beyanı sınır durumları (postgres)", { skip: backend ? fals
     const mail = h.mails.filter((m) => m.to === account.email).at(-1);
     const verify = await h.app.inject({ method: "POST", url: "/v1/auth/email/verify", headers: json, payload: JSON.stringify({ token: tokenFrom(mail) }) });
     assert.ok(verify.statusCode < 300, verify.body);
-    const cookie = await login(account.email);
-    const id = (await db.user.findUniqueOrThrow({ where: { email: account.email }, select: { id: true } })).id;
+    const { id, cookie } = await signIn(account.email);
     await db.user.update({ where: { id }, data: { adultDeclaredAt: null } });
     return { ...account, id, cookie };
   }
