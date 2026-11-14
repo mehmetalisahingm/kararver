@@ -52,8 +52,8 @@ pnpm --filter @kararver/worker media:check
 | Ne | Nasıl | Sıklık / saklama |
 |---|---|---|
 | PostgreSQL | Sağlayıcının otomatik yedeği ve PITR'ı (varsa, hosting kararında doğrulanacak) | Sağlayıcıya göre |
-| PostgreSQL (bağımsız kopya) | `db:backup` → ayrı bir yedek bucket'ına (farklı erişim anahtarı; uygulamanın anahtarı yedekleri silemez) | Günlük; 7 günlük + 4 haftalık + 3 aylık |
-| PostgreSQL (deploy öncesi) | Migration içeren her deploy'dan hemen önce `db:backup` | Son 5 deploy |
+| PostgreSQL (bağımsız kopya) | `db:backup` → ayrı bir yedek bucket'ına (farklı erişim anahtarı; uygulamanın anahtarı yedekleri silemez) | Günlük; **30 gün üst sınır (8 Kasım 2026 işletmeci kararı)** — eski katman önerileri artık onaylı değil |
+| PostgreSQL (deploy öncesi) | Migration içeren her deploy'dan hemen önce `db:backup` | **En fazla 30 gün**, bu süre içinde en son 5 deploy (hangisi daha erken sınıra ulaşırsa) |
 | Private bucket (orijinal + işlenmiş) | DB yedeğinden **sonra** yedek bucket'ına senkron (ör. rclone sync; R2'de nesne sürümleme yok) | Günlük |
 | Public bucket | **Yedeklenmez.** İçerik, private bucket'taki işlenmiş kopyanın birebir aynısıdır (worker ve `admin.media.decide` aynı veriyi yazar). APPROVED kayıtlar için `processed_object_key` → `public_object_key` kopyalanarak yeniden üretilir. | — |
 
@@ -82,7 +82,7 @@ pnpm --filter @kararver/worker media:check
 A için gerekenler:
 1. Yedek bucket'ı ve **yalnız yazma** yetkili anahtar (uygulamanın anahtarı yedekleri silemez).
 2. RSA (en az 3072 bit) **açık** anahtarı; özel anahtar sunucu dışında, sorumlusu belirlenmiş güvenli yerde saklanır. Sunucu yapılandırması özel anahtarı reddeder.
-3. Saklama kuralı bucket yaşam döngüsüyle; 35 gün önerisi ve daha uzun katmanlar Mehmet'in teyidini bekler. Kod bunları otomatik uygulamaz.
+3. Saklama kuralı: **operasyonel DB yedeğinde 30 gün üst sınır (8 Kasım 2026 işletmeci kararı)**. Artifact politikası private workflow'da 30 gündür; bucket/provider PITR ve eski snapshot kopyaları otomatik aynı sürede temizlenmiş SAYILMAZ; ayrı yaşam döngüsü, alan/bölge ve gerçek silinme kanıtı gerekir. Daha uzun katmanlar bu kararla onaylanmadı.
 4. `staging-monitor` gibi bir izleme: panel `degraded` olunca alarm.
 
 ### Zamanlanmış yedek: uygulama (#51)
@@ -120,6 +120,45 @@ Herhangi bir adım başarısızsa kayıt yazılmaz, çıkış kodu 1 olur, panel
 node apps/worker/scripts/decrypt-backup.ts --in <ad>.dump.enc --out <ad>.dump --key kv-backup-private.pem
 ```
 Dosya değiştirilmiş ya da kesikse çözme reddedilir, geçici düz metin temizlenir; mevcut çıktı ve kaynak dosya korunur. Hedef yalnız doğrulamadan sonra, üzerine yazılmadan oluşturulur. Manifest aynı klasöre `<ad>.dump.manifest.json` olarak konur, sonra `db:restore --file <ad>.dump`.
+
+## Zamanlanmış yedek: private repo (0 TL, #186 / #311; Neon + Render Free)
+
+Render Free 15 dk trafiksizlikte uyuduğu için worker içindeki `BACKUP_ENABLED` zamanlaması güvenilir değil. Yedek, uygulamadan bağımsız olarak GitHub Actions'ta alınır.
+
+**Owner kararı (7 Kasım 2026, #311):** Gerçek DB yedeği public `mehmetalisahingm/kararver` reposunda **çalışmaz**, artifact'ı oraya **konmaz**. Şifreli olsa da indirilmiş kopyalar, özel anahtar ileride sızarsa geri alınamaz. Gece işi, DB secret'ı ve artifact saklama ayrı bir **private yedek reposundadır**. Private repo yoksa iş **çalışmaz** (fail-closed); public artifact'a otomatik geri dönüş yoktur.
+
+**Public repoda ne var:**
+- `.github/workflows/backup-validate.yml`: yalnız secret'sız doğrulama. Yedek kodunun birim testleri. Ayrıca iki kapı: public workflow'larda DB yedek secret'ı kullanan iş yoktur; private şablon "yalnız private repoda çalış", şifreli manifest ve 30 gün saklama adımlarını taşır.
+- `ops/private-backup-repo/workflows/`: private repoya kopyalanacak **şablonlar**. `.github` dışında oldukları için public repoda çalışmazlar.
+
+**Private repodaki iş (`nightly-backup.yml`, her gece UTC 00:30, elle tetikleme yalnız Mehmet ve Faruk):**
+0. Repo `private` değilse ilk adım FAIL olur. Kod public KararVer reposundan, `vars.KARARVER_REF` (varsayılan `main`) ile token'sız alınır.
+1. **Tek döküm, doğrulanmış:** `db:backup --no-record` (`pg_dump` 18, tutarlı snapshot + manifest). **Aynı dosya** runner'da **ayrı, temiz bir PostgreSQL 18**'e `db:restore` ile geri yüklenir (52 migration + 6/6 tutarlılık).
+2. **Şifreleme:** `scheduled-backup.ts`, `BACKUP_FROM_FILE` ile aynı dökümü şifreler; sha256 manifestle eşleşmezse durur. Manifest de şifrelenir (`BACKUP_ENCRYPT_MANIFEST=true`). Zarf şifrelemesi RSA-OAEP + AES-256-GCM. Düz döküm hemen silinir.
+3. **Saklama:** Yalnız `.enc` dosyaları (`<ad>.dump.enc`, `<ad>.dump.manifest.json.enc`) **30 gün** saklanan private artifact olur. Artifact'ta `.enc` dışında dosya olmadığı denetlenir.
+4. **Kayıt:** **Ancak artifact yüklendikten sonra** `ops_backup_runs`'a "github-actions" kaydı yazılır (`record-backup-run.ts`, düz manifest yalnız runner'da). Yükleme düşerse `/admin/ops` "son yedek" eskimiş görünür.
+5. **Log:** Araç çıktısı (satır sayıları, tablo/kontrol adları) yalnız runner'daki dosyaya yazılır; loga yalnız sonuç satırı düşer.
+6. **Alarm:** Yapılandırma eksikse ya da bir adım düşerse iş FAIL olur ve private repoda `backup-alarm` issue'su açılır; başarı onu kapatır.
+7. **Sessiz durma:** `backup-freshness.yml` 6 saatte bir gece işinin etkin olduğunu ve son başarılı koşunun **26 saatten** yeni olduğunu denetler; değilse `backup-alarm` açar. Sorumlu Faruk.
+
+**Kurulum (Mehmet; hiçbir değer issue'ya yazılmaz):**
+1. Ayrı **private** repo aç (ör. `kararver-backups`). Erişim yalnız Mehmet + Faruk. Repo boş kalabilir; yalnız `.github/workflows/` altına iki şablon kopyalanır.
+2. **Kota kapısı:** GitHub Free'de private repo için aylık 2.000 Actions dakikası ve 500 MB artifact/paket deposu dahil. Tahmin: ~6 dk × 30 gece ≈ 180 dk; ~7 MB × 2 dosya × 30 gün ≈ 210 MB (öngörü; gerçek boyut/kota ölçülmeli). Settings → Billing'de harcama limitinin **0 $** olduğu, kart ya da otomatik aşım faturası olmadığı doğrulanmalı. Aşımda iş durur, ücret çıkmaz; freshness alarmı bunu gösterir.
+3. Private repoda secret `STAGING_BACKUP_DATABASE_URL` (Neon **doğrudan** adres; en az yetki: tablolara okuma + yalnız `ops_backup_runs`'a ekleme) ve değişken `BACKUP_PUBLIC_KEY` (RSA ≥ 3072 bit açık anahtar).
+4. **Özel anahtar:** iki sahip (öneri Mehmet + Faruk), şifre yöneticisinde ve çevrimdışı. Repoya, Actions'a, issue'ya **asla** girmez; MFA anahtarıyla (#300) aynı yerde saklanmaz; sahiplerden biri değişirse yeni anahtar çifti üretilir.
+5. İlk koşu elle tetiklenir. Faruk artifact'ı indirip çözer, temiz PG 18'e restore eder ve yalnız sayılarla #186'ya yazar.
+
+**Merge kapıları (owner, #311):** (1) private depo erişimi ve 0 $ kota doğrulandı; (2) restore yetkili bağlantı ve çevrimdışı özel anahtar sahipliği belli; (3) aynı şifreli snapshot'tan temiz PG 18 restore, 52/52 migration ve kontroller; (4) kayıt yalnız yüklemeden sonra, şifreli manifest, alarm ve yaş izlemesi; (5) KVKK aktarım/saklama kararı #288/#291 ile uyumlu. Kod (4)'ü karşılar; (1)–(3) ve (5) kurulum ve kararla kapanır.
+
+**Geri yükleme (yetkili kişi, kendi makinesinde; aylık elle tatbikat önerilir):**
+1. Private repo → Actions → ilgili koşu → artifact'ı indir.
+2. Dökümü çöz: `node apps/worker/scripts/decrypt-backup.ts --in <ad>.dump.enc --out <ad>.dump --key kv-backup-private.pem`.
+3. Manifesti çöz: `node apps/worker/scripts/decrypt-backup.ts --in <ad>.dump.manifest.json.enc --out <ad>.dump.manifest.json --key kv-backup-private.pem` (dökümle aynı klasöre).
+4. Boş bir DB'ye `db:restore --file <ad>.dump`.
+
+**4–5 Kasım yerel kanıt:** tek döküm + temiz PG 18'e restore (tutarlı); `BACKUP_FROM_FILE` ile aynı dosyanın şifrelenmesi, düz döküm silindi; `BACKUP_SKIP_RECORD` ile kayıt sayısı değişmedi (5 → 5), `record-backup-run.ts` sonrası 6; şifreli dosya özel anahtarla çözülüp boş PG 18'e restore edildi (6/6).
+
+**Kapsam dışı:** Medya nesneleri (Neon Object Storage) bu işe dahil değil; nesne envanteri ve checksum'lı kurtarma noktası #302 ile birlikte.
 
 ## Restore runbook'u
 
