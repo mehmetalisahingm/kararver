@@ -38,7 +38,8 @@ Her dilim ayrı, küçük bir PR; #282/#283 merge edildikten sonra ve Utku'yla k
 ### Dilim A: Üstlenme MFA ister (G4) — önce bu
 - `admin.securityAlerts.ack` için oturumda **taze step-up** şartı (`critical-approval.ts` ile aynı TTL ve sıra kontrolü). Yoksa `403 FORBIDDEN` + `details: [{ code: "mfa_stepup_required" }]`.
 - Step-up **tek kullanımlık**: aynı step-up ile ikinci kritik işlem yapılamaz (mevcut "transaction içinde tek sefer" notuyla aynı).
-- Ayrı bir `claimedBy` / `claimedAt` alanı gerekip gerekmediği Utku'yla netleşmeli. Öneri: 48A'daki "üstlenme", MFA'lı onayın kendisi olsun, yeni kavram açılmasın.
+- **Karar (Utku, 13 Kasım, [#185](https://github.com/mehmetalisahingm/kararver/issues/185)):** 48A'daki "üstlenme", step-up'lı onayın kendisidir; ayrı `claimedBy`/`claimedAt` alanı açılmaz. Step-up tek kullanımlık ve 5 dakikalıktır (toplu moderasyon onayındaki gibi). Bir dalgadaki her alarm ayrı step-up ister; bu sürtünme bilinçlidir. Toplu onay gerekirse ayrı bir uç olarak tasarlanır.
+  - Ek negatif test: aynı dalgadaki iki alarm tek step-up ile onaylanamaz.
 - **Negatif testler:**
   - step-up yok → 403, audit yok;
   - süresi geçmiş step-up → 403;
@@ -59,7 +60,8 @@ Her dilim ayrı, küçük bir PR; #282/#283 merge edildikten sonra ve Utku'yla k
   - worker uzun süre kapalı kalıp açılınca birikmiş saatler için tek hatırlatma (fırtına yok).
 
 ### Dilim C: Alıcı kümesi (G2)
-- Alıcılar açık bir KV-04 yetkisiyle tanımlanır (ör. `security.alert.receive`). SUPER_ADMIN'e ek olarak, görev kabulü yapmış ve **MFA'sı etkin** güvenlik sorumlularına verilir.
+- **Karar (Utku, 13 Kasım, #185):** Alıcılar rol adına değil, ayrı KV-04 izinlerine bağlanır: `security.alerts.read` ve `security.alerts.ack`. Bu izinler yalnız **MFA'sı etkin** hesaplara verilebilir; MFA kapanırsa izin de düşer. SUPER_ADMIN varsayılan alıcıdır; diğer ADMIN'ler otomatik alıcı olmaz. Sorumlular Mehmet'in 8 Kasım kararına göre belirlenir (#285: birincil Ümit, yedek Mert).
+  - Ek negatif testler: MFA kapatıldığında izin aynı işlemde düşer; ADMIN rolü tek başına alıcı yapmaz.
 - Devredilen yetki (Mert, en fazla 8 saat) bittiğinde alıcılıktan da düşer.
 - **Negatif testler:**
   - MFA'sı kapalı hesap alıcı olmaz;
