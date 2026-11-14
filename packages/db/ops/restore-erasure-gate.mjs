@@ -79,9 +79,8 @@ export function assertIsolatedRestoreTarget(target, live) {
  *   indistinguishable from a resurrected account.
  * A tombstoned user is still retained data, not an anonymous stat.
  *
- * `actorEvents` (#372, Utku): domain_events rows whose actor, or USER subject, is a journaled ID. Today's erasure does not
- * touch domain_events, so they are counted as RETAINED (exit 3), not resurrected. Once erasure scrubs
- * actor/sensitive fields, move this count to `resurrected`.
+ * `actorEvents` (#372, Utku): domain_events rows whose actor, or USER subject, is a journaled ID. Account erasure
+ * deletes these rows in the same transaction (#372 §3), so any such row in a restored copy is RESURRECTED (exit 2).
  */
 export async function checkNoResurrection(db, subjectIds) {
   // Each counter is an explicit name → query pair, so adding one cannot silently shift the others (#389 review).
@@ -93,8 +92,6 @@ export async function checkNoResurrection(db, subjectIds) {
     sessions: (id) => db.session.count({ where: { userId: id } }),
     authTokens: (id) => db.authToken.count({ where: { userId: id } }),
     mediaAssets: (id) => db.mediaAsset.count({ where: { uploaderId: id } }),
-    // The person as actor OR as the USER subject of an event (sanctions, role changes).
-    actorEvents: (id) => db.domainEvent.count({ where: { OR: [{ actorId: id }, { subjectType: "USER", subjectId: id }] } }),
   };
   const resurrectedQueries = {
     liveUsers: (id) => db.user.count({ where: { id, deletedAt: null } }),
@@ -106,6 +103,8 @@ export async function checkNoResurrection(db, subjectIds) {
     mfaCredentials: (id) => db.userMfaCredential.count({ where: { userId: id } }),
     publishedMedia: (id) => db.mediaAsset.count({ where: { uploaderId: id, OR: [{ publicObjectKey: { not: null } }, { status: { not: "REJECTED" } }] } }),
     readyExports: (id) => db.dataExport.count({ where: { userId: id, status: "READY" } }),
+    // The person as actor OR as the USER subject of an event (sanctions, role changes); erasure deletes both.
+    actorEvents: (id) => db.domainEvent.count({ where: { OR: [{ actorId: id }, { subjectType: "USER", subjectId: id }] } }),
   };
   const tally = async (queries, whereId, into) => {
     const entries = Object.entries(queries);
