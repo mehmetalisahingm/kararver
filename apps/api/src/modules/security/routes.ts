@@ -2,7 +2,9 @@
 // All write endpoints depend on DB transaction/row locks in MfaStore.
 import { ApiError } from "../../http/errors.ts";
 import type { Route } from "../../http/route.ts";
+import { sendSafely, type Mailer } from "../../mail/mailer.ts";
 import type { PasswordHasher } from "../auth/crypto.ts";
+import { authenticatorChangedMail } from "./mail.ts";
 import type { MfaStore } from "./store.ts";
 
 /**
@@ -14,6 +16,8 @@ const reauthFailed = () => new ApiError("FORBIDDEN", "Kimliğin yeniden doğrula
 
 export function registerMfaRoutes(route: Route, deps: {
   store: MfaStore; hasher: PasswordHasher; now: () => Date;
+  /** #373 P2: doğrulayıcı yenilenince kayıtlı adrese bildirim. Verilmezse bildirim yok (eski test düzenekleri). */
+  mailer?: Mailer; webUrl?: string;
 }): void {
   route("me.mfa.status", async ({ viewer }) => {
     const state = await deps.store.status(viewer!.id, viewer!.sessionId, deps.now());
@@ -74,6 +78,8 @@ export function registerMfaRoutes(route: Route, deps: {
       code: body.code, now: deps.now(), requestId: request.id });
     if (result.kind === "session") throw new ApiError("UNAUTHENTICATED", "Oturum geçersiz.");
     if (result.kind !== "reenrolled") throw new ApiError("FORBIDDEN", "Yeni doğrulayıcı kodu doğrulanamadı veya süresi doldu. Eski doğrulayıcın geçerli.");
+    // Değişiklik commit edildikten sonra; gönderim hatası yenilemeyi geri almaz (sendSafely yalnız loglar, adres loglanmaz).
+    if (deps.mailer && deps.webUrl) await sendSafely(deps.mailer, authenticatorChangedMail(deps.webUrl, viewer!.user.email), request.log);
     return { status: 200, body: { data: { enabled: true, recoveryCodes: result.recoveryCodes } } };
   });
 }

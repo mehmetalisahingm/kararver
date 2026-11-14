@@ -142,10 +142,17 @@ suite("#180/#291 doğrulayıcı yenileme (PostgreSQL)", () => {
     assert.ok((await request("GET", "/me/mfa", undefined, other)).json().data.stepUpExpiresAt);
     h.clock.advance(30_000);
     const code = codeFor(newSecret);
+    const mailsBefore = h.mails.length;
     const results = await Promise.all([
       request("POST", "/me/mfa/reenroll/confirm", { code }, cookie),
       request("POST", "/me/mfa/reenroll/confirm", { code }, cookie),
     ]);
+    // #373 P2: yalnız kazanan onay, kayıtlı adrese tek bir bildirim gönderir; bildirimde sır ya da kod yok.
+    const notices = h.mails.slice(mailsBefore);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0]!.to, email);
+    assert.match(notices[0]!.subject, /doğrulayıcın değiştirildi/);
+    for (const secret of [newSecret, oldSecret, ...oldCodes]) assert.equal(notices[0]!.text.includes(secret), false);
     assert.deepEqual(results.map(r => r.statusCode).sort(), [200, 403]);
     newCodes = results.find(r => r.statusCode === 200)!.json().data.recoveryCodes;
     assert.equal(newCodes.length, 10);

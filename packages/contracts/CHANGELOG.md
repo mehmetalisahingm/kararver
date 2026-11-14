@@ -13,6 +13,7 @@ Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahi
 
 - `me.mfa.reenroll.begin`: step-up parolaDAN ÖNCE denetlenir. Step-up eksikliği ile yanlış parola aynı 403 `reauth_failed` yanıtını verir. `stepup_required` ayrıntı kodu bu uçta kalktı; web bu koda bağlı değildi.
 - `me.mfa.recover` / `me.mfa.setup`: yanlış parola (ve kurtarmada yanlış kod) 403 `reauth_failed` döner; parola kahini kalmadı.
+- `me.mfa.reenroll.confirm`: başarılı onay kayıtlı adrese güvenlik bildirimi gönderir (#373 P2).
 - Yeni ayar `limits.mfaReauthPerHour` (1–100, varsayılan 5): üç uç ortak sayaçla hesap başına saatte sınırlanır (429).
 
 ## 1.43.0 — 2026-11-07 (Faruk, #180/#291 doğrulayıcı yenileme)

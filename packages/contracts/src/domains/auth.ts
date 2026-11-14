@@ -254,6 +254,7 @@ export const authEndpoints = [
     notes: [
       "Kod YENİ sırla üretilmiş olmalı ve başlatan oturumdan gelmeli. Yanlış kodda hiçbir şey değişmez; eski sır çalışmaya devam eder (deneme sayacı ortaktır).",
       "Tek transaction: yeni sır v2 yazılır, eski kurtarma kodlarının hepsi iptal edilir, 10 yeni kod üretilir, audit yazılır ve diğer oturumların step-up'ları düşürülür. Eşzamanlı iki onaydan yalnız biri kazanır.",
+      "Başarılı onaydan sonra hesabın kayıtlı e-postasına \"doğrulayıcın değiştirildi\" bildirimi gider (sır/kod içermez; gönderim hatası yenilemeyi geri almaz).",
     ],
   }),
   defineEndpoint({

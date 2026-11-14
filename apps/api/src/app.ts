@@ -304,7 +304,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return roles.length > 0 ? roles : ["USER" as const];
   };
 
-  if (deps.mfaStore) registerMfaRoutes(route, { store: deps.mfaStore, hasher: deps.hasher, now });
+  if (deps.mfaStore) registerMfaRoutes(route, { store: deps.mfaStore, hasher: deps.hasher, now, mailer: deps.mailer, webUrl: config.webUrl });
   registerAuthRoutes(route, {
     rolesOf,
     store: deps.authStore,
