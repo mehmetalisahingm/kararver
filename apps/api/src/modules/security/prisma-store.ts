@@ -5,7 +5,8 @@ import { writeAudit } from "../audit/write.ts";
 import { createRecoveryCodes, recoveryCodeHashCandidates, recoveryCodeHashForStorage } from "./recovery.ts";
 import { createMfaEnrollment, legacyOnly, needsRekey, recoverTotpSecret, rekeyTotpSecret, type MfaKeys } from "./encryption.ts";
 import { matchTotpStep } from "./totp.ts";
-import type { MfaStore } from "./store.ts";
+import { checkMfaKey } from "./mfa-rekey.ts";
+import type { MfaKeyCheck, MfaStore } from "./store.ts";
 
 const ENROLLMENT_MS = 10 * 60_000;
 const STEPUP_MS = 5 * 60_000;
@@ -53,6 +54,18 @@ export function createPrismaMfaStore(prisma: PrismaClient, mfaKeys: MfaKeys | st
     return expiresAt;
   };
   return {
+    async keyCheck(): Promise<MfaKeyCheck> {
+      let rows: { user_id: string; secret_cipher: Uint8Array }[];
+      try {
+        rows = await prisma.$queryRaw<{ user_id: string; secret_cipher: Uint8Array }[]>`
+          SELECT user_id::text, secret_cipher FROM user_mfa_credentials
+          WHERE octet_length(secret_cipher) >= 30 AND get_byte(secret_cipher, 0) = 2
+          ORDER BY enabled_at DESC NULLS LAST LIMIT 5`;
+      } catch {
+        return "unknown";
+      }
+      return checkMfaKey(rows, keys);
+    },
     async status(userId, sessionId, now) {
       const rows = await prisma.$queryRaw<{ enabled_at: Date | null; expires_at: Date | null }[]>`
         SELECT c.enabled_at, CASE WHEN s.revoked_at IS NULL AND s.expires_at > ${now}::timestamptz

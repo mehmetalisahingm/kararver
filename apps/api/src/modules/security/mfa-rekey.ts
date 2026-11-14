@@ -31,7 +31,25 @@ export type RekeyReport = {
 };
 
 /** Şifre çözme hatası mı (yanlış anahtar/eski sır, bozuk kayıt)? DB/ağ hataları değildir. */
-function isDecryptError(err: unknown): boolean {
+/**
+ * #373 P2: verilen v2 kayıtlardan biri bu anahtarla çözülüyorsa "ok", hiçbiri çözülmüyorsa "mismatch", kayıt yoksa
+ * "unverified". Çözme dışı hata "unknown". Sır döndürmez, loglamaz.
+ */
+export function checkMfaKey(rows: { user_id: string; secret_cipher: Uint8Array }[], keys: MfaKeys): "ok" | "mismatch" | "unverified" | "unknown" {
+  const v2 = rows.filter((r) => cipherVersion(r.secret_cipher) === 2);
+  if (v2.length === 0) return "unverified";
+  for (const row of v2) {
+    try {
+      recoverTotpSecret(row.secret_cipher, row.user_id, keys);
+      return "ok";
+    } catch (err) {
+      if (!isDecryptError(err)) return "unknown";
+    }
+  }
+  return "mismatch";
+}
+
+export function isDecryptError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return /Unsupported state or unable to authenticate data|MFA kaydı eski sırlarla çözülemedi|MFA_ENCRYPTION_KEY gerekli|Invalid encrypted MFA key|yeniden şifreleme doğrulanamadı/.test(message);
 }

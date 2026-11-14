@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { loadConfig } from "../src/config.ts";
 import { cipherVersion, createMfaEnrollment, legacyOnly, needsRekey, protectTotpSecret, recoverTotpSecret, rekeyTotpSecret, type MfaKeys } from "../src/modules/security/encryption.ts";
-import { rekeyMfaCredentials } from "../src/modules/security/mfa-rekey.ts";
+import { checkMfaKey, rekeyMfaCredentials } from "../src/modules/security/mfa-rekey.ts";
 import { createPrismaMfaStore } from "../src/modules/security/prisma-store.ts";
 import { hashRecoveryCode, recoveryCodeHashCandidates, recoveryCodeHashForStorage } from "../src/modules/security/recovery.ts";
 import { decodeBase32, hotp } from "../src/modules/security/totp.ts";
@@ -63,6 +63,24 @@ describe("MFA anahtar sürümleri", () => {
     const afterC = recoveryCodeHashCandidates("ABCD1234", id, { current: KEY, legacy: [C, A, B] });
     for (const h of [fresh, underA, underB]) assert.ok(afterC.includes(h));
     assert.equal(recoveryCodeHashCandidates("abcd1234", id, { current: KEY, legacy: [C, B] }).includes(underA), false, "A silinirse A kodları ölür");
+  });
+});
+
+describe("#373 açılışta MFA anahtar denetimi", () => {
+  const u1 = "00000000-0000-4000-8000-000000000001", u2 = "00000000-0000-4000-8000-000000000002";
+  const keys: MfaKeys = { current: KEY, legacy: ["pepper-a-0123456789-abcdefghijklmnop"] };
+  const v2 = (userId: string, k: MfaKeys) => ({ user_id: userId, secret_cipher: protectTotpSecret("JBSWY3DPEHPK3PXP", userId, k) });
+  test("doğru anahtar ok; yanlış ya da eksik anahtar mismatch; v2 kayıt yoksa unverified", () => {
+    assert.equal(checkMfaKey([v2(u1, keys)], keys), "ok");
+    assert.equal(checkMfaKey([v2(u1, keys)], { ...keys, current: "baska-anahtar-0123456789-abcdefghijklmn" }), "mismatch");
+    assert.equal(checkMfaKey([v2(u1, keys)], legacyOnly(keys.legacy[0]!)), "mismatch");
+    assert.equal(checkMfaKey([], keys), "unverified");
+    assert.equal(checkMfaKey([{ user_id: u1, secret_cipher: protectTotpSecret("JBSWY3DPEHPK3PXP", u1, legacyOnly(keys.legacy[0]!)) }], keys), "unverified", "yalnız v1 kayıt anahtarı kanıtlamaz");
+  });
+  test("bir kayıt çözülürse ok (kısmi bozuk kayıt sağlıklı sürümü düşürmez); kayıt başka hesaba bağlıysa çözülmez", () => {
+    const foreign = { user_id: u2, secret_cipher: v2(u1, keys).secret_cipher };
+    assert.equal(checkMfaKey([foreign], keys), "mismatch", "şifreli kayıt hesap kimliğine bağlı");
+    assert.equal(checkMfaKey([foreign, v2(u2, keys)], keys), "ok");
   });
 });
 

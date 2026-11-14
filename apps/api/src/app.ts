@@ -96,7 +96,7 @@ import { registerMetricsRoutes } from "./modules/metrics/routes.ts";
 import type { MetricsStore } from "./modules/metrics/store.ts";
 import type { OpsProbe } from "./modules/ops/probe.ts";
 import { registerOpsRoutes } from "./modules/ops/routes.ts";
-import { buildHealth, cachedDatabaseCheck } from "./modules/ops/health.ts";
+import { buildHealth, cachedDatabaseCheck, cachedMfaKeyCheck } from "./modules/ops/health.ts";
 import { emergencySwitchesView } from "./modules/ops/switches.ts";
 import { createOpsTelemetry, type OpsTelemetry } from "./modules/ops/telemetry.ts";
 
@@ -504,6 +504,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   // Sürüm (deploy SHA): Railway GitHub entegrasyonu RAILWAY_GIT_COMMIT_SHA verir. Saat gerçek zamandır (uptime izleme).
   const healthStartedAt = new Date();
   const healthDatabase = cachedDatabaseCheck(deps.opsProbe);
+  const healthMfaKey = cachedMfaKeyCheck(deps.mfaStore?.keyCheck?.bind(deps.mfaStore));
   app.get("/health", async (_request, reply) => {
     const { httpStatus, body } = await buildHealth({
       probe: deps.opsProbe,
@@ -513,6 +514,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       env: config.appEnv,
       sha: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT_SHA ?? null,
       workerExpected: process.env.WORKER_HEARTBEAT_EXPECTED === "true",
+      mfaKeyCheck: healthMfaKey,
     });
     return reply.code(httpStatus).header("Cache-Control", "no-store").send(body);
   });

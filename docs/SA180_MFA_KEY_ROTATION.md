@@ -64,6 +64,8 @@ Bir sır sızıntısı şüphesinde ya da düzenli rotasyonda pepper'ın değiş
 **2. Toplu taşıma:** `mfa:rekey` (deneme) → `çözülemeyen: 0` ve **v2 kayıtlar anahtarla doğrulanmış** → `--apply` → `v1: 0`.
 - **Yanlış anahtar koruması:** v2 kayıtlar verilen anahtarla çözülemezse CLI hiçbir şey yazmaz ve çıkış 1 verir.
 - **İlk taşıma koruması:** DB'de henüz anahtarı doğrulanmış v2 kayıt yoksa toplu `--apply` reddedilir. Önce 1. adımdaki uygulama step-up'ı (kayıt uygulamanın anahtarıyla v2 olur) ya da `--only <hesap-id>` ile tek hesapta tatbikat yapılır.
+- **`--only` yalnız sentetik test hesabıyla (#373):** `--only` verilince ilk taşıma koruması kapanır. Yanlış anahtarla yapılan tatbikat o hesabın MFA kaydını kilitleyebilir. Gerçek kullanıcı ya da yönetici hesabında `--only` kullanılmaz. Tatbikattan sonra o test hesabıyla step-up yapılır ve geçtiği doğrulanır.
+- **Açılış denetimi (#373):** API, kayıtlı v2 sırlardan birkaçını (en yeni etkinleştirilenler) mevcut anahtarla çözmeyi dener. Hiçbiri çözülmezse `/health` `status: "degraded"`, `mfa.key: "mismatch"` döner (HTTP 200; deploy kapısı kilitlenmez) ve staging-monitor alarm açar. Sonuç 10 dakika önbelleklenir. v2 kayıt yoksa `unverified`; bu anahtarın kanıtlanmadığı anlamına gelir, sağlıksız sayılmaz.
 
 **3. Pepper değişimi (A→B):**
 - `MFA_LEGACY_PEPPERS = <mevcut liste>,<A>` (ilk rotasyonda yalnız `<A>`) ve `AUTH_TOKEN_PEPPER = <B>` olarak gir, deploy et. Mevcut değerler **silinmez**.
