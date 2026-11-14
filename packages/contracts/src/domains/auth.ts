@@ -71,6 +71,8 @@ export const authEndpoints = [
         username: Username,
         displayName: z.string().trim().min(1).max(60),
         password: Password,
+        /** 18+ ürün politikası için öz beyan; kimlik/gerçek yaş doğrulaması değildir. */
+        adultConfirmed: z.boolean().optional(),
       }),
     },
     responses: { 202: dataOf(z.strictObject({ status: z.literal("VERIFICATION_SENT") })) },

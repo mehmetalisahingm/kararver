@@ -229,7 +229,7 @@
   .app-aside { grid-column: 2; }
 }
 @media (max-width: 767px) {
-  .app-header { padding: 11px 16px; min-height: 64px; gap: 9px; flex-wrap: nowrap; }
+  .app-header { padding: 11px 16px; min-height: 64px; gap: 9px; flex-wrap: wrap; }
   .brand { font-size: 21px; }
   .brand span { width: 33px; height: 33px; font-size: 18px; border-radius: 11px; }
   .header-caption { display: none; }
@@ -271,14 +271,14 @@
   .product .kv-button, .app-sidebar nav a, .vote-option, .reaction-button { transition: none !important; }
 }
 
-/* Brand safety: dark ink on champagne creates an accessible call to action in both themes. */
+/* Keep primary controls readable independently of their surrounding theme. */
 .product .kv-button:not(.kv-button--secondary):not(.kv-button--ghost):not(.kv-button--danger) {
-  color: #252525;
-  border-color: #b69359;
+  color: #fff;
+  border-color: var(--kv-primary-light);
 }
 .product .kv-button:not(.kv-button--secondary):not(.kv-button--ghost):not(.kv-button--danger):hover:not(:disabled) {
-  color: #252525;
-  border-color: #a78144;
+  color: #fff;
+  border-color: var(--kv-primary-light);
 }
 .product .kv-button--danger { color: #fff; }
 .product .feed-tabs a[aria-current] {
@@ -288,15 +288,15 @@
   font-weight: 750;
 }
 .product .brand span {
-  color: #292826;
-  background: linear-gradient(135deg, #f0d9ad, #c9a163);
+  color: #fff;
+  background: var(--kv-primary);
 }
 .product .avatar {
-  color: #292826;
-  background: linear-gradient(135deg, #ead2a5, #bf9555);
+  color: var(--kv-text);
+  background: var(--kv-soft);
 }
 .product .app-mobile a[href="/olustur"] span {
-  color: #252525;
+  color: #fff;
   background: var(--kv-primary);
 }
 .product .reaction-button[aria-pressed="true"],
@@ -308,7 +308,7 @@
 .product[data-theme="light"] .chart-bar-1 { background: #777166; }
 .product .rank-badge { color: var(--kv-accent); background: var(--kv-soft); }
 .product .vote-option:hover:not(:has(input:disabled)) { box-shadow: 0 5px 18px rgba(78, 62, 37, .07); }
-.product .app-sidebar nav a[aria-current="page"] { border-left: 3px solid #bd9759; }
+.product .app-sidebar nav a[aria-current="page"] { border-left: 3px solid var(--kv-accent); }
 @media (prefers-reduced-motion: reduce) {
   .product .kv-button, .product .vote-option { transform: none !important; }
 }
@@ -325,7 +325,7 @@ body { background: #faf8f2; color: #292826; }
   color: #252525;
 }
 .product .app-sidebar nav a[aria-current="page"] {
-  border-left: 3px solid #92703b;
+  border-left: 3px solid var(--kv-accent);
 }
-.product .app-mobile a[aria-current="page"] svg { color: #252525; }
-.product .app-mobile a[href="/olustur"][aria-current="page"] span { color: #252525; }
+.product .app-mobile a[aria-current="page"] svg { color: var(--kv-accent); }
+.product .app-mobile a[href="/olustur"][aria-current="page"] span { color: #fff; }

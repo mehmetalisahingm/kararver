@@ -79,9 +79,11 @@ test("mark all keeps sidebar badge consistent with server unread count", async (
 
   await page.goto("/bildirimler");
   await expect(page.locator(".app-sidebar .notification-badge")).toHaveText("3");
+  await expect(page.locator(".studio-atmosphere-line")).toHaveText("3 okunmamış bildirim seni bekliyor.");
   await page.getByRole("button", { name: "Tümünü okundu yap" }).click();
   await expect(page.locator(".app-sidebar .notification-badge")).toHaveCount(0);
   await expect(page.locator(".notification-item--unread")).toHaveCount(0);
+  await expect(page.locator(".studio-atmosphere-line")).toHaveText("Sana ulaşan fikirler, tek bir yerde.");
   expect(mock.unexpected).toEqual([]);
 });
 

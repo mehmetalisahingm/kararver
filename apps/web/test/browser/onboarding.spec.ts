@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 for (const width of [1440, 360]) test(`premium onboarding ${width}px: choice, results, interests and auth gate`, async ({page}, info) => {
   await page.setViewportSize({width,height:1000});
   await page.goto("/basla");
-  await expect(page.getByRole("heading", {name:"İnsanlar gerçekten ne düşünüyor?"})).toBeVisible();
+  await expect(page.getByRole("heading", {name:"Dünyanın nabzını tut."})).toBeVisible();
   await page.getByRole("button", {name:"Bir karar verelim"}).click();
   await page.getByRole("button", {name:"Kendin dene"}).click();
   await page.getByRole("button", {name:"Beklerim",exact:false}).click();

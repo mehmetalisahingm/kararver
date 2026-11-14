@@ -41,7 +41,7 @@ function harness({ failGrant = false, leakResults = false } = {}) {
     const cookie = init.headers?.cookie;
     calls.push({ path, method, body });
     if (path === "/health") return response(200, { status: "ok", release: { env: "staging", sha: sha.slice(0, 12) } });
-    if (path === "/auth/register") { actors.push({ id: `actor-${actors.length}`, username: body.username, roles: ["USER"] }); return response(202, {}); }
+    if (path === "/auth/register") { assert.equal(body.adultConfirmed, true); actors.push({ id: `actor-${actors.length}`, username: body.username, roles: ["USER"] }); return response(202, {}); }
     if (path === "/auth/login") {
       if (body.email === options.email) return response(200, { data: { id: "root", roles: ["SUPER_ADMIN"] } }, "root-cookie");
       const actor = actors.find(a => `${a.username}@example.test` === body.email);

@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 const browserName = (process.env.KV_BROWSER || "chromium") as "chromium" | "firefox" | "webkit";
 export default defineConfig({
-  testDir:"./test/states", workers:1, timeout:90000,
+  testDir:"./test/states", testIgnore:/release-.*\.spec\.ts/, workers:1, timeout:90000,
   expect:{timeout:10000},
   reporter:[["list"],["html",{outputFolder:"state-report",open:"never"}]],
   use:{baseURL:"http://127.0.0.1:3003",browserName,trace:"retain-on-failure",screenshot:"only-on-failure",

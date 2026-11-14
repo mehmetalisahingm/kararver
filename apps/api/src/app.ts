@@ -115,6 +115,8 @@ export type AppDeps = {
   /** Sistem ayarları servisi (KV-40, #42). Verilirse ayar kancaları (aşağıdaki `is*`/`*Settings`) ondan türetilir; açıkça verilen kanca önceliklidir (testler). */
   settingsService?: SettingsService;
   isRegistrationEnabled?: () => Promise<boolean>;
+  /** Defaults true in all deployed environments; only explicit legacy test fixtures may disable. */
+  adultDeclarationRequired?: boolean;
   /** Verilmezse anket route'ları kaydedilmez (ör. sadece auth'u test eden düzenek). */
   pollStore?: PollStore;
   /** KV-22 public profil/private bookmark store'u; pollStore ile birlikte route'ları açar. */
@@ -315,6 +317,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     webUrl: config.webUrl,
     mediaPublicBaseUrl: config.mediaPublicBaseUrl,
     isRegistrationEnabled,
+    adultDeclarationRequired: deps.adultDeclarationRequired ?? true,
     loginGuard: limiter?.login,
     initialGrant: settings ? async () => (await settings.pointSettings()).initialGrant : undefined,
   });

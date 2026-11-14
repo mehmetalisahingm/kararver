@@ -72,6 +72,7 @@ describe("KV-25 share links (postgres)", { skip: backendFactory ? false : "TEST_
       username: `kv25_${suffix}`,
       displayName: "KV25 kullanıcı",
       password: "guclu-bir-sifre-1",
+      adultConfirmed: true,
     };
     const mailIndex = mails.length;
     const register = await app.inject({

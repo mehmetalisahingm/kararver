@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Loading } from "../../components/fields";
@@ -9,21 +10,35 @@ import { ReportButton } from "../community/report-dialog";
 import { SocialPanel } from "../social/social-panel";
 import { DecisionPanel } from "./decision-panel";
 import { PollGallery } from "./gallery";
+import { IllustratedScene, visualTopic } from "../../components/visual-story";
 
-export function PollDetail({ id }: { id: string }) {
+const planets = ["choice-planet.webp", "choice-desert.webp", "choice-ice.webp", "choice-gas.webp", "choice-volcanic.webp", "choice-ocean.webp"];
+const planetStyle = (index: number): CSSProperties => ({
+  "--planet-image": `url('/art/space/${planets[index % planets.length]}')`,
+  "--planet-hue": "0deg",
+} as CSSProperties);
+
+export function PollDetail({ id, initialPoll }: { id: string; initialPoll?: Poll }) {
   const { client, user, selections, select, requireUser, notify, syncUser } =
     useProduct();
-  const [poll, setPoll] = useState<Poll | null>(null);
+  const [poll, setPoll] = useState<Poll | null>(initialPoll ?? null);
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [attempt, retry] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [launched, setLaunched] = useState(false);
+  const [sound, setSound] = useState(false);
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const lock = useRef(false);
   useEffect(() => {
+    if (!launched) return;
+    const timer = setTimeout(() => setLaunched(false), 700);
+    return () => clearTimeout(timer);
+  }, [launched]);
+  useEffect(() => {
     let active = true;
-    setPoll(null);
+    setPoll(initialPoll ?? null);
     setSaved(false);
     setLoadError("");
     client
@@ -51,7 +66,7 @@ export function PollDetail({ id }: { id: string }) {
     return () => {
       active = false;
     };
-  }, [client, id, user?.id, attempt]);
+  }, [client, id, user?.id, attempt, initialPoll]);
   async function vote() {
     if (!selections[id]) {
       setError("Bir seçenek seçmelisin.");
@@ -65,6 +80,7 @@ export function PollDetail({ id }: { id: string }) {
     try {
       const next = await client.vote(id, selections[id]);
       setPoll(next);
+      setLaunched(true);
       notify("Oyun kaydedildi.");
     } catch (e) {
       setError((e as Error).message);
@@ -76,6 +92,23 @@ export function PollDetail({ id }: { id: string }) {
       lock.current = false;
       setBusy(false);
     }
+  }
+  function playChoiceSound() {
+    if (!sound) return;
+    try {
+      const context = new AudioContext();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(440, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(590, context.currentTime + .12);
+      gain.gain.setValueAtTime(.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(.025, context.currentTime + .025);
+      gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + .2);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.onended = () => { void context.close(); };
+      oscillator.start(); oscillator.stop(context.currentTime + .21);
+    } catch { /* Audio is optional and must never block a choice. */ }
   }
   async function toggleBookmark() {
     if (!poll || !requireUser(`/karar/${id}`) || !client.setBookmark || bookmarkBusy) return;
@@ -116,7 +149,7 @@ export function PollDetail({ id }: { id: string }) {
       <Link href="/" className="back-link">
         ← Akışa dön
       </Link>
-      <article className="kv-card poll-card">
+      <article className="kv-card poll-card orbital-poll">
         <div className="kv-row kv-between">
           <span className="kv-badge">{poll.category}</span>
           <div className="kv-row">
@@ -134,10 +167,24 @@ export function PollDetail({ id }: { id: string }) {
             )}
           </div>
         </div>
+        {!poll.gallery?.some((item) => item.status === "ready") && !poll.options.some((option) => option.image) && (
+          <div className="kv-poll-visual" data-illustration="true">
+            <IllustratedScene topic={visualTopic(poll.category || poll.title)} />
+          </div>
+        )}
         <h1>{poll.title}</h1>
         <p className="kv-muted">{poll.description}</p>
+        {!user && (
+          <p className="kv-help">
+            Anketleri ve izin verilen sonuçları üye olmadan inceleyebilirsin.
+            Oy vermek veya yorum yazmak için 18 yaşını doldurmuş bir hesapla{" "}
+            <Link href={`/giris?returnTo=${encodeURIComponent(`/karar/${id}`)}`}>giriş yap</Link>
+            {" "}ya da <Link href={`/kayit?returnTo=${encodeURIComponent(`/karar/${id}`)}`}>hesap oluştur</Link>.
+          </p>
+        )}
         {poll.kind === "poll" && (
           <>
+            <div className="choice-sound"><button type="button" aria-pressed={sound} onClick={() => setSound(value => !value)}>{sound ? "♪ Ses açık" : "♪ Ses kapalı"}</button><span>Seçim sesi · isteğe bağlı</span></div>
             <fieldset
               id="vote-options"
               tabIndex={-1}
@@ -152,21 +199,27 @@ export function PollDetail({ id }: { id: string }) {
                     ? "Oyun kaydedildi."
                     : "Sen hangisini seçerdin?"}
               </legend>
-              <div className="vote-options">
-                {poll.options.map((option) => (
-                  <label className="vote-option" key={option.id}>
-                    {option.image && (
-                      <img src={option.image} alt="" width={800} height={530} />
-                    )}
+              <div className="vote-options orbital-options" data-launching={busy || launched}>
+                {poll.options.map((option, index) => (
+                  <label className="vote-option orbital-option" key={option.id} style={planetStyle(index)}>
+                    <div className="orbital-option__scene" data-photo={Boolean(option.image)} aria-hidden="true">
+                      {option.image && <img className="orbital-option__photo" src={option.image} alt="" width={800} height={530} />}
+                      <div className="orbital-option__number">0{index + 1} / SEÇENEK</div>
+                      <div className="orbital-option__ring" />
+                      <div className="orbital-option__planet" />
+                      <div className="orbital-option__star" />
+                    </div>
                     <span>
                       <input
                         name="vote"
                         type="radio"
+                        aria-label={option.label}
                         value={option.id}
                         checked={(selections[id] || poll.ownVote) === option.id}
                         onChange={() => {
                           select(id, option.id);
                           setError("");
+                          playChoiceSound();
                         }}
                       />
                       {option.label}
@@ -188,10 +241,12 @@ export function PollDetail({ id }: { id: string }) {
               </button>
             )}
             {poll.results.visible ? (
-              <section className="screen-stack" aria-labelledby="results-title">
-                <h2 id="results-title">Sonuçlar</h2>
+              <section className="screen-stack orbital-results" aria-labelledby="results-title">
+                <div className="orbital-results__heading"><div><p className="orbital-results__eyebrow">BİRLİKTE ŞEKİLLENEN BİR EVREN</p><h2 id="results-title">Sonuçlar</h2></div><p>Her oy, bu hikâyede bir iz bırakır.</p></div>
                 {poll.results.options.map((result) => (
-                  <div className="result" key={result.id}>
+                  <div className="result orbital-result" key={result.id} style={{ ...planetStyle(Math.max(0, poll.options.findIndex(option => option.id === result.id))), "--planet-scale": String(0.45 + Math.max(0, Math.min(100, result.percent)) / 100 * 0.55) } as CSSProperties}>
+                    <div className="orbital-result__world" aria-hidden="true"><div className="orbital-result__planet" /></div>
+                    <div className="orbital-result__detail">
                     <div className="kv-row kv-between">
                       <span>
                         {poll.options.find((o) => o.id === result.id)?.label}
@@ -205,6 +260,7 @@ export function PollDetail({ id }: { id: string }) {
                       max="100"
                       aria-label={`${poll.options.find((o) => o.id === result.id)?.label} yüzde ${result.percent}`}
                     />
+                    </div>
                   </div>
                 ))}
                 <p className="kv-help">Toplam {poll.results.total} oy</p>
@@ -214,6 +270,12 @@ export function PollDetail({ id }: { id: string }) {
                 Sonuçlar oy verdikten sonra görünür.
               </p>
             )}
+            <section className="comparison-desk" aria-labelledby="comparison-title">
+              <div><span className="comparison-desk__eyebrow">KARŞILAŞTIRMA MASASI</span><h2 id="comparison-title">Seçeneklere yakından bak.</h2><p>Kararını verirken seçenekleri yan yana gör.</p></div>
+              <div className="comparison-desk__scroll" role="region" aria-label="Seçenek karşılaştırma tablosu" tabIndex={0}><table><caption className="sr-only">Seçeneklerin karşılaştırması</caption><thead><tr><th scope="col">Seçenek</th>{poll.options.map(option => <th scope="col" key={option.id}>{option.label}</th>)}</tr></thead><tbody><tr><th scope="row">Oy oranı</th>{poll.options.map(option => <td key={option.id}>{poll.results.visible ? `%${poll.results.options.find(result => result.id === option.id)?.percent ?? 0}` : "Gizli"}</td>)}</tr><tr><th scope="row">Oy sayısı</th>{poll.options.map(option => <td key={option.id}>{poll.results.visible ? poll.results.options.find(result => result.id === option.id)?.votes ?? 0 : "Gizli"}</td>)}</tr></tbody></table></div>
+              {!poll.results.visible && <p className="comparison-desk__note">Bu anketin sonuçları henüz sana açık değil.</p>}
+              <a className="comparison-desk__link" href="#comments-title">Yorumları ve alternatif önerileri incele →</a>
+            </section>
           </>
         )}
       </article>

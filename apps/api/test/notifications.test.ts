@@ -61,7 +61,7 @@ describe("KV-21 bildirimler (postgres)", { skip: backendFactory ? false : "TEST_
 
   async function signUp(): Promise<User> {
     const suffix = randomUUID().replaceAll("-", "").slice(0, 8);
-    const account = { email: `kv21_${suffix}@example.test`, username: `kv21_${suffix}`, displayName: "KV21 kullanıcı", password: "guclu-bir-sifre-1" };
+    const account = { email: `kv21_${suffix}@example.test`, username: `kv21_${suffix}`, displayName: "KV21 kullanıcı", password: "guclu-bir-sifre-1", adultConfirmed: true };
     const json = { origin: WEB_ORIGIN, "content-type": "application/json" };
     const mailIndex = mails.length;
     const register = await app.inject({ method: "POST", url: "/v1/auth/register", headers: json, payload: JSON.stringify(account) });

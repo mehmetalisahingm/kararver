@@ -21,6 +21,8 @@ export type AuthDeps = {
   rolesOf?: RolesOf;
   /** Sistem ayarı `registration.enabled` (KV-40, #42). Ayar servisi gelene kadar her zaman açık. */
   isRegistrationEnabled: () => Promise<boolean>;
+  /** New signups must declare 18+. Legacy test fixtures can opt out explicitly. */
+  adultDeclarationRequired: boolean;
   /** points.initialGrant (KV-40); verilmezse resmî varsayılan. */
   initialGrant?: () => Promise<number>;
   /** KV-19 (#21) başarısız giriş sınırı; verilmezse sınır yok (auth-only test düzenekleri). */
@@ -68,6 +70,11 @@ export function registerAuthRoutes(route: Route, deps: AuthDeps): void {
   route("auth.register", async ({ body, request }) => {
     if (!(await deps.isRegistrationEnabled())) {
       throw new ApiError("FEATURE_DISABLED", "Yeni kayıtlar şu an kapalı.");
+    }
+    // Enforce at the API boundary, before hashing, account lookup or creation.
+    // This is an adult self-declaration, NOT verified age or legal consent.
+    if (deps.adultDeclarationRequired && body.adultConfirmed !== true) {
+      throw new ApiError("VALIDATION_ERROR", "KararVer'e kayıt için 18 yaşını doldurmuş olmalısın.", [{ field: "adultConfirmed", code: "adult_declaration_required" }]);
     }
     const emailNormalized = normalizeEmail(body.email);
     const passwordHash = await hasher.hash(body.password);
