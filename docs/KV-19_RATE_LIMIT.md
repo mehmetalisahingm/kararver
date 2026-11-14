@@ -27,6 +27,7 @@ Plan (PRODUCT_TEAM_PLAN §13 "Ek kontroller") sınırları ister ama sayı verme
 | Yorum | hesap | 1 gün (UTC) | 200 | 30 | `limits.commentsPerDay`, `limits.newAccountCommentsPerDay` |
 | Şikâyet (`reports.create`) | hesap | 1 saat | 10 | 5 | `limits.reportsPerHour`, `limits.newAccountReportsPerHour` |
 | Görsel yükleme (`media.uploads.create`) | hesap | 1 saat | 20 | 5 | `limits.uploadsPerHour`, `limits.newAccountUploadsPerHour` |
+| MFA kurulum/kurtarma/yenileme (`me.mfa.setup`, `me.mfa.recover`, `me.mfa.reenroll.begin`; ortak sayaç, #373) | hesap | 1 saat | 5 | 5 | `limits.mfaReauthPerHour` (Faruk önerisi, Mehmet onayı bekliyor) |
 | Arama (`search.query`) | hesap, oturum yoksa IP | 1 dk | 60 | 60 | `limits.searchesPerMinute` |
 | Diğer bütün yazma işlemleri (POST/PUT/PATCH/DELETE) | hesap, oturum yoksa IP | 1 dk | 60 | 30 | `limits.writesPerMinute`, `limits.newAccountWritesPerMinute` |
 | Okuma (GET), arama hariç | — | — | sınırsız | sınırsız | — |

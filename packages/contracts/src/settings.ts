@@ -68,6 +68,8 @@ const FEED_PROPOSAL = (value: number) =>
  * Pencereler sabittir (dakika/15 dk/saat/gün), ayar yalnız üst sınırdır.
  */
 const RATE_SOURCE = "docs/KV-19_RATE_LIMIT.md \"Değerler\": Mehmet onayı, #21 (2026-10-08; PR #152 tablosu referans)";
+/** #373 (Utku) P1 düzeltmesi: güvenlik sınırı, Mehmet onayından önce de açık olmalı; değer onay bekliyor. */
+const MFA_REAUTH_SOURCE = "docs/KV-19_RATE_LIMIT.md: Faruk önerisi, #373 (2026-11-14); Mehmet onayı bekliyor";
 
 /** Varsayılanı resmî kaynakta olan, public olmayan mantıksal ayar. */
 const boolSetting = (description: string, value: boolean, source: string): SettingDefinition => ({
@@ -307,6 +309,7 @@ export const settingsRegistry = Object.freeze({
   "limits.newAccountReportsPerHour": int("Şikâyet: yeni hesap saatte en fazla", 1, 1000, 5, RATE_SOURCE, null),
   "limits.uploadsPerHour": int("Görsel yükleme: normal hesap saatte en fazla", 1, 1000, 20, RATE_SOURCE, null),
   "limits.newAccountUploadsPerHour": int("Görsel yükleme: yeni hesap saatte en fazla", 1, 1000, 5, RATE_SOURCE, null),
+  "limits.mfaReauthPerHour": int("MFA kurulum, kurtarma ve doğrulayıcı yenileme: hesap saatte en fazla (parola denemesi)", 1, 100, 5, MFA_REAUTH_SOURCE, null),
   "limits.searchesPerMinute": int("Arama: kullanıcı veya IP dakikada en fazla", 1, 10000, 60, RATE_SOURCE, null),
   "limits.writesPerMinute": int("Diğer yazma işlemleri: normal hesap dakikada en fazla", 1, 10000, 60, RATE_SOURCE, null),
   "limits.newAccountWritesPerMinute": int("Diğer yazma işlemleri: yeni hesap dakikada en fazla", 1, 10000, 30, RATE_SOURCE, null),

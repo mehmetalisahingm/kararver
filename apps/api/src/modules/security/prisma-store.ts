@@ -5,6 +5,7 @@ import { writeAudit } from "../audit/write.ts";
 import { createRecoveryCodes, recoveryCodeHashCandidates, recoveryCodeHashForStorage } from "./recovery.ts";
 import { createMfaEnrollment, legacyOnly, needsRekey, recoverTotpSecret, rekeyTotpSecret, type MfaKeys } from "./encryption.ts";
 import { matchTotpStep } from "./totp.ts";
+import { consumeFreshStepup } from "./stepup-guard.ts";
 import { checkMfaKey } from "./mfa-rekey.ts";
 import type { MfaKeyCheck, MfaStore } from "./store.ts";
 
@@ -15,6 +16,7 @@ const MAX_FAILURES = 5;
 type CredentialRow = {
   secret_cipher: Uint8Array; enabled_at: Date | null; pending_expires_at: Date;
   setup_session_id: string; last_accepted_step: number; failed_attempts: number; locked_until: Date | null;
+  reenroll_secret_cipher: Uint8Array | null; reenroll_session_id: string | null; reenroll_expires_at: Date | null;
 };
 type Tx = Prisma.TransactionClient;
 
@@ -34,9 +36,10 @@ export function createPrismaMfaStore(prisma: PrismaClient, mfaKeys: MfaKeys | st
         AND revoked_at IS NULL AND expires_at > ${now}::timestamptz FOR UPDATE`;
     return rows.length === 1;
   };
-  const audit = (tx: Tx, userId: string, operation: string, now: Date, requestId?: string) =>
+  const audit = (tx: Tx, userId: string, operation: string, now: Date, requestId?: string,
+    after: Record<string, number> | null = null) =>
     writeAudit(tx, { source: "API", actorId: userId, action: "account.mfa", operation,
-      target: { type: "USER", id: userId }, before: null, after: null, at: now, requestId });
+      target: { type: "USER", id: userId }, before: null, after, at: now, requestId });
   const recordFailure = async (tx: Tx, userId: string, failed: number, now: Date, requestId?: string) => {
     const count = failed + 1;
     const locked = count >= MAX_FAILURES ? new Date(now.getTime() + LOCK_MS) : null;
@@ -146,7 +149,8 @@ export function createPrismaMfaStore(prisma: PrismaClient, mfaKeys: MfaKeys | st
         if (!c?.enabled_at) return { kind: "invalid" as const };
         if (c.locked_until && c.locked_until > now) return { kind: "locked" as const };
         const used = await tx.mfaRecoveryCode.updateMany({
-          where: { userId, codeHash: { in: recoveryCodeHashCandidates(code, userId, keys) }, usedAt: null }, data: { usedAt: now },
+          where: { userId, codeHash: { in: recoveryCodeHashCandidates(code, userId, keys) }, usedAt: null, revokedAt: null },
+          data: { usedAt: now },
         });
         if (used.count !== 1) {
           await recordFailure(tx, userId, c.failed_attempts, now, requestId);
@@ -157,6 +161,68 @@ export function createPrismaMfaStore(prisma: PrismaClient, mfaKeys: MfaKeys | st
         const expiresAt = await grantStepup(tx, sessionId, now);
         await audit(tx, userId, "recover", now, requestId);
         return { kind: "verified" as const, expiresAt };
+      });
+    },
+    /**
+     * Doğrulayıcı yenileme başlatma (#180/#291). Taze step-up bu transaction'da tüketilir; yeni sır yalnız bekleyen alana
+     * yazılır, etkin `secret_cipher` ve kurtarma kodları değişmez. Yeni sır her zaman ayrı anahtarla (v2) şifrelenir:
+     * anahtar yoksa başlatılmaz, çünkü amaç sırrı eski pepper'dan koparmaktır.
+     */
+    async reenrollBegin({ userId, sessionId, email, now, requestId }) {
+      return prisma.$transaction(async tx => {
+        if (!(await freshSession(tx, userId, sessionId, now))) return { kind: "session" as const };
+        const [c] = await tx.$queryRaw<CredentialRow[]>`
+          SELECT * FROM user_mfa_credentials WHERE user_id = ${userId}::uuid FOR UPDATE`;
+        if (!c?.enabled_at) return { kind: "not_enabled" as const };
+        if (!keys.current) return { kind: "key_required" as const };
+        if (!(await consumeFreshStepup(tx, userId, sessionId, now))) return { kind: "stepup_required" as const };
+        const enrollment = createMfaEnrollment(email, userId, keys);
+        const expiresAt = new Date(now.getTime() + ENROLLMENT_MS);
+        await tx.$executeRaw`UPDATE user_mfa_credentials SET reenroll_secret_cipher = ${enrollment.ciphertext},
+          reenroll_session_id = ${sessionId}::uuid, reenroll_expires_at = ${expiresAt}::timestamptz
+          WHERE user_id = ${userId}::uuid AND enabled_at IS NOT NULL`;
+        await audit(tx, userId, "reenroll_begin", now, requestId);
+        return { kind: "created" as const, secret: enrollment.secret, uri: enrollment.uri, expiresAt };
+      });
+    },
+    /**
+     * Onay: kod bekleyen YENİ sırla doğrulanır. Başarısızlıkta yalnız ortak deneme sayacı artar; etkin sır ve kodlar aynı
+     * kalır. Başarıda tek transaction: sır değişir (v2), eski kurtarma kodları iptal, yeni kodlar, audit, diğer oturumların
+     * step-up'ları düşer. Satır kilidi eşzamanlı ikinci onayı bekletir; o, temizlenmiş bekleyen alanı görüp reddedilir.
+     */
+    async reenrollConfirm({ userId, sessionId, code, now, requestId }) {
+      return prisma.$transaction(async tx => {
+        if (!(await freshSession(tx, userId, sessionId, now))) return { kind: "session" as const };
+        const [c] = await tx.$queryRaw<CredentialRow[]>`
+          SELECT * FROM user_mfa_credentials WHERE user_id = ${userId}::uuid FOR UPDATE`;
+        if (!c?.enabled_at || !c.reenroll_secret_cipher || c.reenroll_session_id !== sessionId
+          || !c.reenroll_expires_at || c.reenroll_expires_at <= now || !keys.current) return { kind: "invalid" as const };
+        if (c.locked_until && c.locked_until > now) return { kind: "locked" as const };
+        const step = matchTotpStep({ base32Secret: recoverTotpSecret(c.reenroll_secret_cipher, userId, keys),
+          code, nowMs: now.getTime(), lastAcceptedStep: -1 });
+        if (step === null) { await recordFailure(tx, userId, c.failed_attempts, now, requestId); return { kind: "invalid" as const }; }
+        // Bekleyen sır başlatmada v2 yazıldı; yine de yazmadan önce sürüm ve dönüş doğrulanır.
+        const next = needsRekey(c.reenroll_secret_cipher, keys)
+          ? rekeyTotpSecret(c.reenroll_secret_cipher, userId, keys) : Buffer.from(c.reenroll_secret_cipher);
+        const swapped = await tx.$executeRaw`UPDATE user_mfa_credentials SET secret_cipher = ${next},
+            last_accepted_step = ${step}, failed_attempts = 0, locked_until = NULL,
+            reenroll_secret_cipher = NULL, reenroll_session_id = NULL, reenroll_expires_at = NULL
+          WHERE user_id = ${userId}::uuid AND enabled_at IS NOT NULL AND reenroll_session_id = ${sessionId}::uuid`;
+        if (swapped !== 1) return { kind: "invalid" as const };
+        const revoked = await tx.mfaRecoveryCode.updateMany({
+          where: { userId, usedAt: null, revokedAt: null }, data: { revokedAt: now },
+        });
+        const recoveryCodes = createRecoveryCodes();
+        await tx.mfaRecoveryCode.createMany({ data: recoveryCodes.map(code => ({
+          userId, codeHash: recoveryCodeHashForStorage(code, userId, keys), createdAt: now,
+        })) });
+        const stepups = await tx.$executeRaw`UPDATE session_mfa_stepups SET consumed_at = ${now}::timestamptz
+          WHERE consumed_at IS NULL AND session_id <> ${sessionId}::uuid
+            AND session_id IN (SELECT id FROM sessions WHERE user_id = ${userId}::uuid)`;
+        await audit(tx, userId, "reenroll", now, requestId, {
+          cipherVersion: 2, recoveryCodesIssued: recoveryCodes.length, recoveryCodesRevoked: revoked.count, stepupsRevoked: stepups,
+        });
+        return { kind: "reenrolled" as const, recoveryCodes };
       });
     },
   };
