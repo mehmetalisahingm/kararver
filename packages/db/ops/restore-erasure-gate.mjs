@@ -78,9 +78,13 @@ export function assertIsolatedRestoreTarget(target, live) {
  *   still blocks (exit 3) until physical deletion lands, but it is no longer
  *   indistinguishable from a resurrected account.
  * A tombstoned user is still retained data, not an anonymous stat.
+ *
+ * `actorEvents` (#372, Utku): domain_events rows whose actor is a journaled ID. Today's erasure does not
+ * touch domain_events, so they are counted as RETAINED (exit 3), not resurrected. Once erasure scrubs
+ * actor/sensitive fields, move this count to `resurrected`.
  */
 export async function checkNoResurrection(db, subjectIds) {
-  const retained = { restoredUsers: 0, authoredPolls: 0, authoredComments: 0, linkedVotes: 0, sessions: 0, authTokens: 0, mediaAssets: 0 };
+  const retained = { restoredUsers: 0, authoredPolls: 0, authoredComments: 0, linkedVotes: 0, sessions: 0, authTokens: 0, mediaAssets: 0, actorEvents: 0 };
   const resurrected = { liveUsers: 0, liveAuthoredPolls: 0, liveAuthoredComments: 0, linkedVotes: 0, sessions: 0, authTokens: 0, mfaCredentials: 0, publishedMedia: 0, readyExports: 0 };
   for (let i = 0; i < subjectIds.length; i += 250) {
     const chunk = subjectIds.slice(i, i + 250);
@@ -93,6 +97,7 @@ export async function checkNoResurrection(db, subjectIds) {
       db.session.count({ where: { userId: whereId } }),
       db.authToken.count({ where: { userId: whereId } }),
       db.mediaAsset.count({ where: { uploaderId: whereId } }),
+      db.domainEvent.count({ where: { actorId: whereId } }),
     ]);
     Object.keys(retained).forEach((key, j) => { retained[key] += kept[j]; });
     const live = await Promise.all([

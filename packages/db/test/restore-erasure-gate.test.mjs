@@ -79,7 +79,7 @@ function fakeDb(tables) {
     return row[key] === cond;
   });
   const db = {};
-  for (const name of ["user", "poll", "comment", "vote", "session", "authToken", "mediaAsset", "userMfaCredential", "dataExport"]) {
+  for (const name of ["user", "poll", "comment", "vote", "session", "authToken", "mediaAsset", "userMfaCredential", "dataExport", "domainEvent"]) {
     db[name] = { count: async ({ where }) => (tables[name] ?? []).filter(r => match(r, where)).length };
   }
   return db;
@@ -92,6 +92,8 @@ const tombstone = () => ({
   comment: [{ authorId: userId, deletedAt: at, status: "REMOVED" }],
   mediaAsset: [{ uploaderId: userId, publicObjectKey: null, status: "REJECTED" }],
   dataExport: [{ userId, status: "EXPIRED" }],
+  // #372: erasure does not touch domain_events today.
+  domainEvent: [{ actorId: userId, type: "comment.created" }],
 });
 
 test("erasure tombstones are retained data (still NO-GO) but are NOT reported as resurrection", async () => {
@@ -102,6 +104,14 @@ test("erasure tombstones are retained data (still NO-GO) but are NOT reported as
   assert.equal(r.retained.restoredUsers, 1);
   assert.equal(r.retained.authoredPolls, 1);
   assert.equal(r.retained.mediaAssets, 1);
+  assert.equal(r.retained.actorEvents, 1, "#372: events under a journaled actor are retained data");
+});
+
+test("#372 events alone (no other row) still block promotion as retained data", async () => {
+  const r = await checkNoResurrection(fakeDb({ domainEvent: [{ actorId: userId, type: "comment.created" }] }), [userId]);
+  assert.equal(r.noResurrection, true);
+  assert.equal(r.safe, false);
+  assert.equal(r.retained.actorEvents, 1);
 });
 
 test("any pre-erasure state under a journaled ID is resurrection", async () => {
