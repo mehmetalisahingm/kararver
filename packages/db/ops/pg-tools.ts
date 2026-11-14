@@ -28,6 +28,12 @@ export function pgEnv(connectionString: string): Record<string, string> {
 }
 
 /** Hedef adresi aynı sunucuda başka bir veritabanına çevirir (CREATE DATABASE için ör. "postgres"). */
+/**
+ * İzole kopya işareti (#299): `db:restore` yalnız boş bir hedefe restore eder ve hedefe bu yorumu yazar. Kişisel veriyi
+ * değiştiren araçlar (`db:sanitize`) yalnız bu işareti taşıyan veritabanında çalışır; canlı DB'de işaret yoktur.
+ */
+export const ISOLATED_COPY_MARKER = "kararver:isolated-copy";
+
 export function withDatabase(connectionString: string, database: string): string {
   const url = new URL(connectionString);
   url.pathname = `/${encodeURIComponent(database)}`;

@@ -139,6 +139,62 @@ Dosya değiştirilmiş ya da kesikse çözme reddedilir, geçici düz metin temi
 
 Ölçülen veri adımı (aşağıda) birkaç saniyedir. Toplam süreyi insan adımları belirler: karar, bakım modu, ortam değişkeni değişikliği, yeniden başlatma. Bu adımların süresi staging'de ölçülecek.
 
+## Arındırılmış kopya (#299; #297 sonrası)
+
+**Durum (3 Kasım):** #297 ile Neon staging'e gerçek staging verisi, oturum ve MFA kayıtlarıyla **arındırılmadan** taşındı. Bu araç **canlı Neon staging'e ya da production'a uygulanmaz**; oradaki hesap ve oturumlar kalıcı etkilenir. Yalnız **izole bir kopyada** çalışır. Kullanım alanları:
+- kişisel veri içermeyen test/tatbikat veritabanı üretmek;
+- yeni bir sağlayıcıya ya da başka bir ortama veri vermek;
+- staging'in ileride sentetikleştirilmesi.
+
+Canlı staging'in sentetikleştirilmesi ayrı, kullanıcıya etkisi olan bir işlem planı ve #288/#291 kararı ister (Mehmet).
+
+**Akış:**
+1. **Yedek:** `db:backup` (sunucuyla aynı major `pg_dump`; staging PG 18).
+2. **Yerel restore:** `RESTORE_DATABASE_URL=postgresql://…@localhost:…/kararver_restore_<tarih> db:restore --file <yedek>`.
+3. **Deneme:** `SANITIZE_DATABASE_URL=<aynı yerel kopya> db:sanitize [--role-holders keep|demote]`. Her şeyi yapar, doğrular ve **geri alır**; rapor yalnız sayı içerir.
+4. **Uygula:** aynı komut `--apply` ile. Doğrulama commit'ten **önce**, transaction içinde yapılır; herhangi bir iz, oturum, MFA kaydı ya da tutarlılık ihlali varsa geri alınır, çıkış kodu 1.
+
+**Hedef güvenliği (fail-closed):**
+- adres yalnız `localhost`/`127.0.0.1`/`::1`;
+- **sorgu parametresi yok** (`?host=…` ile başka sunucuya yönlendirme reddedilir);
+- bağlandıktan sonra veritabanında **izole kopya işareti** aranır. `db:restore`, yalnız boş hedefe restore ederken bu işareti yazar (`COMMENT ON DATABASE`). Canlı Neon, Railway ya da production DB'sinde işaret olmadığı için **ağ yapısından bağımsız** olarak reddedilir;
+- DB adı `restore`/`sanitize` içerir ya da `_test` ile biter; `DATABASE_URL` ile aynı olamaz.
+
+**Rol sahipleri (`--role-holders`), tek SUPER_ADMIN kilitlenmesin diye:**
+- **`keep` (varsayılan):** Gerçek e-postalı MODERATOR/ADMIN/SUPER_ADMIN hesaplarının kimliği ve parolası **korunur**; kopyada giriş yapabilirler, bootstrap gerekmez. Bu hesapların kişisel verisi kopyada **bilerek kalır**; rapor sayısını verir.
+- **`demote`:** Rol sahipleri de arındırılır ve rol satırları silinir. Kopyada gerçek kişiye ait SUPER_ADMIN kalmaz. Hiç SUPER_ADMIN kalmazsa `admin:bootstrap` ile yeni bir test sahibi atanır; test alanlı bir SUPER_ADMIN varsa o kalır.
+
+**Ne değişir (`packages/db/ops/sanitize.ts`):**
+- **Gerçek görünümlü hesap** (e-postası example.*, .test, .invalid, .example, .localhost, .local dışında):
+  - e-posta, kullanıcı adı ve görünen ad sentetik olur (`user_<20 hex>`, `…@example.test`);
+  - bio ve avatar boşalır;
+  - parola özeti geçersiz olur: giriş yapılamaz, doğrulama hata vermez, `false` döner.
+- **Herkes için silinenler:** oturumlar (IP, user-agent), MFA kayıtları ve kurtarma kodları, token'lar, e-posta değişikliği talepleri, idempotency anahtarları, hız sınırı sayaçları, dışa aktarma talepleri.
+- **Serbest metin ve JSON DEĞERLERİ** (anahtarlar değişmez):
+  - test alan adında olmayan **her** e-posta `redacted@example.test` olur; hesabı olmayan üçüncü kişiler dahil;
+  - **kullanıcı adı** harf duyarlı tam kelime olarak değişir;
+  - **görünen ad**, Türkçe harfler dahil harf duyarsız tam kelime olarak değişir (yerelden bağımsız karakter sınıflarıyla). Kullanıcı adıyla aynıysa harf duyarlıdır;
+  - **kelime sınırı** nokta, alt çizgi, @ ve tireyi de içerir. Örneğin "admin" adlı hesap, `admin.users.list` işlem adını ya da `"ADMIN"` rol değerini değiştirmez;
+  - **slug'lar** yapısaldır. Yalnız `polls.slug`'daki kullanıcı adı kısa sentetik değere (`u` + 8 hane) döner; sütun sınırına sığar.
+- **Tetikleyiciler:** Ekleme-yalnız tetikleyiciler yalnız bu transaction içinde kapatılıp geri açılır; audit satırı eklenmez ya da silinmez.
+- **Bağımsız doğrulama:** Bütün metin/JSON sütunlarında, test alanı dışında e-posta kalmadığı ayrıca taranır.
+
+**Kapsam dışı:** Medya nesneleri (avatar, dışa aktarma paketleri) depoda kalır. Araç yalnız veritabanını işler; nesne deposu ayrı ele alınır (#302).
+
+**Sınır:** Genel kelime olan kullanıcı adları (ör. "admin") başka bir kelimenin parçası olarak kalabilir. Repodaki migration adları kişisel veri değildir.
+
+**3 Kasım izole klon kanıtı** (1 Kasım staging yedeği; 52 migration, 2470 satır; yerel PG 18.6):
+- **`keep` deneme:**
+  - 10 gerçek görünümlü hesap, 2'si rol sahibi ve korunuyor;
+  - roller önce/sonra aynı (`ADMIN` 1, `SUPER_ADMIN` 2); audit 92 → 92;
+  - oturum 86 → 0;
+  - kalan iz, yabancı e-posta, oturum ve MFA 0; 6/6 tutarlılık.
+- **`demote` deneme:**
+  - rol satırı 2 silindi; kalan yalnız test alanlı `SUPER_ADMIN` 1;
+  - 4 alan yeniden yazıldı (`audit_logs.reason`, `poll_revisions.snapshot`, `polls.slug`, `polls.title`);
+  - kalan 0; 6/6.
+- **`keep --apply` + bağımsız alt dize taraması** (arındırılan hesapların tanımlayıcıları önceden belleğe alındı, 118 sütun): isabetler yalnız korunan rol sahiplerinin kendi kayıtlarında ve migration adlarında.
+
 ## Migration ve deploy geri dönüşü
 
 Prisma'da down migration yoktur. Geri dönüşün üç yolu var; hangisinin seçileceği hatanın türüne bağlı.
