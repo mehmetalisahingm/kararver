@@ -93,13 +93,14 @@ export type SwitchesView = {
 
 export async function buildOpsStatus(deps: OpsStatusDeps) {
   const { probe, telemetry } = deps;
-  const [database, workerSeen, queues, lastBackup, signals, switches] = await Promise.all([
+  const [database, workerSeen, queues, lastBackup, signals, switches, alerts] = await Promise.all([
     settle(probe ? () => probe.database() : undefined),
     settle(probe ? () => probe.workerLastSeen() : undefined),
     settle(probe ? () => probe.queues() : undefined),
     settle(probe ? () => probe.lastBackup() : undefined),
     settle(probe && deps.loginLimits ? async () => probe.securitySignals(await deps.loginLimits!()) : undefined),
     settle(deps.switches),
+    settle(probe ? () => probe.securityAlerts() : undefined),
   ]);
   const now = deps.now();
   // İki iz varsa yenisi: dosya heartbeat'i (aynı servis) ya da worker'ın aldığı son iş (ayrı servis).
@@ -126,6 +127,20 @@ export async function buildOpsStatus(deps: OpsStatusDeps) {
       ...security,
       lockedLogins: signals.ok ? signals.value.lockedLogins : null,
       adminActions24h: signals.ok ? signals.value.adminActions24h : null,
+      // #185: açık ve son 24 saatte kapanan alarmlar. Avatar gösterilmez (ops görünümü).
+      alerts: alerts.ok
+        ? alerts.value.map((a) => ({
+            id: a.id,
+            rule: a.rule,
+            severity: a.severity,
+            status: a.status,
+            actor: a.actor ? { ...a.actor, avatarUrl: null } : null,
+            peakCount: a.peakCount,
+            openedAt: a.openedAt.toISOString(),
+            lastSeenAt: a.lastSeenAt.toISOString(),
+            resolvedAt: a.resolvedAt ? a.resolvedAt.toISOString() : null,
+          }))
+        : null,
     },
     // Son yedek `db:backup` kaydından (ops_backup_runs); tatbikat kanıtı KV-48'den.
     backup: {

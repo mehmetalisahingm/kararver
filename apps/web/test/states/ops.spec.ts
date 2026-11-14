@@ -97,3 +97,38 @@ test("operations: emergency switches show state, last change and propagation; un
   await expect(panel.getByRole("region", { name: "Acil durum anahtarları tablosu" })).toHaveCount(0);
   expect(mock.unexpected).toEqual([]);
 });
+
+test("#185 güvenlik alarmları: açık önce, önem/durum metinle, kapsam ve ilk adım; alarm yoksa ve ölçüm yoksa ayrı metin", async ({ page }) => {
+  const mock = await api(page);
+  const body = sample("admin.ops.status");
+  body.data.security.alerts = [
+    { id: "0192f0e0-0000-7000-8000-0000000000a2", rule: "mfa.lock.wave", severity: "HIGH", status: "RESOLVED", actor: null, peakCount: 6, openedAt: "2026-10-26T09:00:00.000Z", lastSeenAt: "2026-10-26T09:05:00.000Z", resolvedAt: "2026-10-26T09:20:00.000Z" },
+    { id: "0192f0e0-0000-7000-8000-0000000000a1", rule: "role.change.burst", severity: "CRITICAL", status: "OPEN", actor: { id: "0192f0e0-0000-7000-8000-000000000001", username: "deniz", displayName: "Deniz", avatarUrl: null }, peakCount: 4, openedAt: "2026-10-26T12:00:00.000Z", lastSeenAt: "2026-10-26T12:05:00.000Z", resolvedAt: null },
+  ];
+  mock.handlers.set("admin.ops.status", r => r.fulfill({ json: body }));
+  await page.goto("/admin#guvenlik-alarmlari");
+  const panel = page.getByRole("region", { name: "Operasyon durumu", exact: true });
+  const card = panel.getByRole("article", { name: "Güvenlik alarmları" });
+  await expect(card.getByRole("status")).toHaveText("1 açık alarm var.");
+  const rows = card.getByRole("region", { name: "Güvenlik alarmları tablosu" }).getByRole("row");
+  await expect(rows.nth(1)).toContainText("Kısa sürede çok rol değişikliği");
+  await expect(rows.nth(1)).toContainText("Kritik");
+  await expect(rows.nth(1)).toContainText("Açık");
+  await expect(rows.nth(1)).toContainText("Deniz @deniz");
+  await expect(rows.nth(1)).toContainText("4 (eşik 3 / 15 dk)");
+  await expect(rows.nth(1)).toContainText("oturumlarını kapatıp rolleri geri al");
+  await expect(rows.nth(2)).toContainText("Çok hesapta MFA kilitlenmesi");
+  await expect(rows.nth(2)).toContainText("Kapandı");
+  await expect(rows.nth(2)).toContainText("Genel");
+  expect((await new AxeBuilder({ page }).include("#guvenlik-alarmlari").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
+
+  body.data.security.alerts = [];
+  await panel.getByRole("button", { name: "Operasyon verilerini yenile" }).click();
+  await expect(card.getByRole("status")).toHaveText("Açık alarm yok.");
+  await expect(card.getByRole("region", { name: "Güvenlik alarmları tablosu" })).toHaveCount(0);
+
+  body.data.security.alerts = null;
+  await panel.getByRole("button", { name: "Operasyon verilerini yenile" }).click();
+  await expect(card).toContainText("Alarm durumu: Ölçüm yok");
+  expect(mock.unexpected).toEqual([]);
+});
