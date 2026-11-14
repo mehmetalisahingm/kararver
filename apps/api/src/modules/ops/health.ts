@@ -26,6 +26,8 @@ export type HealthDeps = {
   dbTimeoutMs?: number;
   /** Verilirse DB durumu buradan okunur (uygulama önbellekli denetimi verir, bkz. cachedDatabaseCheck). */
   databaseCheck?: () => Promise<HealthBody["database"]>;
+  /** #373 P2: MFA anahtarı kayıtlı v2 sırları çözüyor mu (önbellekli; bkz. cachedMfaKeyCheck). Verilmezse alan yok. */
+  mfaKeyCheck?: () => Promise<"ok" | "mismatch" | "unverified" | "unknown">;
 };
 
 export type HealthBody = {
@@ -35,7 +37,31 @@ export type HealthBody = {
     | { status: string; at: string; ageMs: number; health: "ok" | "degraded" | "down" }
     | { status: "unknown" | "missing"; health: "unknown" | "down" };
   release: { sha: string | null; env: string };
+  /** Yanlış MFA_ENCRYPTION_KEY ile açılan sürüm sağlıklı görünmesin: "mismatch" → status "degraded" (503 değil). */
+  mfa?: { key: "ok" | "mismatch" | "unverified" | "unknown" };
 };
+
+/** MFA anahtar denetimi: açılışta ilk /health'te çalışır, sonra MFA_KEY_CHECK_TTL_MS boyunca sonuç yeniden kullanılır. */
+export const MFA_KEY_CHECK_TTL_MS = 10 * 60_000;
+export function cachedMfaKeyCheck(
+  check: (() => Promise<"ok" | "mismatch" | "unverified" | "unknown">) | undefined,
+  options: { ttlMs?: number; nowMs?: () => number } = {},
+): (() => Promise<"ok" | "mismatch" | "unverified" | "unknown">) | undefined {
+  if (!check) return undefined;
+  const ttl = options.ttlMs ?? MFA_KEY_CHECK_TTL_MS;
+  const nowMs = options.nowMs ?? Date.now;
+  let last: { at: number; value: "ok" | "mismatch" | "unverified" | "unknown" } | null = null;
+  let inflight: Promise<"ok" | "mismatch" | "unverified" | "unknown"> | null = null;
+  return () => {
+    if (last && nowMs() - last.at < ttl) return Promise.resolve(last.value);
+    inflight ??= check().catch(() => "unknown" as const).then((value) => {
+      last = { at: nowMs(), value };
+      inflight = null;
+      return value;
+    });
+    return inflight;
+  };
+}
 
 async function databaseState(deps: Pick<HealthDeps, "probe" | "dbTimeoutMs">): Promise<HealthBody["database"]> {
   if (!deps.probe) return { status: "unknown" };
@@ -94,6 +120,8 @@ export async function buildHealth(deps: HealthDeps): Promise<{ httpStatus: 200 |
   const database = deps.databaseCheck ? await deps.databaseCheck() : await databaseState(deps);
   const worker = workerState(deps);
   const down = database.status === "down" || worker.health === "down";
-  const status = down ? "down" : worker.health === "degraded" ? "degraded" : "ok";
-  return { httpStatus: down ? 503 : 200, body: { status, database, worker, release: { sha: deps.sha ? deps.sha.slice(0, 12) : null, env: deps.env } } };
+  const mfaKey = deps.mfaKeyCheck ? await deps.mfaKeyCheck() : null;
+  const status = down ? "down" : worker.health === "degraded" || mfaKey === "mismatch" ? "degraded" : "ok";
+  return { httpStatus: down ? 503 : 200, body: { status, database, worker, release: { sha: deps.sha ? deps.sha.slice(0, 12) : null, env: deps.env },
+    ...(mfaKey ? { mfa: { key: mfaKey } } : {}) } };
 }

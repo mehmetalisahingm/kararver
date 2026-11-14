@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
-import { buildHealth, cachedDatabaseCheck, HEALTH_DB_TIMEOUT_MS, WORKER_STARTUP_GRACE_MS, type HealthDeps } from "../src/modules/ops/health.ts";
+import { buildHealth, cachedDatabaseCheck, cachedMfaKeyCheck, HEALTH_DB_TIMEOUT_MS, WORKER_STARTUP_GRACE_MS, type HealthDeps } from "../src/modules/ops/health.ts";
 import { createHarness, memoryBackend, type Harness } from "./support/harness.ts";
 
 const NOW = new Date("2026-10-18T10:00:00.000Z");
@@ -106,6 +106,34 @@ describe("/health kuralları", () => {
     assert.equal(calls, 2, "süre dolunca yeni sorgu");
     const { body } = await buildHealth(deps({ databaseCheck: check }));
     assert.equal(body.database.status, "ok");
+  });
+
+  test("#373 MFA anahtarı: mismatch → 200 degraded (izleme alarmı); ok/unverified sağlıklı; denetim yoksa alan yok", async () => {
+    const mismatch = await buildHealth(deps({ mfaKeyCheck: async () => "mismatch" }));
+    assert.equal(mismatch.httpStatus, 200, "deploy kapısını kilitlemez");
+    assert.equal(mismatch.body.status, "degraded");
+    assert.deepEqual(mismatch.body.mfa, { key: "mismatch" });
+    for (const key of ["ok", "unverified", "unknown"] as const) {
+      const r = await buildHealth(deps({ mfaKeyCheck: async () => key }));
+      assert.equal(r.body.status, "ok", key);
+      assert.deepEqual(r.body.mfa, { key });
+    }
+    assert.equal((await buildHealth(deps())).body.mfa, undefined);
+    const down = await buildHealth(deps({ probe: { database: async () => { throw new Error("x"); } }, mfaKeyCheck: async () => "mismatch" }));
+    assert.equal(down.body.status, "down", "down önceliklidir");
+  });
+
+  test("#373 önbellekli MFA anahtar denetimi: süre içinde tek denetim, hata unknown, süre sonunda yeniden", async () => {
+    let t = 0, calls = 0;
+    const check = cachedMfaKeyCheck(async () => { calls++; if (calls === 2) throw new Error("db"); return "ok"; }, { ttlMs: 1000, nowMs: () => t })!;
+    assert.deepEqual(await Promise.all([check(), check()]), ["ok", "ok"]);
+    assert.equal(calls, 1);
+    t = 1500;
+    assert.equal(await check(), "unknown");
+    t = 3000;
+    assert.equal(await check(), "ok");
+    assert.equal(calls, 3);
+    assert.equal(cachedMfaKeyCheck(undefined), undefined);
   });
 
   test("DB yoklaması verilmemişse bilinmiyor ve 200 (testler, yalnız API süreci)", async () => {

@@ -46,9 +46,9 @@ const MD = "packages/contracts/src/domains/media.ts";
  */
 export const MATRIX = Object.freeze([
   { id: "R0.pinned", r: "R0", role: "all", sev: "P0", expect: "STAGING_PINNED_SHA dolu (7–40 hex) ve KV44_EXPECTED_SHA ile aynı commit; değilse NO-GO, okunamazsa BLOCKED-verification", ref: ".github/workflows/staging-monitor.yml:150", needle: "STAGING_PINNED_SHA: ${{ vars.STAGING_PINNED_SHA }}" },
-  { id: "R0.release", r: "R0", role: "all", sev: "P0", expect: "200 status=ok env=staging, sha = KV44_EXPECTED_SHA", ref: "apps/api/src/app.ts:507", needle: 'app.get("/health"' },
+  { id: "R0.release", r: "R0", role: "all", sev: "P0", expect: "200 status=ok env=staging, sha = KV44_EXPECTED_SHA", ref: "apps/api/src/app.ts:508", needle: 'app.get("/health"' },
   { id: "R0.login", r: "R0", role: "all", sev: "P0", expect: "200 + kv_session", ref: "packages/contracts/src/domains/auth.ts:87", needle: 'id: "auth.login"' },
-  { id: "R0.role", r: "R0", role: "all", sev: "P0", expect: "/me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN)", ref: "packages/contracts/src/domains/auth.ts:266", needle: 'id: "me.get"' },
+  { id: "R0.role", r: "R0", role: "all", sev: "P0", expect: "/me rolü uygun (initiator/approver ADMIN+, owner SUPER_ADMIN)", ref: "packages/contracts/src/domains/auth.ts:270", needle: 'id: "me.get"' },
   { id: "ACC.register", r: "R0", role: "initiator, media-operator", sev: "P1", expect: "202; 429 → BLOCKED-ratelimit (5/IP/h)", ref: "docs/KV-19_RATE_LIMIT.md:21", needle: "registerPerIpHour", rateLimit: true },
   { id: "ACC.owned", r: "R0", role: "initiator, media-operator", sev: "P0", expect: "yeni hesap yalnız USER", ref: "packages/contracts/src/domains/admin.ts:566", needle: 'id: "admin.users.list"' },
   { id: "ACC.login", r: "R0", role: "initiator, media-operator", sev: "P1", expect: "200, aynı id", ref: "packages/contracts/src/domains/auth.ts:87", needle: 'id: "auth.login"' },
@@ -73,7 +73,7 @@ export const MATRIX = Object.freeze([
   { id: "R3.not-public", r: "R3", role: "media-operator", sev: "P0", expect: "anonim /media-public 404, imza sızıntısı yok", ref: "apps/api/src/modules/media/public-routes.ts:12", needle: "/media-public/m/:file" },
   { id: "R2.resolve", r: "R2", role: "approver", sev: "P1", expect: "8 karakter → tek talep, başlatan ben değilim", ref: `${MC}:855`, needle: 'id: "admin.moderation.bulkApprovals.list"' },
   { id: "R2.stepup_required", r: "R2", role: "approver", sev: "P0", expect: "403 FORBIDDEN stepup_required", ref: `${BR}:121`, needle: 'code: "stepup_required"' },
-  { id: "R2.stepup", r: "R2", role: "approver", sev: "P1", expect: "200 stepUpExpiresAt", ref: "packages/contracts/src/domains/auth.ts:257", needle: 'id: "me.mfa.stepup"' },
+  { id: "R2.stepup", r: "R2", role: "approver", sev: "P1", expect: "200 stepUpExpiresAt", ref: "packages/contracts/src/domains/auth.ts:261", needle: 'id: "me.mfa.stepup"' },
   { id: "R2.approve", r: "R2", role: "approver", sev: "P0", expect: "200 APPROVED", ref: `${BR}:138`, needle: "status: 200" },
   { id: "R2.closed.reapprove", r: "R2", role: "approver", sev: "P0", expect: "409 CONFLICT closed", ref: `${BR}:111`, needle: '"closed"' },
   { id: "R2.expired.view", r: "R2", role: "approver", sev: "P1", expect: "T+31'de status EXPIRED", ref: `${BR}:22`, needle: '"EXPIRED"' },
