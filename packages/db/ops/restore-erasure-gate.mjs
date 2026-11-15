@@ -11,7 +11,7 @@
  * still need separately recorded operational/human acceptance.
  */
 import { createPublicKey, verify } from "node:crypto";
-import { Prisma } from "@prisma/client";
+
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -107,17 +107,17 @@ export async function checkNoResurrection(db, subjectIds) {
     // Same four subject-match paths as account erasure: actor, USER subject, payload and natural_key.
     // A restored row whose only reference is payload/natural_key is still a resurrection (#372).
     actorEvents: async (whereId) => {
-      const rows = await db.$queryRaw(Prisma.sql`
+      const rows = await db.$queryRaw`
         SELECT COUNT(*)::bigint AS total
         FROM domain_events AS event
         WHERE EXISTS (
-          SELECT 1 FROM unnest(ARRAY[${Prisma.join(whereId.in)}]::text[]) AS subject(id)
+          SELECT 1 FROM unnest(${whereId.in}::text[]) AS subject(id)
           WHERE event.actor_id = subject.id::uuid
              OR (event.subject_type = 'USER' AND event.subject_id = subject.id)
              OR event.payload::text LIKE ('%' || subject.id || '%')
              OR event.natural_key LIKE ('%' || subject.id || '%')
         )
-      `);
+      `;
       return Number(rows[0]?.total ?? 0);
     },
   };
