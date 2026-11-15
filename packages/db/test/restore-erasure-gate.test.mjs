@@ -83,8 +83,8 @@ function fakeDb(tables) {
     db[name] = { count: async ({ where }) => (tables[name] ?? []).filter(r => match(r, where)).length };
   }
   // The restore gate's parameterized SQL counts all four references to a deleted subject.
-  db.$queryRaw = async (sql) => {
-    const ids = sql.values.filter(value => typeof value === "string");
+  db.$queryRaw = async (_strings, ids) => {
+    assert.ok(Array.isArray(ids), "the signed-journal ID chunk must be passed as one SQL array parameter");
     const count = (tables.domainEvent ?? []).filter(row => ids.some(id =>
       row.actorId === id ||
       (row.subjectType === "USER" && row.subjectId === id) ||
