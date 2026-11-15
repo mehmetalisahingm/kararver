@@ -22,14 +22,22 @@ export type SensitiveRisk = { field: string; category: "political" | "belief" | 
 function normalized(value: string): string {
   return " " + value.toLocaleLowerCase("tr-TR")
     .replaceAll("ı", "i")
-    .normalize("NFD")
+    .normalize("NFKD")
+    .replace(/\p{Cf}/gu, "")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\bs[1i]yas[1i]\b/g, "siyasi")
     .replace(/\s+/g, " ")
     .trim() + " ";
 }
 
 const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: RegExp }> = [
+  // #371: short, explicit self-identifiers and direct respondent questions in English.
+  { category: "political", pattern: /\b(?:which party did you vote for|what party did you vote for|who did you vote for|what is your political affiliation)\b|\bben (?:ak parti|akp|chp|mhp|hdp|dem|iyi parti|tip) (?:li|liyim)\b/ },
+  { category: "belief", pattern: /\b(?:what is your religion|which religion do you follow|ramazanda oruc tutuyor musun|namaz kiliyor musun|basortusu takiyor musun)\b/ },
+  { category: "health", pattern: /\b(?:depresyon tanisi aldin mi|depresyon tanisi aldiniz mi|engelli raporun var mi|engelli raporunuz var mi)\b/ },
+  { category: "sexual", pattern: /\b(?:escinsel misin|escinsel misiniz)\b/ },
+  { category: "ethnicity", pattern: /\b(?:kurt musun turk musun|turk musun kurt musun|hangi etnik gruptansin|which ethnicity are you)\b/ },
   // Respondent's voting behaviour, political party or political views.
   { category: "political", pattern: /\b(?:siyasi|politik) (?:gorus(?:un|unuz|leriniz)?|tercih(?:in|iniz)?)\b|\b(?:hangi|hangi bir|ne|senin|sizin) (?:siyasi )?parti(?:ye|yi|den|nin|ye oy)?\b|\b(?:oy verdin|oy verdiniz|oy veriyorsun|oy vereceksin|oy vereceksiniz|kime oy veriyorsun|kime oy vereceksin)\b|\b(?:parti|siyasi hareket) (?:uyesi|uyeligin|uyesi misin)\b/ },
   // Religion, denominations and philosophical belief about the respondent.
@@ -48,9 +56,10 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
  * research/services topics like "Kanser araştırmaları" must remain allowed.
  */
 const SENSITIVE_ANSWERS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: RegExp }> = [
-  { category: "political", pattern: /^(?:ak parti|chp|mhp|iyi parti|dem parti|turkiye isci partisi|tip|zafer partisi|yeniden refah)(?: (?:a|b|c|d|partisi|grubu|secenegi))?$/ },
+  { category: "political", pattern: /^(?:ak parti|akp|chp|mhp|hdp|dem|dem parti|iyi parti|turkiye isci partisi|tip|zafer partisi|yeniden refah)(?: ?(?:a|b|c|d|li|liyim|partisi|grubu|secenegi))?$/ },
   { category: "belief", pattern: /^(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|deist)(?: (?:a|b|c|d|mezhebi|inanci|grubu|secenegi))?$/ },
   { category: "health", pattern: /^(?:diyabet|hiv|aids|kanser|depresyon|bipolar|sizofreni|otizm)(?: (?:a|b|c|d|hastasi|grubu|secenegi))?$/ },
+  { category: "ethnicity", pattern: /^(?:kurt|turk|arap|laz|cerkez|roman)$/ },
   { category: "membership", pattern: /^(?:sendika uyesi|dernek uyesi|vakif uyesi)$/ },
 ];
 const PERSONAL_CHOICE_PROMPT = /\b(?:hangisisin|hangisiniz|hangi gruptasin|hangi gruptasiniz|hangisini tercih edersin|hangisini secersin|hangisini tercih ediyorsun|hangi gruba aitsin|sana yakin olan grubu sec|kendini|senin|sizin|sen hangi|siz hangi|sende|kime oy verirsin|hangi dine mensupsun)\b/;
