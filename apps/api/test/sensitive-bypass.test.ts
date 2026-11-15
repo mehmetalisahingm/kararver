@@ -1,6 +1,6 @@
 // #371 bağımsız inceleme — hassas anket korumasının iki katmanı birlikte: ret (sensitive-policy) ya da insan incelemesi
 // (risk-review). Değişmez kural: aşağıdaki girdilerin hiçbiri onaysız doğrudan yayına çıkmamalı.
-// `todo` işaretli olanlar bugün AÇIK (doğrudan yayın); kapandıkça işaret kaldırılır. Girdiler sentetiktir.
+// #371 P1 düzeltmelerinden sonra tüm vakalar zorunlu regresyondur; atlanan TODO bulunmaz. Girdiler sentetiktir.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { screenV1Publication, type ReviewInput } from "../src/modules/polls/risk-review.ts";
@@ -49,7 +49,7 @@ const MUST_NOT_PUBLISH: Case[] = [
 ];
 
 for (const c of MUST_NOT_PUBLISH) {
-  test(`hassas içerik doğrudan yayına çıkmaz: ${c.name}`, c.open ? { todo: `AÇIK (#371): ${c.open}` } : {}, () => {
+  test(`hassas içerik doğrudan yayına çıkmaz: ${c.name}`, () => {
     assert.equal(guarded(c.input), true, "ne reddedildi ne incelemeye alındı");
   });
 }
@@ -61,7 +61,7 @@ const MAY_PUBLISH: Case[] = [
 ];
 
 for (const c of MAY_PUBLISH) {
-  test(`genel konu reddedilmez ve gereksiz incelemeye düşmez: ${c.name}`, c.open ? { todo: `AÇIK (#371): ${c.open}` } : {}, () => {
+  test(`genel konu reddedilmez ve gereksiz incelemeye düşmez: ${c.name}`, () => {
     assert.equal(detectSensitiveSurvey(c.input), null);
     assert.equal(screenV1Publication({ kind: "DISCUSSION", ...c.input }).action, "PUBLISH");
   });
