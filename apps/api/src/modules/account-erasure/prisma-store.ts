@@ -89,6 +89,23 @@ async function retainedCounts(db: Db, userId: string): Promise<RetainedCounts> {
 
 const ZERO_REMOVAL: RemovalCounts = { polls: 0, comments: 0, media: 0, sessions: 0, dataExports: 0, avatar: 0, communityMemberships: 0, ownedCommunities: 0, pendingCommunityRequests: 0, preferences: 0 };
 
+/**
+ * #372 §3 (Utku): silinen kişiye bağlanan olay kayıtları aynı transaction'da silinir; teslim satırları ON DELETE CASCADE
+ * ile gider. Kapsam: kişinin aktör olduğu olaylar, kişiyi USER konusu olarak taşıyan olaylar (yaptırım, rol) ve kimliği
+ * payload'da (ör. vote.invalidated.voterId) ya da natural_key'de (vote.submitted) geçen olaylar. Alan temizliği yerine
+ * silme: kimlik, oy seçimi ve doğal anahtar birlikte gider; dağıtılmamış olay da teslim edilmez (içerik zaten kaldırıldı).
+ * Denetim kaydı (audit_logs) bu tablodan bağımsızdır ve korunur. Tablo 30 günlük saklamayla sınırlı (events/cleanup).
+ */
+async function purgeSubjectEvents(tx: Prisma.TransactionClient, userId: string): Promise<number> {
+  const needle = `%${userId}%`;
+  return tx.$executeRaw`
+    DELETE FROM domain_events
+    WHERE actor_id = ${userId}::uuid
+       OR (subject_type = 'USER' AND subject_id = ${userId})
+       OR payload::text LIKE ${needle}
+       OR natural_key LIKE ${needle}`;
+}
+
 export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountErasureStore {
   return {
     async preview(userId, now) {
@@ -246,6 +263,7 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
         await eraseAuthoredContent(tx, userId, now);
         await tx.contentJob.updateMany({ where: { userId, status: { in: ["QUEUED", "PROCESSING"] } },
           data: { status: "CANCELLED", finishedAt: now } });
+        await purgeSubjectEvents(tx, userId);
         await writeAudit(tx, {
           source: "API",
           actorId,
