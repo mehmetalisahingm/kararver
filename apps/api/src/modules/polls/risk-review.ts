@@ -9,6 +9,8 @@
  * a guarantee of safe content. Human staffing and an independent privacy
  * review are still required before public release.
  */
+import { detectSensitiveSurvey } from "./sensitive-policy.ts";
+
 export type ReviewInput = {
   kind: "POLL" | "DISCUSSION";
   title: string;
@@ -27,7 +29,7 @@ function normalized(s: string): string {
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
-const SENSITIVE_CONTEXT = /\b(?:siyasi|politik|parti|secim|oy verme|dini|din|mezhep|inanc|etnik|irk|saglik durumu|hastalik|teshis|tani|psikiyatr|sendika|cinsel|biyometrik|genetik|dna|suc kaydi|sabika)\b/;
+const SENSITIVE_CONTEXT = /\b(?:siyasi|politik|parti|oy verme|dini|din|mezhep|inanc|etnik|irk|saglik durumu|hastalik|teshis|tani|psikiyatr|sendika|cinsel|biyometrik|genetik|dna|suc kaydi|sabika)\b/;
 const LINK = /(?:https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|com\.tr|io|app|site|xyz)\b)/i;
 
 /**
@@ -45,6 +47,6 @@ export function screenV1Publication(input: ReviewInput): ReviewDecision {
     ...(input.addenda ?? []),
   ];
   if (parts.some(text => LINK.test(text))) signals.push("EXTERNAL_LINK");
-  if (parts.some(text => SENSITIVE_CONTEXT.test(normalized(text)))) signals.push("POSSIBLE_SENSITIVE_CONTEXT");
+  if (detectSensitiveSurvey(input) !== null || parts.some(text => SENSITIVE_CONTEXT.test(normalized(text)))) signals.push("POSSIBLE_SENSITIVE_CONTEXT");
   return signals.length ? { action: "REVIEW", signals } : { action: "PUBLISH", signals: [] };
 }
