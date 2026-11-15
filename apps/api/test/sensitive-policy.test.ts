@@ -130,3 +130,60 @@ test("annotated personal categories are blocked but topic-only descriptions rema
   assert.deepEqual(detectSensitiveSurvey({ title: "Hangi hastalığın var?" }),
     { field: "title", category: "health" });
 });
+
+
+test("direct sensitive respondent prompts in polite Turkish are rejected without blocking neutral topics", () => {
+  const blocked = [
+    ["İnancınız nedir?", "belief"],
+    ["Mezhebiniz nedir?", "belief"],
+    ["Cinsel yöneliminiz nedir?", "sexual"],
+    ["Sabıka kaydınız var mı?", "justice"],
+    ["Parmak iziniz nedir?", "biometric"],
+    ["Parmak izinizi paylaşır mısınız?", "biometric"],
+  ] as const;
+  for (const [title, category] of blocked) {
+    const result = detectSensitiveSurvey({ title });
+    assert.deepEqual(result, { field: "title", category }, title);
+  }
+  for (const title of [
+    "İnanç özgürlüğü hakkında kamu hizmetleri nasıl iyileştirilmeli?",
+    "Sabıka kayıtlarına erişim prosedürü nasıl geliştirilmeli?",
+    "Parmak izi sensörleri daha hızlı çalışmalı mı?",
+  ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
+});
+
+
+test("review #371: bypass probes are rejected before unmoderated publication", () => {
+  const choose = (...labels: string[]) => labels.map(label => ({ label }));
+  const forbidden = [
+    { title: "Hangi par\u200bti\u200byi seçtin?" },
+    { title: "S1yas1 görüşün ne?" },
+    { title: "Hangisisin?", options: choose("HDP", "DEM") },
+    { title: "Hangisisin?", options: choose("CHP'li", "AK Partili") },
+    { title: "Sence?", options: choose("Ben AKP'liyim", "Ben CHP'liyim") },
+    { title: "Which party did you vote for?" },
+    { title: "What is your religion?" },
+    { title: "Depresyon tanısı aldın mı?" },
+    { title: "Eşcinsel misin?" },
+    { title: "Ramazanda oruç tutuyor musun?" },
+    { title: "Namaz kılıyor musun?" },
+    { title: "Başörtüsü takıyor musun?" },
+    { title: "Kürt müsün Türk müsün?", options: choose("Kürt", "Türk") },
+    { title: "Hangisisin?", options: choose("Kürt", "Türk", "Arap") },
+    { title: "Engelli raporun var mı?" },
+  ];
+  for (const input of forbidden) {
+    const result = detectSensitiveSurvey(input);
+    assert.ok(result, JSON.stringify(input) + " must be rejected or reviewed");
+    assert.match(result.field, /^(title|options\.\d+\.label)$/);
+  }
+});
+
+test("review #371: ordinary policy and product questions remain allowed", () => {
+  for (const title of [
+    "Seçim barajı düşürülmeli mi?",
+    "Kanser araştırmalarına daha çok fon ayrılmalı mı?",
+    "Türkçe dil kurslarının fiyatları ne olmalı?",
+    "Hangi telefon daha iyi?",
+  ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
+});
