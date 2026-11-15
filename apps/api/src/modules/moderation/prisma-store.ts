@@ -3,6 +3,7 @@
 // yazma/silme ile moderasyon sayaçlarda deadlock veya çift sayım üretmez.
 import type { Prisma, PrismaClient } from "@kararver/db";
 import { writeAudit } from "../audit/write.ts";
+import { refundRejectedReviewPoints } from "../points/moderation-refund.ts";
 import { writeEvent } from "../events/write.ts";
 import { communityOfTarget } from "./community-of.ts";
 import { listComments, listPolls } from "./content-list.ts";
@@ -136,6 +137,17 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
   }
 
 
+  // A review rejection has already returned the publishing points. Reopening
+  // that poll without a new charge would grant an uncharged public listing.
+  // The appeal/reinstatement points rule still needs an owner decision.
+  if (row.status === "REMOVED" && next === "ACTIVE") {
+    const credited = await tx.pointLedgerEntry.findFirst({
+      where: { referenceId: input.id, reason: "MODERATION_REFUND" },
+      select: { id: true },
+    });
+    if (credited) return { kind: "conflict", reason: "invalid_transition" };
+  }
+
   // A pending poll's advertised voting duration starts when a moderator
   // publishes it, not when its review queue submission was created.
   const releasingReview = row.status === "UNDER_REVIEW" && next === "ACTIVE";
@@ -163,6 +175,15 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
       } : {}),
     },
   });
+  // ONLY the first human rejection of a never-published review submission
+  // triggers a credit. Public takedowns and user deletions never refund.
+  // Poll row lock + points account update + unique ledger key keep it exact-once.
+  if (row.status === "UNDER_REVIEW" && next === "REMOVED" && input.action === "REMOVE") {
+    const owner = await tx.poll.findUniqueOrThrow({
+      where: { id: input.id }, select: { authorId: true },
+    });
+    await refundRejectedReviewPoints(tx, { pollId: input.id, authorId: owner.authorId, now: input.now });
+  }
   const trail = await recordTrail(tx, input, row.status, next, snap(row.status, excluded, closed), snap(next, excluded, closed));
   return { kind: "applied", outcome: outcome(next, excluded), trail };
 }

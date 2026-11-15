@@ -458,6 +458,22 @@ describe("anketler (postgres)", { skip: backend ? false : "TEST_DATABASE_URL yok
   });
 
 
+  test("sıfır yayın ücretiyle inceleme reddi, var olmayan kesintiyi 10 puan iade diye üretmez", async () => {
+    const owner = await signUp();
+    const reviewer = await signUp();
+    await db.userRole.create({ data: { userId: reviewer.id, role: "ADMIN", grantedById: owner.id } });
+    const created = await send("POST", "/polls",
+      pollBody({ title: "Siyasi partilerin şehir içi ulaşım projeleri tartışması" }), owner.cookie, key());
+    assert.equal(created.statusCode, 202, created.body);
+    const id = created.json().data.id as string;
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: id, reason: "PUBLISH" } }), 0);
+    const decision = await send("POST", `/admin/polls/${id}/moderation`,
+      { action: "REMOVE", reason: "İnceleme kararıyla yayımlanmadı." }, reviewer.cookie);
+    assert.equal(decision.statusCode, 200, decision.body);
+    assert.equal(await db.pointLedgerEntry.count({ where: { userId: owner.id, referenceId: id, reason: "MODERATION_REFUND" } }), 0);
+  });
+
+
   // ─── Oluşturma ──────────────────────────────────────────────
 
   test("anket oluşturma 201; sahip sonucu görür ama oy veremez", async () => {
