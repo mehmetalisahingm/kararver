@@ -2,7 +2,7 @@
  * #372 bağımsız denetim — hesap anonimleştirmesinden sonra kalan izler (#181/#321).
  * Değişmez kural: silinen hesabın kimliği olay kuyruğunda (domain_events) kalmaz ve kalan "anonim" oy kaydı
  * zaman damgasıyla kişiye geri bağlanamaz. Not: main'de oy ucu henüz vote.* olayı yazmıyor (votes/routes.ts:
- * "outbox ile gelir"); o geldiğinde aynı kural oy seçimini (optionId) de kapsamalı. `todo` işaretliler bugün AÇIK (#372 ikinci rapor); kapandıkça işaret kaldırılır.
+ * "outbox ile gelir"); o geldiğinde aynı kural oy seçimini (optionId) de kapsamalı. #372 §3 event kalıntısı testleri artık zorunlu; yalnız #372 §2 k-anonimlik bilinen açık TODO.
  * Gerçek PostgreSQL gerektirir (TEST_DATABASE_URL veya .env). Veriler sentetiktir.
  */
 import assert from "node:assert/strict";
@@ -104,7 +104,7 @@ describe("hesap anonimleştirmesinden sonra kalan izler (postgres)", { skip: bac
     assert.ok(await db.domainEvent.count({ where: { actorId: commenter.id, type: "comment.created" } }) >= 1, "comment.created yazılmadı; kurgu geçersiz");
   });
 
-  test("silmeden sonra domain_events'te kişinin kimliği kalmaz (actor_id, natural_key)", { todo: "AÇIK (#372 §3): hesap silme domain_events'e dokunmuyor" }, async () => {
+  test("silmeden sonra domain_events'te kişinin kimliği kalmaz (actor_id, natural_key)", async () => {
     const author = await signUp();
     const commenter = await signUp();
     const p = await poll(author.id);
@@ -114,7 +114,7 @@ describe("hesap anonimleştirmesinden sonra kalan izler (postgres)", { skip: bac
     assert.equal(await db.domainEvent.count({ where: { naturalKey: { contains: commenter.id } } }), 0, "natural_key silinen hesabın kimliğini taşıyor");
   });
 
-  test("teslim edilemeyen (dispatch_error) olaylar da silmede temizlenir; saklama dışında süresiz kalmaz", { todo: "AÇIK (#372 §3): dispatch_error'lı olaylar cleanup'ta hiç silinmiyor, silme de dokunmuyor" }, async () => {
+  test("teslim edilemeyen (dispatch_error) olaylar da silmede temizlenir; saklama dışında süresiz kalmaz", async () => {
     const voter = await signUp();
     const id = randomUUID();
     await db.domainEvent.create({
