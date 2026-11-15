@@ -193,6 +193,8 @@ export type HarnessOptions = {
    * (system_settings) gelir; KV-40 testleri için. Varsayılan false: eski testler sabit ayarla çalışır.
    */
   realSettings?: boolean;
+  /** Ayrı MFA anahtarı (MFA_ENCRYPTION_KEY); verilmezse MFA yalnız pepper ile (v1) çalışır. */
+  mfaKey?: string;
   /** Legacy auth fixtures predate the 18+ contract. New policy tests MUST pass true. */
   adultDeclarationRequired?: boolean;
 };
@@ -249,7 +251,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     rateLimitStore,
     rateLimitSettings: async () => rateLimitSettings,
     authStore: backend.store,
-    mfaStore: backend.prisma ? createPrismaMfaStore(backend.prisma, PEPPER) : undefined,
+    mfaStore: backend.prisma ? createPrismaMfaStore(backend.prisma, options.mfaKey ? { current: options.mfaKey, legacy: [PEPPER] } : PEPPER) : undefined,
     roleApprovalStore: backend.prisma ? createPrismaRoleApprovalStore(backend.prisma) : undefined,
     rbacStore: backend.rbac,
     hasher: createArgon2Hasher(),

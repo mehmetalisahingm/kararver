@@ -56,6 +56,8 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /me/mfa/setup`<br>Parola tekrar doğrulamasıyla TOTP kurulumu · `me.mfa.setup` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 | hazır |
 | `POST /me/mfa/confirm`<br>TOTP kurulumunu doğrula ve etkinleştir · `me.mfa.confirm` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 | hazır |
 | `POST /me/mfa/recover`<br>Parola ve tek kullanımlık kurtarma koduyla mevcut oturumda yeniden doğrulama · `me.mfa.recover` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 #182 | hazır |
+| `POST /me/mfa/reenroll`<br>Etkin MFA için yeni TOTP sırrı başlat; eski sır onaya kadar geçerli · `me.mfa.reenroll.begin` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 #291 | hazır |
+| `POST /me/mfa/reenroll/confirm`<br>Yeni TOTP sırrını kodla doğrula; eski sırrı ve kurtarma kodlarını değiştir · `me.mfa.reenroll.confirm` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 #291 | hazır |
 | `POST /me/mfa/step-up`<br>Mevcut oturum için 5 dakikalık MFA yeniden doğrulama · `me.mfa.stepup` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 #182 | hazır |
 | `GET /me`<br>Oturum sahibinin hesabı · `me.get` | U | 200 | — | Faruk `users` | Ümit (web, KV-13), Mehmet (profil, KV-22) | #11 #15 #24 | hazır |
 | `PATCH /me`<br>Görünen ad, biyografi, avatar · `me.update` | U | 200 | doğal | Faruk `users` | Ümit (web, KV-13), Mehmet (profil, KV-22) | #11 #24 | hazır |
@@ -316,13 +318,14 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #66 | `POST /polls`, `PUT /polls/:id/reaction`, `DELETE /polls/:id/reaction`, `PUT /comments/:id/reaction`, `DELETE /comments/:id/reaction` |
 | #67 | `POST /auth/login`, `POST /polls`, `GET /me/points`, `GET /me/points/ledger`, `POST /admin/users/:id/point-adjustments` |
 | #172 | `POST /communities/requests`, `GET /communities/requests/mine`, `GET /admin/communities/requests`, `PATCH /admin/communities/requests/:id` |
-| #180 | `GET /me/mfa`, `POST /me/mfa/setup`, `POST /me/mfa/confirm`, `POST /me/mfa/recover`, `POST /me/mfa/step-up` |
+| #180 | `GET /me/mfa`, `POST /me/mfa/setup`, `POST /me/mfa/confirm`, `POST /me/mfa/recover`, `POST /me/mfa/reenroll`, `POST /me/mfa/reenroll/confirm`, `POST /me/mfa/step-up` |
 | #181 | `POST /me/email-change`, `GET /me/email-change`, `DELETE /me/email-change`, `POST /auth/email-change/confirm`, `POST /auth/email-change/deny`, `GET /me/deletion`, `POST /me/deletion`, `DELETE /me/deletion`, `POST /auth/deletion/confirm`, `POST /auth/deletion/cancel`, `POST /me/data-export/download`, `POST /admin/users/:id/password-reset`, `POST /admin/users/:id/data-exports`, `GET /admin/users/:id/data-exports`, `POST /admin/users/:id/data-exports/:exportId/deliver`, `GET /admin/users/:id/erasure`, `POST /admin/users/:id/erasure`, `PUT /admin/users/:id/legal-hold`, `POST /admin/users/:id/legal-hold/release`, `POST /admin/users/:id/email-change`, `GET /admin/users/:id/email-change`, `POST /admin/users/:id/email-change/cancel`, `GET /admin/users/:id/content-jobs/preview`, `POST /admin/users/:id/content-jobs`, `GET /admin/users/:id/content-jobs`, `POST /admin/users/:id/content-jobs/:jobId/undo`, `POST /admin/users/:id/content-jobs/:jobId/cancel` |
 | #182 | `GET /me/mfa`, `POST /me/mfa/recover`, `POST /me/mfa/step-up`, `GET /admin/role-approvals/:id`, `POST /admin/role-approvals`, `POST /admin/role-approvals/:id/approve` |
 | #183 | `GET /admin/moderation/polls/bulk/preview`, `POST /admin/moderation/polls/bulk`, `GET /admin/moderation/comments/bulk/preview`, `POST /admin/moderation/comments/bulk`, `GET /admin/moderation/bulk-approvals`, `GET /admin/moderation/bulk-approvals/:id`, `POST /admin/moderation/bulk-approvals/:id/approve`, `POST /admin/moderation/bulk-approvals/:id/reject`, `POST /admin/moderation/bulk-approvals/:id/cancel`, `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `GET /admin/moderation/batches`, `GET /admin/spam-scores`, `GET /admin/users/:id/timeline`, `GET /admin/users/:id/timeline/summary` |
 | #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
 | #185 | `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `POST /admin/audit/export` |
 | #186 | `GET /admin/ops` |
+| #291 | `POST /me/mfa/reenroll`, `POST /me/mfa/reenroll/confirm` |
 <!-- END:unblocks -->
 
 Bağımlılığı olmayan KV-03 tüketicileri: #8 (KV-06, mock fixture ve CI) bu paketin `examples` ve şemalarını mock sunucu için kullanır; #6 (KV-04) olay ve yetki sözleşmesini bu envanterdeki `auth` seviyeleriyle eşler.
