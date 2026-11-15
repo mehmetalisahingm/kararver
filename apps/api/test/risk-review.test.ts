@@ -35,3 +35,38 @@ test("existing and new addenda are screened alongside the published poll", () =>
   assert.deepEqual(screenV1Publication({ ...base, addenda: ["Bilgi: https://example.com"] }),
     { action: "REVIEW", signals: ["EXTERNAL_LINK"] });
 });
+
+
+test("review #371: 15 bypass variants never publish directly from the risk screen", () => {
+  const choose = (...labels: string[]) => labels.map(label => ({ label }));
+  const blocked = [
+    { title: "Hangi par\u200bti\u200byi seçtin?" },
+    { title: "S1yas1 görüşün ne?" },
+    { title: "Hangisisin?", options: choose("HDP", "DEM") },
+    { title: "Hangisisin?", options: choose("CHP'li", "AK Partili") },
+    { title: "Sence?", options: choose("Ben AKP'liyim", "Ben CHP'liyim") },
+    { title: "Which party did you vote for?" },
+    { title: "What is your religion?" },
+    { title: "Depresyon tanısı aldın mı?" },
+    { title: "Eşcinsel misin?" },
+    { title: "Ramazanda oruç tutuyor musun?" },
+    { title: "Namaz kılıyor musun?" },
+    { title: "Başörtüsü takıyor musun?" },
+    { title: "Kürt müsün Türk müsün?", options: choose("Kürt", "Türk") },
+    { title: "Hangisisin?", options: choose("Kürt", "Türk", "Arap") },
+    { title: "Engelli raporun var mı?" },
+  ];
+  for (const input of blocked) {
+    const result = screenV1Publication({ kind: input.options?.length ? "POLL" : "DISCUSSION", ...input });
+    assert.equal(result.action, "REVIEW", JSON.stringify(input));
+    assert.ok(!JSON.stringify(result).includes(input.title), "review output must not contain text");
+  }
+});
+
+test("review #371: neutral public policy topics should not be queued solely on election words", () => {
+  for (const title of [
+    "Seçim barajı düşürülmeli mi?",
+    "Seçim sistemi nasıl iyileştirilebilir?",
+    "Kanser araştırmalarına daha çok fon ayrılmalı mı?",
+  ]) assert.deepEqual(screenV1Publication({ kind: "DISCUSSION", title }), { action: "PUBLISH", signals: [] }, title);
+});
