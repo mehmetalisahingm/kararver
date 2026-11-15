@@ -130,6 +130,9 @@ test("discussion needs no options; closed and locked voting unavailable", async 
   await expect(
     page.getByRole("button", { name: "Oyumu onayla" }),
   ).not.toBeVisible();
+  // Yayın sonrası uygulama yeni anketin kalıcı adresine yönlenir; bitmeden goto yapılırsa
+  // WebKit'te "navigation interrupted by another navigation" ile yarışır.
+  await expect(page).toHaveURL(/\/karar\/[^/]+$/);
   for (const id of ["kapali-anket", "kilitli-anket"]) {
     await page.goto(`/karar/${id}`);
     await expect(page.getByRole("radio").first()).toBeDisabled();
