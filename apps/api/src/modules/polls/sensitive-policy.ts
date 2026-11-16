@@ -24,6 +24,14 @@ function normalized(value: string): string {
     .replaceAll("ı", "i")
     .normalize("NFKD")
     .replace(/\p{Cf}/gu, "")
+    // Minimal common Cyrillic/Greek lookalikes used to hide Latin words.
+    .replace(/[аα]/gu, "a")
+    .replace(/[еε]/gu, "e")
+    .replace(/[оο]/gu, "o")
+    .replace(/[рρ]/gu, "p")
+    .replace(/[іι]/gu, "i")
+    .replace(/[с]/gu, "c")
+    .replace(/[т]/gu, "t")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\bs[1i]yas[1i]\b/g, "siyasi")
@@ -49,6 +57,14 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
   { category: "sexual", pattern: /\b(?:cinsel hayatin|cinsel yasamin|cinsel yonelimin|cinsel yoneliminiz|cinsel deneyimin|cinsel iliskin oldu mu|kiminle cinsel|cinsel partner sayin)\b/ },
   { category: "justice", pattern: /\b(?:sabikan var mi|sabika kaydin|sabika kaydiniz|ceza mahkumiyetin|hapse girdin mi|cezaevine girdin mi|guvenlik tedbiri aldin mi)\b/ },
   { category: "biometric", pattern: /\b(?:parmak izin|parmak iziniz|parmak izini|parmak izinizi|yuz tanima verin|genetik verin|genetik test sonucunuz|dna sonucunu|dna bilgilerini)\b/ },
+
+  // #371 P1: generalized respondent variants, not one-off exact-question fixtures.
+  { category: "political", pattern: /\b(?:son secimde|cumhurbaskanligi seciminde|son cumhurbaskanligi seciminde) (?:kimi destekledin|kime oy verdin|tercihin|tercihiniz)\b|\b(?:kime|kimi|kimin) (?:oy verdin|oy verdiniz|destekledin|desteklediniz)\b|\bhow did you vote in the last election\b/ },
+  { category: "belief", pattern: /\b(?:ramazanda oruc tutuyor|namaz kiliyor|basortusu takiyor) mu(?:sun|sunuz)\b|\bdinin hangisi\b|\ballah a inaniyor mu(?:sun|sunuz)\b|\bdo you pray five times a day\b/ },
+  { category: "health", pattern: /\bdepresyon teshisi kondu mu\b|\bhiv testin pozitif mi cikti\b|\bhave you been diagnosed with depression\b/ },
+  { category: "sexual", pattern: /\b(?:gay|lezbiyen) mi(?:sin|siniz)\b|\bare you gay\b/ },
+  { category: "ethnicity", pattern: /\b(?:kurt|turk) mu(?:sun|sunuz)\b/ },
+  { category: "justice", pattern: /\bhic tutuklandin mi\b/ },
 ];
 
 /** Categorical choices alone do not prove that we ask about a respondent's attributes.
@@ -62,6 +78,9 @@ const SENSITIVE_ANSWERS: ReadonlyArray<{ category: SensitiveRisk["category"]; pa
   { category: "ethnicity", pattern: /^(?:kurt|turk|arap|laz|cerkez|roman)$/ },
   { category: "membership", pattern: /^(?:sendika uyesi|dernek uyesi|vakif uyesi)$/ },
 ];
+// First-person political option labels disclose a respondent even with a neutral question.
+const POLITICAL_SELF_ANSWER = /^(?:ben )?(?:ak parti|akp|chp|mhp|hdp|dem(?: parti)?|iyi parti|tip|zafer partisi) (?:li|liyim|liyiz)$/;
+
 const PERSONAL_CHOICE_PROMPT = /\b(?:hangisisin|hangisiniz|hangi gruptasin|hangi gruptasiniz|hangisini tercih edersin|hangisini secersin|hangisini tercih ediyorsun|hangi gruba aitsin|sana yakin olan grubu sec|kendini|senin|sizin|sen hangi|siz hangi|sende|kime oy verirsin|hangi dine mensupsun)\b/;
 
 export function detectSensitiveSurvey(input: SensitiveInput): SensitiveRisk | null {
@@ -83,6 +102,11 @@ export function detectSensitiveSurvey(input: SensitiveInput): SensitiveRisk | nu
   // even though no sensitive keyword appears in the title.
   const question = normalized([input.title, input.description, input.extraInfo, input.body, ...(input.addenda ?? [])].filter(Boolean).join(" "));
   const choices = (input.options ?? []).map(o => normalized(o.label).trim());
+  for (const [index, choice] of choices.entries()) {
+    if (POLITICAL_SELF_ANSWER.test(choice)) {
+      return { field: `options.${index}.label`, category: "political" };
+    }
+  }
   if (choices.length >= 2 && PERSONAL_CHOICE_PROMPT.test(question)) {
     for (const rule of SENSITIVE_ANSWERS) {
       const index = choices.findIndex(c => rule.pattern.test(c));
