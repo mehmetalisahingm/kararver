@@ -187,3 +187,52 @@ test("review #371: ordinary policy and product questions remain allowed", () => 
     "Hangi telefon daha iyi?",
   ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
 });
+
+
+test("review #371: generalized P1 bypass variants are blocked (independent of the original 15)", () => {
+  const forbidden = [
+    ["Ramazanda oruç tutuyor musunuz?", "belief"],
+    ["Namaz kılıyor musunuz?", "belief"],
+    ["Başörtüsü takıyor musunuz?", "belief"],
+    ["Depresyon teşhisi kondu mu?", "health"],
+    ["Gay misin?", "sexual"],
+    ["Lezbiyen misiniz?", "sexual"],
+    ["Kürt müsünüz?", "ethnicity"],
+    ["Dinin hangisi?", "belief"],
+    ["Allah'a inanıyor musun?", "belief"],
+    ["Hiç tutuklandın mı?", "justice"],
+    ["HIV testin pozitif mi çıktı?", "health"],
+    ["Son seçimde kimi destekledin?", "political"],
+    ["Cumhurbaşkanlığı seçiminde tercihin?", "political"],
+    ["Are you gay?", "sexual"],
+    ["Do you pray five times a day?", "belief"],
+    ["Have you been diagnosed with depression?", "health"],
+    ["How did you vote in the last election?", "political"],
+    ["Hangi pаrtiye oy verdin?", "political"], // Cyrillic U+0430
+    ["Hangi pαrtiye oy verdin?", "political"], // Greek U+03B1
+  ] as const;
+  for (const [title, category] of forbidden) {
+    const result = detectSensitiveSurvey({ title });
+    assert.deepEqual(result, { field: "title", category }, title);
+  }
+  for (const title of ["Sence?", "Bu seçeneklerden hangisi daha yakın?"]) {
+    for (const labels of [
+      ["AKP'liyim", "CHP'liyim"],
+      ["Ben AKP'liyim", "Ben CHP'liyim"],
+    ]) {
+      const result = detectSensitiveSurvey({ title, options: labels.map(label => ({ label })) });
+      assert.deepEqual(result, { field: "options.0.label", category: "political" }, title);
+    }
+  }
+});
+
+test("review #371: new generalizations do not classify neutral policy topics as personal data", () => {
+  for (const title of [
+    "Son seçimde katılım oranı yükseldi mi?",
+    "Cumhurbaşkanlığı seçiminin tarihi ne zaman?",
+    "Ramazanda oruç geleneğinin tarihi nedir?",
+    "HIV test merkezleri hangi şehirlerde?",
+    "Depresyon hakkında bilimsel araştırma var mı?",
+    "Hangi partinin seçim afişi daha başarılı?",
+  ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
+});
