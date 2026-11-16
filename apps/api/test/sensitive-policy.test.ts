@@ -233,6 +233,6 @@ test("review #371: new generalizations do not classify neutral policy topics as 
     "Ramazanda oruç geleneğinin tarihi nedir?",
     "HIV test merkezleri hangi şehirlerde?",
     "Depresyon hakkında bilimsel araştırma var mı?",
-    "Hangi partinin seçim afişi daha başarılı?",
+    "Parti afişlerinde hangi renkler tercih ediliyor?",
   ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
 });
