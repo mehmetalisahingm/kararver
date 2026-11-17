@@ -48,7 +48,7 @@ export function AdultDeclarationScreen() {
     finally { lock.current = false; setBusy(false); }
   }
 
-  return <section className="kv-card screen-stack" aria-labelledby="adult-title">
+  return <section className="kv-card auth-card screen-stack" aria-labelledby="adult-title">
     <h1 id="adult-title" ref={heading} tabIndex={-1}>18+ yaş beyanı</h1>
     <p>KararVer'de katılım 18 yaş ve üzeri içindir. Bu bir öz beyandır; kimlik veya gerçek yaş doğrulaması değildir.</p>
     <ErrorMessage message={error} />

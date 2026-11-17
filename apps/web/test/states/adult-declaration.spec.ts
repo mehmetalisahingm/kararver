@@ -47,6 +47,15 @@ for (const fault of ["server", "network", "forbidden"] as const) test(`restored 
   const checkbox = page.getByRole("checkbox", { name: "18 yaşımı doldurduğumu beyan ediyorum.", exact: true });
   const submit = page.getByRole("button", { name: "Beyanı kaydet ve devam et", exact: true });
   await expect(checkbox).not.toBeChecked(); await expect(submit).toBeDisabled();
+  const touchTarget = checkbox.locator("..");
+  const targetBox = await touchTarget.boundingBox();
+  expect(targetBox).not.toBeNull();
+  expect(targetBox!.width).toBeGreaterThanOrEqual(44);
+  expect(targetBox!.height).toBeGreaterThanOrEqual(44);
+  await touchTarget.click({ position: { x: targetBox!.width - 6, y: targetBox!.height - 6 } });
+  await expect(checkbox).toBeChecked();
+  await checkbox.focus(); await page.keyboard.press("Space");
+  await expect(checkbox).not.toBeChecked();
   await checkbox.focus(); await page.keyboard.press("Space"); await submit.click();
   await expect(page.locator("main").getByRole("alert")).toBeVisible();
   await expect(checkbox).toBeChecked(); await expect(page).toHaveURL(/yas-beyani/);

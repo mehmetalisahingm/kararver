@@ -23,6 +23,8 @@ tsc --noEmit
 
 Foundation mevcut 360/1440 durum paketine ek olarak üç motorda 390px komutunu çalıştırır.
 
+17 Kasım görsel kontrolde bağımsız beyan sayfasının checkbox etiketi 24.75px yüksek bulundu. Ortak `auth-card` form stili kullanılarak en az44px dokunma alanı ve görünür focus-within çerçevesi sağlandı. Regresyon, etiketin gerçek bounding box'ını ve checkbox dışındaki alt köşesine dokunarak seçim yapılmasını kontrol eder; klavye Space davranışı ayrıca korunur. Düzeltme öncesinde360px Chromium testi44px beklentisinde kırılarak bulguyu doğruladı.
+
 17 Kasım staging ön kontrolü: canonical web bu ortamda hem terminal hem gerçek browser navigasyonunda bağlantı reseti verdi (`ERR_CONNECTION_RESET`); free-preview API health 20 saniyede yanıt vermedi. Bu erişim sonucu bir API 500 veya toparlanma testi değildir. Erişim reddi aşılmadı, hesap/rol/ayar veya TTL değiştirilmedi. Bu makinede mevcut NVDA çalıştırılabilir dosyası bulunmadı; fiziksel ekran okuyucu kabulü yapılmış sayılmaz.
 
 ## Açık kabul kapıları
