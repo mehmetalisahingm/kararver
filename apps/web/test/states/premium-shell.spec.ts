@@ -2,11 +2,11 @@ import {test, expect} from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import {api} from "./api";
 
-test("premium shell defaults to light, persists dark preference and exposes usable navigation",async({page},info)=>{
+test("premium shell defaults to dark, persists either preference and exposes usable navigation",async({page},info)=>{
   const mock=await api(page);
   await page.goto("/kesfet");
   const product=page.locator(".product");
-  await expect(product).toHaveAttribute("data-theme","light");
+  await expect(product).toHaveAttribute("data-theme","dark");
   for(const theme of ["light","dark"]){
     if(await product.getAttribute("data-theme")!==theme) await page.getByRole("button",{name:/temaya geç/}).click();
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
