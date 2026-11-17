@@ -112,13 +112,13 @@ describe("/health kuralları", () => {
     const mismatch = await buildHealth(deps({ mfaKeyCheck: async () => "mismatch" }));
     assert.equal(mismatch.httpStatus, 200, "deploy kapısını kilitlemez");
     assert.equal(mismatch.body.status, "degraded");
-    assert.deepEqual(mismatch.body.mfa, { key: "mismatch" });
+    assert.equal("mfa" in mismatch.body, false, "#300: anahtar ayrıntısı herkese açık gövdede yok");
     for (const key of ["ok", "unverified", "unknown"] as const) {
       const r = await buildHealth(deps({ mfaKeyCheck: async () => key }));
       assert.equal(r.body.status, "ok", key);
-      assert.deepEqual(r.body.mfa, { key });
+      assert.equal("mfa" in r.body, false, key);
     }
-    assert.equal((await buildHealth(deps())).body.mfa, undefined);
+    assert.equal(JSON.stringify(mismatch.body).includes("mismatch"), false);
     const down = await buildHealth(deps({ probe: { database: async () => { throw new Error("x"); } }, mfaKeyCheck: async () => "mismatch" }));
     assert.equal(down.body.status, "down", "down önceliklidir");
   });

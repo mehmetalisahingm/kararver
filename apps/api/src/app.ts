@@ -467,7 +467,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerAccountErasureRoutes(route, { store: deps.accountErasureStore, users: deps.adminUserStore, now });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
+  // /health ve /admin/ops aynı önbellekli MFA anahtar denetimini paylaşır (açılışta ilk istekte, sonra 10 dk).
+  const healthMfaKey = cachedMfaKeyCheck(deps.mfaStore?.keyCheck?.bind(deps.mfaStore));
   registerOpsRoutes(route, {
+    mfaKey: healthMfaKey,
     probe: deps.opsProbe,
     telemetry,
     env: config.appEnv,
@@ -507,7 +510,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   // Sürüm (deploy SHA): Railway GitHub entegrasyonu RAILWAY_GIT_COMMIT_SHA verir. Saat gerçek zamandır (uptime izleme).
   const healthStartedAt = new Date();
   const healthDatabase = cachedDatabaseCheck(deps.opsProbe);
-  const healthMfaKey = cachedMfaKeyCheck(deps.mfaStore?.keyCheck?.bind(deps.mfaStore));
   app.get("/health", async (_request, reply) => {
     const { httpStatus, body } = await buildHealth({
       probe: deps.opsProbe,

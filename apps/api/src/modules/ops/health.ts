@@ -37,8 +37,8 @@ export type HealthBody = {
     | { status: string; at: string; ageMs: number; health: "ok" | "degraded" | "down" }
     | { status: "unknown" | "missing"; health: "unknown" | "down" };
   release: { sha: string | null; env: string };
-  /** Yanlış MFA_ENCRYPTION_KEY ile açılan sürüm sağlıklı görünmesin: "mismatch" → status "degraded" (503 değil). */
-  mfa?: { key: "ok" | "mismatch" | "unverified" | "unknown" };
+  // #300 (Utku P2): MFA anahtar ayrıntısı herkese açık gövdede YOK. "mismatch" yalnız status'u "degraded" yapar (503 değil);
+  // ayrıntı SUPER_ADMIN'in /admin/ops görünümünde (security.mfaKey).
 };
 
 /** MFA anahtar denetimi: açılışta ilk /health'te çalışır, sonra MFA_KEY_CHECK_TTL_MS boyunca sonuç yeniden kullanılır. */
@@ -122,6 +122,5 @@ export async function buildHealth(deps: HealthDeps): Promise<{ httpStatus: 200 |
   const down = database.status === "down" || worker.health === "down";
   const mfaKey = deps.mfaKeyCheck ? await deps.mfaKeyCheck() : null;
   const status = down ? "down" : worker.health === "degraded" || mfaKey === "mismatch" ? "degraded" : "ok";
-  return { httpStatus: down ? 503 : 200, body: { status, database, worker, release: { sha: deps.sha ? deps.sha.slice(0, 12) : null, env: deps.env },
-    ...(mfaKey ? { mfa: { key: mfaKey } } : {}) } };
+  return { httpStatus: down ? 503 : 200, body: { status, database, worker, release: { sha: deps.sha ? deps.sha.slice(0, 12) : null, env: deps.env } } };
 }

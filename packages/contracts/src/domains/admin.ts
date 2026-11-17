@@ -313,6 +313,11 @@ export const OpsStatus = z.strictObject({
     lockedLogins: z.strictObject({ emails: Count, ips: Count }).nullable().default(null),
     /** Bütün süreçler (DB): son 24 saatteki kritik yönetici işlemleri (audit). Okunamazsa null. */
     adminActions24h: z.array(z.strictObject({ action: z.string().max(80), operation: z.string().max(40), count: Count })).nullable().default(null),
+    /**
+     * #300: API'nin MFA anahtarı kayıtlı v2 sırları çözüyor mu. "mismatch" = yanlış MFA_ENCRYPTION_KEY; "unverified" = v2 kayıt
+     * yok. Bu ayrıntı herkese açık /health'te YOK (orada yalnız status "degraded"). Denetim yoksa null.
+     */
+    mfaKey: z.enum(["ok", "mismatch", "unverified", "unknown"]).nullable().default(null),
   }),
   backup: z.strictObject({
     status: OpsHealth,
