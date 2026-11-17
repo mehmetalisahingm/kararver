@@ -92,9 +92,11 @@ test("delayed response blocks resubmit; expiry and filed states come only from A
   await page.goto(path);
   await page.getByLabel("İtiraz gerekçen").fill(reason);
   await page.getByRole("button", { name: "İtirazımı gönder" }).click();
-  await expect(page.getByRole("button", { name: "Gönderiliyor…" })).toBeDisabled();
-  expect(writes).toBe(1);
-  release(); await expect(page.locator("main").getByRole("alert")).toBeVisible();
+  try {
+    await expect(page.getByRole("button", { name: "Gönderiliyor…" })).toBeDisabled();
+    await expect.poll(() => writes).toBe(1);
+  } finally { release(); }
+  await expect(page.locator("main").getByRole("alert")).toBeVisible();
   mock.handlers.set("me.moderationAppeals.get", r => r.fulfill({ json: { data: { ...view, status: "EXPIRED" } } }));
   await page.getByRole("button", { name: "Durumu tekrar kontrol et" }).click();
   await expect(page.getByRole("status").filter({ hasText: "başvuru süresi dolmuş" })).toBeVisible();
