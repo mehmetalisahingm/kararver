@@ -1,6 +1,6 @@
 # #365 — mevcut hesap için erişilebilir 18+ beyanı
 
-10 Kasım 2026. Bu frontend teslimi #355 head `7f85a53edca6c5066c8d0ab3b53604d2c793f4d9` üstündedir; backend migration/özellik anahtarı veya canlı hesap değiştirmez.
+İlk teslim 10 Kasım 2026; güncelleme 17 Kasım 2026. Frontend #355 head `cde331391b92f7177873d722a08d164f274cbdcb` ve main `1850c7b` ile birleştirildi. Yeni studio teması, public SSR, WebKit form kontrastı ve hesap silme düzeltmeleri korunur. Backend migration/özellik anahtarı veya canlı hesap değiştirilmez.
 
 ## Davranış
 
@@ -19,9 +19,11 @@ KV_BROWSER=<chromium|firefox|webkit> playwright test -c playwright.adult.config.
 tsc --noEmit
 ```
 
-İstemci testleri 7/7; üç motorda 360/390/1440px matrisi motor başına 30/30 (toplam 90/90). Klavye seçimi, axe, reduced-motion, overflow, 2x CSS zoom, server/network/403 hatası ve retry, POST sonrası session expiry ve iki sekmede tek beyan kontrol edildi. Login sırasında ilgi seçimlerinin tek kez kaydı ve expiry olursa seçimlerin korunması ayrıca doğrulandı. Ekran görüntüleri `adult-results/<motor>` altında ve CI artifact'ındadır; gerçek şifre/cookie/token içermez. Chromium Windows Edge motorudur; WebKit fiziksel Safari değildir. Yerel kontroller aynı çalışma ağacında yapıldı; kesin head SHA ve birleşik CI sonucu PR kontrollerinden doğrulanmalıdır.
+İstemci testleri 7/7; üç motorda 360/390/1440px matrisi motor başına 30/30 (toplam 90/90). Bu tarayıcı matrisi 17 Kasım'da güncel tema ve parent birleşimi üzerinde yeniden geçti; web typecheck geçti. Klavye seçimi, axe, reduced-motion, overflow, 2x CSS zoom, server/network/403 hatası ve retry, POST sonrası session expiry ve iki sekmede tek beyan kontrol edildi. Login sırasında ilgi seçimlerinin tek kez kaydı ve expiry olursa seçimlerin korunması ayrıca doğrulandı. Ekran görüntüleri `adult-results` altında ve motor bazlı CI artifact'ındadır; yerelde aynı output dizini yeniden kullanıldığında önceki motorun çıktısı korunmaz. Gerçek şifre/cookie/token içermez. Son Chromium koşusu kurulu Windows Chrome'u kullanır; WebKit fiziksel Safari değildir. Kesin head SHA ve birleşik CI sonucu PR kontrollerinden doğrulanmalıdır.
 
 Foundation mevcut 360/1440 durum paketine ek olarak üç motorda 390px komutunu çalıştırır.
+
+17 Kasım staging ön kontrolü: canonical web bu ortamda hem terminal hem gerçek browser navigasyonunda bağlantı reseti verdi (`ERR_CONNECTION_RESET`); free-preview API health 20 saniyede yanıt vermedi. Bu erişim sonucu bir API 500 veya toparlanma testi değildir. Erişim reddi aşılmadı, hesap/rol/ayar veya TTL değiştirilmedi. Bu makinede mevcut NVDA çalıştırılabilir dosyası bulunmadı; fiziksel ekran okuyucu kabulü yapılmış sayılmaz.
 
 ## Açık kabul kapıları
 
