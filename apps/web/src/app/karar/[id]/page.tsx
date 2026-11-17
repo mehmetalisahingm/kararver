@@ -14,6 +14,9 @@ function descriptionOf(value: string | null): string {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const poll = await loadPublicPoll(id, { strict: process.env.APP_ENV === "production" });
+  // HTML-limited crawlers wait for metadata before headers are sent. Resolve
+  // removal here too, before the page's streaming boundary can commit a 200.
+  if (!poll && process.env.APP_ENV === "production") notFound();
   if (!poll) {
     return {
       title: "İçerik bulunamadı · Kararver",

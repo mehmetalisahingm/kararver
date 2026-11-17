@@ -104,7 +104,7 @@ test("skip and signup are keyboard reachable; back preserves interest selection"
   await expect(page.getByRole("button", { name: "Bir karar verelim" })).toBeEnabled();
   // The intro focuses its heading. The header link precedes that heading:
   // traverse backwards rather than depending on browser-chrome focus wrapping.
-  await expect(page.getByRole("heading", { name: "İnsanlar gerçekten ne düşünüyor?" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Dünyanın nabzını tut." })).toBeFocused();
   await tabTo(page, page.getByRole("link", { name: /Zaten üye misin/ }), "backward");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/giris\?onboarding=1/);
