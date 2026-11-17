@@ -23,6 +23,8 @@ Motor başına 360/1440px'te 20 test yerelde geçti (üç motor 60/60): 400/403/
 
 17 Kasım'da aynı 60/60 matris ve web typecheck güncel main/tema birleşimi üzerinde yeniden geçti. Önceki `ecf9561` head'inin Foundation koşusu `42875748033` tüm PostgreSQL/web/entegrasyon/storage/UI/üç tarayıcı işleriyle başarılı olarak doğrulandı; staging-smoke SKIP'tir. Yeni birleşimin CI sonucu ayrı kaydedilir, eski head'in yeşili ona aktarılmaz.
 
+Ek `202 UNDER_REVIEW` tarayıcı testi normal USER fixture'ıyla üç motorda360/1440px'te6/6 geçti. API yanıtı beklerken modal kapatılmaz, ikinci gönderim/erken başarı ve herkese açık karar sayfasına geçiş olmaz. Yanıt sonrası yalnız özel inceleme bildirimi gösterilir; içerik yayında diye sunulmaz. Dosya artık motor başına22, toplam66 vaka içerir; yerel60+6 ayrı koşulmuştur, birleşik tek koşu sonucu CI'dan alınır. Bu sentetik HTTP sözleşme kanıtıdır; gerçek yayın/puan işlemi yapılmaz.
+
 ## Faruk/Mert için eksik sözleşme ve entegrasyon
 
 1. `notificationData.MODERATION_APPLIED` ve worker yalnız action/toStatus gönderiyor. İtiraz GET'i **rejectionActionId** ister; notification.id veya pollId bunun yerine geçirilemez. Backend sahibi asıl ret kararına yetkili deep-link/karar kimliği sağlamadan bildirimden ekrana giriş bağlanamaz. Bu PR sahte kimlik üretmez, backend alanı eklemez.

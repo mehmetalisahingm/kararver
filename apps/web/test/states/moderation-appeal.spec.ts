@@ -8,6 +8,46 @@ const path = `/hesap/itiraz/${id}`;
 const view = { rejectionActionId: id, deliveredAt: "2026-11-09T12:00:00Z", deadlineAt: "2026-12-09T12:00:00Z", filedAt: null as string | null, status: "OPEN" };
 const reason = "Kararın yeniden incelenmesini istiyorum.";
 
+test("202 submission waits for the API and stays private instead of opening a public poll", async ({ page }, info) => {
+  const mock = await api(page);
+  const pendingId = "01998b9a-0000-7000-8000-000000000099";
+  let submissions = 0;
+  let release!: () => void;
+  const response = new Promise<void>(resolve => { release = resolve; });
+  mock.handlers.set("me.get", r => {
+    const body = sample("me.get"); body.data.roles = ["USER"]; body.data.avatarUrl = null;
+    return r.fulfill({ json: body });
+  });
+  mock.handlers.set("polls.create", async r => {
+    submissions++; await response;
+    await r.fulfill({ status: 202, json: { data: { id: pendingId, status: "UNDER_REVIEW" } } });
+  });
+  await page.goto("/olustur");
+  await page.getByLabel("Sorun", { exact: true }).fill("Yeni çalışma alanı hangi renkte olsun?");
+  await page.getByLabel("1. seçenek", { exact: true }).fill("Yeşil");
+  await page.getByLabel("2. seçenek", { exact: true }).fill("Mavi");
+  await page.getByRole("navigation", { name: "Oluşturma adımları" }).getByRole("button", { name: /02.*Yayını düzenle/ }).click();
+  await page.getByLabel("Kategori", { exact: true }).selectOption({ label: "Otomobil" });
+  await page.getByRole("button", { name: "Yayın önizlemesi", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Yayımlamaya hazır mısın?" });
+  await dialog.getByRole("button", { name: /puan ile yayımla$/ }).click();
+  try {
+    await expect.poll(() => submissions).toBe(1);
+    await expect(dialog.getByRole("button", { name: "Yayımlanıyor…", exact: true })).toBeDisabled();
+    await expect(page).toHaveURL(/\/olustur$/);
+    await expect(page.locator(".announcement")).not.toContainText(/yayımlandı|incelemesine alındı/);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+  } finally { release(); }
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator(".announcement")).toContainText("henüz herkese açık değil");
+  await expect(page.locator(".announcement")).not.toContainText("yayımlandı");
+  await expect(page.locator(`a[href="/karar/${pendingId}"]`)).toHaveCount(0);
+  expect(submissions).toBe(1);
+  expect(mock.unexpected).toEqual([]);
+  await page.screenshot({ path: info.outputPath("under-review-receipt.png"), fullPage: true });
+});
+
 for (const status of [400, 403, 409, 500, "network"] as const) test(`appeal ${status}: no optimistic success, retained reason, explicit retry`, async ({ page }, info) => {
   const mock = await api(page); let failed = true; let calls = 0;
   mock.handlers.set("me.moderationAppeals.get", r => r.fulfill({ json: { data: view } }));
