@@ -26,10 +26,23 @@ export type ReviewDecision = { action: "REVIEW"; signals: ReviewSignal[] } | { a
 
 function normalized(s: string): string {
   return s.toLocaleLowerCase("tr-TR").replaceAll("ı", "i")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+    .normalize("NFKD")
+    // Format characters must be removed, not turned into token boundaries.
+    .replace(/\p{Cf}/gu, "")
+    // Common Cyrillic/Greek lookalikes in Turkish/English survey text.
+    .replace(/[аα]/gu, "a").replace(/[еε]/gu, "e")
+    .replace(/[оο]/gu, "o").replace(/[рρ]/gu, "p")
+    .replace(/[іι]/gu, "i").replace(/[с]/gu, "c")
+    .replace(/[т]/gu, "t").replace(/[кκ]/gu, "k")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\bs[1i]yas[1i]\b/g, "siyasi")
+    .replace(/\s+/g, " ").trim();
 }
-const SENSITIVE_CONTEXT = /\b(?:siyasi|politik|parti|oy verme|dini|din|mezhep|inanc|etnik|irk|saglik durumu|hastalik|teshis|tani|psikiyatr|sendika|cinsel|biyometrik|genetik|dna|suc kaydi|sabika)\b/;
+// Soft signals, not 400/REJECT rules. Inflected roots and cross-language
+// identifiers enter human review instead of being silently published.
+// Avoid generic 'secim' alone to keep electoral-system policy polls public.
+const SENSITIVE_CONTEXT = /\b(?:siyas\w*|politik\w*|politic\w*|parti\w*|oy ver\w*|vote\w*|election\w*|secim\w*\s+.{0,80}\b(?:aday\w*|kime|kimi|destekl\w*)|din\w*|mezhep\w*|inanc\w*|inan\w*|allah|ramazan\w*|oruc\w*|namaz\w*|basortu\w*|musluman\w*|muslim\w*|religion\w*|pray\w*|etnik\w*|irk\w*|kurt\w*|arap\w*|ethnic\w*|saglik durum\w*|hastalik\w*|teshis\w*|tani\w*|tanis\w*|depresyon\w*|diyabet\w*|hiv\w*|diagnos\w*|psikiyatr\w*|sendika\w*|cinsel\w*|yonelim\w*|gay\w*|lezbiyen\w*|lesbian\w*|biseksuel\w*|bisexual\w*|lgbt\w*|biyometrik\w*|genetik\w*|dna\w*|suc kayd\w*|sabika\w*|tutuklan\w*|gozalti\w*)\b/;
 const LINK = /(?:https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|com\.tr|io|app|site|xyz)\b)/i;
 
 /**
