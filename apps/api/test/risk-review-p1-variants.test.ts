@@ -77,3 +77,16 @@ test("neutral public-service and product questions are not automatically queued"
     assert.deepEqual(screenV1Publication(poll(title)), { action: "PUBLISH", signals: [] }, title);
   }
 });
+
+test("common non-sensitive words sharing prefixes with sensitive terms still publish", () => {
+  for (const title of [
+    "Gayrimenkul piyasası yükselir mi?",
+    "Dinamik fiyatlama faydalı mı?",
+    "Bu ürünün tanımı doğru mu?",
+    "Kurtuluş Savaşı sergisi nerede?",
+    "Partikül fiziği dersi zor mu?",
+    "İnanılmaz bir telefon mu?",
+  ]) {
+    assert.deepEqual(screenV1Publication(poll(title)), { action: "PUBLISH", signals: [] }, title);
+  }
+});
