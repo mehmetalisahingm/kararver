@@ -118,6 +118,14 @@ test("draft guards and return target never allow external or ambiguous navigatio
   assert.equal(safeReturnTo("/veri-indir"), "/veri-indir");
   assert.equal(safeReturnTo("/veri-indir?x=1"), "/");
   assert.equal(safeReturnTo("/veri-indir/baska"), "/");
+  assert.equal(safeReturnTo("/topluluk/yazilim"), "/topluluk/yazilim");
+  const declaration = "/hesap/yas-beyani?returnTo=%2Ftopluluk%2Fyazilim";
+  assert.equal(safeReturnTo(declaration), declaration);
+  for (const target of ["https://evil.test", "//evil.test", "/\\evil.test", "/topluluk/../admin", "/topluluk/%2f%2fevil.test", "/hesap/yas-beyani?returnTo=%2Folustur"]) {
+    assert.equal(safeReturnTo(`/hesap/yas-beyani?returnTo=${encodeURIComponent(target)}`), "/");
+  }
+  assert.equal(safeReturnTo(declaration + "&extra=1"), "/");
+  assert.equal(safeReturnTo(declaration + "&returnTo=%2Fadmin"), "/");
 });
 test("two demo accounts keep individual votes; logout removes private result visibility", async () => {
   const client = new DemoClient(0);

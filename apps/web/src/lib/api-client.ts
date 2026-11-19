@@ -108,6 +108,7 @@ export class ApiClient implements ProductClient {
       email: data.email,
       verified: data.emailVerified,
       adultDeclarationRequired: data.adultDeclarationRequired ?? false,
+      adultDeclarationEnforced: data.adultDeclarationEnforced,
       balance: previous?.balance ?? null,
       publishCost: previous?.publishCost ?? null,
       username: data.username,

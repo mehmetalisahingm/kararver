@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Field } from "../../components/fields";
 import { ApiClient } from "../../lib/api-client";
-import { UiError, safeReturnTo } from "../../lib/model";
+import { UiError, safeReturnTo, needsAdultDeclaration as isAdultDeclarationEnforced } from "../../lib/model";
 import { clearWelcomeDraft, readWelcomeDraft } from "../../lib/welcome-draft";
 import { WelcomeAuthContext } from "../onboarding/welcome";
 export type AuthMode = "login" | "register" | "verify" | "forgot" | "reset";
@@ -131,7 +131,7 @@ export function AuthScreen({
     }
     // A pre-policy account may sign in but cannot publish, vote or comment until
     // it makes an explicit 18+ declaration. Do not redirect to an unusable page.
-    if (!demo && client.current()?.adultDeclarationRequired) {
+    if (!demo && isAdultDeclarationEnforced(client.current())) {
       setNeedsAdultDeclaration(true);
       return;
     }

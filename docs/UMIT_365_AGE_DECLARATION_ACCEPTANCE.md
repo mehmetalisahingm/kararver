@@ -29,4 +29,12 @@ Foundation mevcut 360/1440 durum paketine ek olarak üç motorda 390px komutunu 
 
 ## Açık kabul kapıları
 
+### 19 Kasım inceleme düzeltmeleri
+
+- Genel `requireUser` yalnız oturum ister. Yaş kapısı açıkça anket oluşturma ve oy/yorum gönderimine uygulanır; compose kapısı görsel yüklemeyi de kapsar. Kaydetme, tepki, topluluk üyeliği, raporlama ve hesap hakları yaş beyanına bağlanmaz. API yetki kuralları değiştirilmedi.
+- API'nin kendi hesap projeksiyonuna `adultDeclarationEnforced` eklendi. Login, `/me` ve profil güncellemesi bu alanı gerçek session yayın anahtarından üretir; `adultDeclarationRequired` eksik beyanı anahtardan bağımsız bildirmeye devam eder. Yeni kayıt beyan şartı aynı kalır. Anahtar kapalıyken login/compose engellenmez; odak çalmayan hatırlatma ve isteğe bağlı beyan sayfasında “Şimdilik işlemime devam et” bağlantısı vardır.
+- Eski API bu yeni alanı vermezse önceki koruyucu davranış sürer; yeni API ve web aynı adayda doğrulanmalıdır. Backend anahtarı bu değişiklikle açılmaz. API response sözleşmesi eki Faruk incelemesine tabidir.
+- `/topluluk/<slug>` ve tek seviyeli `/hesap/yas-beyani?returnTo=...` dönüşü korunur. Dış URL, protokol-relative, ters bölü, dot-segment, kodlanmış ayraç, iç içe beyan dönüşü ve tekrarlı/ek query alanları kabul edilmez. Oturumu dolan beyan sayfasından login ve beyan sonrası topluluk dönüşü browser regresyonundadır.
+- Yeni senaryolar: yaptırım açıkken kaydetme/rapor/üyelik çalışır ve compose kapanır; anahtar kapalıyken login/compose ve gönüllü beyan; expiry sonrası topluluk dönüşü. Önceki negatif beyan, seçimlerin korunması, hata/retry ve erişilebilirlik testleri kaldırılmadı. Kesin güncel test/CI sonuçları PR'da belirtilir; yukarıdaki 17 Kasım sayıları tarihsel kanıttır.
+
 #355 hâlâ bağımlılıktır. `LEGACY_ADULT_DECLARATION_ENFORCED` aday backend'de varsayılan kapalıdır; gerçek katılım reddi/migration ve bu anahtarın aynı sürümde açılması backend/owner kabulüdür. Bu PR anahtarı açmaz veya API yetkisi yerine istemci kontrolü kullanmaz. Canlı aynı-SHA staging ve fiziksel iPhone/Safari/VoiceOver, Android/TalkBack, NVDA bu yerel çalışmada yapılmadı. #365/#191/#48 bu kanıtlarla otomatik kapanmaz; production GO verilmez.

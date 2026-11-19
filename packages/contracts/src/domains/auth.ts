@@ -15,8 +15,10 @@ export const Me = z.strictObject({
   displayName: z.string().min(1).max(60),
   email: Email,
   emailVerified: z.boolean(),
-  /** #289 54A: true ise eski hesap 18+ öz beyanı vermeden katılım işlemleri (anket, oy, yorum, görsel) yapamaz. */
+  /** #289 54A: eski hesabın 18+ öz beyanı eksik; yayın anahtarından bağımsız hatırlatma. */
   adultDeclarationRequired: z.boolean().optional(),
+  /** Katılım kapısının bu hesap için etkin durumu; sunucunun yayın anahtarından gelir. */
+  adultDeclarationEnforced: z.boolean().optional(),
   avatarUrl: Url.nullable(),
   bio: z.string().max(300).nullable(),
   status: UserStatus,

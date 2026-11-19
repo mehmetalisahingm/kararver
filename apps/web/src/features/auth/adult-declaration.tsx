@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage } from "../../components/fields";
 import { ApiClient } from "../../lib/api-client";
-import { safeReturnTo } from "../../lib/model";
+import { safeReturnTo, needsAdultDeclaration } from "../../lib/model";
 
 export function AdultDeclarationScreen() {
   const { client, user, syncUser } = useProduct();
@@ -54,7 +54,8 @@ export function AdultDeclarationScreen() {
     <ErrorMessage message={error} />
     {!user ? <><p role="status">Oturumun açık değil. Beyan durumunu görmek için yeniden giriş yap.</p><Link className="kv-button" href={`/giris?returnTo=${encodeURIComponent(self)}`}>Yeniden giriş yap</Link></>
       : user.adultDeclarationRequired ? <form className="screen-stack" onSubmit={submit} aria-busy={busy}>
-        <p>Oy, yorum, görsel yükleme ve anket oluşturma için beyan gerekiyor. Beyan vermeden kamuya açık içerikleri okuyabilir ve hesap haklarına erişebilirsin.</p>
+        <p>{needsAdultDeclaration(user) ? "Oy, yorum, görsel yükleme ve anket oluşturma için beyan gerekiyor." : "Yaş beyanını şimdi tamamlayabilir veya işlemine devam edebilirsin; katılım kısıtı henüz etkin değil."} Beyan vermeden kamuya açık içerikleri okuyabilir ve hesap haklarına erişebilirsin.</p>
+        {!needsAdultDeclaration(user) && <Link href={destination}>Şimdilik işlemime devam et</Link>}
         <label className="kv-check-row"><input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} disabled={busy} required />18 yaşımı doldurduğumu beyan ediyorum.</label>
         <p className="kv-help">Bu seçim kullanım koşulları kabulü veya isteğe bağlı veri işleme rızası değildir. 18 yaşını doldurmadıysan işaretleme.</p>
         <button className="kv-button" disabled={!checked || busy}>{busy ? "Kaydediliyor…" : "Beyanı kaydet ve devam et"}</button>

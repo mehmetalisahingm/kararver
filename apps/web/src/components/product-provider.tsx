@@ -9,7 +9,7 @@ import type { DemoClient } from "../lib/demo-client";
 import { SpaceHero } from "./space-hero";
 import { SceneMotionProvider } from "./scene-motion";
 import { StudioAtmosphere } from "./studio-atmosphere";
-import { emptyDraft, safeReturnTo } from "../lib/model";
+import { emptyDraft, safeReturnTo, needsAdultDeclaration } from "../lib/model";
 import type { Draft, ProductClient, User } from "../lib/model";
 import type { CommentDraft } from "../features/social/model";
 
@@ -26,7 +26,7 @@ type Context = {
   setDraft: (draft: Draft) => void;
   selections: Record<string, string>;
   select: (id: string, option: string) => void;
-  requireUser: (returnTo: string) => boolean;
+  requireUser: (returnTo: string, participation?: boolean) => boolean;
   message: string;
   notify: (message: string) => void;
   returnTo: string;
@@ -176,8 +176,8 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     setUser(current);
   };
   const setReturnTo = (path: string) => setReturn(safeReturnTo(path));
-  function requireUser(path: string) {
-    if (client.current()?.adultDeclarationRequired) {
+  function requireUser(path: string, participation = false) {
+    if (participation && needsAdultDeclaration(client.current())) {
       router.push(`/hesap/yas-beyani?returnTo=${encodeURIComponent(safeReturnTo(path))}`);
       return false;
     }
@@ -321,6 +321,10 @@ export function ProductProvider({ children }: { children: ReactNode }) {
             <div className="announcement" role="status">
               {message}
             </div>
+            {user?.adultDeclarationRequired && user.adultDeclarationEnforced === false && !pathname.startsWith("/hesap/yas-beyani") && <p className="kv-card">
+              18+ yaş beyanını tamamlayabilirsin. Şimdilik bu hatırlatma işlemlerini engellemiyor.{" "}
+              <Link href={`/hesap/yas-beyani?returnTo=${encodeURIComponent(safeReturnTo(pathname))}`}>Yaş beyanını tamamla</Link>
+            </p>}
             {pathname !== "/" && pathname !== "/kesfet" && pathname !== "/topluluklar" && <StudioAtmosphere pathname={pathname} unread={unreadNotifications} />}
             {sessionReady || publicPollRead ? <Fragment key={(pathname === "/giris" || pathname === "/kayit") ? "auth-session" : (user?.id ?? "guest")}>{children}</Fragment> : <div className="kv-card kv-state">
               <h1>{sessionError ? "Bağlantı kurulamadı." : "Oturum kontrol ediliyor…"}</h1>

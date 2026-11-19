@@ -159,7 +159,7 @@ export function SocialPanel({ poll }: { poll: Poll }) {
       input.current?.focus();
       return;
     }
-    if (!requireUser(`/karar/${poll.id}`)) return;
+    if (!requireUser(`/karar/${poll.id}`, true)) return;
     const fingerprint = JSON.stringify(draft);
     if (request.current?.fingerprint !== fingerprint)
       request.current = { fingerprint, id: crypto.randomUUID() };

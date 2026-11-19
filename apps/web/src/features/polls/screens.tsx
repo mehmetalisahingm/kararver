@@ -73,7 +73,7 @@ export function PollDetail({ id, initialPoll }: { id: string; initialPoll?: Poll
       document.getElementById("vote-options")?.focus();
       return;
     }
-    if (!requireUser(`/karar/${id}`) || lock.current) return;
+    if (!requireUser(`/karar/${id}`, true) || lock.current) return;
     lock.current = true;
     setBusy(true);
     setError("");

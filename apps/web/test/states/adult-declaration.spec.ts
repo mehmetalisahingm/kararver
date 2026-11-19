@@ -3,6 +3,66 @@ import AxeBuilder from "@axe-core/playwright";
 import { api, sample, failure } from "./api";
 
 const path = "/hesap/yas-beyani?returnTo=%2Folustur";
+test("enforced declaration leaves bookmarks, reporting and community membership open", async ({ page }, info) => {
+  const mock = await api(page); let saved = 0; let reported = 0; let joined = false;
+  mock.handlers.set("me.get", r => { const body = sample("me.get"); body.data.adultDeclarationRequired = true; body.data.adultDeclarationEnforced = true; return r.fulfill({json:body}); });
+  mock.handlers.set("bookmarks.list", r => r.fulfill({json:{data:[],page:{hasMore:false,nextCursor:null}}}));
+  mock.handlers.set("bookmarks.put", r => { saved++; return r.fulfill({json:sample("bookmarks.put")}); });
+  mock.handlers.set("reports.create", r => { reported++; return r.fulfill({status:202,json:sample("reports.create")}); });
+  const community = sample("communities.get");
+  mock.handlers.set("communities.get", r => { const body = structuredClone(community); body.data.viewer = joined ? {role:"MEMBER"} : null; return r.fulfill({json:body}); });
+  mock.handlers.set("communities.join", r => { joined = true; return r.fulfill({json:sample("communities.join")}); });
+  const pollId = sample("polls.get").data.id;
+  await page.goto(`/karar/${pollId}`);
+  await page.getByRole("button", {name:"Kaydet",exact:true}).click();
+  await expect(page.getByRole("button", {name:"Kaydı kaldır",exact:true})).toBeVisible();
+  await page.getByRole("button", {name:"Bu içeriği raporla",exact:true}).click();
+  await page.getByRole("dialog").getByRole("button", {name:"Raporu gönder",exact:true}).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  expect(saved).toBe(1); expect(reported).toBe(1);
+  await page.goto(`/topluluk/${community.data.slug}`);
+  await page.getByRole("button", {name:"Topluluğa katıl",exact:true}).click();
+  await expect(page.getByRole("button", {name:"Topluluktan ayrıl",exact:true})).toBeVisible();
+  await page.goto("/olustur");
+  await expect(page.getByRole("heading", {name:"Katılım için 18+ beyanı gerekiyor."})).toBeVisible();
+  await page.screenshot({path:info.outputPath("declaration-scope.png"),fullPage:true});
+  expect(mock.unexpected).toEqual([]);
+});
+
+test("disabled enforcement allows login and composing while offering a non-blocking declaration", async ({ page }, info) => {
+  const mock = await api(page); let signedIn = false;
+  const me = () => { const body = sample("me.get"); body.data.adultDeclarationRequired = true; body.data.adultDeclarationEnforced = false; return body; };
+  mock.handlers.set("me.get", r => signedIn ? r.fulfill({json:me()}) : r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
+  mock.handlers.set("auth.login", r => {signedIn = true; return r.fulfill({json:me()});});
+  await page.goto("/giris?returnTo=%2Folustur");
+  await page.getByLabel("E-posta",{exact:true}).fill("legacy-flag-off@example.test");
+  await page.getByLabel("Şifre",{exact:true}).fill("synthetic-test-password");
+  await page.getByRole("button",{name:"Giriş yap",exact:true}).click();
+  await expect(page).toHaveURL(/\/olustur$/);
+  await expect(page.getByRole("heading",{name:"Aklında ne var?"})).toBeVisible();
+  await page.getByRole("link",{name:"Yaş beyanını tamamla",exact:true}).click();
+  await expect(page.getByRole("checkbox")).not.toBeChecked();
+  await expect(page.getByRole("link",{name:"Şimdilik işlemime devam et",exact:true})).toHaveAttribute("href","/olustur");
+  await page.screenshot({path:info.outputPath("declaration-flag-off.png"),fullPage:true});
+  expect(mock.unexpected).toEqual([]);
+});
+
+test("expired declaration login preserves the community continuation", async ({ page }) => {
+  const mock = await api(page); let signedIn = false; let declared = false;
+  mock.handlers.set("me.get", r => { if(!signedIn) return r.fulfill({status:401,json:failure("UNAUTHENTICATED")}); const body=sample("me.get"); body.data.adultDeclarationRequired=!declared; return r.fulfill({json:body}); });
+  mock.handlers.set("auth.login", r => { signedIn=true; const body=sample("auth.login"); body.data.adultDeclarationRequired=!declared; return r.fulfill({json:body}); });
+  mock.handlers.set("me.adultDeclaration.confirm", r => { declared=true; return r.fulfill({json:{data:{declaredAt:"2026-11-10T12:00:00Z"}}}); });
+  await page.goto("/hesap/yas-beyani?returnTo=%2Ftopluluk%2Fyazilim");
+  await page.getByRole("link",{name:"Yeniden giriş yap",exact:true}).click();
+  await page.getByLabel("E-posta",{exact:true}).fill("legacy-return@example.test");
+  await page.getByLabel("Şifre",{exact:true}).fill("synthetic-test-password");
+  await page.getByRole("button",{name:"Giriş yap",exact:true}).click();
+  await page.getByRole("checkbox",{name:/18 yaşımı doldurduğumu/}).check();
+  await page.getByRole("button",{name:"18+ beyanını kaydet ve devam et",exact:true}).click();
+  await expect(page).toHaveURL(/\/hesap\/yas-beyani\?returnTo=%2Ftopluluk%2Fyazilim$/);
+  await expect(page.getByRole("link",{name:"İşlemime dön",exact:true})).toHaveAttribute("href","/topluluk/yazilim");
+  expect(mock.unexpected).toEqual([]);
+});
 for (const expired of [false, true]) test(`login declaration preserves onboarding continuation, expiry=${expired}`, async ({ page }) => {
   const mock = await api(page); let signedIn = false; let declared = false; let writes = 0;
   const categoryId = sample("categories.list").data[0].id;
