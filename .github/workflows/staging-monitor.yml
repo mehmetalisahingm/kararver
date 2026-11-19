@@ -168,8 +168,11 @@ jobs:
 
           # (2) main uzun süredir kırmızı mı? (yalnız staging: production onaylı sürümle ilerler)
           if [ "$TARGET" = "staging" ] && [ "${latest%% *}" = "failure" ]; then
-            last_green_at=$(printf '%s' "$green" | awk '{ print $3 }')
-            red_hours=$(( (now - $(date -u -d "${last_green_at:-1970-01-01T00:00:00Z}" +%s)) / 3600 ))
+            # Kırmızılık son yeşil koşudan değil, ondan sonraki İLK kırmızı koşudan sayılır: son yeşilden
+            # sonra günlerce push olmayıp yeni bir commit kırılırsa süre o commit'ten başlar (#401).
+            # Liste en yeni önce; son yeşile kadarki kesintisiz başarısızlıkların en eskisi alınır.
+            red_since=$(printf '%s\n' "$runs" | awk '$1 == "success" { exit } $1 == "failure" { at = $3 } END { print at }')
+            red_hours=$(( (now - $(date -u -d "${red_since:-1970-01-01T00:00:00Z}" +%s)) / 3600 ))
             if [ "$red_hours" -ge "$MAIN_RED_MAX_HOURS" ]; then
               problems+=("main CI ${red_hours} saattir kırmızı: staging yeni sürüm alamıyor")
             fi
