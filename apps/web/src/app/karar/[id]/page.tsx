@@ -11,12 +11,18 @@ function descriptionOf(value: string | null): string {
   return text.length > 160 ? `${text.slice(0, 157)}…` : text;
 }
 
+// Staging uses the real API too. Only local/demo should fall back to the
+// client when a public poll is missing or the upstream service is unavailable.
+function requirePublicApi() {
+  return process.env.APP_ENV === "production" || process.env.APP_ENV === "staging";
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const poll = await loadPublicPoll(id, { strict: process.env.APP_ENV === "production" });
+  const poll = await loadPublicPoll(id, { strict: requirePublicApi() });
   // HTML-limited crawlers wait for metadata before headers are sent. Resolve
   // removal here too, before the page's streaming boundary can commit a 200.
-  if (!poll && process.env.APP_ENV === "production") notFound();
+  if (!poll && requirePublicApi()) notFound();
   if (!poll) {
     return {
       title: "İçerik bulunamadı · Kararver",
@@ -42,12 +48,12 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   // The real poll body is part of the initial HTML, not a JS-only loading
   // spinner. Public results stay subject to the API's visibility projection.
   // Preview/demo stays client-driven and remains noindex by policy.
-  const poll = await loadPublicPoll(id, { strict: process.env.APP_ENV === "production" });
-  if (!poll && process.env.APP_ENV === "production") notFound();
+  const poll = await loadPublicPoll(id, { strict: requirePublicApi() });
+  if (!poll && requirePublicApi()) notFound();
   return (
     <>
       <PollDetail id={id} initialPoll={poll ? mapPoll(poll) : undefined} />
-      {(poll || process.env.APP_ENV !== "production") && <ShareActions routeId={id} />}
+      {(poll || !requirePublicApi()) && <ShareActions routeId={id} />}
     </>
   );
 }

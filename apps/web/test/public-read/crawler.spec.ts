@@ -20,6 +20,12 @@ test("removed poll is 404/noindex and the previous title is absent from HTML and
   expect(html.includes("noindex")).toBe(true);
   expect(html.includes("PUBLIC_SSR_FIXTURE_TITLE")).toBe(false);
 });
+test("removed poll also returns 404 to an ordinary browser", async ({ request }) => {
+  await request.post("http://127.0.0.1:4015/__scenario/removed");
+  const response = await request.get(path, { headers: { "User-Agent": "Mozilla/5.0" } });
+  expect(response.status()).toBe(404);
+  expect((await response.text()).includes("PUBLIC_SSR_FIXTURE_TITLE")).toBe(false);
+});
 test("upstream outage is an error, never a false permanent 404 or cached old poll", async ({ request }) => {
   await request.post("http://127.0.0.1:4015/__scenario/error");
   const response = await request.get(path);
