@@ -10,7 +10,7 @@ Mehmet'in kesin ürün kararı: **Yeni anketlerde `ALWAYS` (herkese açık sonu�
 
 Mehmet, KararVer'de **yeni kayıtların 18 yaş ve üzeriyle sınırlandırılmasını** seçti. Bu ürün kuralı, genel bir yasal yaş eşiği olduğu iddiası değildir. Teknik ürün kararı ve güçlü yaş doğrulaması arasındaki fark, mevcut hesapların geçişi ve hukuki değerlendirmede kalan #289 kapıları [ayrı dosyada](LEGAL_289_AGE18_PRODUCT_POLICY.md) açıklıdır. #285/#286 yasal metinleri onaylanmadan bu ürün tercihi tek başına hukuki GO değildir.
 
-19 Kasım 2026: Mehmet, kamuya açık başvuru ve destek adresi olarak `karariniverdestek@gmail.com` adresini belirledi. Hesabın açıldığı, posta aldığı ve düzenli takip edildiği henüz doğrulanmadı; bu doğrulama ve diğer yasal kabul koşulları açık kalır.
+19 Kasım 2026: Mehmet, kamuya açık başvuru ve destek adresi olarak `karariniverdestek@gmail.com` adresini belirledi; hesabı açtığını ve giriş yapabildiğini bildirdi. Gelen posta teslimi ve düzenli başvuru takibi henüz doğrulanmadı; bu doğrulama ve diğer yasal kabul koşulları açık kalır.
 
 ## 8 Kasım 2026 — hesap ve içerik silme işletmeci kararı
 
@@ -21,7 +21,7 @@ Karar ve mevcut kod arasındaki **uyumsuzluklar** (anket/yorum tombstone DB sat�
 ## Hesap sahibinden alınmış gerçek karar
 
 - **Kesinleşti:** şirket bulunmuyor; hizmet kendi adına gerçek kişi olarak yayımlanacak. Bu karar kullanıcının 1 Kasım 2026 cevabıdır. Bir şirket/unvan/vergi kaydı uydurulmaz.
-- **Başvuru kanalı:** Mehmet 19 Kasım'da `karariniverdestek@gmail.com` adresini seçti. Hesabın erişimi, gelen posta ve başvuruların nasıl takip edileceği doğrulanmadı. Faaliyete uygun başvuru yöntemi ve yayımlanması gereken gerçek kimlik/iletişim bilgileri ayrıca kesinleştirilir; kimlik/adres belgeleri public repoya konmaz.
+- **Başvuru kanalı:** Mehmet 19 Kasım'da `karariniverdestek@gmail.com` adresini seçti ve hesabı açıp erişebildiğini bildirdi. Gelen posta teslimi ve başvuruların nasıl takip edileceği doğrulanmadı. Faaliyete uygun başvuru yöntemi ve yayımlanması gereken gerçek kimlik/iletişim bilgileri ayrıca kesinleştirilir; kimlik/adres belgeleri public repoya konmaz.
 - **Bütçe:** ilk 12 ay tüm hizmetler/vergiler/ödeme masrafları dahil en fazla 750 TL; otomatik kullanım aşımı yok. Ücretli hukuk danışmanlığı veya resmî başvuru harcaması onaylanmış değildir. Bu bütçe yükümlülüklerin karşılandığı veya uygulanmadığı kararı sayılmaz.
 - **Yayın:** gerçek SUPER_ADMIN güvenlik kabulü ve hukuki/operasyon kapıları açık; public GO verilmedi. Bir tercih panelinin eklenmesi bu durumu değiştirmez.
 
