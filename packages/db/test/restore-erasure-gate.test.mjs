@@ -68,32 +68,122 @@ test("restore gate never accepts live/remote/non-quarantined database URLs", () 
   ]) assert.throws(() => assertIsolatedRestoreTarget(url, live));
 });
 
-test("any restored account row (including tombstones), authored poll/comment, vote, session, token or media blocks", async () => {
-  const makeDb = affected => {
-    const seen = [];
-    const count = table => async opts => {
-      seen.push([table, opts.where]);
-      return table === affected ? 1 : 0;
-    };
-    return {
-      seen,
-      user: { count: count("user") },
-      poll: { count: count("poll") },
-      comment: { count: count("comment") },
-      vote: { count: count("vote") },
-      session: { count: count("session") },
-      authToken: { count: count("authToken") },
-      mediaAsset: { count: count("mediaAsset") },
-    };
-  };
-  for (const table of ["user","poll","comment","vote","session","authToken","mediaAsset"]) {
-    const db = makeDb(table);
-    const r = await checkNoResurrection(db, [userId]);
-    assert.equal(r.safe, false, table);
-    assert.equal(db.seen.length, 7);
-    assert.equal(db.seen[0][1].id.in[0], userId);
+// In-memory Prisma stand-in: each table is a row list; count() applies the
+// subset of where-filters the gate uses (in / null / not / OR).
+function fakeDb(tables) {
+  const match = (row, where) => Object.entries(where).every(([key, cond]) => {
+    if (key === "OR") return cond.some(w => match(row, w));
+    if (cond === null) return row[key] === null;
+    if (typeof cond === "object" && "in" in cond) return cond.in.includes(row[key]);
+    if (typeof cond === "object" && "not" in cond) return row[key] !== cond.not;
+    return row[key] === cond;
+  });
+  const db = {};
+  for (const name of ["user", "poll", "comment", "vote", "session", "authToken", "mediaAsset", "userMfaCredential", "dataExport", "domainEvent"]) {
+    db[name] = { count: async ({ where }) => (tables[name] ?? []).filter(r => match(r, where)).length };
   }
-  assert.equal((await checkNoResurrection(makeDb("none"), [userId])).safe, true);
+  // The restore gate's parameterized SQL counts all four references to a deleted subject.
+  db.$queryRaw = async (_strings, ids) => {
+    assert.ok(Array.isArray(ids), "the signed-journal ID chunk must be passed as one SQL array parameter");
+    const count = (tables.domainEvent ?? []).filter(row => ids.some(id =>
+      row.actorId === id ||
+      (row.subjectType === "USER" && row.subjectId === id) ||
+      JSON.stringify(row.payload ?? {}).includes(id) ||
+      (row.naturalKey ?? "").includes(id)
+    )).length;
+    return [{ total: BigInt(count) }];
+  };
+  return db;
+}
+const at = new Date("2026-11-08T09:00:00.000Z");
+// Exactly what today's account-erasure flow leaves behind.
+const tombstone = () => ({
+  user: [{ id: userId, deletedAt: at }],
+  poll: [{ authorId: userId, deletedAt: at, status: "REMOVED" }],
+  comment: [{ authorId: userId, deletedAt: at, status: "REMOVED" }],
+  mediaAsset: [{ uploaderId: userId, publicObjectKey: null, status: "REJECTED" }],
+  dataExport: [{ userId, status: "EXPIRED" }],
+  // #372 §3: erasure deletes the person's domain_events, so a tombstone has none.
+});
+
+test("erasure tombstones are retained data (still NO-GO) but are NOT reported as resurrection", async () => {
+  const r = await checkNoResurrection(fakeDb(tombstone()), [userId]);
+  assert.equal(r.safe, false, "strict #321 target: tombstones still block");
+  assert.equal(r.noResurrection, true);
+  assert.ok(Object.values(r.resurrected).every(v => v === 0));
+  assert.equal(r.retained.restoredUsers, 1);
+  assert.equal(r.retained.authoredPolls, 1);
+  assert.equal(r.retained.mediaAssets, 1);
+  assert.equal(r.resurrected.actorEvents, 0, "#372 §3: erased person's events are gone");
+});
+
+test("#389 review: events where the erased person is the USER subject (sanction, role) are counted too", async () => {
+  const other = "00000000-0000-4000-8000-000000000009";
+  const r = await checkNoResurrection(fakeDb({ domainEvent: [
+    { actorId: other, subjectType: "USER", subjectId: userId, type: "user.sanctioned" },
+    { actorId: other, subjectType: "POLL", subjectId: userId, type: "poll.removed" }, // same UUID text, different subject type
+    { actorId: other, subjectType: "USER", subjectId: other, type: "user.role.changed" },
+  ] }), [userId]);
+  assert.equal(r.resurrected.actorEvents, 1);
+  assert.equal(r.noResurrection, false);
+});
+
+test("#372 reviewer P2: payload/natural_key-only event resurrection is detected", async () => {
+  const other = "00000000-0000-4000-8000-000000000009";
+  const r = await checkNoResurrection(fakeDb({ domainEvent: [
+    { actorId: other, subjectType: "POLL", subjectId: other, payload: { voterId: userId } },
+    { actorId: null, subjectType: "POLL", subjectId: other, payload: {}, naturalKey: `vote.submitted:${other}:${userId}` },
+    { actorId: other, subjectType: "POLL", subjectId: other, payload: { voterId: other }, naturalKey: other },
+  ] }), [userId]);
+  assert.equal(r.resurrected.actorEvents, 2);
+  assert.equal(r.noResurrection, false);
+  assert.equal(r.safe, false);
+});
+
+test("#389 review: every counter is reported under its own name (no positional shift)", async () => {
+  const t = tombstone();
+  t.session = [{ userId }];
+  const r = await checkNoResurrection(fakeDb(t), [userId]);
+  assert.deepEqual(r.retained, { restoredUsers: 1, authoredPolls: 1, authoredComments: 1, linkedVotes: 0, sessions: 1, authTokens: 0, mediaAssets: 1 });
+  assert.deepEqual(r.resurrected, { liveUsers: 0, liveAuthoredPolls: 0, liveAuthoredComments: 0, linkedVotes: 0, sessions: 1, authTokens: 0, mfaCredentials: 0, publishedMedia: 0, readyExports: 0, actorEvents: 0 });
+});
+
+test("#372 §3 events alone (no other row) are resurrection: erasure deletes them", async () => {
+  const r = await checkNoResurrection(fakeDb({ domainEvent: [{ actorId: userId, type: "comment.created" }] }), [userId]);
+  assert.equal(r.noResurrection, false);
+  assert.equal(r.safe, false);
+  assert.equal(r.resurrected.actorEvents, 1);
+});
+
+test("any pre-erasure state under a journaled ID is resurrection", async () => {
+  const cases = {
+    liveUsers: t => { t.user[0].deletedAt = null; },
+    liveAuthoredPolls: t => { t.poll[0].status = "ACTIVE"; },
+    liveAuthoredComments: t => { t.comment[0].deletedAt = null; },
+    linkedVotes: t => { t.vote = [{ userId }]; },
+    sessions: t => { t.session = [{ userId }]; },
+    authTokens: t => { t.authToken = [{ userId }]; },
+    mfaCredentials: t => { t.userMfaCredential = [{ userId }]; },
+    publishedMedia: t => { t.mediaAsset[0].publicObjectKey = "public/x.webp"; },
+    readyExports: t => { t.dataExport[0].status = "READY"; },
+    actorEvents: t => { t.domainEvent = [{ actorId: userId, type: "comment.created" }]; },
+  };
+  for (const [key, mutate] of Object.entries(cases)) {
+    const t = tombstone();
+    mutate(t);
+    const r = await checkNoResurrection(fakeDb(t), [userId]);
+    assert.equal(r.noResurrection, false, key);
+    assert.equal(r.safe, false, key);
+    assert.equal(r.resurrected[key], 1, key);
+  }
+});
+
+test("unrelated users never count; only a fully absent subject passes", async () => {
+  const other = "00000000-0000-4000-8000-000000000002";
+  const t = { user: [{ id: other, deletedAt: null }], session: [{ userId: other }] };
+  const r = await checkNoResurrection(fakeDb(t), [userId]);
+  assert.equal(r.safe, true);
+  assert.equal(r.noResurrection, true);
 });
 
 test("CLI refuses promotion proof without signed journal and writes no secrets", () => {

@@ -1,5 +1,6 @@
 import { DataExportPackage, SelfDeletionDone, SelfDeletionPreview, SelfDeletionStarted, EmailChangeCancelled, EmailChangeConfirmed, EmailChangeStarted, EmailChangeView, DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PendingPollReceipt, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
+import { MyModerationAppealView, LedgerEntry } from "@kararver/contracts";
 import { AdminClient } from "../features/admin/admin-client.ts";
 import { CommunityClient, ReportClient } from "../features/community/community-client.ts";
 import { NotificationClient } from "../features/notifications/notification-client.ts";
@@ -14,6 +15,17 @@ import type { FeedTab, SearchType, SearchResult, TrendFormat, TrendPage } from "
 export { mapPoll } from "./poll-mapper.ts";
 
 export class ApiClient implements ProductClient {
+  async moderationAppeal(id: string, signal?: AbortSignal) {
+    return dataOf(MyModerationAppealView).parse(await this.http.request("me.moderationAppeals.get", { params: { id }, signal })).data;
+  }
+  async fileModerationAppeal(id: string, reason: string) {
+    const view = dataOf(MyModerationAppealView).parse(await this.http.request("me.moderationAppeals.file", { params: { id }, body: { reason } })).data;
+    if (view.status !== "FILED" || !view.filedAt) throw new UiError("INVALID_RESPONSE", "Başvurunun kaydedildiği doğrulanamadı. Durumunu tekrar kontrol et.");
+    return view;
+  }
+  async pointsLedger(cursor?: string, signal?: AbortSignal) {
+    return pageOf(LedgerEntry).parse(await this.http.request("points.ledger", { query: { cursor }, signal }));
+  }
   readonly media: MediaClient;
   /** Yönetim ekranları (KV-14/24/32/37/38); demo adapter'da yoktur, ekran yer tutucuya düşer. */
   readonly admin: AdminClient;

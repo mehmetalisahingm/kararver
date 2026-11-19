@@ -41,3 +41,13 @@
   .metric{min-width:0;padding:12px;overflow-wrap:anywhere}
   .metric strong{font-size:clamp(1.15rem,4vw,1.35rem)}
 }
+
+/* The management workspace keeps the same flat, readable editorial controls. */
+:global(.product[data-experience="studio"]) :is(.nav,.nav a,.metric,.tableWrap,.dialog,.inlineError,.mediaCard,.mediaCard img,.noPreview,.timeline li){border-radius:0;box-shadow:none}
+:global(.product[data-experience="studio"]) .nav{background:transparent;border:0;border-right:1px solid var(--kv-border);padding:0 18px 0 0}
+:global(.product[data-experience="studio"]) .nav a{padding:12px 8px}
+:global(.product[data-experience="studio"]) .nav a[aria-current="page"]{background:var(--kv-soft);outline:0;border-left:2px solid var(--kv-accent)}
+:global(.product[data-experience="studio"]) .metric{background:var(--kv-surface);border:0;border-top:1px solid var(--kv-control-border);padding:22px 16px}
+:global(.product[data-experience="studio"]) .metric strong{font-weight:500;font-size:2rem;letter-spacing:-.05em}
+:global(.product[data-experience="studio"]) .table th{background:var(--kv-surface-2);color:var(--kv-text);opacity:1;font-weight:500}
+@media(max-width:900px){:global(.product[data-experience="studio"]) .nav{border:0;border-block:1px solid var(--kv-border);padding:8px 0;gap:16px}}

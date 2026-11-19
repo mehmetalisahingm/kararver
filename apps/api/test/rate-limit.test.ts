@@ -267,6 +267,27 @@ describe("hız sınırı: içerik ve çoklu süreç (postgres)", { skip: postgre
     }
   });
 
+  test("görsel yükleme (#374): yeni hesap saatte 5, normal 20; web'in izin verdiği 10 görselin 6.'sı yeni hesapta 429", async () => {
+    const c = client(h, freshIp());
+    const [veteran, newbie] = [await c.signUp(), await c.signUp()];
+    await age(veteran);
+    strict();
+    try {
+      const upload = (u: User) => c.send("POST", "/media/uploads", { purpose: "POLL", mimeType: "image/jpeg", sizeBytes: 1024 }, u.cookie);
+      // Yeni hesap (ilk 7 gün): web tek ankete 10 görsel seçtirir, API saatte 5'e izin verir.
+      for (let i = 0; i < 5; i++) assert.equal((await upload(newbie)).statusCode, 201);
+      assertLimited(await upload(newbie), 3600);
+      // Normal hesap: 20; 10 görsellik iki anket sığar, 21. reddedilir.
+      for (let i = 0; i < 20; i++) assert.equal((await upload(veteran)).statusCode, 201);
+      assertLimited(await upload(veteran), 3600);
+      // Hesap başına sayılır ve saat dönünce açılır.
+      h.clock.advance(60 * MINUTE);
+      assert.equal((await upload(newbie)).statusCode, 201);
+    } finally {
+      relaxed();
+    }
+  });
+
   test("yorum günlük sınır: Retry-After UTC gün sonuna kadar", async () => {
     const c = client(h, freshIp());
     const owner = await c.signUp();

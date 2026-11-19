@@ -142,6 +142,7 @@ export default function Page() {
         <div className="kv-row">
           <Link className="kv-button kv-button--secondary" href="/ilgi-alanlari">İlgi alanlarını düzenle</Link>
           <Link className="kv-button kv-button--secondary" href="/hesap/guvenlik">Hesap güvenliği</Link>
+          <Link className="kv-button kv-button--secondary" href="/hesap/puanlar">Puan hareketleri</Link>
           <Link href="/">Akışa dön</Link>
         </div>
       </section>
