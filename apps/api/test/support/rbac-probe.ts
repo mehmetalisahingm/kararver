@@ -159,7 +159,7 @@ export async function createProbe(
     createRouter(app, {
       validateResponses: false,
       enforceResourceChecks: options.enforceResourceChecks ?? true,
-      authenticator: createAuthenticator(h.store, { ...config.session, pepper: config.authTokenPepper }, now),
+      authenticator: createAuthenticator(h.store, { ...config.session, pepper: config.authTokenPepper, adultDeclarationRequired: false }, now),
       rbac: h.rbac,
       now,
     }),

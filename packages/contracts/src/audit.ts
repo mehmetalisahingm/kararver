@@ -48,6 +48,7 @@ const commentOnlyExcluded = (o: string) => o.endsWith("_trends") || o.endsWith("
  * Tek türlü işlemde `operation` verilmezse o tür yazılır; birden çok türlüde her zaman açıkça verilir.
  */
 export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[]>>> = Object.freeze({
+  "account.adult.declare": ["declare"],
   "account.mfa": ["setup", "enable", "verify", "recover", "deny", "lock"],
   "user.sanction": ["apply"],
   "user.sessions.manage": ["revoke"],

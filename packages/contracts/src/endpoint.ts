@@ -64,7 +64,7 @@ export const commonErrors: readonly ErrorCode[] = ["VALIDATION_ERROR", "RATE_LIM
 const authErrors: Record<Auth, ErrorCode[]> = {
   public: [],
   user: ["UNAUTHENTICATED", "ACCOUNT_RESTRICTED"],
-  verified: ["UNAUTHENTICATED", "ACCOUNT_RESTRICTED", "EMAIL_NOT_VERIFIED"],
+  verified: ["UNAUTHENTICATED", "ACCOUNT_RESTRICTED", "EMAIL_NOT_VERIFIED", "ADULT_DECLARATION_REQUIRED"],
   owner: ["UNAUTHENTICATED", "ACCOUNT_RESTRICTED", "FORBIDDEN"],
   moderator: ["UNAUTHENTICATED", "FORBIDDEN"],
   admin: ["UNAUTHENTICATED", "FORBIDDEN"],

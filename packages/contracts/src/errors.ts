@@ -17,6 +17,8 @@ export const errorStatuses = Object.freeze({
   // 403
   FORBIDDEN: 403,
   EMAIL_NOT_VERIFIED: 403,
+  /** #289: eski hesap 18+ öz beyanını henüz vermedi; POST /me/adult-declaration ile verilir. */
+  ADULT_DECLARATION_REQUIRED: 403,
   SELF_VOTE_FORBIDDEN: 403,
   ACCOUNT_RESTRICTED: 403,
   // 404

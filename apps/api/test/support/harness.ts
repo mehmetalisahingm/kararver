@@ -195,6 +195,8 @@ export type HarnessOptions = {
   realSettings?: boolean;
   /** Legacy auth fixtures predate the 18+ contract. New policy tests MUST pass true. */
   adultDeclarationRequired?: boolean;
+  /** #289 eski hesap katılım kısıtı (yayın anahtarı). */
+  legacyAdultDeclarationEnforced?: boolean;
 };
 
 export async function createHarness(factory: BackendFactory, options: HarnessOptions = {}): Promise<Harness> {
@@ -257,6 +259,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     now: () => clock.now,
     isRegistrationEnabled: fixed ? async () => registrationEnabled.value : undefined,
     adultDeclarationRequired: options.adultDeclarationRequired ?? false,
+    legacyAdultDeclarationEnforced: options.legacyAdultDeclarationEnforced ?? false,
     decisionStore: backend.prisma ? createPrismaDecisionStore(backend.prisma) : undefined,
     profileStore: backend.prisma ? createPrismaProfileStore(backend.prisma) : undefined,
     shareStore: backend.prisma ? createPrismaShareStore(backend.prisma) : undefined,

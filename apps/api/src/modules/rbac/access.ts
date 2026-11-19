@@ -48,6 +48,7 @@ const messages: Partial<Record<ErrorCode, string>> = {
   UNAUTHENTICATED: "Giriş yapmanız gerekiyor.",
   ACCOUNT_RESTRICTED: "Hesabınız bu işlem için kısıtlı.",
   EMAIL_NOT_VERIFIED: "Önce e-postanızı doğrulayın.",
+  ADULT_DECLARATION_REQUIRED: "Devam etmek için 18 yaşını doldurduğunu beyan etmelisin.",
   FORBIDDEN: "Bu işlem için yetkiniz yok.",
   SELF_VOTE_FORBIDDEN: "Kendi anketinize oy veremezsiniz.",
 };
@@ -70,7 +71,7 @@ export type Access = {
 };
 
 /** Yetki kararı için gereken asgari kimlik: oturum yoksa (ör. ikinci onayda başlatanın yetkisini yeniden kurarken) yalnız bu alanlar. */
-export type AccessViewer = Pick<SessionUser, "id" | "status" | "emailVerified">;
+export type AccessViewer = Pick<SessionUser, "id" | "status" | "emailVerified"> & Partial<Pick<SessionUser, "adultDeclared">>;
 
 export function createAccess(store: RbacStore, viewer: AccessViewer | null, endpointAction: ActionId, now: Date): Access {
   let grants: Promise<ActorGrants> | undefined;
@@ -93,6 +94,7 @@ export function createAccess(store: RbacStore, viewer: AccessViewer | null, endp
       roles: g.roles,
       status: viewer.status,
       emailVerified: viewer.emailVerified,
+      adultDeclared: viewer.adultDeclared,
       sanctions: g.sanctions,
       moderatedCommunityIds: moderated,
     };

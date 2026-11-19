@@ -25,6 +25,11 @@ export type TrustedActor = {
   /** `users.status` */
   status: z.infer<typeof UserStatus>;
   emailVerified: boolean;
+  /**
+   * #289 54A: 18+ öz beyanı verilmiş mi. Yalnız açıkça `false` iken katılım (verified) işlemleri reddedilir;
+   * alanı vermeyen çağıran (ör. worker) etkilenmez. Öz beyan gerçek yaş doğrulaması değildir.
+   */
+  adultDeclared?: boolean;
   /** Kaldırılmamış yaptırımlar; süresi dolanları `authorize` kendisi eler. */
   sanctions: readonly ActorSanction[];
   /** `community_memberships.role = MODERATOR` olan topluluklar (DATA_MODEL §9). */
@@ -63,6 +68,8 @@ export type ActionRule = {
   guard?: Guard;
   /** Çağıranın doldurması zorunlu `ResourceContext` alanları; eksikse programlama hatasıdır (TypeError). */
   requires?: readonly (keyof ResourceContext)[];
+  /** true: kişinin kendi verisi üzerindeki hak (ör. e-posta düzeltme); 18+ beyanı olmadan da açık kalır (#289). */
+  dataRight?: true;
 };
 
 const rule = (level: Auth, summary: string, extra: Omit<ActionRule, "level" | "summary"> = {}): ActionRule =>
@@ -88,6 +95,7 @@ export const actions = Object.freeze({
   "account.deletion.confirm": rule("public", "Hesap silme bağlantısını onaylama/iptal etme (yetki token'dır)"),
   "account.emailChange.confirm": rule("public", "E-posta değişimi bağlantısını onaylama/reddetme (yetki token'dır)"),
   "account.mfa": rule("user", "Kendi doğrulayıcı kurulumu, yeniden doğrulama ve kurtarma"),
+  "account.adult.declare": rule("user", "Eski hesapta 18+ öz beyanı verme (#289, karar 54A)"),
   "reaction.set": rule("user", "Beğeni/dislike ekle/kaldır"),
   "bookmark.set": rule("user", "Kaydet/kaldır"),
   "bookmark.read": rule("user", "Kaydedilenler"),
@@ -104,7 +112,7 @@ export const actions = Object.freeze({
   "notification.update": rule("user", "Okundu, tercih ve sessize alma"),
 
   // ── verified: user + e-posta doğrulanmış ──
-  "account.emailChange.manage": rule("verified", "Kendi e-posta değişimini başlatma, görme ve iptal etme (#181)"),
+  "account.emailChange.manage": rule("verified", "Kendi e-posta değişimini başlatma, görme ve iptal etme (#181)", { dataRight: true }),
   "poll.create": rule("verified", "Anket/tartışma yayımlama", { restrictedBy: "POSTING" }),
   "vote.cast": rule("verified", "Oy ver/değiştir; anket sahibi kendi anketine oy veremez", {
     guard: "selfVote",
@@ -224,6 +232,7 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "auth.password.reset": "account.recoverPassword",
   "me.get": "account.read",
   "me.update": "account.update",
+  "me.adultDeclaration.confirm": "account.adult.declare",
   "me.deletion.preview": "account.deletion.manage",
   "me.deletion.request": "account.deletion.manage",
   "me.deletion.cancel": "account.deletion.manage",
@@ -515,6 +524,9 @@ function decide(actor: TrustedActor | null, r: ActionRule, resource: ResourceCon
     return deny("ACCOUNT_RESTRICTED", "Hesap askıda veya yasaklı");
   }
   if (r.level === "verified" && !actor.emailVerified) return deny("EMAIL_NOT_VERIFIED", "E-posta doğrulanmamış");
+  if (r.level === "verified" && !r.dataRight && actor.adultDeclared === false) {
+    return deny("ADULT_DECLARATION_REQUIRED", "18+ öz beyanı yok");
+  }
   if (resource) {
     if (r.level === "owner" && resource.ownerId !== actor.userId) return deny("FORBIDDEN", "Kaynağın sahibi değil");
     if (r.guard === "selfVote" && resource.ownerId === actor.userId) {
