@@ -129,6 +129,7 @@ Olay → adapter → alıcılar (teslim anında DB'den) → ortak süzgeç ve po
 | `moderation.applied` | `MODERATION_APPLIED` | içeriğin sahibi (anket/yorum; yorumda anket DB'den) | anket/yorum | **gizli** | `{ action, toStatus }` | olay kimliği |
 | `community.featured` | `COMMUNITY_FEATURED` | yalnız anket sahibi (üyelere yok) | anket | **gizli** | `{ communityId }` | doğal anahtar |
 | `sanction.applied` | `SANCTION_APPLIED` | yaptırım alan; yalnız `WARNING`, `RESTRICT_*` | kullanıcı | **gizli** | `{ sanctionType, endsAt }` (gerekçe yok) | doğal anahtar |
+| `security.alert.opened` (#185) | `SECURITY_ALERT` | bütün SUPER_ADMIN'ler (`user_roles`) | — | **gizli** | `{ rule, severity, count }` (kişi yok; ayrıntı ops panelinde) | doğal anahtar |
 
 `dedupe_key` = `notifications:<naturalKey ?? event.id>` (trend hariç). UNIQUE `(recipient_id, dedupe_key)` ve `ON CONFLICT DO NOTHING`; retry'da, aynı iş olgusunun farklı kimlikle tekrarında ve aynı alıcının iki yoldan gelmesinde tek satır kalır (anket sahibi kendi anketine oy veremez, `KV_SELF_VOTE`; verseydi de tek satır). `created_at` = olayın `occurredAt`'i. `data` şemaları contracts `notificationData`'dadır.
 
@@ -138,7 +139,7 @@ Olay → adapter → alıcılar (teslim anında DB'den) → ortak süzgeç ve po
 
 - **Ortak süzgeç** (SQL'de): olayın gerçek aktörü alıcı olmaz (aktörü gizlenen tiplerde de); silinmiş (`deleted_at`) ve BANNED hesap bildirim almaz; SUSPENDED / RESTRICTED alır.
 - **Görünürlük:** yorum, cevap, öneri ve anket konulu bildirimler konu içerik teslimde `ACTIVE` veya `LOCKED` değilse yazılmaz; moderasyon bildirimi hariç (gizlenen içeriğin sahibi bilmeli).
-- **KV-34 politika kancası:** `policy.ts` (`NotificationPolicy`; üretimde `preferencePolicy`, §8). Tüketici her alıcı diliminde çağırır; KV-34 tip tercihi ve anket sessizini (`poll_id`) yalnız bu dosyada uygular. `MODERATION_APPLIED` ve `SANCTION_APPLIED` kapatılamaz (contracts `MANDATORY_NOTIFICATION_TYPES`): politikaya hiç sorulmaz.
+- **KV-34 politika kancası:** `policy.ts` (`NotificationPolicy`; üretimde `preferencePolicy`, §8). Tüketici her alıcı diliminde çağırır; KV-34 tip tercihi ve anket sessizini (`poll_id`) yalnız bu dosyada uygular. `MODERATION_APPLIED`, `SANCTION_APPLIED` ve `SECURITY_ALERT` (#185) kapatılamaz (contracts `MANDATORY_NOTIFICATION_TYPES`): politikaya hiç sorulmaz.
 
 ### 6.3 Kitlesel fan-out ve ölçüm
 
@@ -206,7 +207,7 @@ Sahip: Faruk (Utku'nun geçici inaktifliği süresince). Tüketici: bildirim mer
 
 | Uç nokta | Davranış |
 |---|---|
-| `GET /notifications/preferences` | Kapatılabilir **bütün** tipler açıkça `true`/`false` döner; kapatılamayan tipler (`MANDATORY_NOTIFICATION_TYPES`: `MODERATION_APPLIED`, `SANCTION_APPLIED`) listede yoktur. |
+| `GET /notifications/preferences` | Kapatılabilir **bütün** tipler açıkça `true`/`false` döner; kapatılamayan tipler (`MANDATORY_NOTIFICATION_TYPES`: `MODERATION_APPLIED`, `SANCTION_APPLIED`, `SECURITY_ALERT`) listede yoktur. |
 | `PATCH /notifications/preferences` | Gönderilen tipler değişir, diğerleri aynı kalır. Kapatılamayan tip gönderilirse istek bütünüyle reddedilir (400 `VALIDATION_ERROR`, `details[].field = types.<tip>`, `code: not_configurable`). Cevap güncel tam tercih haritasıdır. |
 | `PUT /notifications/mutes/:pollId` | Anketi sessize alır. Anket yoksa 404 `NOT_FOUND` (contracts 1.20.0'da eklendi). Tekrar çağrı aynı cevabı verir. |
 | `DELETE /notifications/mutes/:pollId` | Sessizi kaldırır; yoksa da `{ muted: false }`. |

@@ -9,6 +9,14 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.42.0 — 2026-10-27 (Utku, #185 kritik güvenlik alarmları, dilim 1)
+
+Kırıcı değişiklik yok: yeni olay, yeni bildirim tipi (açık enum, sona eklendi), ops durumunda yeni alan.
+
+- **Eklendi:** `securityAlertRules` (`security-alerts.ts`): sekiz kural, önem (`HIGH` | `CRITICAL`), kapsam (aktör/genel), eşik ve pencere; `SecurityAlertRuleId`, `SecurityAlertSeverity`, `SecurityAlertStatus`, `securityAlertRuleProblems`.
+- **Eklendi:** olay `security.alert.opened` (sistem, konu tipi `SECURITY_ALERT`, payload kural/önem/sayı/pencere) → bildirim `SECURITY_ALERT` (yalnız SUPER_ADMIN, `MANDATORY_NOTIFICATION_TYPES`'a eklendi). `NotificationView.subject.type` ve `EventSubjectType` `SECURITY_ALERT` alır.
+- **Eklendi:** `admin.ops.status` → `security.alerts` (açık ve son 24 saatte kapanan alarmlar; okunamazsa null, eski yanıtlarda varsayılan null).
+
 ## 1.41.0 — 2026-10-24 (Utku, #185 audit sonuç süzgeci, dilim 3)
 
 Kırıcı değişiklik yok: yeni isteğe bağlı süzgeç ve yanıtta yeni alan.

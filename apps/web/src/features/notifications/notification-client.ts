@@ -1,6 +1,6 @@
 // Bildirim merkezi istemcisi — KV-35 (#37). Okuma API'si KV-21'den gelir; tercih/sessiz API'leri
 // kullanıma açıldığında aynı ekran ek değişiklik olmadan onları da kullanır.
-import { NotificationPreferences, NotificationView, pageOf } from "@kararver/contracts";
+import { MANDATORY_NOTIFICATION_TYPES, NotificationPreferences, NotificationView, pageOf, securityAlertRule, SecurityAlertRuleId } from "@kararver/contracts";
 import type { NotificationType } from "@kararver/contracts";
 import type { HttpClient } from "../../lib/http-client.ts";
 
@@ -19,10 +19,12 @@ export const notificationTypeLabels: Record<NotificationType, string> = {
   COMMUNITY_FEATURED: "Toplulukta öne çıkarma",
   SANCTION_APPLIED: "Hesap bildirimi",
   ANNOUNCEMENT_PUBLISHED: "Platform duyuruları",
+  SECURITY_ALERT: "Güvenlik alarmı",
 };
 
+/** Kapatılamayan tipler (sözleşme) tercihlerde listelenmez. */
 export const optionalPreferenceTypes = (Object.keys(notificationTypeLabels) as NotificationType[]).filter(
-  (type) => type !== "MODERATION_APPLIED" && type !== "SANCTION_APPLIED",
+  (type) => !MANDATORY_NOTIFICATION_TYPES.includes(type),
 );
 
 export function pollIdOf(notification: NotificationItem): string | null {
@@ -37,6 +39,8 @@ export function notificationHref(notification: NotificationItem): string {
   if (pollId) return `/karar/${pollId}`;
   if (notification.subject.type === "USER") return "/hesap";
   if (notification.subject.type === "COMMUNITY") return "/topluluklar";
+  // #185: ayrıntı yalnız SUPER_ADMIN'in ops panelinde.
+  if (notification.subject.type === "SECURITY_ALERT") return "/admin#guvenlik-alarmlari";
   return "/";
 }
 
@@ -65,6 +69,14 @@ export function notificationCopy(notification: NotificationItem): { title: strin
       return { title: "Hesabınla ilgili yeni bir bildirim var.", detail: "Hesap durumunu görüntüle." };
     case "ANNOUNCEMENT_PUBLISHED":
       return { title: "KararVer'den yeni bir duyuru var.", detail: "Duyuruyu ana sayfada görüntüle." };
+    case "SECURITY_ALERT": {
+      const rule = SecurityAlertRuleId.safeParse(notification.data.rule);
+      const level = notification.data.severity === "CRITICAL" ? "Kritik" : "Yüksek";
+      return {
+        title: `${level} güvenlik alarmı: ${rule.success ? securityAlertRule(rule.data).label : "yeni alarm"}.`,
+        detail: "Ayrıntı ve ilk adım için operasyon paneline git.",
+      };
+    }
     default:
       return { title: "Yeni bir bildirimin var.", detail: "Ayrıntıları görüntüle." };
   }
