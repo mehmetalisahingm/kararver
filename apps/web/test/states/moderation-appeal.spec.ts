@@ -8,6 +8,33 @@ const path = `/hesap/itiraz/${id}`;
 const view = { rejectionActionId: id, deliveredAt: "2026-11-09T12:00:00Z", deadlineAt: "2026-12-09T12:00:00Z", filedAt: null as string | null, status: "OPEN" };
 const reason = "Kararın yeniden incelenmesini istiyorum.";
 
+for (const target of ["appeal", "ledger"] as const) test(`login resumes the private ${target} page without reading it as a guest`, async ({page}, info) => {
+  const mock = await api(page); let signedIn = false; let privateReads = 0;
+  const destination = target === "appeal" ? path : "/hesap/puanlar";
+  mock.handlers.set("me.get", r => {
+    if (!signedIn) return r.fulfill({status:401,json:failure("UNAUTHENTICATED")});
+    const body=sample("me.get"); body.data.roles=["USER"]; return r.fulfill({json:body});
+  });
+  mock.handlers.set("auth.login", r => {signedIn=true; const body=sample("auth.login"); body.data.roles=["USER"]; return r.fulfill({json:body});});
+  mock.handlers.set("me.moderationAppeals.get", r => {privateReads++; return r.fulfill({json:{data:view}});});
+  mock.handlers.set("points.ledger", r => {privateReads++; return r.fulfill({json:{data:[],page:{nextCursor:null,hasMore:false}}});});
+  await page.goto(destination);
+  const signIn = page.locator(".app-main").getByRole("link", {name:"Giriş yap",exact:true});
+  await expect(signIn).toBeVisible();
+  expect(privateReads).toBe(0);
+  await expect(page.locator("main time")).toHaveCount(0);
+  await signIn.click();
+  await page.getByLabel("E-posta",{exact:true}).fill("private-return@example.test");
+  await page.getByLabel("Şifre",{exact:true}).fill("synthetic-test-password");
+  await page.getByRole("button",{name:"Giriş yap",exact:true}).click();
+  await expect(page).toHaveURL(new RegExp(destination + "$"));
+  await expect.poll(()=>privateReads).toBeGreaterThan(0);
+  if (target === "appeal") await expect(page.getByLabel("İtiraz gerekçen")).toBeVisible();
+  else await expect(page.getByRole("status").filter({hasText:"Henüz puan hareketin yok."})).toBeVisible();
+  await page.screenshot({path:info.outputPath(`login-return-${target}.png`),fullPage:true});
+  expect(mock.unexpected).toEqual([]);
+});
+
 test("202 submission waits for the API and stays private instead of opening a public poll", async ({ page }, info) => {
   const mock = await api(page);
   const pendingId = "01998b9a-0000-7000-8000-000000000099";

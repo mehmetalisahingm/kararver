@@ -27,6 +27,12 @@ Ek `202 UNDER_REVIEW` tarayıcı testi normal USER fixture'ıyla üç motorda360
 
 ## Faruk/Mert için eksik sözleşme ve entegrasyon
 
+### 19 Kasım — özel sayfaya giriş sonrası dönüş
+
+`/hesap/itiraz/<UUID>` ve `/hesap/puanlar` güvenli dönüş listesine eklendi. Önceki listede bulunmadıkları için oturumu kapalı kullanıcı bu sayfalardaki giriş bağlantısını izlediğinde giriş sonrasında ana sayfaya düşüyordu. Regresyon birim testi düzeltme öncesi `/` sonucuyla kırıldı. İzin yalnız sabit puan yolu ve biçimi doğrulanan UUID'li itiraz yoludur; dış/protokol-relative adres, dot-segment, kodlanmış ayraç, fazladan yol veya query kabul edilmez.
+
+Yeni iki tarayıcı senaryosu misafirken özel API'nin okunmadığını ve tarihlerin gösterilmediğini, normal USER login sonrasında aynı özel sayfaya dönülüp API okumasının başladığını doğrular. Chromium/Firefox/WebKit ×360/1440px hedeflenir; kesin sonuç güncel PR yorumundadır. API/ledger, oturum TTL'si ve moderasyon sözleşmesi değiştirilmez. Aşağıdaki read-contract ve canlı kabul eksikleri devam eder.
+
 1. `notificationData.MODERATION_APPLIED` ve worker yalnız action/toStatus gönderiyor. İtiraz GET'i **rejectionActionId** ister; notification.id veya pollId bunun yerine geçirilemez. Backend sahibi asıl ret kararına yetkili deep-link/karar kimliği sağlamadan bildirimden ekrana giriş bağlanamaz. Bu PR sahte kimlik üretmez, backend alanı eklemez.
 2. Mevcut `MyModerationAppealView` yalnız rejectionActionId, deliveredAt, deadlineAt, filedAt ve OPEN/FILED/EXPIRED verir. Özel ret gerekçesi, başvurunun çözümlenme/nihai karar durumu ve ücretsiz yeniden yayın makbuzu yoktur. #341/ilgili çözüm-SLA modeliyle owner yetkili read sözleşmesi netleşmeden sonuç/reason ekranı tamamlandı denemez.
 3. Ledger geçmişi gerçek iade satırını gösterebilir. Bunun tek-seferlik transaction/concurrency kabulü #358'e; kabul edilen itirazın ücretsiz yeniden yayını ve bunun özel okunabilir makbuzu #359'a bağlıdır. UI politika kopyasından kredi/yayın başarısı çıkarmıyor.

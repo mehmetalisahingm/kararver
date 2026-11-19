@@ -119,6 +119,15 @@ test("draft guards and return target never allow external or ambiguous navigatio
   assert.equal(safeReturnTo("/veri-indir?x=1"), "/");
   assert.equal(safeReturnTo("/veri-indir/baska"), "/");
 });
+test("moderation return targets preserve private routes without broadening the redirect boundary", () => {
+  const appeal = "/hesap/itiraz/01998b9a-0000-7000-8000-000000000020";
+  assert.equal(safeReturnTo(appeal), appeal);
+  assert.equal(safeReturnTo("/hesap/puanlar"), "/hesap/puanlar");
+  for (const target of [appeal + "?next=https://evil.test", appeal + "/extra", "/hesap/itiraz/not-a-uuid", "/hesap/itiraz/../admin", "/hesap/puanlar?next=/admin", "/hesap/puanlar/extra", "//evil.test/hesap/puanlar", "/hesap/itiraz/%2f%2fevil.test"]) {
+    assert.equal(safeReturnTo(target), "/");
+  }
+});
+
 test("two demo accounts keep individual votes; logout removes private result visibility", async () => {
   const client = new DemoClient(0);
   await client.login("umit@example.test", "Demo12345!");
