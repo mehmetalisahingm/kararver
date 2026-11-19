@@ -203,6 +203,7 @@ Payload şemaları `events.ts` içindedir (strict zod). Kabul koşulundaki alanl
 | `limits.newAccountCommentsPerDay` | integer | 1 – 100000 | 30 | hayır | Yorum: yeni hesap günde en fazla. KV-19 (#21); Mehmet onayı (2026-10-08, PR #152 tablosu) |
 | `limits.reportsPerHour` | integer | 1 – 1000 | 10 | hayır | Şikâyet: normal hesap saatte en fazla. KV-19 (#21); Mehmet onayı (2026-10-08, PR #152 tablosu) |
 | `limits.newAccountReportsPerHour` | integer | 1 – 1000 | 5 | hayır | Şikâyet: yeni hesap saatte en fazla. KV-19 (#21); Mehmet onayı (2026-10-08, PR #152 tablosu) |
+| `limits.mfaReauthPerHour` | integer | 1 – 100 | 5 | hayır | MFA kurulum, kurtarma ve doğrulayıcı yenileme: hesap saatte en fazla (parola denemesi; üç uç ortak sayaç). #373 (Utku) P1 düzeltmesi, Faruk önerisi; Mehmet onayı bekliyor |
 | `limits.uploadsPerHour` | integer | 1 – 1000 | 20 | hayır | Görsel yükleme: normal hesap saatte en fazla. KV-19 (#21); Mehmet onayı (2026-10-08, PR #152 tablosu) |
 | `limits.newAccountUploadsPerHour` | integer | 1 – 1000 | 5 | hayır | Görsel yükleme: yeni hesap saatte en fazla. KV-19 (#21); Mehmet onayı (2026-10-08, PR #152 tablosu) |
 | `limits.searchesPerMinute` | integer | 1 – 10000 | 60 | hayır | Arama: kullanıcı veya IP dakikada en fazla. KV-19 (#21); Mehmet onayı (2026-10-08, PR #152 tablosu) |

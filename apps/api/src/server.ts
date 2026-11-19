@@ -73,7 +73,7 @@ const app = buildApp({
   config,
   settingsService,
   authStore: createPrismaAuthStore(prisma),
-  mfaStore: createPrismaMfaStore(prisma, config.authTokenPepper),
+  mfaStore: createPrismaMfaStore(prisma, config.mfa),
   roleApprovalStore: createPrismaRoleApprovalStore(prisma),
   rbacStore: createPrismaRbacStore(prisma),
   pollStore: createPrismaPollStore(prisma),

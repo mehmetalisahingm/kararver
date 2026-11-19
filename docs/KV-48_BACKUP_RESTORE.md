@@ -110,7 +110,8 @@ Herhangi bir adım başarısızsa kayıt yazılmaz, çıkış kodu 1 olur, panel
    - Tek çalıştırmalık araç hâlâ `node apps/worker/scripts/scheduled-backup.ts`; zamanlayıcıdan bağımsız kabul/restore için kullanılabilir.
    - Değişkenler: `DATABASE_URL` (Postgres servisinin **iç** adresi, referansla), `APP_ENV`, `BACKUP_PUBLIC_KEY` (PEM; tek satırda `\n` ile yazılabilir), `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGION`, `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY`, `BACKUP_DESTINATION` (ör. `r2`), `BACKUP_PREFIX` (varsayılan `db/<APP_ENV>`).
    - `pg_dump` sunucuyla **aynı major** olmalı (staging PG 18). Mevcut servis imajına PostgreSQL 18 istemci araçları eklenmeden etkinleştirme yapılmaz; gerekirse `PG_BIN` ile yolu verilir. Bu PR canlı servis imajını veya anahtarlarını değiştirmez. CI ise kendi PostgreSQL 17 sunucusu için 17 istemcisini zorunlu doğrular.
-4. **Doğrulama:**
+4. **MFA anahtarı:** Restore edilen DB, kaynakla **aynı** `MFA_ENCRYPTION_KEY` ve `MFA_LEGACY_PEPPERS` ile açılır. Aksi hâlde MFA'lı hesaplar (SUPER_ADMIN dahil) step-up'ta reddedilir. Tatbikat MFA'lı bir test hesabıyla step-up'ı da doğrular ([SA180_MFA_KEY_ROTATION.md](SA180_MFA_KEY_ROTATION.md)).
+5. **Doğrulama:**
    - İlk çalıştırmadan sonra bucket'ta iki dosya var mı, panelde `backup.status = ok` mu?
    - Bir yedeği aşağıdaki gibi çözüp boş bir veritabanına restore et.
    - Bu tatbikat KV-48 restore runbook'unun kendisidir.

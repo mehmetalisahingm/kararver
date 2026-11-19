@@ -11,6 +11,8 @@ describe("demo sınırı: API yapılandırması", () => {
     API_URL: "http://localhost:4000",
     SESSION_COOKIE_SECURE: "true",
     AUTH_TOKEN_PEPPER: PEPPER,
+    // production ayrı MFA anahtarı ister (#300).
+    MFA_ENCRYPTION_KEY: "demo-boundary-mfa-key-0123456789-abcdefgh",
     MAIL_FROM: "KararVer <no-reply@kararver.test>",
     MAIL_TRANSPORT: "smtp",
     SMTP_URL: "smtp://u:p@smtp.test:587",

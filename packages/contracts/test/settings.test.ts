@@ -129,9 +129,12 @@ describe("anahtar ve kaynak kuralları", () => {
 
   test("limits.* (KV-19) kayıtta, Mehmet onaylı varsayılanla ve public değil", () => {
     const rate = settingKeys.filter((k) => k.startsWith("limits."));
-    assert.equal(rate.length, 18);
+    assert.equal(rate.length, 19);
+    // Tek istisna #373 güvenlik sınırı: kaynağı açıkça "onay bekliyor" der; onaylanınca bu istisna kalkar.
+    const pending = ["limits.mfaReauthPerHour"];
     for (const k of rate) {
-      assert.match(def(k).default!.source, /Mehmet onayı, #21/, k);
+      if (pending.includes(k)) assert.match(def(k).default!.source, /Mehmet onayı bekliyor/, k);
+      else assert.match(def(k).default!.source, /Mehmet onayı, #21/, k);
       assert.equal(def(k).publicPath, null, `${k} public değil`);
       assert.ok(def(k).min! >= 1, `${k}: 0 limit uç noktayı tamamen kapatır; kapatma acil durum anahtarıyla yapılır`);
     }
