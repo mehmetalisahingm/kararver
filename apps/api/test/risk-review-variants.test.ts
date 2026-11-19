@@ -13,7 +13,7 @@ const yesNo = opts("Evet", "Hayır");
 const YES_NO = opts("Yes", "No");
 const poll = (title: string, options = yesNo): ReviewInput => ({ kind: "POLL", title, options });
 
-const OPEN: Array<[string, ReviewInput]> = [
+const CLOSED: Array<[string, ReviewInput]> = [
   ["oruç, geçmiş zaman", poll("Bu ramazan oruç tuttun mu?")],
   ["oruç, siz", poll("Ramazanda oruç tutuyor musunuz?")],
   ["namaz, siz", poll("Namaz kılıyor musunuz?")],
@@ -37,8 +37,41 @@ const OPEN: Array<[string, ReviewInput]> = [
   ["sıfır genişlikli boşluk (U+200B)", poll("Si​yasi konularda hangisine yakınsın?", opts("A", "B"))],
 ];
 
-for (const [name, input] of OPEN) {
-  test(`incelemeye düşer: ${name}`, { todo: "AÇIK (#371 yeniden test, #357 9128215): bağlam listesi ek almış kelimeyi ve eksik kategorileri kaçırıyor" }, () => {
+const FOURTH_ROUND: Array<[string, ReviewInput]> = [
+  ["din, İngilizce Hristiyan", poll("Are you Christian?", YES_NO)],
+  ["din, İngilizce ateist", poll("Are you an atheist?", YES_NO)],
+  ["inanç, İngilizce", poll("Do you believe in God?", YES_NO)],
+  ["ibadet, kilise", poll("Pazar günleri kiliseye gider misin?")],
+  ["din, tesettür", poll("Tesettürlü müsün?")],
+  ["sağlık, kanser tedavisi", poll("Kanser tedavisi görüyor musun?")],
+  ["sağlık, ilaç", poll("Antidepresan kullanıyor musun?")],
+  ["sağlık, ameliyat", poll("Obezite ameliyatı oldun mu?")],
+  ["sağlık, engellilik", poll("Engelli misiniz?")],
+  ["sağlık, gebelik", poll("Hamile misiniz?")],
+  ["sağlık, kürtaj", poll("Hiç kürtaj oldun mu?")],
+  ["cinsel kimlik, trans", poll("Trans mısın?")],
+  ["cinsel kimlik, İngilizce queer", poll("Are you queer?", YES_NO)],
+  ["cinsel yönelim, İngilizce", poll("What is your sexual orientation?", opts("A", "B"))],
+  ["etnik, Ermeni", poll("Ermeni misin?")],
+  ["etnik, Rum", poll("Rum musun?")],
+  ["etnik, Zaza", poll("Zaza mısın?")],
+  ["etnik, Laz", poll("Laz mısın?")],
+  ["adli, hapis", poll("Hiç hapis yattın mı?")],
+  ["adli, İngilizce", poll("Have you ever been convicted of a crime?", YES_NO)],
+  ["sendika, İngilizce", poll("Are you a union member?", YES_NO)],
+  ["siyasi, muhalefet/iktidar", poll("Muhalefeti mi destekliyorsun iktidarı mı?", opts("Muhalefet", "İktidar"))],
+  ["siyasi, referandum", poll("Referandumda ne dedin?", opts("Evet", "Hayır"))],
+  ["siyasi, cumhurbaşkanı desteği", poll("Cumhurbaşkanını destekliyor musun?")],
+];
+
+for (const [name, input] of CLOSED) {
+  test(`incelemeye düşer: ${name}`, () => {
+    assert.equal(screenV1Publication(input).action, "REVIEW");
+  });
+}
+
+for (const [name, input] of FOURTH_ROUND) {
+  test(`incelemeye düşer (4. tur): ${name}`, { todo: "AÇIK (#371 4. tur, #357 67b3de3): kategori/kelime bağlam listesinde yok" }, () => {
     assert.equal(screenV1Publication(input).action, "REVIEW");
   });
 }
