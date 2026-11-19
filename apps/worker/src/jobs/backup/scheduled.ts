@@ -24,6 +24,11 @@ export type ScheduledBackupDeps = {
   prefix: string;
   now: () => Date;
   log: (level: "info" | "warn" | "error", message: string, fields: Record<string, unknown>) => void;
+  /**
+   * Manifest de zarf şifrelemesiyle şifrelenip `<ad>.manifest.json.enc` olarak yüklenir (satır sayıları ve şema kataloğu
+   * açıkta kalmaz; #311, public artifact). Düz manifest yalnız yerelde kalır.
+   */
+  encryptManifest?: boolean;
   /** Testler için: yedek ve kayıt adımları değiştirilebilir. */
   backup?: typeof dbBackup;
   record?: typeof recordBackupRun;
@@ -47,9 +52,15 @@ export async function runScheduledBackup(deps: ScheduledBackupDeps): Promise<Sch
     const day = manifest.createdAt.slice(0, 10).replaceAll("-", "/");
     const base = `${deps.prefix}/${day}/${path.basename(file)}`;
     const dumpKey = `${base}.enc`;
-    const manifestKey = `${base}.manifest.json`;
+    const manifestKey = deps.encryptManifest ? `${base}.manifest.json.enc` : `${base}.manifest.json`;
     await deps.upload(dumpKey, encrypted, "application/octet-stream");
-    await deps.upload(manifestKey, `${file}.manifest.json`, "application/json");
+    if (deps.encryptManifest) {
+      const encryptedManifest = path.join(work, `${path.basename(file)}.manifest.json.enc`);
+      await encryptFile(`${file}.manifest.json`, encryptedManifest, deps.publicKeyPem);
+      await deps.upload(manifestKey, encryptedManifest, "application/octet-stream");
+    } else {
+      await deps.upload(manifestKey, `${file}.manifest.json`, "application/json");
+    }
     const encryptedBytes = (await stat(encrypted)).size;
     await (deps.record ?? recordBackupRun)(deps.databaseUrl, manifest, deps.destination, deps.now());
     deps.log("info", "zamanlanmış yedek tamamlandı", {

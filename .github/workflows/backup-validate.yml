@@ -1,0 +1,49 @@
+name: Backup code validation
+# #186 / #311 — public repoda YALNIZ secret'sız doğrulama. Owner kararı (7 Kasım 2026): gerçek DB yedeği bu public repoda
+# çalışmaz ve artifact'ı buraya konmaz; gece işi ayrı PRIVATE yedek reposunda koşar (şablon: ops/private-backup-repo/).
+# Bu iş secret'a erişmez, veritabanına bağlanmaz; yedek kodunun birim testlerini ve şu kapıyı denetler:
+#   - public .github/workflows altında DB yedek secret'ı kullanan iş YOK;
+#   - private şablon "yalnız private repoda çalış" adımını taşıyor.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/**
+      - ops/private-backup-repo/**
+      - apps/worker/scripts/scheduled-backup.ts
+      - apps/worker/scripts/record-backup-run.ts
+      - apps/worker/src/jobs/backup/**
+      - apps/worker/test/scheduled-backup.test.ts
+      - apps/worker/test/directory-upload.test.ts
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/**
+      - ops/private-backup-repo/**
+      - apps/worker/src/jobs/backup/**
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Public workflow'larda DB yedek secret'ı yok
+        run: |
+          if grep -rlE --exclude=backup-validate.yml 'STAGING_BACKUP_DATABASE_URL|BACKUP_DATABASE_URL' .github/workflows; then
+            echo "::error::Public repoda DB yedek secret'ı kullanan workflow var (owner kararı #311: yalnız private yedek reposu)."
+            exit 1
+          fi
+      - name: Private şablon fail-closed
+        run: |
+          grep -q 'visibility" != "private"' ops/private-backup-repo/workflows/nightly-backup.yml
+          grep -q 'retention-days: 30' ops/private-backup-repo/workflows/nightly-backup.yml
+          grep -q "BACKUP_ENCRYPT_MANIFEST: 'true'" ops/private-backup-repo/workflows/nightly-backup.yml
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile --filter "@kararver/worker..."
+      - run: cd apps/worker && node --test test/directory-upload.test.ts test/scheduled-backup.test.ts

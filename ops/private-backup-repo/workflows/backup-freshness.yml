@@ -1,0 +1,53 @@
+name: Backup freshness
+# KararVer #186 / #311 — ŞABLON. nightly-backup.yml ile aynı PRIVATE yedek reposunda .github/workflows/ altına konur.
+# Gece yedeği hiç çalışmazsa (workflow kapatıldı, cron atlandı) nightly-backup kendi alarmını açamaz. Bu iş 6 saatte bir
+# nightly-backup workflow'unun etkin olduğunu ve son BAŞARILI koşunun BACKUP_MAX_AGE_HOURS'tan yeni olduğunu denetler;
+# değilse bu repoda `backup-alarm` issue'su açar/günceller. Secret gerekmez (yalnız bu reponun Actions geçmişi okunur).
+on:
+  schedule:
+    - cron: '15 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+  issues: write
+concurrency:
+  group: backup-freshness
+  cancel-in-progress: false
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BACKUP_MAX_AGE_HOURS: '26'
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Son başarılı yedeğin yaşı
+        id: check
+        shell: bash
+        run: |
+          set -u
+          problems=()
+          state=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/nightly-backup.yml" --jq '.state' 2>/dev/null || echo "okunamadı")
+          [ "$state" = "active" ] || problems+=("nightly-backup workflow'u etkin değil (durum: $state)")
+          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/nightly-backup.yml/runs?status=success&per_page=20" \
+            --jq '[.workflow_runs[] | select(.event == "schedule" or .event == "workflow_dispatch")][0].updated_at // empty' 2>/dev/null || true)
+          if [ -z "$last" ]; then
+            problems+=("hiç başarılı gece yedeği yok (kurulumdan sonra elle bir kez çalıştırılmalı)")
+          else
+            age=$(( ($(date -u +%s) - $(date -u -d "$last" +%s)) / 3600 ))
+            [ "$age" -lt "$BACKUP_MAX_AGE_HOURS" ] || problems+=("son başarılı yedek ${age} saat önce (sınır ${BACKUP_MAX_AGE_HOURS} sa)")
+          fi
+          echo "- Son başarılı yedek: ${last:-yok}" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "${problems[@]}" > problems.txt
+          [ ${#problems[@]} -eq 0 ] && echo "ok=true" >> "$GITHUB_OUTPUT" || echo "ok=false" >> "$GITHUB_OUTPUT"
+      - name: Alarm aç / güncelle
+        if: steps.check.outputs.ok == 'false'
+        shell: bash
+        run: |
+          gh label create backup-alarm --color B60205 --description "Zamanlanmış yedek başarısız (#186)" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label backup-alarm --state open --json number --jq '.[0].number // empty')
+          msg=$(printf '**Gece yedeği eskidi ya da durdu** (%s)\n\n%s\n\nSorumlu: @farukkemree' "$RUN_URL" "$(grep -v '^$' problems.txt | sed 's/^/- /')")
+          if [ -n "$open" ]; then gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$msg"; else gh issue create -R "$GITHUB_REPOSITORY" --title "Yedek alarmı: gece yedeği eskidi" --label backup-alarm --body "$msg"; fi
+          exit 1
