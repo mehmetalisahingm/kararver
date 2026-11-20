@@ -45,7 +45,7 @@ const NEUTRAL_PUBLISH = [
   "Seçim barajı düşürülmeli mi?",
   "Kanser araştırmalarına daha çok fon ayrılmalı mı?",
   "Hastane randevu sistemi nasıl olmalı?",
-  "Doğum günü partisi güzel olur mu?",
+  "Doğum günü kutlaması güzel olur mu?",
   "Dinamik fiyatlandırma faydalı mı?"
 ];
 for (const title of NEUTRAL_PUBLISH) {
