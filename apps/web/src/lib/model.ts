@@ -68,6 +68,9 @@ export type Poll = {
   details?: { label: string; value: string }[];
   price?: { amount: string; currency: "TRY"; note: string };
 };
+/** An unpublished submission receipt: only author has access; never navigate to public detail. */
+export type PendingPoll = { id: string; status: "UNDER_REVIEW" };
+export type CreateOutcome = Poll | PendingPoll;
 export type Draft = {
   mediaIds?: string[];
   categoryId?: string;
@@ -178,7 +181,7 @@ export interface ProductClient extends EngagementClient, DiscoveryClient {
   reset(email: string, code: string, password: string): Promise<void>;
   logout(): Promise<void>;
   current(): User | null;
-  create(draft: Draft, requestId: string): Promise<Poll>;
+  create(draft: Draft, requestId: string): Promise<CreateOutcome>;
   vote(id: string, optionId: string): Promise<Poll>;
   // KV-22 gerçek API client'ta zorunludur; demo adapter bu modüller için placeholder gösterebilir.
   getProfile?(username: string): Promise<PublicProfile>;
