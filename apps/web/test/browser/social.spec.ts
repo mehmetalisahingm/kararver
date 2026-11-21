@@ -148,6 +148,11 @@ test("post/comment reaction rollback, one-level replies, edit and delete failure
   const edited = page
     .locator(".social-comment")
     .filter({ hasText: "Uzun bir test sürüşü yap." });
+  // A pointer click need not focus its invoker before the modal opens.
+  await page.locator("#main").focus();
+  await edited.getByRole("button", { name: "Sil", exact: true }).evaluate(button => {
+    button.addEventListener("mousedown", event => event.preventDefault());
+  });
   await edited.getByRole("button", { name: "Sil", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "Yorumu silmek istiyor musun?" }),
@@ -194,15 +199,18 @@ test("alternatives are separate; account changes hide ownership and another acco
     .getByLabel("Yorumun", { exact: true })
     .fill("Bu taslak sadece Ümit hesabında görünmeli.");
   await page.getByRole("button", { name: "Çıkış", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
   await page
     .locator("header")
     .getByRole("link", { name: "Giriş yap", exact: true })
     .click();
+  await expect(page).toHaveURL(/\/giris(?:\?|$)/);
   await login(page, "deniz@example.test");
-  await page
-    .locator(".app-aside")
-    .getByRole("link", { name: "İlk bisikletini seçerken", exact: true })
-    .click();
+  // The 09 scene deliberately hides demo shortcuts from the visual layout.
+  // Activate the existing Next Link without a full navigation (which would reset DemoClient).
+  await page.locator('.app-aside a[href="/karar/ilk-bisiklet"]')
+    .evaluate((link: HTMLAnchorElement) => link.click());
+  await expect(page).toHaveURL(/\/karar\/ilk-bisiklet$/);
   await expect(page.getByLabel("Yorumun", { exact: true })).toHaveValue("");
   await page
     .getByRole("button", { name: "Alternatifler (1)", exact: true })
@@ -306,10 +314,11 @@ test("gallery keyboard controls, load retry, locked and closed states, mobile/li
     "none",
   );
   await fail(page, "Yorum yükleme hatası");
-  await page
-    .locator(".app-aside")
-    .getByRole("link", { name: "İlk bisikletini seçerken", exact: true })
-    .click();
+  // The 09 scene deliberately hides demo shortcuts from the visual layout.
+  // Activate the existing Next Link without a full navigation (which would reset DemoClient).
+  await page.locator('.app-aside a[href="/karar/ilk-bisiklet"]')
+    .evaluate((link: HTMLAnchorElement) => link.click());
+  await expect(page).toHaveURL(/\/karar\/ilk-bisiklet$/);
   await expect(
     page.getByRole("heading", { name: "Yorumlar yüklenemedi." }),
   ).toBeVisible();

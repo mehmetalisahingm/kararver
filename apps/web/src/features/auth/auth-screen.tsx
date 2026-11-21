@@ -1,12 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useProduct } from "../../components/product-provider";
 import { ErrorMessage, Field } from "../../components/fields";
 import { ApiClient } from "../../lib/api-client";
-import { UiError, safeReturnTo } from "../../lib/model";
+import { UiError, safeReturnTo, needsAdultDeclaration as isAdultDeclarationEnforced } from "../../lib/model";
 import { clearWelcomeDraft, readWelcomeDraft } from "../../lib/welcome-draft";
 import { WelcomeAuthContext } from "../onboarding/welcome";
 export type AuthMode = "login" | "register" | "verify" | "forgot" | "reset";
@@ -38,6 +38,8 @@ export function AuthScreen({
   const [adultConfirmed, setAdultConfirmed] = useState(false);
   const [needsAdultDeclaration, setNeedsAdultDeclaration] = useState(false);
   const [legacyAdultConfirmed, setLegacyAdultConfirmed] = useState(false);
+  const legacyDeclaration = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (needsAdultDeclaration) legacyDeclaration.current?.focus(); }, [needsAdultDeclaration, user?.id]);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -129,7 +131,7 @@ export function AuthScreen({
     }
     // A pre-policy account may sign in but cannot publish, vote or comment until
     // it makes an explicit 18+ declaration. Do not redirect to an unusable page.
-    if (!demo && client.current()?.adultDeclarationRequired) {
+    if (!demo && isAdultDeclarationEnforced(client.current())) {
       setNeedsAdultDeclaration(true);
       return;
     }
@@ -236,11 +238,11 @@ export function AuthScreen({
         hesap: deniz@example.test. Yeni kayıt .test uzantılı olmalı. Kod:{" "}
         <strong>123456</strong>. Gerçek e-posta gönderilmez.
       </div>}
-      {needsAdultDeclaration && !demo ? (
+      {needsAdultDeclaration && !demo && user ? (
         <form className="screen-stack" onSubmit={submitLegacyAdultDeclaration}>
           <p role="status">Giriş başarılı. Hesabınla oy vermek, yorum yapmak veya anket yayımlamak için 18 yaşını doldurduğunu beyan etmen gerekiyor.</p>
           <label className="kv-check-row">
-            <input type="checkbox" name="legacyAdultConfirmed" disabled={!interactive || busy}
+            <input ref={legacyDeclaration} type="checkbox" name="legacyAdultConfirmed" disabled={!interactive || busy}
               checked={legacyAdultConfirmed} onChange={event => setLegacyAdultConfirmed(event.target.checked)} required />
             <span>18 yaşımı doldurduğumu beyan ediyorum. Bu bir öz beyandır, kimlik doğrulaması değildir.</span>
           </label>

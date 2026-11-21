@@ -8,9 +8,41 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import type { PrismaClient } from "@kararver/db";
 import { createHarness, memoryBackend, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
+import { createArgon2Hasher } from "../src/modules/auth/crypto.ts";
 
 const backend = prismaBackend();
 const json = { origin: WEB_ORIGIN, "content-type": "application/json" };
+
+for (const enforced of [false, true]) test(`login and me separate pending declaration from enforcement=${enforced} (memory)`, async () => {
+  const h = await createHarness(memoryBackend, { adultDeclarationRequired: true, legacyAdultDeclarationEnforced: enforced });
+  try {
+    // Isolated pre-policy account; no staging/database account is created or changed.
+    const password = "synthetic-password-18";
+    const created = await h.store.createUser({email:"legacy@example.test",emailNormalized:"legacy@example.test",username:"legacy",usernameNormalized:"legacy",displayName:"Legacy",passwordHash:await createArgon2Hasher().hash(password),adultDeclaredAt:null},
+      {purpose:"EMAIL_VERIFICATION",tokenHash:"synthetic-unused-token",expiresAt:new Date("2035-01-01T00:00:00Z")});
+    assert.equal(created.ok,true);
+    const login = await h.app.inject({method:"POST",url:"/v1/auth/login",headers:json,payload:JSON.stringify({email:"legacy@example.test",password})});
+    assert.equal(login.statusCode,200,login.body);
+    assert.equal(login.json().data.adultDeclarationRequired,true);
+    assert.equal(login.json().data.adultDeclarationEnforced,enforced);
+    const headers = {...json,cookie:sessionCookie(login.headers["set-cookie"])};
+    const me = await h.app.inject({method:"GET",url:"/v1/me",headers});
+    assert.equal(me.statusCode,200,me.body);
+    assert.equal(me.json().data.adultDeclarationRequired,true);
+    assert.equal(me.json().data.adultDeclarationEnforced,enforced);
+    const profile = await h.app.inject({method:"PATCH",url:"/v1/me",headers,payload:JSON.stringify({displayName:"Legacy updated"})});
+    assert.equal(profile.statusCode,200,profile.body);
+    assert.equal(profile.json().data.adultDeclarationRequired,true);
+    assert.equal(profile.json().data.adultDeclarationEnforced,enforced);
+    const declaration = await h.app.inject({method:"POST",url:"/v1/me/adult-declaration",headers,payload:JSON.stringify({adultConfirmed:true})});
+    assert.equal(declaration.statusCode,200,declaration.body);
+    const after = await h.app.inject({method:"GET",url:"/v1/me",headers});
+    assert.equal(after.json().data.adultDeclarationRequired,false);
+    assert.equal(after.json().data.adultDeclarationEnforced,false);
+    const registration = await h.app.inject({method:"POST",url:"/v1/auth/register",headers:json,payload:JSON.stringify({email:"new@example.test",username:"newuser",displayName:"New",password})});
+    assert.equal(registration.statusCode,400,"new signup declaration remains mandatory regardless of legacy flag");
+  } finally { await h.close(); }
+});
 
 async function signUp(h: Harness, adultConfirmed: boolean | undefined) {
   const nonce = randomUUID().replaceAll("-", "").slice(0, 12);

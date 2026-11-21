@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useProduct } from "../../components/product-provider";
 import { ApiClient } from "../../lib/api-client";
 import { ErrorMessage, Field } from "../../components/fields";
@@ -12,6 +13,7 @@ import {
   emptyDraft,
   UiError,
   validateDraft,
+  needsAdultDeclaration,
 } from "../../lib/model";
 import type { FieldErrors } from "../../lib/model";
 import styles from "./polls.module.css";
@@ -32,11 +34,23 @@ export function Composer() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [activeStep, setActiveStep] = useState("compose-story");
+  const [previewExpanded, setPreviewExpanded] = useState(false);
   const [media, setMedia] = useState<MediaSelection>({ids:[],blocked:false});
   const dialog = useRef<HTMLDialogElement>(null);
   const previewButton = useRef<HTMLButtonElement>(null);
   const lock = useRef(false);
   const request = useRef({ fingerprint: "", key: "" });
+  useEffect(() => {
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) if (entry.isIntersecting) {
+        const title = entry.target.querySelector("h2");
+        if (title?.id) setActiveStep(title.id);
+      }
+    }, { rootMargin: "-15% 0px -65% 0px", threshold: 0 });
+    document.querySelectorAll(".compose-workspace form > section").forEach(section => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
   const publishCost = user?.publishCost ?? 10;
   const update = (change: Partial<typeof draft>) => {
     setDraft({ ...draft, ...change });
@@ -56,7 +70,7 @@ export function Composer() {
       );
       return;
     }
-    if (!requireUser("/olustur")) return;
+    if (!requireUser("/olustur", true)) return;
     dialog.current?.showModal();
   }
   async function publish() {
@@ -84,6 +98,7 @@ export function Composer() {
       setBusy(false);
     }
   }
+  if (needsAdultDeclaration(user)) return <section className="kv-card screen-stack"><h1>Katılım için 18+ beyanı gerekiyor.</h1><p>Görsel yüklemeden veya anket oluşturmadan önce yaş beyanını tamamla. Kamuya açık içerikleri okumaya devam edebilirsin.</p><Link className="kv-button" href="/hesap/yas-beyani?returnTo=%2Folustur">Yaş beyanına git</Link><Link href="/kesfet">İçerikleri keşfet</Link></section>;
   return (
     <section className={`screen-stack ${styles.editor}`}>
       <div>
@@ -94,8 +109,9 @@ export function Composer() {
         </p>
       </div>
       <nav aria-label="Oluşturma adımları">
-        <ol className={styles.steps}>{[["compose-story","1 · Sorunu hazırla"],["compose-settings","2 · Yayını düzenle"],["compose-media","3 · Görseller ve önizleme"]].map(([target,label])=><li key={target}><button type="button" onClick={()=>document.getElementById(target)?.focus()}>{label}</button></li>)}</ol>
+        <ol className={styles.steps}>{[["compose-story","01","Sorunu hazırla"],["compose-settings","02","Yayını düzenle"],["compose-media","03","Son dokunuş"]].map(([target,number,label])=><li key={target}><button type="button" aria-current={activeStep === target ? "step" : undefined} onClick={()=>document.getElementById(target)?.focus()}><span>{number}</span><strong>{label}</strong></button></li>)}</ol>
       </nav>
+      <div className="compose-workspace">
       <form className="kv-card screen-stack" onSubmit={review} noValidate>
         <section className={styles.section} aria-labelledby="compose-story">
           <h2 id="compose-story" tabIndex={-1}>1 · Sorunu hazırla</h2>
@@ -326,6 +342,19 @@ export function Composer() {
         </button>
         </section>
       </form>
+      <aside className="compose-preview" aria-labelledby="live-preview-title" data-expanded={previewExpanded}>
+        <div className="compose-preview__top"><div><span>FİKRİN ŞEKİL ALIYOR</span><h2 id="live-preview-title">Canlı önizleme</h2></div><span className="compose-preview__live"><i /> TASLAK</span></div>
+        <div className="compose-preview__mobile"><span>{draft.title.trim() || "Sorun burada hayat bulacak."}</span><button type="button" aria-controls="compose-live-card" aria-expanded={previewExpanded} onClick={() => setPreviewExpanded(value => !value)}>{previewExpanded ? "Kapat" : "Göster"}</button></div>
+        <div className="compose-preview__card" id="compose-live-card">
+          <div className="compose-preview__orbit" aria-hidden="true"><div className="compose-preview__planet" /></div>
+          <div className="compose-preview__content"><span className="compose-preview__category">{draft.category || "Kategori seç"} · {draft.kind === "poll" ? "Anket" : "Tartışma"}</span><h3>{draft.title.trim() || "Sorun burada hayat bulacak."}</h3><p>{draft.description.trim() || "İstersen soruna birkaç detay ekle."}</p>
+            {draft.kind === "poll" && <ul>{draft.options.map((option, index) => <li key={index}><i aria-hidden="true" />{option.trim() || `${index + 1}. seçenek`}</li>)}</ul>}
+            <div className="compose-preview__footer">{draft.kind === "poll" ? `${draft.hours < 24 ? `${draft.hours} saat` : `${draft.hours / 24} gün`} · ${draft.visibility === "always" ? "Sonuçlar açık" : "Oy sonrası sonuç"}` : "Fikir alışverişi"}</div>
+          </div>
+        </div>
+        <p>Yazdıkların anında burada görünür. Eklenen görselleri aşağıdaki yükleme alanında kontrol edebilirsin.</p>
+      </aside>
+      </div>
       <dialog
         ref={dialog}
         className="kv-dialog"

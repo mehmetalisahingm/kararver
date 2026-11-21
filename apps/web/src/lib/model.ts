@@ -11,6 +11,7 @@ export type User = {
   verified: boolean;
   /** Eski hesabın katılım işlemleri için 18+ öz beyanı bekleniyor. */
   adultDeclarationRequired?: boolean;
+  adultDeclarationEnforced?: boolean;
   balance: number | null;
   publishCost?: number | null;
   username?: string;
@@ -147,10 +148,19 @@ export function validateDraft(draft: Draft): FieldErrors {
   return errors;
 }
 export function safeReturnTo(value: string | null): string {
+  if (value?.startsWith("/hesap/yas-beyani?")) {
+    if (value.length > 1024) return "/";
+    const params = new URLSearchParams(value.slice(value.indexOf("?") + 1));
+    const target = params.get("returnTo");
+    if ([...params.keys()].length !== 1 || !target || target.startsWith("/hesap/yas-beyani") || safeReturnTo(target) !== target) return "/";
+    return `/hesap/yas-beyani?returnTo=${encodeURIComponent(target)}`;
+  }
   return value &&
     (/^\/$/.test(value) ||
       /^\/olustur$/.test(value) ||
       /^\/hesap$/.test(value) ||
+      /^\/hesap\/yas-beyani$/.test(value) ||
+      /^\/topluluk\/[a-z0-9-]{2,60}$/.test(value) ||
         /^\/hesap\/guvenlik$/.test(value) ||
       /^\/bildirimler$/.test(value) ||
       /^\/ilgi-alanlari$/.test(value) ||
@@ -160,6 +170,10 @@ export function safeReturnTo(value: string | null): string {
       /^\/karar\/[A-Za-z0-9_-]+$/.test(value))
     ? value
     : "/";
+}
+/** Missing enforcement field preserves older server behavior; an explicit false is non-blocking. */
+export function needsAdultDeclaration(user: User | null | undefined): boolean {
+  return !!user?.adultDeclarationRequired && user.adultDeclarationEnforced !== false;
 }
 export type Decision = { pollId: string; chosenOptionId: string | null; note: string; updatedAt: string };
 export type DecisionState = { decision: Decision | null; following: boolean; isAuthor: boolean };

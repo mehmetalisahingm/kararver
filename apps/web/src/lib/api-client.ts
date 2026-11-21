@@ -108,6 +108,7 @@ export class ApiClient implements ProductClient {
       email: data.email,
       verified: data.emailVerified,
       adultDeclarationRequired: data.adultDeclarationRequired ?? false,
+      adultDeclarationEnforced: data.adultDeclarationEnforced,
       balance: previous?.balance ?? null,
       publishCost: previous?.publishCost ?? null,
       username: data.username,
@@ -135,7 +136,10 @@ export class ApiClient implements ProductClient {
   /** Own 18+ self-declaration. The server records the first accepted timestamp. */
   async confirmAdultDeclaration() {
     await this.http.request("me.adultDeclaration.confirm", { body: { adultConfirmed: true } });
-    return this.restore();
+    const user = await this.restore();
+    if (!user) throw new UiError("UNAUTHENTICATED", "Oturumun sona erdi. Yeniden giriş yap.");
+    if (user.adultDeclarationRequired) throw new UiError("DECLARATION_PENDING", "Beyan henüz doğrulanamadı. Durumunu kontrol edip tekrar dene.");
+    return user;
   }
   async register(name: string, email: string, password: string, username?: string, adultConfirmed?: boolean) {
     await this.http.request("auth.register", { body: { displayName: name, email, password, username, ...(adultConfirmed === undefined ? {} : { adultConfirmed }) } });
