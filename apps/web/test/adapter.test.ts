@@ -119,6 +119,11 @@ test("draft guards and return target never allow external or ambiguous navigatio
   assert.equal(safeReturnTo("/veri-indir?x=1"), "/");
   assert.equal(safeReturnTo("/veri-indir/baska"), "/");
   assert.equal(safeReturnTo("/topluluk/yazilim"), "/topluluk/yazilim");
+  for (const slug of ["ab", "a".repeat(60)]) assert.equal(safeReturnTo(`/topluluk/${slug}`), `/topluluk/${slug}`);
+  for (const slug of ["a", "a".repeat(61), "with_underscore"]) {
+    assert.equal(safeReturnTo(`/topluluk/${slug}`), "/");
+    assert.equal(safeReturnTo(`/hesap/yas-beyani?returnTo=${encodeURIComponent(`/topluluk/${slug}`)}`), "/");
+  }
   const declaration = "/hesap/yas-beyani?returnTo=%2Ftopluluk%2Fyazilim";
   assert.equal(safeReturnTo(declaration), declaration);
   for (const target of ["https://evil.test", "//evil.test", "/\\evil.test", "/topluluk/../admin", "/topluluk/%2f%2fevil.test", "/hesap/yas-beyani?returnTo=%2Folustur"]) {

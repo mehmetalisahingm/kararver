@@ -160,7 +160,7 @@ export function safeReturnTo(value: string | null): string {
       /^\/olustur$/.test(value) ||
       /^\/hesap$/.test(value) ||
       /^\/hesap\/yas-beyani$/.test(value) ||
-      /^\/topluluk\/[a-z0-9][a-z0-9_-]{0,79}$/.test(value) ||
+      /^\/topluluk\/[a-z0-9-]{2,60}$/.test(value) ||
         /^\/hesap\/guvenlik$/.test(value) ||
       /^\/bildirimler$/.test(value) ||
       /^\/ilgi-alanlari$/.test(value) ||
