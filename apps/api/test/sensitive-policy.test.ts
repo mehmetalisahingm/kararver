@@ -236,3 +236,23 @@ test("review #371: new generalizations do not classify neutral policy topics as 
     "Parti afişlerinde hangi renkler tercih ediliyor?",
   ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
 });
+
+test("review #371: self-identification and first-person voting options cannot bypass generic questions", () => {
+  const options = (...labels: string[]) => labels.map(label => ({ label }));
+  const cases = [
+    { title: "Kendinizi hangisine yakın hissediyorsunuz?", options: options("Alevi", "Sünni"), category: "belief" },
+    { title: "Sence?", options: options("Ben CHP'ye oy verdim", "Ben DEM'e oy verdim"), category: "political" },
+    { title: "Hangisini seçersiniz?", options: options("AKP'ye oy veriyorum", "MHP'ye oy veriyorum"), category: "political" },
+  ] as const;
+  for (const input of cases) {
+    assert.deepEqual(detectSensitiveSurvey(input), { field: "options.0.label", category: input.category }, input.title);
+  }
+});
+
+test("review #371: group-history and election-level discussion are not first-person disclosure", () => {
+  assert.equal(detectSensitiveSurvey({
+    title: "Kültür dersinde hangi konuya öncelik verilmeli?",
+    options: [{ label: "Alevilik tarihi" }, { label: "Sünnilik tarihi" }],
+  }), null);
+  assert.equal(detectSensitiveSurvey({ title: "Partilerin oy oranları nasıl değişti?" }), null);
+});
