@@ -29,6 +29,11 @@ jobs:
       - name: Real local HTTP crawler and removal regression
         if: matrix.browser == 'chromium'
         run: pnpm --filter @kararver/web exec playwright test -c playwright.public-read.config.ts
+      - name: Staging API-mode crawler and removal regression
+        if: matrix.browser == 'chromium'
+        run: pnpm --filter @kararver/web exec playwright test -c playwright.public-read.config.ts
+        env:
+          PUBLIC_READ_APP_ENV: staging
       - uses: actions/upload-artifact@v4
         if: always()
         with:
