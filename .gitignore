@@ -41,12 +41,13 @@ beta-reports/
 .playwright-cli/
 output/playwright/
 
-# KV-48 / #51: yedek anahtarları, dökümleri ve manifestleri asla commit edilmez.
+# KV-48 / #51: yedek anahtarları ve yedek dosyaları asla commit edilmez.
 *.pem
-backups/
 *.dump
 *.dump.enc
+# pg_dump yanındaki manifest şema, sayım ve kaynak metaverisi içerebilir (#375).
 *.dump.manifest.json
+*.dump.enc.manifest.json
 
 # KV-44 (#46): yerel kesinti kabul testi çıktıları (pnpm outage:test -- --out ...)
 outage-sonuc*.json
