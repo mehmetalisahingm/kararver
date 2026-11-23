@@ -51,6 +51,13 @@ export async function checkSecurityGate(origin, http = fetch, timeoutMs = 12_000
     emit(name, res.status === expectedStatus, "HTTP " + res.status + " (expected " + expectedStatus + ")");
     emit(name + ".no_server_fingerprint", !res.headers.has("x-powered-by"), res.headers.has("x-powered-by") ? "X-Powered-By exposed" : "not exposed");
     emit(name + ".hsts", Boolean(res.headers.get("strict-transport-security")), res.headers.get("strict-transport-security") ? "present" : "missing");
+    // Private 401s must never be cacheable by shared proxies or browsers (#46).
+    // Inspect only directive names, never echo any response body or private headers.
+    if (expectedStatus === 401) {
+      const cache = res.headers.get("cache-control") || "";
+      const noStore = /(?:^|,)\s*no-store\s*(?:,|$)/i.test(cache);
+      emit(name + ".no-store", noStore, noStore ? "private response not cacheable" : "missing no-store");
+    }
     return res;
   };
   const health = await response("health", "/health", 200);
