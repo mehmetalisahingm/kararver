@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { checkSecurityGate, validateApiUrl } from "./security-acceptance.mjs";
 
 const ORIGIN = "https://kararver-api-free-preview.onrender.com";
-const headers = { "strict-transport-security": "max-age=31536000" };
+const headers = { "strict-transport-security": "max-age=31536000", "cache-control": "private, no-store" };
 const api = (override = () => null) => async (url, init) => {
   assert.equal(init.method, "GET", "only read-only requests permitted");
   assert.equal(init.redirect, "manual");
@@ -53,6 +53,29 @@ test("fails closed on missing HSTS, X-Powered-By disclosure, private user data, 
   for (const id of ["health.hsts","public-config.no-secrets","guest-admin-users","guest-account.no_server_fingerprint","cross-origin-admin.auth","cross-origin-admin.cors"]) {
     assert.ok(failed.includes(id), "missing expected failure: " + id);
   }
+});
+
+test("401 private boundaries fail closed if no-store is missing or publicly cacheable", async () => {
+  const report = await checkSecurityGate(ORIGIN, api((path, init) => {
+    if (path === "/v1/me") {
+      return Response.json({ error: { code: "UNAUTHENTICATED" } }, {
+        status: 401,
+        headers: { "strict-transport-security": "max-age=31536000", "cache-control": "public, max-age=600" },
+      });
+    }
+    if (path === "/v1/admin/users" && init.headers.origin === "https://attacker.invalid") {
+      return Response.json({ error: { code: "UNAUTHENTICATED" } }, {
+        status: 401,
+        headers: { "strict-transport-security": "max-age=31536000" },
+      });
+    }
+    return null;
+  }));
+  const failed = report.checks.filter(x => x.result === "FAIL").map(x => x.id);
+  assert.ok(failed.includes("guest-account.no-store"));
+  assert.ok(failed.includes("cross-origin-admin.no-store"));
+  assert.deepEqual([...failed].sort(), ["cross-origin-admin.no-store", "guest-account.no-store"]);
+  assert.equal(report.betaGate, "NO_GO_NEEDS_AUTHENTICATED_STAGING_TESTS_AND_SIGNOFF");
 });
 
 test("network unreachable is a FAIL, not a simulated PASS or beta GO", async () => {
