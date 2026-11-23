@@ -78,6 +78,29 @@ test("401 private boundaries fail closed if no-store is missing or publicly cach
   assert.equal(report.betaGate, "NO_GO_NEEDS_AUTHENTICATED_STAGING_TESTS_AND_SIGNOFF");
 });
 
+test("HSTS must be enabled for at least 180 days, not merely present", async () => {
+  const healthy = [
+    "max-age=31536000",
+    "MAX-AGE = 15552000; includeSubDomains",
+    'max-age="31536000"; preload',
+  ];
+  const weak = [
+    null, "", "includeSubDomains", "max-age=0", "max-age=86400",
+    "max-age=15551999", "max-age=invalid", "max-age=-1",
+    "max-age=999999999999999999999999", "max-age=31536000; max-age=0",
+  ];
+  for (const [value, expected] of [...healthy.map(x => [x, "PASS"]), ...weak.map(x => [x, "FAIL"])]) {
+    const report = await checkSecurityGate(ORIGIN, api((path) => {
+      if (path !== "/health") return null;
+      const headers = { "cache-control": "no-store" };
+      if (value !== null) headers["strict-transport-security"] = value;
+      return Response.json({ status: "ok" }, { headers });
+    }));
+    const hsts = report.checks.find(x => x.id === "health.hsts");
+    assert.equal(hsts?.result, expected, String(value));
+  }
+});
+
 test("network unreachable is a FAIL, not a simulated PASS or beta GO", async () => {
   const report = await checkSecurityGate(ORIGIN, async () => { throw new Error("do not leak https://user:password@host"); });
   assert.ok(report.totals.fail > 0);
