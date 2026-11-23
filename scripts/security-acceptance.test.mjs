@@ -73,8 +73,8 @@ test("401 private boundaries fail closed if no-store is missing or publicly cach
   }));
   const failed = report.checks.filter(x => x.result === "FAIL").map(x => x.id);
   assert.ok(failed.includes("guest-account.no-store"));
-  // The cross-origin request is independently tested below; it must not hide a cache leak.
-  assert.ok(failed.every(x => x === "guest-account.no-store"), JSON.stringify(failed));
+  assert.ok(failed.includes("cross-origin-admin.no-store"));
+  assert.deepEqual([...failed].sort(), ["cross-origin-admin.no-store", "guest-account.no-store"]);
   assert.equal(report.betaGate, "NO_GO_NEEDS_AUTHENTICATED_STAGING_TESTS_AND_SIGNOFF");
 });
 
