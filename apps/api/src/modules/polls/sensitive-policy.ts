@@ -79,9 +79,9 @@ const SENSITIVE_ANSWERS: ReadonlyArray<{ category: SensitiveRisk["category"]; pa
   { category: "membership", pattern: /^(?:sendika uyesi|dernek uyesi|vakif uyesi)$/ },
 ];
 // First-person political option labels disclose a respondent even with a neutral question.
-const POLITICAL_SELF_ANSWER = /^(?:ben )?(?:ak parti|akp|chp|mhp|hdp|dem(?: parti)?|iyi parti|tip|zafer partisi) (?:li|liyim|liyiz)$/;
+const POLITICAL_SELF_ANSWER = /^(?:ben )?(?:ak parti|akp|chp|mhp|hdp|dem(?: parti)?|iyi parti|tip|zafer partisi) (?:li|liyim|liyiz|(?:ye|ya|e|a) oy (?:verdim|veriyorum))$/;
 
-const PERSONAL_CHOICE_PROMPT = /\b(?:hangisisin|hangisiniz|hangi gruptasin|hangi gruptasiniz|hangisini tercih edersin|hangisini secersin|hangisini tercih ediyorsun|hangi gruba aitsin|sana yakin olan grubu sec|kendini|senin|sizin|sen hangi|siz hangi|sende|kime oy verirsin|hangi dine mensupsun)\b/;
+const PERSONAL_CHOICE_PROMPT = /\b(?:hangisisin|hangisiniz|hangi gruptasin|hangi gruptasiniz|hangisini tercih edersin|hangisini secersin|hangisini tercih ediyorsun|hangi gruba aitsin|sana yakin olan grubu sec|kendini|kendinizi|senin|sizin|sen hangi|siz hangi|sende|kime oy verirsin|hangi dine mensupsun)\b/;
 
 export function detectSensitiveSurvey(input: SensitiveInput): SensitiveRisk | null {
   const fields: Array<[string, string | undefined | null]> = [
