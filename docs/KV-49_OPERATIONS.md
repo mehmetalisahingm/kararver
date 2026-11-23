@@ -13,19 +13,22 @@
 
 ## Ortamlar
 
+> **Güncel durum (23 Kasım 2026):** Railway altyapısından Neon + Render Free + Vercel'e geçildi (#297/#301). Aşağıdaki **Ekim Railway tatbikatları tarihsel kanıttır**, güncel sağlayıcıda yeniden test edilmeden GO veya aynı RTO iddiası değildir. Güvenlik, gerçek restore ve yayın kapıları açık.
+
+
 | | Local | Staging | Production |
 |---|---|---|---|
-| Barındırma | Yerel | Railway `kararver-staging` (`sfo`), web Vercel | Henüz yok (Mehmet kararı) |
+| Barındırma | Yerel | **Render Free** (API + worker), **Vercel** (web), **Neon** (veritabanı) | Henüz yok (Mehmet'in yayın kararı bekleniyor) |
 | API + worker | Ayrı süreçler | **Tek serviste**: `scripts/start-api-with-worker.mjs` (ücretsiz plan; worker çökerse 2 sn'de yeniden başlar, API çökerse servis yeniden başlar) | **Ayrı servisler** (API ve worker bağımsız ölçeklenir/yeniden başlar) |
-| Deploy | — | `main`'e her push otomatik (Railpack); önce `db:deploy` (migration), sonra `/health` kapısı | Elle: onaylı SHA'nın promote edilmesi |
+| Deploy | — | **Web:** Vercel `main` push ile otomatik. **API/worker:** Render autodeploy kapalı; kontrollü migration/backup kapısından sonra elle deploy. | Yalnız onaylı SHA ve yayın kapısıyla |
 | E-posta | console | `mailpit_api`: Mailpit test kutusu, gerçek alıcıya gitmez | `smtp`: gerçek sağlayıcı, TLS zorunlu, SPF/DKIM'li alan adı |
-| Veritabanı | PostgreSQL 17 | PostgreSQL 18.6 (Railway) | Karar: sürüm 17 mi 18 mi (aşağıda) |
-| Medya | Yok / SeaweedFS | Railway bucket'ları | R2 veya Railway bucket'ları, bucket başına doğru anahtar |
+| Veritabanı | Yerel PostgreSQL | Neon PostgreSQL 18 (`kararver-staging-free`, `main` branch); restore kabulü ayrıca açık | Production sağlayıcısı/sürümü ayrıca kararlaştırılacak |
+| Medya | Yerel servis | Neon Object Storage entegrasyonu; gerçek browser PUT → worker → public gösterim kabulü #374 açık | Sağlayıcı, erişim ve testler karar bekliyor |
 
 ## Secret ve ortam değişkenleri
 
-- Secret'lar yalnız Railway/Vercel servis değişkenlerindedir; repoda yalnız `*.example` dosyaları bulunur. Değerler issue, PR ya da log'a yazılmaz.
-- Veritabanı adresi Railway referansı olarak verilir (`${{Postgres.DATABASE_URL}}`); parola değişirse kendiliğinden güncellenir.
+- Secret'lar yalnız ilgili **Render/Vercel/Neon** yapılandırmasında tutulur; repoya, issue'ya, test çıktısına veya loga değer yazılmaz. Sadece boş `*.example` örnekleri repodadır. Yetkisiz erişim ve secret yenileme planı #300/#291 ayrıca kapatılmalıdır.
+- Neon `DATABASE_URL` gizli ortam değişkenidir; migration kontrollü adımında pooler olmayan doğrudan bağlantı kullanılır. Eski Railway `${{Postgres.DATABASE_URL}}` referansı **güncel staging için geçerli değildir**.
 - Zorunlu güvenlik değişkenleri (`config.ts` staging/production'da zorlar): `SESSION_COOKIE_SECURE=true`, `MAIL_TRANSPORT≠console`, `AUTH_TOKEN_PEPPER` (≥ 32 karakter), bütün `S3_*`, `RATE_LIMIT_ENABLED` kapatılamaz.
 - Geçici erişimler iş bitince kapatılır: KV-48 tatbikatında açılan Postgres TCP proxy kapatıldı.
 
@@ -50,23 +53,23 @@
 
 > Railway dönemi (21 Ekim'e kadar): migration'lar Railway'in pre-deploy adımında (`db:deploy`) otomatik uygulanıyordu. Railway servisleri durduruldu (#297).
 
-**Rollback (uygulama):** Railway'de önceki başarılı deployment yeniden deploy edilir (dashboard → Deployments → Redeploy, ya da `railway redeploy`). `/health` → `release.sha` önceki SHA olmalı.
-- **Migration'lar geri alınmaz:** Prisma'da down migration yok; eski sürüm yeni şemayla çalışır (expand/contract kuralı, KV-48). Eski sürümün `db:deploy` adımı yeni migration'ları zaten uygulanmış bulur.
-- **Veri bozulduysa:** KV-48 restore runbook'u (yeni veritabanına geri yükle, `DATABASE_URL`'i çevir). Ölçülen RTO 5,2 dk.
+**Rollback (uygulama — güncel Render):** Önce etkisini ve migration uyumunu değerlendir; Render'da uygun **önceki başarılı** uygulama sürümüne kontrollü geri dönüş yapılır. Sonra `/health` → `release.sha`, DB ve worker durumları ve anonim smoke kontrol edilir. **Render üzerinde aynı-SHA rollback kabulü henüz kayda geçmediği için 15 Ekim Railway tatbikatı güncel kabul sayılamaz.**
+- **Migration'lar geri alınmaz:** Prisma'da otomatik down migration yoktur. Eski sürümün yeni şema ile uyumu expand/contract kuralıyla önceden doğrulanmalıdır. Render API/worker kendiliğinden `db:deploy` çalıştırmaz; mevcut ve geçmiş sürüm aynı DB üzerinde değerlendirilir (KV-48/#301).
+- **Veri bozulduysa:** KV-48 restore runbook'uyla **ayrı DB** üzerinde doğrulama yap, veri kaybı penceresini işletmeciyle kararlaştır, sonrasında onaylı bağlantı değişimi ve smoke gerçekleştir. Railway'de tarihsel ölçülen 5,2 dk RTO, **güncel Neon/Render için taahhüt veya kabul değildir**.
 
-**Deploy SHA:** `/health` → `release: { sha, env }`. SHA, Railway'in `RAILWAY_GIT_COMMIT_SHA` değişkeninden (yoksa `GIT_COMMIT_SHA`) ilk 12 hanedir.
+**Deploy SHA:** `/health` → `release: { sha, env }` kaynak sürümünü bildirir. Render'da `release.sha` gerçek deploy commit'iyle eşleşmeden kabul yoktur; `RAILWAY_GIT_COMMIT_SHA` eski sağlayıcıya ait tarihsel değişkendir.
 
 ## İzleme ve alarm
 
 | Ne | Nasıl |
 |---|---|
-| API ve veritabanı ayakta mı | `/health`: veritabanını 2 sn zaman aşımıyla yoklar; erişilemezse **HTTP 503** `status: down`, `database.status: down` (#262 bulgusu, #51). Railway deploy kapısı ve `staging-monitor` bunu okur. GitHub zamanlanmış işleri birkaç saatte bir çalıştırdığı için kesinti izlemesi harici bir uptime servisiyle yapılmalı (#51 kararı). |
+| API ve veritabanı ayakta mı | `/health`: DB erişilemiyorsa HTTP 503 ve `database.status: down`. Render açılış/migration kapısı ve `staging-monitor` bunu kontrol eder. GitHub zamanlanmış iş aralıkları sürekli uptime garantisi sağlamaz; harici uptime izleme kararı #51'de açıktır. |
 | Worker çalışıyor mu | `/health` → `worker`: heartbeat yaşı ≤ 3 dk `ready`, ≤ 10 dk `stale` (`status: degraded`, 200), daha eski `stale` + **503** `down`. Aynı serviste (launcher `WORKER_HEARTBEAT_EXPECTED=true` verir) açılıştan 2 dk sonra heartbeat hiç yoksa `missing` + 503. Heartbeat beklenmiyorsa (ayrı servis) `unknown` ve 200; "bilinmiyor" deploy'u engellemez. |
 | Çalışan sürüm | `/health` → `release.sha` |
 | Web ayakta ve doğru build mi | `staging-monitor` web ana sayfasını (`STAGING_WEB_URL`, varsayılan Vercel staging) yönlendirmeleri izleyerek açar: 200 dışı yanıt ya da sayfada `"demo":true` (demo build, #187) alarmdır. API sağlıklıyken web çökmüşse ya da yanlış build yayındaysa da alarm çıkar. |
-| Staging güncel mi | `staging-monitor` iki durumda alarm verir: (1) CI'ı yeşil son main commit'i 60 dakikadan uzun süredir staging'de değilse ve arada API/worker'ı etkileyen dosya varsa (web, `docs/`, `.github/` ve `.md` sayılmaz; Vercel bunları ayrı yayınlar); (2) main CI 24 saattir kırmızıysa; Staging kabul testi için bilerek bir SHA'da tutuluyorsa repo değişkeni `STAGING_PINNED_SHA` verilir: gecikme alarmı yerine "staging o SHA'da mı" denetlenir (beklenmeyen deploy alarmdır); iş bitince değişken silinir. (3) staging main'de olmayan bir commit çalıştırıyorsa (elle deploy edilmiş PR dalı: dalın migration'ları staging DB'sine uygulanmıştır, dal değişirse sonraki main deploy'u migration geçmişiyle çatışır). Railway yalnız yeşil commit'i deploy eder; 9–12 Ekim'de main 3 gün kırmızı kaldı, staging API güncellenmedi ama Vercel her merge'ü aldı (yeni web + eski API). |
+| Staging güncel mi | `staging-monitor`, sağlık ve web kontrollerine ek olarak **API/worker/DB/contracts değişmişse** başarılı `main` sürümünden 60+ dakika geride kalan Render API'yi alarm eder; web/docs/workflow/örnek env değişiklikleri API deploy gerektirmez (#406/#408 düzeltmesi incelemede). `STAGING_PINNED_SHA` varsa bilerek sabitlenen sürüm beklenir; main dışı commit / migration çatışması ayrıca alarmdır. **Güncel API deploy manuel; Vercel web otomatik.** 9–12 Ekim Railway olayları tarihsel kanıttır. |
 | Alarm | `.github/workflows/staging-monitor.yml`: sorun olunca `staging-alarm` etiketli tek bir issue açar ya da yorum ekler; düzelince kapatır. Bildirim, GitHub issue bildirimleriyle sorumluya gider. |
-| Uygulama hataları | Railway logları (`railway logs --service api`): `level=50` veya `[ERROR]`, `mail gönderilemedi`, `hız sınırı aşıldı` (şüpheli işlem) |
+| Uygulama hataları | **Render** API/worker servis logları: `level=50`, `[ERROR]`, e-posta/kuyruk ve hız sınırı hataları. Railway komutları artık canlı staging runbook'u değildir. |
 | Yanlış web build'i (#187) | Vercel web loglarında `"event":"demo_mode_forbidden"` görürseniz **yanlış build deploy edilmiştir**: demo modunda (`NEXT_PUBLIC_KV_DATA_MODE=demo`) alınmış bir build staging/production'da çalışıyor. Web her isteğe 500 döner, smoke `web GET /` FAIL verir. Süreç bilerek kapanmaz. Müdahale: önceki deploy'a rollback, sonra web ortamında `NEXT_PUBLIC_KV_DATA_MODE=api` ve `APP_ENV=staging/production` ile yeniden build. Normalde build koruması bu build'i baştan reddeder. |
 | İş kuyruğu | Worker logları: `trends.refresh`, `snapshots.daily`, `events.dispatch`, `featured.activate`, `polls.expire`, `sanctions.expire`; `media.process` hataları (`MODERATION_TIMEOUT`, `MODEL_ERROR`) |
 | Model | `MODERATION_TIMEOUT` oranı %1'i aşarsa eşzamanlılık düşürülür (KV-47 Medya) |
@@ -96,7 +99,7 @@
 | Durum | Davranış |
 |---|---|
 | Operasyon API'si cevap vermiyor | `/health` ve `staging-monitor` bağımsızdır; alarm yine çalışır. |
-| Veritabanı yok | `/admin/ops` oturum doğrulayamaz (5xx). Karar `/health` ve Railway loglarından verilir. |
+| Veritabanı yok | `/admin/ops` giriş doğrulaması başarısız olabilir (5xx). Karar `/health`, **Neon** durumu ve **Render** loglarıyla doğrulanır. |
 | pg-boss şeması okunamıyor | Kuyruk ve worker `unknown`. Worker logları ve `/health` → `worker` kontrol edilir. |
 | Telemetri boş (yeni başlamış süreç) | Oran ve gecikme `null`. Panel "veri yok" gösterir, sağlıklı saymaz. |
 
@@ -138,8 +141,8 @@ Pilot (KV-45) **staging'de gerçek kullanıcılarla** yapılır; bu yüzden stag
 | 2 | **Alan adı mail kayıtları** | `node scripts/mail-readiness.mjs --domain <alan> --dkim-selector <seçici> --from "<MAIL_FROM>" --smtp-host <sunucu>`: SPF, DKIM, MAIL_FROM hizası ve SMTP TLS/AUTH için FAIL olmamalı. Beta için DMARC `p=none` (WARN) kabul; yayından önce `quarantine` | ⏳ |
 | 3 | **Gerçek teslim** | Gmail ve Outlook'ta birer test hesabıyla kayıt doğrulama ve parola sıfırlama: mail **gelen kutusuna** (spam değil) 2 dk içinde düşer, bağlantı çalışır. Sonuç adres yazılmadan #51'e | ⏳ |
 | 4 | **Yedek açık** | Staging'de `BACKUP_ENABLED=true` (#245; ayrı bucket, yalnız-yazma anahtar, özel anahtar sorumluları). İlk şifreli yedek → `decrypt-backup` → boş DB'ye restore → doğrulama; panelde `backup.status = ok` | ⏳ bucket ve anahtar kararı |
-| 5 | **İzleme ve alarm** | `staging-monitor` (API, worker, web, deploy gecikmesi, main dışı commit) ve `security-staging` yeşil. `staging-alarm` bildirimleri sorumluya düşüyor. Pilot saatlerinde ilk yanıt ≤ 30 dk | ✅ izleme · ⏳ bildirim teyidi |
-| 6 | **Geri dönüş** | Uygulama rollback'i (15 Ekim'de denendi) ve KV-48 restore runbook'u. Pilot durdurma: `features.registration` kapatılır (yeni kayıt durur), gerekirse `maintenance.enabled`. Panelde "Acil durum anahtarları"ndan durum ve yayılma süresi izlenir | ✅ |
+| 5 | **İzleme ve alarm** | `staging-monitor` (API, worker, web, deploy gecikmesi, main dışı commit) ve `security-staging` sağlıklı olmalı. `staging-alarm` bildirimleri Faruk'a ulaşmalı. **#406 yanlış pozitif incelemesi / #408 PR kabulü bekleniyor**; eski ✅ durumu güncel onay değildir. | ⏳ güncel koşu ve bildirim kanıtı |
+| 6 | **Geri dönüş** | **15 Ekim Railway tatbikatı tarihsel**; güncel Neon/Render'da yedek + izole restore + kontrollü rollback ayrıca doğrulanacak. Pilot durdurma: `features.registration` ve gerekirse `maintenance.enabled`. | ⏳ güncel sağlayıcı kabulü |
 | 7 | **Durdurma ölçütleri** | P0 (veri sızıntısı, yetki atlatma, veri kaybı, ödeme/puan çift harcama) → bakım modu + olay müdahalesi + davetler durur. P1 → yeni davet durur, düzeltme aynı SHA'da tekrar test edilir (KV-45 §5) | ✅ tanımlı |
 | 8 | **KVKK** | Gerçek kişisel veri oluşur: yedek saklama 35 gün; restore sonrası anonimleştirmeleri yeniden uygulama (KV-48 restore 7. adım); veri dışa aktarma ve silme talepleri çalışıyor (#181) | ✅ süreç · ⏳ yedek |
 | 9 | **QA hesapları** | Staging'deki test hesapları (`@example.test`) pilot ölçümüne girmez (KV-45 §4); davetten önce listelenir, gerekirse anonimleştirilir | ⏳ |
