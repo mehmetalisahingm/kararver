@@ -4,6 +4,8 @@
 
 ## Özet
 
+> **23 Kasım 2026 — geçerli ortam ayrımı:** Aşağıdaki ✅ tatbikat kanıtları **Ekim 2026 Railway** ortamına aittir. Güncel staging altyapısı **Neon PostgreSQL + Render Free API/worker + Vercel web** oldu (#297/#301). Eski 5,2 dk RTO ve eski Railway rollback'i, güncel ortam için yapılmış **gerçek Neon izole restore / Render rollback kabulü değildir**. Güncel şifreli yedek, bağımsız anahtar, aynı SHA ve silme tekrarına ilişkin kabul #375 ve #51'de **P0 açık / yayın NO-GO** olarak kalır; bu tablo geçmiş teknik kanıtın kaydıdır.
+
 | Kabul koşulu (#50) | Durum | Kanıt |
 |---|---|---|
 | Temiz ortamda gerçek restore ve uygulama smoke testi | ✅ | **Staging (Railway, PG 18.6):** canlı staging DB'sinin yedeği boş bir veritabanına geri yüklendi, birebir doğrulandı; staging API o veritabanına çevrildi ve smoke geçti ([staging tatbikatı](#staging-tatbikatı-2026-10-05)). Yerelde KV-47 profiliyle de: 50 kullanıcı × 60 sn yük, **%0 hata**, doğruluk 9/9 ([tatbikat](#tatbikat-2026-10-02)). |
