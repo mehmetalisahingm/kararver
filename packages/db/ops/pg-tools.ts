@@ -23,6 +23,13 @@ export function pgEnv(connectionString: string): Record<string, string> {
   if (url.username) env.PGUSER = decodeURIComponent(url.username);
   if (url.password) env.PGPASSWORD = decodeURIComponent(url.password);
   const sslmode = url.searchParams.get("sslmode");
+  // libpq defaults to "prefer", which can silently fall back to plaintext and
+  // expose backup/restore credentials and data. Remote DBs must opt in to TLS.
+  // Local isolated PostgreSQL test/restore databases remain usable without TLS.
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname.toLowerCase());
+  if (!local && !["require", "verify-ca", "verify-full"].includes(sslmode ?? "")) {
+    throw new Error("Uzak PostgreSQL yedek/restore bağlantısı için sslmode=require|verify-ca|verify-full zorunlu");
+  }
   if (sslmode) env.PGSSLMODE = sslmode;
   return env;
 }
