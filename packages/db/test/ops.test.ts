@@ -151,6 +151,23 @@ describe("durum karşılaştırması ve bağlantı", () => {
     assert.notEqual(normalizeConstraint("t.c CHECK ((a)::text = 'x' AND b > 0)"), normalizeConstraint("t.c CHECK ((a)::text = 'x' OR b > 0)"));
   });
 
+  test("uzak yedek/restore PostgreSQL bağlantısı TLS olmadan fail-closed olur", () => {
+    const base = "postgresql://backup@db.example:5432/kararver";
+    for (const url of [
+      base,
+      ...["disable", "allow", "prefer"].map(mode => base + "?sslmode=" + mode),
+    ]) {
+      assert.throws(() => pgEnv(url), /sslmode=require\|verify-ca\|verify-full/, url);
+    }
+    for (const mode of ["require", "verify-ca", "verify-full"]) {
+      assert.equal(pgEnv(base + "?sslmode=" + mode).PGSSLMODE, mode);
+    }
+    // The isolated local PostgreSQL test/restore environment does not require TLS.
+    for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
+      assert.equal(pgEnv(`postgresql://backup@${host}:5432/kararver_restore`).PGHOST, host);
+    }
+  });
+
   test("parola ortam değişkeniyle geçer, loglarda gizlenir", () => {
     const url = "postgresql://kararver:p%40ss%3Aw@db.example:6543/kararver?sslmode=require";
     assert.deepEqual(pgEnv(url), {
