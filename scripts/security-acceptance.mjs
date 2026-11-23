@@ -85,6 +85,8 @@ export async function checkSecurityGate(origin, http = fetch, timeoutMs = 12_000
   else {
     const res = crossOrigin.response;
     emit("cross-origin-admin.auth", res.status === 401, "HTTP " + res.status);
+    const cache = res.headers.get("cache-control") || "";
+    emit("cross-origin-admin.no-store", /(?:^|,)\s*no-store\s*(?:,|$)/i.test(cache), "cross-origin private response cache policy");
     const allowed = res.headers.get("access-control-allow-origin");
     emit("cross-origin-admin.cors", !allowed || (allowed !== "*" && allowed !== "https://attacker.invalid"), allowed ? "origin rule checked" : "origin not reflected");
   }
