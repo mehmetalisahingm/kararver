@@ -63,7 +63,8 @@ export function verifyPreview({ html, status, url, removed, environment }) {
   const noindex = /(?:^|,)\s*noindex(?:,|$)/.test(robots);
 
   if (removed) {
-    add("removed-status", [200, 404, 410].includes(status));
+    // A 200 soft-404 used to mask missing polls on staging (#405). Do not accept it as removal proof.
+    add("removed-status", status === 404 || status === 410);
     add("removed-noindex", noindex);
     let refersToRemoved = false;
     try { refersToRemoved = new URL(m("og:url")).pathname === url.pathname; } catch { /* OG URL absent */ }
