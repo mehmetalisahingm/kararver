@@ -13,7 +13,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
-import { backup } from "../ops/backup.ts";
+import { backup, recordBackupRun, type Manifest } from "../ops/backup.ts";
 import { approval, checkMigrations, CUTOFF, findDestructive, transactional } from "../ops/check-migrations.ts";
 import { pgEnv, pgTool, redact, withDatabase } from "../ops/pg-tools.ts";
 import { restore } from "../ops/restore.ts";
@@ -165,6 +165,22 @@ describe("durum karşılaştırması ve bağlantı", () => {
     // The isolated local PostgreSQL test/restore environment does not require TLS.
     for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
       assert.equal(pgEnv(`postgresql://backup@${host}:5432/kararver_restore`).PGHOST, host);
+    }
+  });
+
+  test("TLS kapısı yedek/restore bağlantısı ve dosya işlemlerinden önce çalışır", async () => {
+    const url = "postgresql://backup@db.invalid:5432/kararver";
+    const dir = await mkdtemp(path.join(os.tmpdir(), "kv48-tls-"));
+    const missing = path.join(dir, "must-not-exist");
+    const tlsError = /sslmode=require\|verify-ca\|verify-full/;
+    try {
+      await assert.rejects(backup(url, missing), tlsError);
+      await assert.rejects(restore(path.join(missing, "absent.dump"), url), tlsError);
+      await assert.rejects(recordBackupRun(url, {} as Manifest, "local"), tlsError);
+      await assert.rejects(readFile(missing), { code: "ENOENT" });
+      assert.throws(() => pgEnv(url + "?sslmode=require&sslmode=disable"), /sslmode yalnız bir kez/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 
