@@ -146,6 +146,8 @@ jobs:
           if-no-files-found: error
       - name: API screen states, desktop/mobile and both themes
         run: pnpm --filter @kararver/web exec playwright test -c playwright.states.config.ts
+      - name: Legacy declaration at 390px
+        run: pnpm --filter @kararver/web exec playwright test -c playwright.adult.config.ts --project ${{ matrix.browser }}-390
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -153,6 +155,7 @@ jobs:
           path: |
             apps/web/test-results
             apps/web/state-report
+            apps/web/adult-results
       - name: Auth, votes, social, discovery and admin browser regressions
         if: matrix.browser != 'chromium'
         run: pnpm --filter @kararver/web test:e2e

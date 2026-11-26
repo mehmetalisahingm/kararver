@@ -41,6 +41,8 @@ Kanıt: `apps/api/test/adult-declaration.test.ts` (PostgreSQL) ve `packages/cont
 
 ## Veri minimizasyonu ve kaynak
 
+**19 Kasım #381 sözleşme açıklığı:** `adultDeclarationRequired` eksik beyanı bildirir; login, `/me` ve profil yanıtındaki ek `adultDeclarationEnforced` alanı ise bu hesap için yayın anahtarının etkin katılım kısıtını bildirir. Web, açık `false` değerinde engellemeden hatırlatma sunar. Böylece yukarıdaki aşamalı yayın sırası ve yeni kayıt beyan zorunluluğu korunur. Yeni API/web aynı adayda kabul edilmelidir; bu açıklama anahtarı etkinleştirme veya hukuki kabul değildir.
+
 18+ ürün kararı, otomatik KVKK açık rızası veya işleme şartı anlamına gelmez. Kayıt sözleşmesi için gereken veriler ile seçime bağlı analitik/pazarlama rızaları ayrı değerlendirilir. Doğum tarihi/kimlik görüntüsü gibi ağır veriler gerekli olduğuna ilişkin hukuk/teknik karar olmadan eklenmez.
 
 - KVKK kişisel veri hukuki şartları: https://www.kvkk.gov.tr/Icerik/2050/Kisisel-Veriler

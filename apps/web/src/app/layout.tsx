@@ -10,6 +10,16 @@ import "./globals.css";
 import "./premium.css";
 import "./legal.css";
 import "./privacy-preferences.css";
+import "./immersive.css";
+import "./space.css";
+import "./gravity.css";
+import "./orbital-journey.css";
+import "./mission.css";
+import "./studio.css";
+import "./refinements.css";
+import "./decision-orbit.css";
+import "./exploration.css";
+import "./quality-refinements.css";
 
 const webUrl = new URL(process.env.WEB_URL ?? "http://localhost:3000");
 const publicIndexing = process.env.APP_ENV === "production";
@@ -40,6 +50,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <Suspense fallback={null}><SourceAttribution /></Suspense>
         <div className="site-content">
+          {/* Route screens own their loading states. A root loading boundary
+              would commit 200 before public-poll 404/5xx is known. */}
           <SiteShell legalLinks={links}>
             {children}
           </SiteShell>

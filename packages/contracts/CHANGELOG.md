@@ -9,6 +9,12 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.45.0 — 2026-11-21 (Ümit, #365 / #381: aşamalı yaş beyanı UI sözleşmesi)
+
+- `Me.adultDeclarationEnforced?: boolean`: yalnız kendi hesap/login/profil yanıtında, sunucunun mevcut session yayın anahtarından türetilen etkin katılım kısıtı. `adultDeclarationRequired` eksik beyanı bildirmeye devam eder; açık `false` değerinde web engellemeden hatırlatma sunar.
+- Alan optional ve eklemelidir; eski fixture'lar geçerlidir. Yeni alanı vermeyen sunucuda web önceki koruyucu davranışı sürdürür. Yeni kayıt beyan şartı, backend yetki kuralları ve yayın anahtarının değeri değişmez.
+- Paket minor sürümü artırıldı; wire `contractVersion = "1.0"` aynı. API/web aynı aday sürümde doğrulanır; migration/flag, staging ve hukuki kabul ayrı kalır.
+
 ## 1.44.0 — 2026-11-09 (Faruk, #289 karar 54A: eski hesaplarda 18+ öz beyanı)
 
 - Yeni hata kodu `ADULT_DECLARATION_REQUIRED` (403). `verified` seviyesindeki katılım işlemleri (`poll.create`, `vote.cast`, `comment.create`, `media.upload`) beyanı olmayan hesapta bu kodu döner. Eklemedir, kırıcı değildir; bilinmeyen kodu 403 olarak gösteren istemci etkilenmez.

@@ -270,7 +270,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   const session: SessionSettings = { ...config.session, pepper: config.authTokenPepper, emailVerificationRequired: config.emailVerificationRequired,
     // Eski hesap kısıtı ayrı yayın anahtarına bağlı: web beyan ekranı gelmeden eski hesaplar katılımdan kilitlenmesin.
-    // /me.adultDeclarationRequired yine bildirir; yeni kayıttaki beyan şartı (auth routes) etkilenmez.
+    // /me eksik beyanı ve etkin katılım kapısını ayrı bildirir; yeni kayıt şartı etkilenmez.
     adultDeclarationRequired: (deps.adultDeclarationRequired ?? true) && (deps.legacyAdultDeclarationEnforced ?? config.legacyAdultDeclarationEnforced) };
   // Ayar kancaları: açık kanca > ayar servisi > güvenli varsayılan.
   const settings = deps.settingsService;
@@ -329,6 +329,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerUserRoutes(route, {
     emailVerificationRequired: config.emailVerificationRequired,
     adultDeclarationRequired: deps.adultDeclarationRequired ?? true,
+    adultDeclarationEnforced: session.adultDeclarationRequired,
     now,
     store: deps.authStore,
     mediaPublicBaseUrl: config.mediaPublicBaseUrl,

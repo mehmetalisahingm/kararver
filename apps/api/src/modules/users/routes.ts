@@ -7,10 +7,10 @@ import { toMe, type RolesOf } from "./me.ts";
 
 const POINTS_LEDGER_CURSOR = "points-ledger:v1";
 
-export function registerUserRoutes(route: Route, deps: { store: AuthStore; mediaPublicBaseUrl: string; rolesOf: RolesOf; publishCost?: () => Promise<number>; emailVerificationRequired?: boolean; adultDeclarationRequired?: boolean; now?: () => Date }): void {
+export function registerUserRoutes(route: Route, deps: { store: AuthStore; mediaPublicBaseUrl: string; rolesOf: RolesOf; publishCost?: () => Promise<number>; emailVerificationRequired?: boolean; adultDeclarationRequired?: boolean; adultDeclarationEnforced?: boolean; now?: () => Date }): void {
   const { store, mediaPublicBaseUrl, rolesOf } = deps;
 
-  route("me.get", async ({ viewer }) => ({ status: 200, body: { data: toMe(viewer!.user, mediaPublicBaseUrl, await rolesOf(viewer!.id), deps.emailVerificationRequired, deps.adultDeclarationRequired) } }));
+  route("me.get", async ({ viewer }) => ({ status: 200, body: { data: toMe(viewer!.user, mediaPublicBaseUrl, await rolesOf(viewer!.id), deps.emailVerificationRequired, deps.adultDeclarationRequired, deps.adultDeclarationEnforced) } }));
 
   // #289 54A: eski hesap 18+ öz beyanı. Öz beyandır, yaş doğrulaması değildir; ilk zaman korunur.
   route("me.adultDeclaration.confirm", async ({ viewer, request }) => {
@@ -28,7 +28,7 @@ export function registerUserRoutes(route: Route, deps: { store: AuthStore; media
       bio: body.bio === "" ? null : body.bio,
       avatarMediaId: body.avatarMediaId,
     });
-    return { status: 200, body: { data: toMe(user, mediaPublicBaseUrl, await rolesOf(user.id), deps.emailVerificationRequired, deps.adultDeclarationRequired) } };
+    return { status: 200, body: { data: toMe(user, mediaPublicBaseUrl, await rolesOf(user.id), deps.emailVerificationRequired, deps.adultDeclarationRequired, deps.adultDeclarationEnforced) } };
   });
 
   route("points.get", async ({ viewer }) => {
