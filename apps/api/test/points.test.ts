@@ -268,6 +268,8 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
       where: { rejectionActionId: rejectedAction.id },
     })).filedReason, "Yanlış ret kararı verildi; genel ulaşım hizmeti değerlendirmesi yapıyorum.");
 
+    const acceptedPath = `/me/moderation-appeals/${rejectedAction.id}/accepted-receipt`;
+    assert.equal((await send("GET", acceptedPath, undefined, owner.cookie)).statusCode, 404);
     const queuePath = "/admin/moderation/appeals";
     assert.equal((await send("GET", queuePath)).statusCode, 401);
     assert.equal((await send("GET", queuePath, undefined, owner.cookie)).statusCode, 403);
@@ -319,6 +321,15 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(appealAccepted.json().data.outcome.status, "ACTIVE");
     const reopened = await db.poll.findUniqueOrThrow({ where: { id: pollId } });
     assert.equal(reopened.status, "ACTIVE");
+    const accepted = await send("GET", acceptedPath, undefined, owner.cookie);
+    assert.equal(accepted.statusCode, 200, accepted.body);
+    assert.match(String(accepted.headers["cache-control"]), /no-store/);
+    assert.equal(accepted.json().data.outcome, "ACCEPTED");
+    assert.equal(accepted.json().data.rejectionActionId, rejectedAction.id);
+    assert.equal(accepted.json().data.pollId, pollId);
+    assert.equal((await send("GET", acceptedPath, undefined, otherViewer.cookie)).statusCode, 404);
+    assert.equal((await send("GET", acceptedPath)).statusCode, 401);
+    assert.ok(!accepted.body.includes(reviewer.id));
     const afterQueue = await send("GET", queuePath, undefined, reviewer.cookie);
     assert.equal(afterQueue.statusCode, 200, afterQueue.body);
     assert.equal(afterQueue.json().data.some((r: { rejectionActionId: string }) => r.rejectionActionId === rejectedAction.id), false);

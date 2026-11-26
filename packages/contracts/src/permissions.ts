@@ -341,6 +341,7 @@ export const endpointPermissions: Readonly<Record<string, ActionId>> = Object.fr
   "admin.communities.moderators.delete": "community.moderator.assign",
 
   "admin.moderation.appeals.list": "moderation.appeal.queue.read",
+  "me.moderationAppeals.acceptedReceipt": "moderation.appeal.self",
   "me.moderationAppeals.get": "moderation.appeal.self",
   "me.moderationAppeals.file": "moderation.appeal.self",
   "notifications.list": "notification.read",

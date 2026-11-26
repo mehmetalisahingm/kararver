@@ -21,7 +21,9 @@ export type AppealFileResult =
   | { kind: "not_reviewable" };
 
 export type AppealQueueRow = { rejectionActionId: string; pollId: string; filedAt: Date };
+export type AppealAcceptedReceipt = { rejectionActionId: string; pollId: string; resolvedAt: Date };
 export interface ModerationAppealStore {
+  getAccepted(userId: string, rejectionActionId: string): Promise<AppealAcceptedReceipt | null>;
   listPending(input: { after: { at: Date; id: string } | null; limit: number }): Promise<{ rows: AppealQueueRow[]; evaluatedAt: Date }>;
   get(userId: string, rejectionActionId: string): Promise<(Receipt & { evaluatedAt: Date }) | null>;
   file(input: { userId: string; rejectionActionId: string; reason: string }): Promise<AppealFileResult>;
@@ -65,6 +67,25 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient, options:
         ORDER BY w.filed_at ASC, w.rejection_action_id ASC
         LIMIT ${limit}`;
       return { rows, evaluatedAt: await dbNow(prisma) };
+    },
+    async getAccepted(userId, rejectionActionId) {
+      // Only an immutable audited RESTORE linked to a timely filed appeal
+      // proves acceptance. A later unrelated ACTIVE state is not proof.
+      // No staff free text or identities are exposed by this read contract.
+      const [row] = await prisma.$queryRaw<AppealAcceptedReceipt[]>`
+        SELECT w.rejection_action_id::text AS "rejectionActionId",
+          m.poll_id::text AS "pollId", undo.created_at AS "resolvedAt"
+        FROM moderation_appeal_windows w
+        JOIN users u ON u.id = w.recipient_id AND u.deleted_at IS NULL
+        JOIN moderation_actions m ON m.id = w.rejection_action_id
+        JOIN polls p ON p.id = m.poll_id AND p.author_id = w.recipient_id
+        JOIN moderation_actions undo ON undo.undo_of_id = m.id AND undo.poll_id = m.poll_id
+        WHERE w.recipient_id = ${userId}::uuid AND w.rejection_action_id = ${rejectionActionId}::uuid
+          AND w.filed_at BETWEEN w.delivered_at AND w.deadline_at
+          AND m.action = 'REMOVE' AND m.from_status = 'UNDER_REVIEW' AND m.to_status = 'REMOVED'
+          AND undo.action = 'RESTORE' AND undo.from_status = 'REMOVED' AND undo.to_status = 'ACTIVE'
+          AND undo.created_at >= w.filed_at`;
+      return row ?? null;
     },
     async get(userId, rejectionActionId) {
       // Do not leak existence, reason or identity to unrelated accounts.

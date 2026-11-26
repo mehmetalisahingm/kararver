@@ -610,7 +610,29 @@ export const AdminAppealQueueItem = z.strictObject({
   rejectionActionId: Id, pollId: Id, filedAt: Timestamp, resolutionTargetAt: Timestamp,
   urgency: z.enum(["OPEN", "DUE_SOON", "OVERDUE"]),
 });
+export const AcceptedModerationAppealReceipt = z.strictObject({
+  rejectionActionId: Id, pollId: Id, resolvedAt: Timestamp,
+  outcome: z.literal("ACCEPTED"), message: z.string(),
+});
 export const moderationEndpoints = [
+  defineEndpoint({
+    id: "me.moderationAppeals.acceptedReceipt",
+    domain: "moderation",
+    method: "GET",
+    path: "/me/moderation-appeals/:id/accepted-receipt",
+    summary: "Kendi kabul edilmiş itiraz makbuzunu oku",
+    auth: "user",
+    provider: moderation,
+    consumers: ["Ümit (itiraz sonucu UI)"],
+    unblocks: ["#290", "#327"],
+    availability: { status: "ready" },
+    request: { params: IdParams },
+    responses: { 200: dataOf(AcceptedModerationAppealReceipt) },
+    errors: ["NOT_FOUND"],
+    idempotency: "none",
+    cache: "private",
+    notes: ["Sadece zamanında dosyalanmış ve denetimli tekil RESTORE ile kabul edilmiş kendi itirazı. Daha sonra içerik tekrar gizlenmiş olabilir; güncel yayın durumu değildir. Yönetici serbest metni ve kimliği dönmez. Ret sonucu bu endpoint üzerinden üretilmez."],
+  }),
   defineEndpoint({
     id: "admin.moderation.appeals.list",
     domain: "moderation",

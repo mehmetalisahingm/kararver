@@ -45,6 +45,16 @@ export function registerMyModerationAppealRoutes(
     })), page: { nextCursor, hasMore: nextCursor !== null } } };
   });
 
+  route("me.moderationAppeals.acceptedReceipt", async ({ viewer, params }) => {
+    const receipt = await deps.store.getAccepted(viewer!.id, params.id);
+    if (!receipt) throw new ApiError("NOT_FOUND", "Kabul edilmiş itiraz makbuzu bulunamadı.");
+    return { status: 200, body: { data: {
+      rejectionActionId: receipt.rejectionActionId, pollId: receipt.pollId,
+      resolvedAt: receipt.resolvedAt.toISOString(), outcome: "ACCEPTED",
+      message: "İtirazın kabul edildi. Bu karar için yeniden yayın ücreti alınmadı.",
+    } } };
+  });
+
   route("me.moderationAppeals.get", async ({ viewer, params }) => {
     const receipt = await deps.store.get(viewer!.id, params.id);
     if (!receipt) throw new ApiError("NOT_FOUND", "İtiraz başvurusu veya ret bildirimi bulunamadı.");
