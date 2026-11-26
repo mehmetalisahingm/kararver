@@ -83,9 +83,17 @@ jobs:
       - name: PostgreSQL 18 istemcisi (resmî PGDG)
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-common ca-certificates curl
+          set -euo pipefail
+          sudo apt-get install -y postgresql-common ca-certificates curl gnupg
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          # Same fail-closed PGDG trust rule as #407: one primary key only.
+          keys="$(gpg --batch --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc)"
+          n="$(printf '%s\n' "$keys" | awk -F: '$1 == "pub"' | wc -l)"
+          fpr="$(printf '%s\n' "$keys" | awk -F: '$1 == "pub" { p = 1; next } p && $1 == "fpr" { print $10; exit }')"
+          if [ "$n" -ne 1 ] || [ "$fpr" != "B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8" ]; then
+            echo "::error::PGDG key verification failed"; exit 1
+          fi
           . /etc/os-release
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/kararver-pgdg.list
           sudo apt-get update

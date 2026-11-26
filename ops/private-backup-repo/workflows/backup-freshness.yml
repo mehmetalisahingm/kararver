@@ -23,6 +23,14 @@ jobs:
       BACKUP_MAX_AGE_HOURS: '26'
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - name: Yalnız PRIVATE repoda çalışır
+        shell: bash
+        run: |
+          set -euo pipefail
+          visibility=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility')
+          if [ "$visibility" != "private" ]; then
+            echo "::error::Backup freshness is private-only"; exit 1
+          fi
       - name: Son başarılı yedeğin yaşı
         id: check
         shell: bash
