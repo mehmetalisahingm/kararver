@@ -4,6 +4,8 @@
 
 ## Özet
 
+> **23 Kasım 2026 — geçerli ortam ayrımı:** Aşağıdaki ✅ tatbikat kanıtları **Ekim 2026 Railway** ortamına aittir. Güncel staging altyapısı **Neon PostgreSQL + Render Free API/worker + Vercel web** oldu (#297/#301). Eski 5,2 dk RTO ve eski Railway rollback'i, güncel ortam için yapılmış **gerçek Neon izole restore / Render rollback kabulü değildir**. Güncel şifreli yedek, bağımsız anahtar, aynı SHA ve silme tekrarına ilişkin kabul #375 ve #51'de **P0 açık / yayın NO-GO** olarak kalır; bu tablo geçmiş teknik kanıtın kaydıdır.
+
 | Kabul koşulu (#50) | Durum | Kanıt |
 |---|---|---|
 | Temiz ortamda gerçek restore ve uygulama smoke testi | ✅ | **Staging (Railway, PG 18.6):** canlı staging DB'sinin yedeği boş bir veritabanına geri yüklendi, birebir doğrulandı; staging API o veritabanına çevrildi ve smoke geçti ([staging tatbikatı](#staging-tatbikatı-2026-10-05)). Yerelde KV-47 profiliyle de: 50 kullanıcı × 60 sn yük, **%0 hata**, doğruluk 9/9 ([tatbikat](#tatbikat-2026-10-02)). |
@@ -31,7 +33,8 @@ pnpm --filter @kararver/db db:check-migrations
 pnpm --filter @kararver/worker media:check
 ```
 
-- **İstemci araçları:** `pg_dump`/`pg_restore` 17.x gerekir; eski istemci 17 sunucuyu yedeklemez. PATH'te yoksa `PG_BIN=<klasör>`. Parola komut satırına değil `PGPASSWORD` ortam değişkenine yazılır; manifestte ve loglarda parola `***` görünür.
+- **İstemci araçları:** `pg_dump` sunucu major sürümünden eski olamaz (güncel Neon staging PG 18 için PG 18 istemci; eski yerel 17 için PG 17 yeterli). PATH'te yoksa `PG_BIN=<klasör>`. Parola komut satırına değil `PGPASSWORD` ortam değişkenine yazılır; manifestte ve loglarda parola `***` görünür.
+- **Uzak DB yedek/restore TLS kapısı (#375):** `DATABASE_URL` / `RESTORE_DATABASE_URL` içinde `sslmode=require`, `verify-ca` veya `verify-full` açıkça bulunmalı; parametresiz URL ve `disable` / `allow` / `prefer` reddedilir. Sertifika/doğrulama imkânı varsa `verify-full` tercih edilir; `require` tek başına sertifika kimliğini her kurulumda doğrulamaz. Yerel izole `localhost`, `127.0.0.1`, `[::1]` test DB'leri istisna. URL/sır değerlerini issue veya loga koyma. Değişiklik merge edilmeden önce Faruk mevcut altyapı URL biçimini sırları paylaşmadan kontrol etmeli.
 - **Tutarlı yedek:** Manifest ile döküm aynı anın görüntüsüdür. REPEATABLE READ transaction'ında `pg_export_snapshot()`, ardından `pg_dump --snapshot`. Sayımlar da aynı transaction'da yapılır. Canlı trafik altında alınan yedekte de manifest dökümle birebir uyuşur. Test bunu yedek sırasında oy yazarak doğrular. `--snapshot` kaldırılınca test düşüyor (mutasyon testi).
 - **Restore güvenliği:** Hedef `RESTORE_DATABASE_URL`'dir, `DATABASE_URL` ile aynı veritabanı olamaz. Hedef yoksa oluşturulur. Doluysa (public şemada tek bir nesne bile varsa) reddedilir. Var olanın üstüne yazma (`--clean`) bilerek yok. sha256 manifestle uyuşmayan dosya restore edilmez.
 - **Doğrulama neye bakar:** `prisma migrate diff` trigger'ları, CHECK kısıtlarını ve fonksiyonları görmez. Manifest bunların hepsini de karşılaştırır: trigger'lar (etkin/pasif), kısıtlar (NOT VALID dahil), index'ler, fonksiyon gövdesi özeti, eklentiler. Ayrıca şu tutarlılık kontrolleri koşar:

@@ -13,7 +13,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { createPrismaClient } from "../src/index.ts";
 import { type Manifest, sha256File } from "./backup.ts";
-import { databaseName, redact, run, withDatabase } from "./pg-tools.ts";
+import { assertRemoteTls, databaseName, redact, run, withDatabase } from "./pg-tools.ts";
 import { checkInvariants, collectState, compareState, type Invariant } from "./state.ts";
 
 export type RestoreReport = {
@@ -29,6 +29,7 @@ const IDENT = /^[A-Za-z0-9_]{1,63}$/;
 
 /** Hedef yoksa oluşturur; varsa boş olduğunu doğrular. */
 async function prepareTarget(target: string): Promise<void> {
+  assertRemoteTls(target);
   const name = databaseName(target);
   if (!IDENT.test(name)) throw new Error(`hedef veritabanı adı yalnız harf, rakam ve _ içermeli: ${name}`);
   const admin = createPrismaClient(withDatabase(target, "postgres"));
@@ -54,6 +55,7 @@ async function prepareTarget(target: string): Promise<void> {
 }
 
 export async function restore(file: string, target: string, opts: { jobs?: number } = {}): Promise<RestoreReport> {
+  assertRemoteTls(target);
   const manifest = JSON.parse(await readFile(`${file}.manifest.json`, "utf8")) as Manifest;
   if (manifest.kind !== "kararver-db-backup" || manifest.version !== 1) throw new Error("manifest tanınmadı");
   const sha = await sha256File(file);

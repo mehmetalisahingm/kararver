@@ -11,10 +11,26 @@ export function pgTool(name: "pg_dump" | "pg_restore"): string {
   return process.env.PG_BIN ? path.join(process.env.PG_BIN, exe) : exe;
 }
 
-/** libpq ortam değişkenleri. `sslmode` gibi sorgu parametreleri de taşınır. */
-export function pgEnv(connectionString: string): Record<string, string> {
+/** Validate before any Prisma or libpq connection, not only before spawning pg_dump. */
+export function assertRemoteTls(connectionString: string): void {
   const url = new URL(connectionString);
   if (url.protocol !== "postgresql:" && url.protocol !== "postgres:") throw new Error("postgresql:// adresi bekleniyor");
+  const sslmode = url.searchParams.get("sslmode");
+  // libpq defaults to "prefer", which can silently fall back to plaintext and
+  // expose backup/restore credentials and data. Remote DBs must opt in to TLS.
+  // Local isolated PostgreSQL test/restore databases remain usable without TLS.
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname.toLowerCase());
+  if (!local && !["require", "verify-ca", "verify-full"].includes(sslmode ?? "")) {
+    throw new Error("Uzak PostgreSQL yedek/restore bağlantısı için sslmode=require|verify-ca|verify-full zorunlu");
+  }
+  // Ambiguous duplicate parameters can be interpreted differently by drivers.
+  if (url.searchParams.getAll("sslmode").length > 1) throw new Error("sslmode yalnız bir kez belirtilebilir");
+}
+
+/** libpq ortam değişkenleri. `sslmode` gibi sorgu parametreleri de taşınır. */
+export function pgEnv(connectionString: string): Record<string, string> {
+  assertRemoteTls(connectionString);
+  const url = new URL(connectionString);
   const env: Record<string, string> = {
     PGHOST: url.hostname,
     PGPORT: url.port || "5432",

@@ -13,7 +13,7 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { createPrismaClient, Prisma } from "../src/index.ts";
-import { databaseName, redact, run } from "./pg-tools.ts";
+import { assertRemoteTls, databaseName, redact, run } from "./pg-tools.ts";
 import { checkInvariants, collectState, type DbState, type Invariant } from "./state.ts";
 
 export type Manifest = {
@@ -38,6 +38,7 @@ export async function sha256File(file: string): Promise<string> {
 }
 
 export async function backup(connectionString: string, outDir: string, now = new Date()): Promise<{ file: string; manifest: Manifest }> {
+  assertRemoteTls(connectionString);
   await mkdir(outDir, { recursive: true });
   const db = databaseName(connectionString);
   const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
@@ -98,6 +99,7 @@ export const DESTINATION = /^[a-z0-9][a-z0-9_-]{0,39}$/;
  * Döküm ve manifest yazıldıktan sonra çağrılır; kayıt dökümün içinde değildir (snapshot'tan sonra yazılır).
  */
 export async function recordBackupRun(connectionString: string, manifest: Manifest, destination: string, finishedAt = new Date()): Promise<void> {
+  assertRemoteTls(connectionString);
   if (!DESTINATION.test(destination)) throw new Error(`geçersiz yedek hedefi etiketi: ${destination}`);
   const prisma = createPrismaClient(connectionString);
   try {
