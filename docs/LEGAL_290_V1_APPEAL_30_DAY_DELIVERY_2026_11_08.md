@@ -62,3 +62,10 @@ Yeni oturumlu/özel API (açık public poll URL'sinden bağımsız):
 - Temiz migration testinde tek kanonik tablo, kanonik teslim migration'ı ve serbest metin redaction migration'ı doğrulanır; alternatif tabloların varlığı testi kırar. Bu test canlı migration geçmişini doğrulamaz.
 - #341'den bildirim niyeti şablonu taşındı. `appealReminderCandidate` yalnız başvuru anından 12×24 saat sonra DUE_SOON ve 14×24 saat +1ms sonra OVERDUE önerir; her ret ID ve aşama için aynı dedupe anahtarı. Çözülmüş/silinmiş kayıtlar uyarı üretmez; puan veya içerik değişmez. Worker/cron ve kalıcı dedupe/teslim henüz bağlı değil.
 - Gerekçeli sonuçlandırma: kabul mevcut denetimli tekil undo ile atomik kalmalı. Ret için aynı kanonik kayda bağlı ayrı sonuç kanıtı, yetkili insan kararı, eşzamanlı kabul/ret kilidi, karar metninin silme ve saklama politikası, bildirim ve kullanıcı read-contract birlikte tasarlanmalı. Bu adım tamamlanmadan gerekçeli ret veya otomatik uyarı teslimi var sayılmaz.
+
+
+### 26 Kasım — Gerekçe kodlu ret ve zamanlanmış operasyon kontrolü (taslak)
+
+ADMIN+ insan incelemesiyle `SENSITIVE_DATA_REQUEST`, `CONTENT_POLICY_VIOLATION` veya `ORIGINAL_DECISION_UPHELD` gerekçe kodunu seçebilir. Ret, aynı kanonik kayıtta ilk karar zamanı ve kodunu değişmez olarak saklar; audit aynı transaction'da, puan ve içerik değişmez. Kendi başvurusunu karara bağlama yasak; kabul ve ret ortak poll kilidiyle sıralanır. Kullanıcıya yalnız kendi ret makbuzu verilir. Kodlar ve kullanıcıya gösterilecek açıklama metinleri ürün/hukuk incelemesi gerektirir; serbest karar metni yok. Moderatörün dosyayı okuyup değerlendirmesine yönelik özel UI ve karar bildirimi henüz bağlı değil.
+
+Worker `moderation.appeals.sla` saatlik UTC cron ile sadece bekleyen güncel başvuruların toplam yaklaşan/geciken sayılarını loglar. Kimlik, başvuru gerekçesi ve anket içeriği loglanmaz. Aynı iş yükü sonraki saatlerde tekrar raporlanabilir; bu bir teslim/durable per-case dedupe kanıtı değildir. Kullanıcı/ADMIN gelen kutusu bildirimi, ack, saklama ve gerçek staging kabulü hâlâ açık.

@@ -469,7 +469,7 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     await assert.rejects(() => db.moderationAppealWindow.update({
       where: { rejectionActionId: boundaryRejectionId }, data: { filedReason: "Silinen gerekçeyi geri yazma" },
     }), /APPEAL_FILING_IMMUTABLE/);
-    const erasedQueue = await send("GET", "/admin/moderation/appeals", undefined, reviewer.cookie);
+    const erasedQueue = await send("GET", "/admin/moderation/appeals", undefined, freshReviewer.cookie);
     assert.equal(erasedQueue.statusCode, 200, erasedQueue.body);
     assert.equal(erasedQueue.json().data.some((r: { rejectionActionId: string }) => r.rejectionActionId === boundaryRejectionId), false);
   });

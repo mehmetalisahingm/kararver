@@ -56,7 +56,7 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient, options:
     async listPending({ after, limit }) {
       // Metadata only. No user ID, title, reason, or notification data.
       // Only ADMIN+ sees this global queue. A successful audited restore
-      // removes an item; rejected-resolution records are not implemented yet.
+      // or human rejection removes an item.
       const rows = await prisma.$queryRaw<AppealQueueRow[]>`
         SELECT w.rejection_action_id::text AS "rejectionActionId",
                m.poll_id::text AS "pollId", w.filed_at AS "filedAt"
@@ -64,7 +64,7 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient, options:
         JOIN moderation_actions m ON m.id = w.rejection_action_id
         JOIN polls p ON p.id = m.poll_id AND p.author_id = w.recipient_id
         JOIN users u ON u.id = w.recipient_id AND u.deleted_at IS NULL
-        WHERE w.filed_at IS NOT NULL AND w.rejected_at IS NULL
+        WHERE w.filed_at IS NOT NULL AND w.rejected_at IS NULL AND p.status = 'REMOVED'
           AND m.action = 'REMOVE' AND m.from_status = 'UNDER_REVIEW' AND m.to_status = 'REMOVED'
           AND NOT EXISTS (
             SELECT 1 FROM moderation_actions undo
