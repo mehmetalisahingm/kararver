@@ -44,6 +44,7 @@ import type {
   ReportView,
   Setting,
 } from "@kararver/contracts";
+import { AdminAppealQueueItem, pageOf } from "@kararver/contracts";
 import type { HttpClient } from "../../lib/http-client.ts";
 
 export type Report = ReturnType<typeof ReportView.parse>;
@@ -163,7 +164,12 @@ const data = <T>(wire: unknown) => (wire as { data: T }).data;
 /** Boolean süzgeç sorgusu: yalnız verilen değer gönderilir ("true" | "false"). */
 const flag = (value: boolean | undefined) => (value === undefined ? undefined : String(value));
 
+export type AdminAppealQueueView = ReturnType<typeof AdminAppealQueueItem.parse>;
 export class AdminClient {
+  async appealQueue(cursor?: string, signal?: AbortSignal): Promise<Page<AdminAppealQueueView>> {
+    const result = pageOf(AdminAppealQueueItem).parse(await this.http.request("admin.moderation.appeals.list", { query: { cursor, limit: "20" }, signal }));
+    return {items: result.data, next: result.page.nextCursor};
+  }
   async ops(signal?: AbortSignal) {
     return data<OpsView>(await this.http.request("admin.ops.status", { signal }));
   }
