@@ -20,7 +20,9 @@ export type AppealFileResult =
   | { kind: "expired" }
   | { kind: "not_reviewable" };
 
+export type AppealQueueRow = { rejectionActionId: string; pollId: string; filedAt: Date };
 export interface ModerationAppealStore {
+  listPending(input: { after: { at: Date; id: string } | null; limit: number }): Promise<{ rows: AppealQueueRow[]; evaluatedAt: Date }>;
   get(userId: string, rejectionActionId: string): Promise<(Receipt & { evaluatedAt: Date }) | null>;
   file(input: { userId: string; rejectionActionId: string; reason: string }): Promise<AppealFileResult>;
 }
@@ -40,6 +42,30 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient, options:
     return row.evaluated_at;
   }
   return {
+    async listPending({ after, limit }) {
+      // Metadata only. No user ID, title, reason, or notification data.
+      // Only ADMIN+ sees this global queue. A successful audited restore
+      // removes an item; rejected-resolution records are not implemented yet.
+      const rows = await prisma.$queryRaw<AppealQueueRow[]>`
+        SELECT w.rejection_action_id::text AS "rejectionActionId",
+               m.poll_id::text AS "pollId", w.filed_at AS "filedAt"
+        FROM moderation_appeal_windows w
+        JOIN moderation_actions m ON m.id = w.rejection_action_id
+        JOIN polls p ON p.id = m.poll_id AND p.author_id = w.recipient_id
+        JOIN users u ON u.id = w.recipient_id AND u.deleted_at IS NULL
+        WHERE w.filed_at IS NOT NULL
+          AND m.action = 'REMOVE' AND m.from_status = 'UNDER_REVIEW' AND m.to_status = 'REMOVED'
+          AND NOT EXISTS (
+            SELECT 1 FROM moderation_actions undo
+            WHERE undo.undo_of_id = m.id AND undo.action = 'RESTORE'
+              AND undo.from_status = 'REMOVED' AND undo.to_status = 'ACTIVE'
+          )
+          AND (${after?.at ?? null}::timestamptz IS NULL OR
+               (w.filed_at, w.rejection_action_id) > (${after?.at ?? null}::timestamptz, ${after?.id ?? null}::uuid))
+        ORDER BY w.filed_at ASC, w.rejection_action_id ASC
+        LIMIT ${limit}`;
+      return { rows, evaluatedAt: await dbNow(prisma) };
+    },
     async get(userId, rejectionActionId) {
       // Do not leak existence, reason or identity to unrelated accounts.
       const result = await prisma.moderationAppealWindow.findFirst({

@@ -267,6 +267,17 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
       where: { rejectionActionId: rejectedAction.id },
     })).filedReason, "Yanlış ret kararı verildi; genel ulaşım hizmeti değerlendirmesi yapıyorum.");
 
+    const queuePath = "/admin/moderation/appeals";
+    assert.equal((await send("GET", queuePath)).statusCode, 401);
+    assert.equal((await send("GET", queuePath, undefined, owner.cookie)).statusCode, 403);
+    const queue = await send("GET", queuePath, undefined, reviewer.cookie);
+    assert.equal(queue.statusCode, 200, queue.body);
+    assert.match(String(queue.headers["cache-control"]), /no-store/);
+    const entry = queue.json().data.find((r: { rejectionActionId: string }) => r.rejectionActionId === rejectedAction.id);
+    assert.deepEqual(entry, { rejectionActionId: rejectedAction.id, pollId, filedAt: inboxDeliveredAt.toISOString(),
+      resolutionTargetAt: new Date(inboxDeliveredAt.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString(), urgency: "OPEN" });
+    assert.equal((await send("GET", queuePath + "?cursor=bad", undefined, reviewer.cookie)).statusCode, 400);
+
     const preview = await send("GET", `/admin/moderation/actions/${rejectedAction.id}/undo/preview`,
       undefined, reviewer.cookie);
     assert.equal(preview.statusCode, 200, preview.body);
@@ -307,6 +318,9 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(appealAccepted.json().data.outcome.status, "ACTIVE");
     const reopened = await db.poll.findUniqueOrThrow({ where: { id: pollId } });
     assert.equal(reopened.status, "ACTIVE");
+    const afterQueue = await send("GET", queuePath, undefined, reviewer.cookie);
+    assert.equal(afterQueue.statusCode, 200, afterQueue.body);
+    assert.equal(afterQueue.json().data.some((r: { rejectionActionId: string }) => r.rejectionActionId === rejectedAction.id), false);
     assert.equal(reopened.opensAt.getTime(), h.clock.now.getTime());
     assert.equal(reopened.closesAt!.getTime() - reopened.opensAt.getTime(),
       beforeRestore.closesAt!.getTime() - beforeRestore.opensAt.getTime(),
