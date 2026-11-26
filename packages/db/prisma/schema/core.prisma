@@ -134,6 +134,7 @@ model User {
   reportsFiled             Report[]                 @relation("ReportReporter")
   reportsAgainst           Report[]                 @relation("ReportTargetUser")
   reportsResolved          Report[]                 @relation("ReportResolver")
+  moderationAppealWindows  ModerationAppealWindow[] @relation("ModerationAppealRecipient")
   moderationActionsTaken   ModerationAction[]       @relation("ModerationActor")
   moderationActionsAgainst ModerationAction[]       @relation("ModerationTargetUser")
   // Mert — community.prisma (KV-31)

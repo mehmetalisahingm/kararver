@@ -37,6 +37,7 @@ import { createPrismaBulkApprovalStore } from "./modules/moderation/bulk-approva
 import { createPrismaMfaStore } from "./modules/security/prisma-store.ts";
 import { createPrismaRoleApprovalStore } from "./modules/security/approval-store.ts";
 import { createPrismaModerationStore } from "./modules/moderation/prisma-store.ts";
+import { createPrismaModerationAppealStore } from "./modules/moderation/appeals-store.ts";
 import { createPrismaNotificationStore } from "./modules/notifications/prisma-store.ts";
 import { createPrismaReportStore } from "./modules/reports/prisma-store.ts";
 import { createPrismaSearchStore } from "./modules/search/prisma-store.ts";
@@ -97,6 +98,7 @@ const app = buildApp({
   onboardingStore: createPrismaOnboardingStore(prisma),
   reportStore: createPrismaReportStore(prisma),
   moderationStore: createPrismaModerationStore(prisma),
+  moderationAppealStore: createPrismaModerationAppealStore(prisma),
   bulkModerationStore: createPrismaBulkModerationStore(prisma),
   bulkApprovalStore: createPrismaBulkApprovalStore(prisma),
   spamScoreStore: createPrismaSpamScoreStore(prisma),

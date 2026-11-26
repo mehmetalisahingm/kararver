@@ -234,6 +234,14 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
           },
         });
 
+        // The target user is already tombstoned within this transaction and
+        // active legal holds were checked under its lock. Keep only the
+        // immutable filing/receipt evidence, not the submitted free text.
+        await tx.moderationAppealWindow.updateMany({
+          where: { recipientId: userId, filedReason: { not: null } },
+          data: { filedReason: null },
+        });
+
         const summary = { removed, retained };
         const record = await tx.accountErasure.create({
           data: { userId, requestedById: actorId, reason: input.reason, summary: summary as unknown as Prisma.InputJsonObject, createdAt: now },

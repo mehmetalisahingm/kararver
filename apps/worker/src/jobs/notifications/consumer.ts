@@ -6,6 +6,7 @@ import { PermanentEventError, type EventConsumer } from "../events/consumers.ts"
 import { notificationAdapters } from "./adapters.ts";
 import { preferencePolicy, type NotificationPolicy } from "./policy.ts";
 import { eligibleUsers, fanoutToVoters, fanoutToActiveUsers, writeNotifications } from "./write.ts";
+import { recordModerationRejectionInboxDelivery } from "./appeal-delivery.ts";
 
 export const NOTIFICATIONS_CONSUMER = "notifications";
 
@@ -30,6 +31,17 @@ export function createNotificationsConsumer(opts: NotificationsConsumerOptions =
       if (!recipients) return;
       const draft = recipients.pollId !== undefined ? { ...base, pollId: recipients.pollId } : base;
       await writeNotifications(tx, draft, await eligibleUsers(tx, recipients.userIds, draft.eventActorId), policy);
+      // Actual recipient-specific inbox INSERT is the notification delivery,
+      // NOT the moderation decision time. The receipt and notification commit
+      // together, so retries cannot restart or backdate the filing period.
+      if (event.type === "moderation.applied" && event.subject.type === "POLL") {
+        const e = event.payload as { moderationActionId: string; action: string; fromStatus: string; toStatus: string };
+        if (e.action === "REMOVE" && e.fromStatus === "UNDER_REVIEW" && e.toStatus === "REMOVED") {
+          await recordModerationRejectionInboxDelivery(tx, {
+            eventId: event.id, rejectionActionId: e.moderationActionId, pollId: event.subject.id,
+          });
+        }
+      }
       if (recipients.broadcast) {
         const result = await fanoutToActiveUsers(tx, draft, { policy, slice: opts.slice, limit: opts.limit });
         if (result.truncated) {
