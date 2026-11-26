@@ -7,6 +7,7 @@ import { assertNoCommittedKey, findIdempotentResult, runIdempotent } from "../..
 import { writeEvent } from "../events/write.ts";
 import { spendPublishPoints } from "../points/store.ts";
 import { writeRevision } from "../revisions/write.ts";
+import { detectSensitiveSurvey } from "./sensitive-policy.ts";
 import {
   PollLimitError,
   PollReferenceError,
@@ -328,6 +329,32 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
       await prisma.$transaction(async (tx) => {
         // Satır kilidi: aynı ankete eşzamanlı iki düzenleme sürüm numarasında çakışmaz.
         await tx.$queryRaw`SELECT 1 FROM polls WHERE id = ${id}::uuid FOR UPDATE`;
+        // Same-row serialization: two individually innocent concurrent PATCH requests must
+        // not jointly publish a sensitive question + sensitive answers. Validate the
+        // effective persisted state INSIDE the transaction, after FOR UPDATE.
+        const persisted = await tx.poll.findUniqueOrThrow({
+          where: { id }, select: { title: true, description: true, extraInfo: true },
+        });
+        const effectiveOptions = options ?? await tx.pollOption.findMany({
+          where: { pollId: id }, select: { label: true }, orderBy: { position: "asc" },
+        });
+        const persistedAddenda = await tx.pollAddendum.findMany({
+          where: { pollId: id }, select: { body: true }, orderBy: { createdAt: "asc" },
+        });
+        const risk = detectSensitiveSurvey({
+          title: fields.title ?? persisted.title,
+          description: fields.description === undefined ? persisted.description : fields.description,
+          extraInfo: fields.extraInfo === undefined ? persisted.extraInfo : fields.extraInfo,
+          options: effectiveOptions,
+          addenda: persistedAddenda.map((a) => a.body),
+        });
+        if (risk) {
+          throw new ApiError(
+            "VALIDATION_ERROR",
+            "KararVer V1'de kişilerin hassas bilgilerini açığa çıkarabilecek içerikler yayımlanamaz.",
+            [{ field: risk.field, code: "sensitive_survey_not_allowed_v1" }],
+          );
+        }
         if (Object.keys(fields).length > 0) await tx.poll.update({ where: { id }, data: fields });
         if (tagSlugs) await replaceTags(tx, id, tagSlugs);
         if (options) {
@@ -361,6 +388,26 @@ export function createPrismaPollStore(prisma: PrismaClient): PollStore {
 
     createAddendum: (pollId, body, scope) =>
       idempotent(scope, async (tx) => {
+        // Serialize with PATCH. No addendum can turn existing options into an
+        // identity question, and no later PATCH can exploit an earlier addendum.
+        await tx.$queryRaw`SELECT 1 FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
+        const poll = await tx.poll.findUniqueOrThrow({
+          where: { id: pollId }, select: { title: true, description: true, extraInfo: true },
+        });
+        const options = await tx.pollOption.findMany({
+          where: { pollId }, select: { label: true }, orderBy: { position: "asc" },
+        });
+        const existing = await tx.pollAddendum.findMany({
+          where: { pollId }, select: { body: true }, orderBy: { createdAt: "asc" },
+        });
+        const risk = detectSensitiveSurvey({
+          ...poll, options, addenda: [...existing.map((a) => a.body), body],
+        });
+        if (risk) throw new ApiError(
+          "VALIDATION_ERROR",
+          "KararVer V1'de kişilerin hassas bilgilerini açığa çıkarabilecek içerikler yayımlanamaz.",
+          [{ field: risk.field, code: "sensitive_survey_not_allowed_v1" }],
+        );
         const addendum = await tx.pollAddendum.create({ data: { pollId, body }, select: { id: true } });
         return addendum.id;
       }),
