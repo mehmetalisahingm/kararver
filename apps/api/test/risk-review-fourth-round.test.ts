@@ -53,3 +53,23 @@ for (const title of NEUTRAL_PUBLISH) {
     assert.deepEqual(screenV1Publication(poll(title)), { action: "PUBLISH", signals: [] }, title);
   });
 }
+
+
+test("cross-field personal context cannot bypass human review", () => {
+  for (const input of [
+    { ...poll("Bir soru"), description: "Are you?", options: [{ label: "Christian" }, { label: "Other" }] },
+    { ...poll("Kendinizi nasıl tanımlarsınız?"), addenda: ["Ermeni, Rum veya diğer"] },
+    { ...poll("Do you have a diagnosis?"), description: "Multiple sclerosis" },
+    { ...poll("Do you have a criminal record?") },
+    { ...poll("Do you take insulin?") },
+    { ...poll("Are you Buddhist?") },
+  ]) {
+    const result = screenV1Publication(input);
+    assert.equal(result.action, "REVIEW", input.title);
+    assert.ok(result.signals.includes("POSSIBLE_SENSITIVE_CONTEXT"));
+  }
+});
+
+test("new sensitive vocabulary alone does not block neutral discussion", () => {
+  for (const title of ["Buddhist architecture and cultural heritage", "Insulin manufacturing capacity", "Multiple sclerosis research funding", "Prison library policy"]) assert.deepEqual(screenV1Publication(poll(title)), { action: "PUBLISH", signals: [] }, title);
+});
