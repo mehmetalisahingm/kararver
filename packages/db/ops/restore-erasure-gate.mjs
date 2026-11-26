@@ -11,6 +11,7 @@
  * still need separately recorded operational/human acceptance.
  */
 import { createPublicKey, verify } from "node:crypto";
+
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -78,35 +79,60 @@ export function assertIsolatedRestoreTarget(target, live) {
  *   still blocks (exit 3) until physical deletion lands, but it is no longer
  *   indistinguishable from a resurrected account.
  * A tombstoned user is still retained data, not an anonymous stat.
+ *
+ * `actorEvents` (#372, Utku): domain_events rows whose actor, or USER subject, is a journaled ID. Account erasure
+ * deletes these rows in the same transaction (#372 §3), so any such row in a restored copy is RESURRECTED (exit 2).
  */
 export async function checkNoResurrection(db, subjectIds) {
-  const retained = { restoredUsers: 0, authoredPolls: 0, authoredComments: 0, linkedVotes: 0, sessions: 0, authTokens: 0, mediaAssets: 0 };
-  const resurrected = { liveUsers: 0, liveAuthoredPolls: 0, liveAuthoredComments: 0, linkedVotes: 0, sessions: 0, authTokens: 0, mfaCredentials: 0, publishedMedia: 0, readyExports: 0 };
+  // Each counter is an explicit name → query pair, so adding one cannot silently shift the others (#389 review).
+  const retainedQueries = {
+    restoredUsers: (id) => db.user.count({ where: { id } }),
+    authoredPolls: (id) => db.poll.count({ where: { authorId: id } }),
+    authoredComments: (id) => db.comment.count({ where: { authorId: id } }),
+    linkedVotes: (id) => db.vote.count({ where: { userId: id } }),
+    sessions: (id) => db.session.count({ where: { userId: id } }),
+    authTokens: (id) => db.authToken.count({ where: { userId: id } }),
+    mediaAssets: (id) => db.mediaAsset.count({ where: { uploaderId: id } }),
+  };
+  const resurrectedQueries = {
+    liveUsers: (id) => db.user.count({ where: { id, deletedAt: null } }),
+    liveAuthoredPolls: (id) => db.poll.count({ where: { authorId: id, OR: [{ deletedAt: null }, { status: { not: "REMOVED" } }] } }),
+    liveAuthoredComments: (id) => db.comment.count({ where: { authorId: id, OR: [{ deletedAt: null }, { status: { not: "REMOVED" } }] } }),
+    linkedVotes: (id) => db.vote.count({ where: { userId: id } }),
+    sessions: (id) => db.session.count({ where: { userId: id } }),
+    authTokens: (id) => db.authToken.count({ where: { userId: id } }),
+    mfaCredentials: (id) => db.userMfaCredential.count({ where: { userId: id } }),
+    publishedMedia: (id) => db.mediaAsset.count({ where: { uploaderId: id, OR: [{ publicObjectKey: { not: null } }, { status: { not: "REJECTED" } }] } }),
+    readyExports: (id) => db.dataExport.count({ where: { userId: id, status: "READY" } }),
+    // Same four subject-match paths as account erasure: actor, USER subject, payload and natural_key.
+    // A restored row whose only reference is payload/natural_key is still a resurrection (#372).
+    actorEvents: async (whereId) => {
+      const rows = await db.$queryRaw`
+        SELECT COUNT(*)::bigint AS total
+        FROM domain_events AS event
+        WHERE EXISTS (
+          SELECT 1 FROM unnest(${whereId.in}::text[]) AS subject(id)
+          WHERE event.actor_id = subject.id::uuid
+             OR (event.subject_type = 'USER' AND event.subject_id = subject.id)
+             OR event.payload::text LIKE ('%' || subject.id || '%')
+             OR event.natural_key LIKE ('%' || subject.id || '%')
+        )
+      `;
+      return Number(rows[0]?.total ?? 0);
+    },
+  };
+  const tally = async (queries, whereId, into) => {
+    const entries = Object.entries(queries);
+    const values = await Promise.all(entries.map(([, query]) => query(whereId)));
+    entries.forEach(([name], j) => { into[name] += values[j]; });
+  };
+  const zero = (queries) => Object.fromEntries(Object.keys(queries).map((k) => [k, 0]));
+  const retained = zero(retainedQueries);
+  const resurrected = zero(resurrectedQueries);
   for (let i = 0; i < subjectIds.length; i += 250) {
-    const chunk = subjectIds.slice(i, i + 250);
-    const whereId = { in: chunk };
-    const kept = await Promise.all([
-      db.user.count({ where: { id: whereId } }),
-      db.poll.count({ where: { authorId: whereId } }),
-      db.comment.count({ where: { authorId: whereId } }),
-      db.vote.count({ where: { userId: whereId } }),
-      db.session.count({ where: { userId: whereId } }),
-      db.authToken.count({ where: { userId: whereId } }),
-      db.mediaAsset.count({ where: { uploaderId: whereId } }),
-    ]);
-    Object.keys(retained).forEach((key, j) => { retained[key] += kept[j]; });
-    const live = await Promise.all([
-      db.user.count({ where: { id: whereId, deletedAt: null } }),
-      db.poll.count({ where: { authorId: whereId, OR: [{ deletedAt: null }, { status: { not: "REMOVED" } }] } }),
-      db.comment.count({ where: { authorId: whereId, OR: [{ deletedAt: null }, { status: { not: "REMOVED" } }] } }),
-      kept[3],
-      kept[4],
-      kept[5],
-      db.userMfaCredential.count({ where: { userId: whereId } }),
-      db.mediaAsset.count({ where: { uploaderId: whereId, OR: [{ publicObjectKey: { not: null } }, { status: { not: "REJECTED" } }] } }),
-      db.dataExport.count({ where: { userId: whereId, status: "READY" } }),
-    ]);
-    Object.keys(resurrected).forEach((key, j) => { resurrected[key] += live[j]; });
+    const whereId = { in: subjectIds.slice(i, i + 250) };
+    await tally(retainedQueries, whereId, retained);
+    await tally(resurrectedQueries, whereId, resurrected);
   }
   const none = counts => Object.values(counts).every(v => v === 0);
   const noResurrection = none(resurrected);

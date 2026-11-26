@@ -46,4 +46,6 @@ Teknik alt işler: (1) sponsor etiketli içerik ve ayrı yerleşim sözleşmesi,
 
 ## Kapanış sınırı
 
+18 Kasım ek teknik teslim: [#57/#58 ölçüm sözlüğü, olgun D7, deney ön kaydı ve uygulama dilimleri](POST_RELEASE_EXPERIMENT_PLAN.md). Bu plan eşik/örneklem kararı veya çalışan pilot değildir.
+
 #57–#59'un tasarım hazırlığı ilerletildi. Gerçek beta verisi, ürün eşikleri, #54 bağımlılığı ve pilot kabulü bulunmadığından bu üç issue kapanmaz; yukarıdaki alt işler uygulama sırasını somutlaştırır.

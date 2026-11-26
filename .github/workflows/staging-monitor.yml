@@ -168,8 +168,11 @@ jobs:
 
           # (2) main uzun süredir kırmızı mı? (yalnız staging: production onaylı sürümle ilerler)
           if [ "$TARGET" = "staging" ] && [ "${latest%% *}" = "failure" ]; then
-            last_green_at=$(printf '%s' "$green" | awk '{ print $3 }')
-            red_hours=$(( (now - $(date -u -d "${last_green_at:-1970-01-01T00:00:00Z}" +%s)) / 3600 ))
+            # Kırmızılık son yeşil koşudan değil, ondan sonraki İLK kırmızı koşudan sayılır: son yeşilden
+            # sonra günlerce push olmayıp yeni bir commit kırılırsa süre o commit'ten başlar (#401).
+            # Liste en yeni önce; son yeşile kadarki kesintisiz başarısızlıkların en eskisi alınır.
+            red_since=$(printf '%s\n' "$runs" | awk '$1 == "success" { exit } $1 == "failure" { at = $3 } END { print at }')
+            red_hours=$(( (now - $(date -u -d "${red_since:-1970-01-01T00:00:00Z}" +%s)) / 3600 ))
             if [ "$red_hours" -ge "$MAIN_RED_MAX_HOURS" ]; then
               problems+=("main CI ${red_hours} saattir kırmızı: staging yeni sürüm alamıyor")
             fi
@@ -202,12 +205,25 @@ jobs:
             problems+=("production izleniyor ama PROD_RELEASE_SHA tanımlı değil: onaysız deploy fark edilmez (KV-52 karar kaydındaki SHA girilmeli)")
           elif [[ "$STAGING_SHA" =~ ^[0-9a-f]{12}$ ]] && [[ "$green_sha" =~ ^[0-9a-f]{40}$ ]] && [ "${green_sha:0:12}" != "$STAGING_SHA" ]; then
             # "ahead": yeşil commit staging'in ilerisinde. "behind"/"identical": staging daha yeni ya da aynı (alarm yok).
-            # Yalnız API/worker'ı etkileyen değişiklik sayılır: web (Vercel), doküman ve workflow değişikliği API deploy'u gerektirmez.
-            # Container dosyaları (#309) da sayılmaz: staging Render'da `runtime: node` ile çalışır, imajı kullanmaz.
-            # Staging Docker imajına geçerse (render.yaml runtime: image/docker) bu istisna kaldırılmalı.
+            # Yalnız Render'daki API/worker'ın çalıştırdığı dosyalar sayılır (izin listesi, #406/#415). Kara liste her yeni
+            # test betiğinde ya da .gitignore değişikliğinde sahte alarm üretiyordu.
+            # Sayılanlar: apps/api, apps/worker, packages/ (db, contracts), Render'ın başlattığı launcher, bağımlılık ve
+            # çalışma ortamı dosyaları. Testler, örnek env ve .md sayılmaz. Container dosyaları (#309) da sayılmaz: staging
+            # Render'da `runtime: node` ile çalışır; Docker imajına geçerse Dockerfile bu listeye eklenmeli.
+            # Yeni bir runtime klasörü eklenirse buraya da eklenmeli; yoksa o klasördeki değişiklik alarm üretmez.
             relation=$(gh api "repos/$GITHUB_REPOSITORY/compare/$STAGING_SHA...$green_sha" --jq '.status' 2>/dev/null || echo "bilinmiyor")
-            api_changes=$(gh api "repos/$GITHUB_REPOSITORY/compare/$STAGING_SHA...$green_sha" --jq '.files[].filename' 2>/dev/null \
-              | grep -Ev '^(apps/web/|docs/|\.github/)|\.md$|^Dockerfile$|^\.dockerignore$' | wc -l || echo 0)
+            changed=$(gh api "repos/$GITHUB_REPOSITORY/compare/$STAGING_SHA...$green_sha" --jq '.files[].filename' 2>/dev/null \
+              | grep -E '^(apps/api/|apps/worker/|packages/)|^(scripts/start-api-with-worker\.mjs|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.nvmrc|render\.yaml)$' \
+              | grep -Ev '(^|/)(test|tests|__tests__)/|\.test\.[cm]?[jt]sx?$|\.example$|\.md$' || true)
+            # Kök package.json'da yalnız "scripts" değiştiyse (CI/test betiği) çalışan API etkilenmez. İçerik okunamazsa sayılır.
+            if printf '%s\n' "$changed" | grep -qx 'package.json'; then
+              pkg() { gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=$1" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | jq -S 'del(.scripts)' 2>/dev/null; }
+              old_pkg=$(pkg "$STAGING_SHA" || true); new_pkg=$(pkg "$green_sha" || true)
+              if [ -n "$old_pkg" ] && [ "$old_pkg" = "$new_pkg" ]; then
+                changed=$(printf '%s\n' "$changed" | grep -vx 'package.json' || true)
+              fi
+            fi
+            api_changes=$(printf '%s\n' "$changed" | grep -c . || true)
             lag_min=$(( (now - $(date -u -d "$green_at" +%s)) / 60 ))
             if [ "$relation" = "ahead" ] && [ "$api_changes" -gt 0 ] && [ "$lag_min" -ge "$DEPLOY_LAG_MAX_MIN" ]; then
               problems+=("staging main'in gerisinde: çalışan ${STAGING_SHA}, CI'ı yeşil son main ${green_sha:0:12} (${lag_min} dk önce, API'yi etkileyen ${api_changes} dosya)")
