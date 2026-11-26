@@ -1,8 +1,8 @@
 /**
  * #371 yeniden test (Utku, 15 Kasım): #353 düzeltmesi 15 örneği tam ifade olarak kapattı.
- * Aynı soruların küçük varyantları (ek, eşanlamlı, İngilizce, benzer harf) hâlâ geçiyor.
+ * 26 Kasım: #395 üzerinde önceki 20 açık vaka zorunlu regresyon olarak etkinleştirildi.
  * Değişmez kural: aşağıdaki sentetik girdilerin her biri detectSensitiveSurvey tarafından tutulur.
- * `todo` işaretliler bugün AÇIK; düzeltme geldikçe işaret kaldırılır. Veriler sentetiktir.
+ * Sentetik test; tüm güvenlik kabulü anlamına gelmez.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -12,7 +12,7 @@ const opts = (...labels: string[]) => labels.map(label => ({ label }));
 const yesNo = opts("Evet", "Hayır");
 const YES_NO = opts("Yes", "No");
 
-const OPEN: Array<[string, SensitiveInput]> = [
+const FIXED: Array<[string, SensitiveInput]> = [
   ["oruç, geçmiş zaman", { title: "Bu ramazan oruç tuttun mu?", options: yesNo }],
   ["oruç, siz", { title: "Ramazanda oruç tutuyor musunuz?", options: yesNo }],
   ["namaz, siz", { title: "Namaz kılıyor musunuz?", options: yesNo }],
@@ -46,8 +46,8 @@ const ALLOWED: Array<[string, SensitiveInput]> = [
   ["sağlık hizmeti", { title: "Hastane randevu sistemi nasıl olmalı?", options: opts("Online", "Telefon") }],
 ];
 
-for (const [name, input] of OPEN) {
-  test(`varyant tutulur: ${name}`, { todo: "AÇIK (#371 yeniden test, #353 60ea54e): kalıp tam ifade, ek/eşanlamlı/benzer harf kaçıyor" }, () => {
+for (const [name, input] of FIXED) {
+  test(`varyant tutulur: ${name}`, () => {
     assert.notEqual(detectSensitiveSurvey(input), null);
   });
 }
