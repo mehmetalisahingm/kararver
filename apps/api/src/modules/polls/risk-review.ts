@@ -46,8 +46,8 @@ const SENSITIVE_CONTEXT = /\b(?:siyas\w*|politik\w*|politic\w*|parti(?!kul)\w*|a
 // Fourth-round guard (#371): only queue personally directed questions that
 // also mention a special-category context. Do not turn these into 400 rejects.
 // Broad subject-only questions (e.g. cancer research funding) stay publishable.
-const DIRECT_PERSONAL_QUESTION = /\b(?:are you|do you|did you|have you|what is your|your|sen(?:in|i|den)?|siz(?:in|i|den)?|misin|misiniz|musun|musunuz|musun|m[ıi]s[ıi]n|destekliyor(?:sun|sunuz)|gider\s+misin|goru(?:yor|r)\s+musun|kullaniyor\s+musun|oldun\s+mu|yattin\s+mi|ne\s+dedin|inaniyor\s+musun)\b/;
-const ADDITIONAL_SENSITIVE_CATEGORIES = /\b(?:christian|atheist|jewish|god|believe|kilise\w*|sinagog\w*|cemevi\w*|tesettur\w*|kanser\w*|tedavi\w*|antidepresan\w*|ameliyat\w*|engelli\w*|hamile\w*|kurtaj\w*|trans|queer|sexual orientation|ermeni\w*|rum|zaza\w*|laz|hapis|mahkum\w*|convict\w*|crime|union member|muhalefet\w*|iktidar\w*|referandum\w*|cumhurbaskan\w*)\b/;
+const DIRECT_PERSONAL_QUESTION = /\b(?:are you|do you|did you|have you|what is your|your|kendin(?:i|izi|e|ize)|kendim(?:i)?|hangisisin|hangisiniz|durumun|durumunuz|sen(?:in|i|de|den)?|siz(?:in|i|den)?|misin|misiniz|musun|musunuz|musun|m[ıi]s[ıi]n|destekliyor(?:sun|sunuz)|gider\s+misin|goru(?:yor|r)\s+musun|kullaniyor\s+musun|oldun\s+mu|yattin\s+mi|gordun\s+mu|gordunuz\s+mu|yaptirdin\s+mi|yaptirdiniz\s+mi|kaldin\s+mi|kaldiniz\s+mi|bozuklugun(?:uz)?|(?:var|aldin|aldiniz)\s+mi|ne\s+dedin|inaniyor\s+musun)\b/;
+const ADDITIONAL_SENSITIVE_CATEGORIES = /\b(?:christian\w*|atheist\w*|jewish|buddhis\w*|budist\w*|suryani\w*|hristiyan\w*|ateist\w*|yahudi\w*|hindu\w*|god|believe|kilise\w*|sinagog\w*|cemevi\w*|tesettur\w*|kanser\w*|cancer\w*|insulin\w*|epilep\w*|bipolar\w*|sizofren\w*|kemoterapi\w*|pregnan\w*|disab(?:led|ility)|multiple sclerosis|tedavi\w*|antidepresan\w*|ameliyat\w*|engelli\w*|hamile\w*|kurtaj\w*|trans(?:gender)?|queer|sexual orientation|heteroseksuel\w*|aseksuel\w*|escinsel\w*|ermeni\w*|cerkez\w*|gurcu\w*|roman(?:lar)?|bosnak\w*|rum|zaza\w*|laz|hapis|cezaevi\w*|mahkum\w*|convict\w*|crime|criminal record|prison\w*|union member|muhalefet\w*|iktidar\w*|hukumet\w*|sagci\w*|solcu\w*|milliyetci\w*|democrat\w*|referandum\w*|cumhurbaskan\w*)\b/;
 const PERSONALLY_SENSITIVE = (text: string) => {
   const value = normalized(text);
   return DIRECT_PERSONAL_QUESTION.test(value) && ADDITIONAL_SENSITIVE_CATEGORIES.test(value);
@@ -69,6 +69,10 @@ export function screenV1Publication(input: ReviewInput): ReviewDecision {
     ...(input.addenda ?? []),
   ];
   if (parts.some(text => LINK.test(text))) signals.push("EXTERNAL_LINK");
-  if (detectSensitiveSurvey(input) !== null || parts.some(text => SENSITIVE_CONTEXT.test(normalized(text)) || PERSONALLY_SENSITIVE(text))) signals.push("POSSIBLE_SENSITIVE_CONTEXT");
+  // Respondent wording can be split between the title, description, choices
+  // and addenda. Evaluate the complete context in addition to each field.
+  if (detectSensitiveSurvey(input) !== null ||
+      parts.some(text => SENSITIVE_CONTEXT.test(normalized(text)) || PERSONALLY_SENSITIVE(text)) ||
+      PERSONALLY_SENSITIVE(parts.join(" "))) signals.push("POSSIBLE_SENSITIVE_CONTEXT");
   return signals.length ? { action: "REVIEW", signals } : { action: "PUBLISH", signals: [] };
 }

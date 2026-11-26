@@ -1,9 +1,7 @@
 /**
  * #371 yeniden test (Utku, 15 Kasım): sözlük (detectSensitiveSurvey) kaçırdığında inceleme kuyruğu yakalamalı.
  * Değişmez kural: aşağıdaki sentetik girdiler screenV1Publication'dan en az REVIEW çıkar, doğrudan yayına gitmez.
- * Bugün SENSITIVE_CONTEXT tam kelime eşliyor (din var, dinin yok) ve risk-review normalized() \p{Cf} temizlemiyor.
- * `todo` işaretliler bugün AÇIK; düzeltme geldikçe işaret kaldırılır. Veriler sentetiktir.
- * 20 Kasım: #357 2074b51 ile 4. tur kapandı (zorunlu); 5. tur listede olmayan kategori kelimeleri ve soru ekleri.
+ * 26 Kasım: 5. tur dahil tüm vakalar zorunlu regresyon; CI ve bağımsız inceleme beklenir. Veriler sentetiktir.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -109,7 +107,7 @@ for (const [name, input] of FOURTH_ROUND) {
 }
 
 for (const [name, input] of FIFTH_ROUND) {
-  test(`incelemeye düşer (5. tur): ${name}`, { todo: "AÇIK (#371 5. tur, #357 2074b51): kategori kelimesi listede yok ya da soru eki/öz tanım tanınmıyor" }, () => {
+  test(`incelemeye düşer (5. tur): ${name}`, () => {
     assert.equal(screenV1Publication(input).action, "REVIEW");
   });
 }
@@ -121,5 +119,12 @@ test("kontrol: sıfır genişlikli boşluk olmadan aynı soru bugün incelemeye 
 test("kontrol: genel konular doğrudan yayınlanır", () => {
   for (const title of ["Asgari ücret ne kadar artmalı?", "Hastane randevu sistemi nasıl olmalı?"]) {
     assert.equal(screenV1Publication(poll(title, opts("A", "B"))).action, "PUBLISH", title);
+  }
+});
+
+
+test("fifth-round neutral vocabulary does not itself require review", () => {
+  for (const title of ["Roman okumak için en iyi zaman nedir?", "Kemoterapi merkezlerinin kapasitesi artırılmalı mı?", "Bipolar bozukluk araştırmalarına bütçe ayrılmalı mı?", "Budist tapınak mimarisi hakkında sergi düzenlensin mi?", "Cezaevi kütüphaneleri nasıl geliştirilmeli?"]) {
+    assert.equal(screenV1Publication(poll(title)).action, "PUBLISH", title);
   }
 });
