@@ -16,17 +16,17 @@ function view(receipt: {
 
 export function registerMyModerationAppealRoutes(
   route: Route,
-  deps: { store: ModerationAppealStore; now: () => Date },
+  deps: { store: ModerationAppealStore },
 ): void {
   route("me.moderationAppeals.get", async ({ viewer, params }) => {
     const receipt = await deps.store.get(viewer!.id, params.id);
     if (!receipt) throw new ApiError("NOT_FOUND", "İtiraz başvurusu veya ret bildirimi bulunamadı.");
-    return { status: 200, body: { data: view(receipt, deps.now()) } };
+    return { status: 200, body: { data: view(receipt, receipt.evaluatedAt) } };
   });
 
   route("me.moderationAppeals.file", async ({ viewer, params, body }) => {
     const filed = await deps.store.file({
-      userId: viewer!.id, rejectionActionId: params.id, reason: body.reason, now: deps.now(),
+      userId: viewer!.id, rejectionActionId: params.id, reason: body.reason,
     });
     if (filed.kind === "not_found") throw new ApiError("NOT_FOUND", "Kendine ait teslim edilmiş ret bildirimi bulunamadı.");
     if (filed.kind === "expired")
@@ -37,6 +37,6 @@ export function registerMyModerationAppealRoutes(
       throw new ApiError("CONFLICT", "Ret kararı artık bu yoldan incelenemiyor.", [
         { code: "appeal_not_reviewable" },
       ]);
-    return { status: 200, body: { data: view(filed.receipt, deps.now()) } };
+    return { status: 200, body: { data: view(filed.receipt, filed.receipt.filedAt!) } };
   });
 }

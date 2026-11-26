@@ -409,7 +409,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   if (deps.onboardingStore) registerOnboardingRoutes(route, deps.onboardingStore);
   if (deps.reportStore) registerReportRoutes(route, { store: deps.reportStore, now });
   if (deps.moderationStore) registerModerationRoutes(route, { store: deps.moderationStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
-  if (deps.moderationAppealStore) registerMyModerationAppealRoutes(route, { store: deps.moderationAppealStore, now });
+  if (deps.moderationAppealStore) registerMyModerationAppealRoutes(route, { store: deps.moderationAppealStore });
   if (deps.moderationStore && deps.bulkModerationStore && deps.bulkApprovalStore) {
     registerBulkModerationRoutes(route, { store: deps.moderationStore, batches: deps.bulkModerationStore, approvals: deps.bulkApprovalStore, rbac: deps.rbacStore, now, mediaPublicBaseUrl: config.mediaPublicBaseUrl });
   }

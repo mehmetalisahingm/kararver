@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { ErrorBody, PointsSummary } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
+import { createPrismaModerationAppealStore } from "../src/modules/moderation/appeals-store.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
 const backend = prismaBackend();
@@ -237,6 +238,14 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
         deadlineAt: new Date(inboxDeliveredAt.getTime() + 30 * 24 * 60 * 60 * 1000),
       },
     });
+    // The production store uses the database clock even while the HTTP harness
+    // intentionally runs with a fixed, unrelated clock.
+    const [dbBefore] = await db.$queryRaw<Array<{ at: Date }>>`SELECT clock_timestamp()::timestamptz(3) AS at`;
+    const realReceipt = await createPrismaModerationAppealStore(db).get(owner.id, rejectedAction.id);
+    const [dbAfter] = await db.$queryRaw<Array<{ at: Date }>>`SELECT clock_timestamp()::timestamptz(3) AS at`;
+    assert.ok(realReceipt);
+    assert.ok(realReceipt.evaluatedAt.getTime() >= dbBefore!.at.getTime());
+    assert.ok(realReceipt.evaluatedAt.getTime() <= dbAfter!.at.getTime());
     const otherViewer = await login(await registerVerified());
     const forbiddenRead = await send("GET", `/me/moderation-appeals/${rejectedAction.id}`, undefined, otherViewer.cookie);
     assert.equal(forbiddenRead.statusCode, 404, forbiddenRead.body);

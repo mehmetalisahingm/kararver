@@ -279,7 +279,7 @@ export async function createHarness(factory: BackendFactory, options: HarnessOpt
     onboardingStore: backend.prisma ? createPrismaOnboardingStore(backend.prisma) : undefined,
     reportStore: backend.prisma ? createPrismaReportStore(backend.prisma) : undefined,
     moderationStore: backend.prisma ? createPrismaModerationStore(backend.prisma) : undefined,
-    moderationAppealStore: backend.prisma ? createPrismaModerationAppealStore(backend.prisma) : undefined,
+    moderationAppealStore: backend.prisma ? createPrismaModerationAppealStore(backend.prisma, { testClock: () => clock.now }) : undefined,
     bulkModerationStore: backend.prisma ? createPrismaBulkModerationStore(backend.prisma) : undefined,
     bulkApprovalStore: backend.prisma ? createPrismaBulkApprovalStore(backend.prisma) : undefined,
     spamScoreStore: backend.prisma ? createPrismaSpamScoreStore(backend.prisma) : undefined,

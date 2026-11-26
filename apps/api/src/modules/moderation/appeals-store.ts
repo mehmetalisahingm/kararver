@@ -21,8 +21,8 @@ export type AppealFileResult =
   | { kind: "not_reviewable" };
 
 export interface ModerationAppealStore {
-  get(userId: string, rejectionActionId: string): Promise<Receipt | null>;
-  file(input: { userId: string; rejectionActionId: string; reason: string; now: Date }): Promise<AppealFileResult>;
+  get(userId: string, rejectionActionId: string): Promise<(Receipt & { evaluatedAt: Date }) | null>;
+  file(input: { userId: string; rejectionActionId: string; reason: string }): Promise<AppealFileResult>;
 }
 
 export function appealStatus(r: Receipt, now: Date): "OPEN" | "FILED" | "EXPIRED" {
@@ -30,7 +30,15 @@ export function appealStatus(r: Receipt, now: Date): "OPEN" | "FILED" | "EXPIRED
   return now.getTime() <= r.deadlineAt.getTime() ? "OPEN" : "EXPIRED";
 }
 
-export function createPrismaModerationAppealStore(prisma: PrismaClient): ModerationAppealStore {
+export function createPrismaModerationAppealStore(prisma: PrismaClient, options: { testClock?: () => Date } = {}): ModerationAppealStore {
+  // Production always uses PostgreSQL time, the source of the delivery receipt.
+  // Test harnesses can explicitly inject a deterministic clock for boundary tests.
+  async function dbNow(client: Pick<PrismaClient, "$queryRaw">): Promise<Date> {
+    if (options.testClock) return options.testClock();
+    const [row] = await client.$queryRaw<Array<{ evaluated_at: Date }>>`SELECT clock_timestamp()::timestamptz(3) AS evaluated_at`;
+    if (!row) throw new Error("appeal_db_clock_unavailable");
+    return row.evaluated_at;
+  }
   return {
     async get(userId, rejectionActionId) {
       // Do not leak existence, reason or identity to unrelated accounts.
@@ -38,9 +46,9 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient): Moderat
         where: { rejectionActionId, recipientId: userId },
         select: { rejectionActionId: true, deliveredAt: true, deadlineAt: true, filedAt: true },
       });
-      return result;
+      return result ? { ...result, evaluatedAt: await dbNow(prisma) } : null;
     },
-    async file({ userId, rejectionActionId, reason, now }) {
+    async file({ userId, rejectionActionId, reason }) {
       return prisma.$transaction(async (tx): Promise<AppealFileResult> => {
         // Serialize repeated user submissions with a row-level lock. A
         // competing retry can never overwrite the first filing timestamp.
@@ -60,8 +68,10 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient): Moderat
           deadlineAt: receipt.deadline_at, filedAt: receipt.filed_at,
         };
         if (original.filedAt) return { kind: "ok", receipt: original };
-        if (now.getTime() > original.deadlineAt.getTime()) return { kind: "expired" };
-        if (now.getTime() < original.deliveredAt.getTime()) return { kind: "not_reviewable" };
+        // Check the clock after obtaining the receipt lock, not at request start.
+        const lockedAt = await dbNow(tx);
+        if (lockedAt.getTime() > original.deadlineAt.getTime()) return { kind: "expired" };
+        if (lockedAt.getTime() < original.deliveredAt.getTime()) return { kind: "not_reviewable" };
 
         // A user can only appeal the rejection of their OWN still-removed
         // poll; deleted accounts and superseded ret decisions fail closed.
@@ -86,6 +96,11 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient): Moderat
         });
         if (latest?.id !== rejectionActionId) return { kind: "not_reviewable" };
 
+        // Re-read after eligibility checks so a long lock/query cannot produce
+        // a filing timestamp outside the immutable delivery window.
+        const now = await dbNow(tx);
+        if (now.getTime() > original.deadlineAt.getTime()) return { kind: "expired" };
+        if (now.getTime() < original.deliveredAt.getTime()) return { kind: "not_reviewable" };
         const saved = await tx.moderationAppealWindow.update({
           where: { rejectionActionId },
           data: { filedAt: now, filedReason: reason },
