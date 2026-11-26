@@ -142,9 +142,10 @@ Dosya değiştirilmiş ya da kesikse çözme reddedilir, geçici düz metin temi
 ## Arındırılmış kopya (#299; #297 sonrası)
 
 **Durum (3 Kasım):** #297 ile Neon staging'e gerçek staging verisi, oturum ve MFA kayıtlarıyla **arındırılmadan** taşındı. Bu araç **canlı Neon staging'e ya da production'a uygulanmaz**; oradaki hesap ve oturumlar kalıcı etkilenir. Yalnız **izole bir kopyada** çalışır. Kullanım alanları:
-- kişisel veri içermeyen test/tatbikat veritabanı üretmek;
-- yeni bir sağlayıcıya ya da başka bir ortama veri vermek;
-- staging'in ileride sentetikleştirilmesi.
+- erişimi sınırlı yerel test/tatbikat için **takma adlı, hâlâ kişisel veri içerebilen** kopya üretmek;
+- staging'in ileride sentetikleştirilmesi için izole ortamda yöntem denemek.
+
+**Anonim veri garantisi yoktur.** Telefon, T.C. kimlik numarası, IBAN, adres, üçüncü kişi adları, medya ve serbest metindeki diğer tanımlayıcılar kalabilir. `demote` seçeneği de tek başına anonimlik sağlamaz. Kopya kişisel veri olarak korunur; üçüncü tarafa veya başka sağlayıcıya aktarım yapılmaz. Böyle bir aktarım ancak #288 kapsamındaki yetkili karar, veri envanteri ve bağımsız risk/anonimlik değerlendirmesi tamamlandıktan sonra ayrı süreçte değerlendirilebilir.
 
 Canlı staging'in sentetikleştirilmesi ayrı, kullanıcıya etkisi olan bir işlem planı ve #288/#291 kararı ister (Mehmet).
 
@@ -181,7 +182,7 @@ Canlı staging'in sentetikleştirilmesi ayrı, kullanıcıya etkisi olan bir iş
 
 **Kapsam dışı:** Medya nesneleri (avatar, dışa aktarma paketleri) depoda kalır. Araç yalnız veritabanını işler; nesne deposu ayrı ele alınır (#302).
 
-**Sınır:** Genel kelime olan kullanıcı adları (ör. "admin") başka bir kelimenin parçası olarak kalabilir. Repodaki migration adları kişisel veri değildir.
+**Sınır:** Genel kelime olan kullanıcı adları (ör. "admin") başka bir kelimenin parçası olarak kalabilir. Repodaki migration adları kişisel veri değildir. Sıfır e-posta veya tanımlayıcı eşleşmesi yalnız bu sınırlı taramanın sonucudur; anonimlik ya da dışa aktarım onayı değildir. `keep` gerçek rol sahiplerinin kimlik ve parola özetlerini koruduğundan sadece izole, erişimi kısıtlı tatbikat için kullanılır. Medya referansları/anahtarları ve nesneler ayrıca değerlendirilir (#302).
 
 **3 Kasım izole klon kanıtı** (1 Kasım staging yedeği; 52 migration, 2470 satır; yerel PG 18.6):
 - **`keep` deneme:**
