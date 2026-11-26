@@ -32,3 +32,18 @@ test("upstream outage is an error, never a false permanent 404 or cached old pol
   expect(response.status()).toBeGreaterThanOrEqual(500);
   expect((await response.text()).includes("PUBLIC_SSR_FIXTURE_TITLE")).toBe(false);
 });
+
+
+for (const scenario of ["hidden", "under_review"]) test(`#377 ${scenario} removes previously public HTML and metadata`, async ({ request }) => {
+  await request.post("http://127.0.0.1:4015/__scenario/public");
+  const before = await request.get(path);
+  expect(before.status()).toBe(200);
+  expect(await before.text()).toContain("PUBLIC_SSR_FIXTURE_TITLE");
+  await request.post(`http://127.0.0.1:4015/__scenario/${scenario}`);
+  const after = await request.get(path);
+  expect(after.status()).toBe(404);
+  const html = await after.text();
+  expect(html).toContain("noindex");
+  expect(html).not.toContain("PUBLIC_SSR_FIXTURE_TITLE");
+  expect(html).not.toContain("Public description for isolated crawler acceptance.");
+});

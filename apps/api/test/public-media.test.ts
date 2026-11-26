@@ -77,3 +77,18 @@ test("missing approved copy returns 404", async t => {
   const { app } = await fixture({ read: async () => null }); t.after(() => app.close());
   assert.equal((await app.inject({ url: path })).statusCode, 404);
 });
+
+
+test("#377 a previously public media URL stops returning bytes after visibility is revoked", async t => {
+  const { app, state } = await fixture(); t.after(() => app.close());
+  assert.equal((await app.inject({ url: path })).statusCode, 200);
+  const reads = state.storageReads;
+  state.key = null;
+  for (const method of ["GET", "HEAD"] as const) {
+    const response = await app.inject({ method, url: path });
+    assert.equal(response.statusCode, 404);
+    assert.match(String(response.headers["cache-control"]), /no-store/);
+    assert.doesNotMatch(response.body, /RIFFtestWEBP/);
+  }
+  assert.equal(state.storageReads, reads);
+});

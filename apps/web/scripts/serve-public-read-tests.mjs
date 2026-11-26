@@ -14,8 +14,9 @@ const server = createServer((request, response) => {
     scenario = path.split("/").at(-1); response.end("{}"); return;
   }
   if (path.startsWith("/v1/polls/")) {
-    response.statusCode = scenario === "public" ? 200 : scenario === "removed" ? 404 : 503;
-    response.end(JSON.stringify(scenario === "public" ? fixture : { error: { code: scenario === "removed" ? "NOT_FOUND" : "INTERNAL_ERROR", message: "Synthetic response", details: [] }, requestId: "ssr-fixture" }));
+    const hidden = ["removed", "hidden", "under_review"].includes(scenario);
+    response.statusCode = scenario === "public" ? 200 : hidden ? 404 : 503;
+    response.end(JSON.stringify(scenario === "public" ? fixture : { error: { code: hidden ? "NOT_FOUND" : "INTERNAL_ERROR", message: "Synthetic response", details: [] }, requestId: "ssr-fixture" }));
     return;
   }
   response.statusCode = 404; response.end("{}");
