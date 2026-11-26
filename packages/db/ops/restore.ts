@@ -13,7 +13,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { createPrismaClient } from "../src/index.ts";
 import { type Manifest, sha256File } from "./backup.ts";
-import { databaseName, redact, run, withDatabase } from "./pg-tools.ts";
+import { databaseName, ISOLATED_COPY_MARKER, redact, run, withDatabase } from "./pg-tools.ts";
 import { checkInvariants, collectState, compareState, type Invariant } from "./state.ts";
 
 export type RestoreReport = {
@@ -36,6 +36,7 @@ async function prepareTarget(target: string): Promise<void> {
     const [{ n }] = await admin.$queryRawUnsafe<{ n: number }[]>("SELECT count(*)::int AS n FROM pg_database WHERE datname = $1", name);
     if (n === 0) {
       await admin.$executeRawUnsafe(`CREATE DATABASE "${name}"`);
+      await admin.$executeRawUnsafe(`COMMENT ON DATABASE "${name}" IS '${ISOLATED_COPY_MARKER} ${new Date().toISOString()}'`);
       return;
     }
   } finally {
@@ -48,6 +49,8 @@ async function prepareTarget(target: string): Promise<void> {
         WHERE ns.nspname = 'public'`,
     );
     if (n > 0) throw new Error(`hedef veritabanı boş değil (${name}: public şemada ${n} nesne); restore yalnız boş veritabanına yapılır`);
+    // Boş hedef restore ile izole kopyaya dönüşür (#299 işareti).
+    await db.$executeRawUnsafe(`COMMENT ON DATABASE "${name}" IS '${ISOLATED_COPY_MARKER} ${new Date().toISOString()}'`);
   } finally {
     await db.$disconnect();
   }
