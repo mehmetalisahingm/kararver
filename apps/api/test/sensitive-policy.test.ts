@@ -256,3 +256,18 @@ test("review #371: group-history and election-level discussion are not first-per
   }), null);
   assert.equal(detectSensitiveSurvey({ title: "Partilerin oy oranları nasıl değişti?" }), null);
 });
+
+
+test("review #371: general contests, election history and indirect medical discussion are not hard-rejected", () => {
+  for (const title of [
+    "Yarışmada kime oy verdin?", "Eurovision'da kime oy verdiniz?",
+    "1950 seçimini hangi parti kazandı?", "Dün akşamki maçta kimi destekledin?",
+    "Depresyon teşhisi kondu mu diye nereden anlarız?",
+  ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
+});
+
+test("review #371: tense, formal address and first-person choice variants", () => {
+  for (const title of ["Bu ramazan oruç tuttun mu?", "Ramazanda oruç tutar mısın?", "Namaz kılar mısınız?", "Allah'a inanır mısın?", "Oruç tutuyor musun?", "Are you Muslim?", "Biseksüel misin?", "Are you lesbian?", "Arap mısın?", "кürt müsünüz?"]) assert.ok(detectSensitiveSurvey({ title }), title);
+  for (const label of ["CHP'ye oy verdik", "CHP'ye oy vereceğim", "CHP'yi destekliyorum", "Oyum CHP'ye", "CHP seçmeniyim"]) assert.deepEqual(detectSensitiveSurvey({ title: "Sence?", options: [{ label }, { label: "Diğer" }] }), { field: "options.0.label", category: "political" }, label);
+  assert.deepEqual(detectSensitiveSurvey({ title: "Kendinize en yakın inanç hangisi?", options: [{ label: "Alevi" }, { label: "Sünni" }] }), { field: "options.0.label", category: "belief" });
+});

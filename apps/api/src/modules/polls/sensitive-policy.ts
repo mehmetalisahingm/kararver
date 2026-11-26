@@ -31,7 +31,7 @@ function normalized(value: string): string {
     .replace(/[рρ]/gu, "p")
     .replace(/[іι]/gu, "i")
     .replace(/[с]/gu, "c")
-    .replace(/[т]/gu, "t")
+    .replace(/[т]/gu, "t").replace(/[кκ]/gu, "k")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\bs[1i]yas[1i]\b/g, "siyasi")
@@ -47,7 +47,7 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
   { category: "sexual", pattern: /\b(?:escinsel misin|escinsel misiniz)\b/ },
   { category: "ethnicity", pattern: /\b(?:kurt musun turk musun|turk musun kurt musun|hangi etnik gruptansin|which ethnicity are you)\b/ },
   // Respondent's voting behaviour, political party or political views.
-  { category: "political", pattern: /\b(?:siyasi|politik) (?:gorus(?:un|unuz|leriniz)?|tercih(?:in|iniz)?)\b|\b(?:hangi|hangi bir|ne|senin|sizin) (?:siyasi )?parti(?:ye|yi|den|nin|ye oy)?\b|\b(?:oy verdin|oy verdiniz|oy veriyorsun|oy vereceksin|oy vereceksiniz|kime oy veriyorsun|kime oy vereceksin)\b|\b(?:parti|siyasi hareket) (?:uyesi|uyeligin|uyesi misin)\b/ },
+  { category: "political", pattern: /\b(?:siyasi|politik) (?:gorus(?:un|unuz|leriniz)?|tercih(?:in|iniz)?)\b|\b(?:hangi|hangi bir) (?:siyasi )?parti(?:ye|yi) (?:oy ver(?:din|diniz|iyorsun|iyorsunuz|eceksin|eceksiniz)|sec(?:tin|tiniz)|destekliyor(?:sun|sunuz))\b|\b(?:senin|sizin) (?:siyasi )?parti(?:n|niz)\b|\b(?:parti|siyasi hareket) (?:uyesi|uyeligin|uyesi misin)\b/ },
   // Religion, denominations and philosophical belief about the respondent.
   { category: "belief", pattern: /\b(?:hangi|hangi bir|ne|senin|sizin) (?:dine|dini|din|mezhep|inanc|inanca)\b|\b(?:dinin|dininiz|mezhebin|mezhebiniz|inancin|inanciniz|felsefi inancin|felsefi inanciniz) (?:ne|nedir)\b|\b(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|dindar) (?:misin|misiniz|miydin|miydiniz)\b/ },
   // Personal diagnoses, prescriptions, psychological/physical conditions.
@@ -59,11 +59,11 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
   { category: "biometric", pattern: /\b(?:parmak izin|parmak iziniz|parmak izini|parmak izinizi|yuz tanima verin|genetik verin|genetik test sonucunuz|dna sonucunu|dna bilgilerini)\b/ },
 
   // #371 P1: generalized respondent variants, not one-off exact-question fixtures.
-  { category: "political", pattern: /\b(?:son secimde|cumhurbaskanligi seciminde|son cumhurbaskanligi seciminde) (?:kimi destekledin|kime oy verdin|tercihin|tercihiniz)\b|\b(?:kime|kimi|kimin) (?:oy verdin|oy verdiniz|destekledin|desteklediniz)\b|\bhow did you vote in the last election\b/ },
-  { category: "belief", pattern: /\b(?:ramazanda oruc tutuyor|namaz kiliyor|basortusu takiyor) mu(?:sun|sunuz)\b|\bdinin hangisi\b|\ballah a inaniyor mu(?:sun|sunuz)\b|\bdo you pray five times a day\b/ },
-  { category: "health", pattern: /\bdepresyon teshisi kondu mu\b|\bhiv testin pozitif mi cikti\b|\bhave you been diagnosed with depression\b/ },
-  { category: "sexual", pattern: /\b(?:gay|lezbiyen) mi(?:sin|siniz)\b|\bare you gay\b/ },
-  { category: "ethnicity", pattern: /\b(?:kurt|turk) mu(?:sun|sunuz)\b/ },
+  { category: "political", pattern: /\b(?:son secimde|cumhurbaskanligi seciminde|son cumhurbaskanligi seciminde) (?:kimi destekledin|kime oy verdin|tercihin|tercihiniz)\b|\b(?:yerel|genel|son|cumhurbaskanligi) secim(?:de|inde)? (?:hangi adayi|kimi|kime) (?:oy verdin|oy verdiniz|destekledin|desteklediniz)\b|\bhow did you vote in the last election\b/ },
+  { category: "belief", pattern: /\b(?:(?:ramazanda )?oruc tutuyor|namaz kiliyor|basortusu takiyor) mu(?:sun|sunuz)\b|\b(?:oruc tuttun|oruc tuttunuz) mu\b|\b(?:oruc tutar|namaz kilar|allah a inanir) mi(?:sin|siniz)\b|\bdinin hangisi\b|\ballah a inaniyor mu(?:sun|sunuz)\b|\bdo you pray five times a day\b|\bare you muslim\b/ },
+  { category: "health", pattern: /\b(?:(?:sana|size) )?depresyon teshisi kondu mu\s*$|\bhiv testin pozitif mi cikti\b|\bhave you been diagnosed with depression\b/ },
+  { category: "sexual", pattern: /\b(?:gay|lezbiyen|biseksuel) mi(?:sin|siniz)\b|\bare you (?:gay|lesbian|bisexual)\b/ },
+  { category: "ethnicity", pattern: /\b(?:kurt|turk) mu(?:sun|sunuz)\b|\barap mi(?:sin|siniz)\b/ },
   { category: "justice", pattern: /\bhic tutuklandin mi\b/ },
 ];
 
@@ -79,9 +79,10 @@ const SENSITIVE_ANSWERS: ReadonlyArray<{ category: SensitiveRisk["category"]; pa
   { category: "membership", pattern: /^(?:sendika uyesi|dernek uyesi|vakif uyesi)$/ },
 ];
 // First-person political option labels disclose a respondent even with a neutral question.
-const POLITICAL_SELF_ANSWER = /^(?:ben )?(?:ak parti|akp|chp|mhp|hdp|dem(?: parti)?|iyi parti|tip|zafer partisi) (?:li|liyim|liyiz|(?:ye|ya|e|a) oy (?:verdim|veriyorum))$/;
+const PARTY_LABEL = "(?:ak parti|akp|chp|mhp|hdp|dem(?: parti)?|iyi parti|tip|zafer partisi)";
+const POLITICAL_SELF_ANSWER = new RegExp("^(?:(?:ben )?" + PARTY_LABEL + " (?:li|liyim|liyiz|secmeniyim|(?:ye|ya|e|a|ne|na) oy (?:verdim|verdik|veriyorum|veriyoruz|verecegim|verecegiz)|(?:yi|yu|i|u|ni|nu) destekliyor(?:um|uz))|oyum " + PARTY_LABEL + "(?: (?:ye|ya|e|a|ne|na))?)$");
 
-const PERSONAL_CHOICE_PROMPT = /\b(?:hangisisin|hangisiniz|hangi gruptasin|hangi gruptasiniz|hangisini tercih edersin|hangisini secersin|hangisini tercih ediyorsun|hangi gruba aitsin|sana yakin olan grubu sec|kendini|kendinizi|senin|sizin|sen hangi|siz hangi|sende|kime oy verirsin|hangi dine mensupsun)\b/;
+const PERSONAL_CHOICE_PROMPT = /\b(?:hangisisin|hangisiniz|hangi gruptasin|hangi gruptasiniz|hangisini tercih edersin|hangisini secersin|hangisini tercih ediyorsun|hangi gruba aitsin|sana yakin olan grubu sec|kendini|kendinizi|kendine|kendinize|senin|sizin|sen hangi|siz hangi|sende|kime oy verirsin|hangi dine mensupsun)\b/;
 
 export function detectSensitiveSurvey(input: SensitiveInput): SensitiveRisk | null {
   const fields: Array<[string, string | undefined | null]> = [
