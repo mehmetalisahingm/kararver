@@ -271,3 +271,13 @@ test("review #371: tense, formal address and first-person choice variants", () =
   for (const label of ["CHP'ye oy verdik", "CHP'ye oy vereceğim", "CHP'yi destekliyorum", "Oyum CHP'ye", "CHP seçmeniyim"]) assert.deepEqual(detectSensitiveSurvey({ title: "Sence?", options: [{ label }, { label: "Diğer" }] }), { field: "options.0.label", category: "political" }, label);
   assert.deepEqual(detectSensitiveSurvey({ title: "Kendinize en yakın inanç hangisi?", options: [{ label: "Alevi" }, { label: "Sünni" }] }), { field: "options.0.label", category: "belief" });
 });
+
+
+test("review #371: obfuscated political respondent prompts remain protected after narrowing generic voting", () => {
+  for (const title of ["Hangi p4rtiye oy verdin?", "H a n g i  p a r t i y e oy verdin?", "Hangi pаrtiye yakınsın?", "Hangi partiye yakınsınız?"]) {
+    assert.equal(detectSensitiveSurvey({ title })?.category, "political", title);
+  }
+  assert.equal(detectSensitiveSurvey({ title: "Sana hiç depresyon teşhisi kondu mu?" })?.category, "health");
+  assert.equal(detectSensitiveSurvey({ title: "Yarışmada kime oy verdin?" }), null);
+  assert.equal(detectSensitiveSurvey({ title: "Depresyon teşhisi kondu mu diye nereden anlarız?" }), null);
+});

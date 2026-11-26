@@ -35,6 +35,10 @@ function normalized(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\bs[1i]yas[1i]\b/g, "siyasi")
+    // Restore narrowly scoped party-token obfuscation coverage without
+    // rejecting generic competition voting questions.
+    .replace(/\bp[4a]rti(ye|yi)\b/g, "parti$1")
+    .replace(/\bh\s+a\s+n\s+g\s+i\s+p\s+a\s+r\s+t\s+i\s+y\s+([ei])\b/g, "hangi partiy$1")
     .replace(/\s+/g, " ")
     .trim() + " ";
 }
@@ -47,7 +51,7 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
   { category: "sexual", pattern: /\b(?:escinsel misin|escinsel misiniz)\b/ },
   { category: "ethnicity", pattern: /\b(?:kurt musun turk musun|turk musun kurt musun|hangi etnik gruptansin|which ethnicity are you)\b/ },
   // Respondent's voting behaviour, political party or political views.
-  { category: "political", pattern: /\b(?:siyasi|politik) (?:gorus(?:un|unuz|leriniz)?|tercih(?:in|iniz)?)\b|\b(?:hangi|hangi bir) (?:siyasi )?parti(?:ye|yi) (?:oy ver(?:din|diniz|iyorsun|iyorsunuz|eceksin|eceksiniz)|sec(?:tin|tiniz)|destekliyor(?:sun|sunuz))\b|\b(?:senin|sizin) (?:siyasi )?parti(?:n|niz)\b|\b(?:parti|siyasi hareket) (?:uyesi|uyeligin|uyesi misin)\b/ },
+  { category: "political", pattern: /\b(?:siyasi|politik) (?:gorus(?:un|unuz|leriniz)?|tercih(?:in|iniz)?)\b|\b(?:hangi|hangi bir) (?:siyasi )?parti(?:ye|yi) (?:oy ver(?:din|diniz|iyorsun|iyorsunuz|eceksin|eceksiniz)|sec(?:tin|tiniz)|destekliyor(?:sun|sunuz)|yakin(?:sin|siniz))\b|\b(?:senin|sizin) (?:siyasi )?parti(?:n|niz)\b|\b(?:parti|siyasi hareket) (?:uyesi|uyeligin|uyesi misin)\b/ },
   // Religion, denominations and philosophical belief about the respondent.
   { category: "belief", pattern: /\b(?:hangi|hangi bir|ne|senin|sizin) (?:dine|dini|din|mezhep|inanc|inanca)\b|\b(?:dinin|dininiz|mezhebin|mezhebiniz|inancin|inanciniz|felsefi inancin|felsefi inanciniz) (?:ne|nedir)\b|\b(?:musluman|hristiyan|yahudi|ateist|agnostik|alevi|sunni|dindar) (?:misin|misiniz|miydin|miydiniz)\b/ },
   // Personal diagnoses, prescriptions, psychological/physical conditions.
@@ -61,7 +65,7 @@ const REQUESTS: ReadonlyArray<{ category: SensitiveRisk["category"]; pattern: Re
   // #371 P1: generalized respondent variants, not one-off exact-question fixtures.
   { category: "political", pattern: /\b(?:son secimde|cumhurbaskanligi seciminde|son cumhurbaskanligi seciminde) (?:kimi destekledin|kime oy verdin|tercihin|tercihiniz)\b|\b(?:yerel|genel|son|cumhurbaskanligi) secim(?:de|inde)? (?:hangi adayi|kimi|kime) (?:oy verdin|oy verdiniz|destekledin|desteklediniz)\b|\bhow did you vote in the last election\b/ },
   { category: "belief", pattern: /\b(?:(?:ramazanda )?oruc tutuyor|namaz kiliyor|basortusu takiyor) mu(?:sun|sunuz)\b|\b(?:oruc tuttun|oruc tuttunuz) mu\b|\b(?:oruc tutar|namaz kilar|allah a inanir) mi(?:sin|siniz)\b|\bdinin hangisi\b|\ballah a inaniyor mu(?:sun|sunuz)\b|\bdo you pray five times a day\b|\bare you muslim\b/ },
-  { category: "health", pattern: /\b(?:(?:sana|size) )?depresyon teshisi kondu mu\s*$|\bhiv testin pozitif mi cikti\b|\bhave you been diagnosed with depression\b/ },
+  { category: "health", pattern: /\b(?:(?:sana|size) (?:hic )?)?depresyon teshisi kondu mu\s*$|\bhiv testin pozitif mi cikti\b|\bhave you been diagnosed with depression\b/ },
   { category: "sexual", pattern: /\b(?:gay|lezbiyen|biseksuel) mi(?:sin|siniz)\b|\bare you (?:gay|lesbian|bisexual)\b/ },
   { category: "ethnicity", pattern: /\b(?:kurt|turk) mu(?:sun|sunuz)\b|\barap mi(?:sin|siniz)\b/ },
   { category: "justice", pattern: /\bhic tutuklandin mi\b/ },
