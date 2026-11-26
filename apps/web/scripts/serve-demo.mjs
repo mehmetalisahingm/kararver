@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import "./sync-assets.mjs";
+import "./build-cabin.mjs";
 const require = createRequire(import.meta.url);
 const child = spawn(
   process.execPath,

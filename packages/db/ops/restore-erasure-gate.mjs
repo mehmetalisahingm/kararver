@@ -11,6 +11,7 @@
  * still need separately recorded operational/human acceptance.
  */
 import { createPublicKey, verify } from "node:crypto";
+
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -66,28 +67,76 @@ export function assertIsolatedRestoreTarget(target, live) {
 }
 
 /**
- * Check the complete signed set, bounded query size, with NO writes. Current
- * strict requirement: no surviving user/content/session/media row under ANY
- * of the journaled IDs. Historic legal operation records are assessed
- * separately; a tombstoned user is still retained data, not an anonymous stat.
+ * Check the complete signed set, bounded query size, with NO writes.
+ *
+ * Two separate results, both fail closed:
+ * - `resurrected`: state that only exists BEFORE an erasure ran (live account,
+ *   unremoved content, sessions/tokens/MFA, votes, published media, ready
+ *   export). This is what a pre-erasure snapshot looks like -> exit 2.
+ * - `retained`: any row at all under a journaled ID, including the tombstones
+ *   today's account-erasure flow intentionally keeps (user row with
+ *   deleted_at, REMOVED polls/comments, REJECTED media). Strict #321 target:
+ *   still blocks (exit 3) until physical deletion lands, but it is no longer
+ *   indistinguishable from a resurrected account.
+ * A tombstoned user is still retained data, not an anonymous stat.
+ *
+ * `actorEvents` (#372, Utku): domain_events rows whose actor, or USER subject, is a journaled ID. Account erasure
+ * deletes these rows in the same transaction (#372 §3), so any such row in a restored copy is RESURRECTED (exit 2).
  */
 export async function checkNoResurrection(db, subjectIds) {
-  const counts = { restoredUsers: 0, authoredPolls: 0, authoredComments: 0, linkedVotes: 0, sessions: 0, authTokens: 0, mediaAssets: 0 };
+  // Each counter is an explicit name → query pair, so adding one cannot silently shift the others (#389 review).
+  const retainedQueries = {
+    restoredUsers: (id) => db.user.count({ where: { id } }),
+    authoredPolls: (id) => db.poll.count({ where: { authorId: id } }),
+    authoredComments: (id) => db.comment.count({ where: { authorId: id } }),
+    linkedVotes: (id) => db.vote.count({ where: { userId: id } }),
+    sessions: (id) => db.session.count({ where: { userId: id } }),
+    authTokens: (id) => db.authToken.count({ where: { userId: id } }),
+    mediaAssets: (id) => db.mediaAsset.count({ where: { uploaderId: id } }),
+  };
+  const resurrectedQueries = {
+    liveUsers: (id) => db.user.count({ where: { id, deletedAt: null } }),
+    liveAuthoredPolls: (id) => db.poll.count({ where: { authorId: id, OR: [{ deletedAt: null }, { status: { not: "REMOVED" } }] } }),
+    liveAuthoredComments: (id) => db.comment.count({ where: { authorId: id, OR: [{ deletedAt: null }, { status: { not: "REMOVED" } }] } }),
+    linkedVotes: (id) => db.vote.count({ where: { userId: id } }),
+    sessions: (id) => db.session.count({ where: { userId: id } }),
+    authTokens: (id) => db.authToken.count({ where: { userId: id } }),
+    mfaCredentials: (id) => db.userMfaCredential.count({ where: { userId: id } }),
+    publishedMedia: (id) => db.mediaAsset.count({ where: { uploaderId: id, OR: [{ publicObjectKey: { not: null } }, { status: { not: "REJECTED" } }] } }),
+    readyExports: (id) => db.dataExport.count({ where: { userId: id, status: "READY" } }),
+    // Same four subject-match paths as account erasure: actor, USER subject, payload and natural_key.
+    // A restored row whose only reference is payload/natural_key is still a resurrection (#372).
+    actorEvents: async (whereId) => {
+      const rows = await db.$queryRaw`
+        SELECT COUNT(*)::bigint AS total
+        FROM domain_events AS event
+        WHERE EXISTS (
+          SELECT 1 FROM unnest(${whereId.in}::text[]) AS subject(id)
+          WHERE event.actor_id = subject.id::uuid
+             OR (event.subject_type = 'USER' AND event.subject_id = subject.id)
+             OR event.payload::text LIKE ('%' || subject.id || '%')
+             OR event.natural_key LIKE ('%' || subject.id || '%')
+        )
+      `;
+      return Number(rows[0]?.total ?? 0);
+    },
+  };
+  const tally = async (queries, whereId, into) => {
+    const entries = Object.entries(queries);
+    const values = await Promise.all(entries.map(([, query]) => query(whereId)));
+    entries.forEach(([name], j) => { into[name] += values[j]; });
+  };
+  const zero = (queries) => Object.fromEntries(Object.keys(queries).map((k) => [k, 0]));
+  const retained = zero(retainedQueries);
+  const resurrected = zero(resurrectedQueries);
   for (let i = 0; i < subjectIds.length; i += 250) {
-    const chunk = subjectIds.slice(i, i + 250);
-    const whereId = { in: chunk };
-    const found = await Promise.all([
-      db.user.count({ where: { id: whereId } }),
-      db.poll.count({ where: { authorId: whereId } }),
-      db.comment.count({ where: { authorId: whereId } }),
-      db.vote.count({ where: { userId: whereId } }),
-      db.session.count({ where: { userId: whereId } }),
-      db.authToken.count({ where: { userId: whereId } }),
-      db.mediaAsset.count({ where: { uploaderId: whereId } }),
-    ]);
-    Object.keys(counts).forEach((key, j) => { counts[key] += found[j]; });
+    const whereId = { in: subjectIds.slice(i, i + 250) };
+    await tally(retainedQueries, whereId, retained);
+    await tally(resurrectedQueries, whereId, resurrected);
   }
-  return { safe: Object.values(counts).every(v => v === 0), counts };
+  const none = counts => Object.values(counts).every(v => v === 0);
+  const noResurrection = none(resurrected);
+  return { safe: noResurrection && none(retained), noResurrection, resurrected, retained, counts: retained };
 }
 
 function report(errorCode, values) {
@@ -116,8 +165,12 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     const db = createPrismaClient(process.env.RESTORE_DATABASE_URL);
     try {
       const outcome = await checkNoResurrection(db, subject.subjectIds);
-      report(outcome.safe ? "READ_ONLY_VERIFIED_PENDING_HUMAN_GO" : "BLOCKED_RESURRECTED_DATA", { checkedSubjects: subject.subjectIds.length, ...outcome.counts });
-      if (!outcome.safe) process.exitCode = 2;
+      const result = !outcome.noResurrection ? "BLOCKED_RESURRECTED_DATA"
+        : !outcome.safe ? "BLOCKED_RETAINED_TOMBSTONES" : "READ_ONLY_VERIFIED_PENDING_HUMAN_GO";
+      report(result, { checkedSubjects: subject.subjectIds.length, resurrected: outcome.resurrected, retained: outcome.retained });
+      // 2: pre-erasure data is back (never promote). 3: only erasure tombstones remain (#321 strict target, still NO-GO).
+      if (!outcome.noResurrection) process.exitCode = 2;
+      else if (!outcome.safe) process.exitCode = 3;
     } finally {
       await db.$disconnect();
     }

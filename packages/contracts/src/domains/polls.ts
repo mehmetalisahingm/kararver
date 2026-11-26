@@ -146,7 +146,8 @@ export const CreatePollBody = z.discriminatedUnion("kind", [
     extraInfo: z.string().trim().max(1000).optional(),
     /** Sunucu sınırı /config → polls.min/maxDurationHours (varsayılan 1–720). */
     durationHours: z.number().int().min(1).max(720),
-    resultsVisibility: ResultsVisibility,
+    /** New polls default to public results; explicit AFTER_VOTE remains honored. */
+    resultsVisibility: ResultsVisibility.default("ALWAYS"),
     options: z
       .array(z.strictObject({ label: OptionLabel }))
       .min(2)

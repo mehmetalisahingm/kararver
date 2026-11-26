@@ -87,7 +87,7 @@ export const emptyDraft = (): Draft => ({
   options: ["", ""],
   category: "Teknoloji",
   hours: 72,
-  visibility: "after_vote",
+  visibility: "always",
   commentsEnabled: true,
 });
 export const categories = [

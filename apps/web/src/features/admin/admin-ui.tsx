@@ -166,6 +166,7 @@ export type ActionDialogProps = {
 
 export function ActionDialog({ open, title, description, submitLabel, reasonLabel = "Gerekçe", onClose, onSubmit, children, validate }: ActionDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  const invoker = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -174,14 +175,35 @@ export function ActionDialog({ open, title, description, submitLabel, reasonLabe
   const submitting = useRef(false);
 
   useEffect(() => {
+    // Pointer activation does not focus buttons in every browser. Capture the
+    // actual control before its React handler opens this dialog.
+    const capture = (event: MouseEvent) => {
+      if (ref.current?.open || !(event.target instanceof Element)) return;
+      invoker.current = event.target.closest<HTMLElement>("button,a[href],input,select,textarea");
+    };
+    const keyboard = () => { if (!ref.current?.open) invoker.current = null; };
+    document.addEventListener("click", capture, true);
+    document.addEventListener("keydown", keyboard, true);
+    return () => {
+      document.removeEventListener("click", capture, true);
+      document.removeEventListener("keydown", keyboard, true);
+    };
+  }, []);
+
+  useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) {
+      if (!invoker.current?.isConnected) invoker.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setReason("");
       setError("");
       dialog.showModal();
     }
-    if (!open && dialog.open) dialog.close();
+    if (!open && dialog.open) {
+      dialog.close();
+      if (invoker.current?.isConnected) invoker.current.focus();
+      invoker.current = null;
+    }
   }, [open]);
 
   async function submit(event: React.FormEvent) {
@@ -206,7 +228,19 @@ export function ActionDialog({ open, title, description, submitLabel, reasonLabe
   }
 
   return (
-    <dialog ref={ref} className={styles.dialog} aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}>
+    <dialog ref={ref} className={styles.dialog} aria-labelledby={titleId}
+      onKeyDown={event => {
+        if (event.defaultPrevented || event.key !== "Tab" || event.ctrlKey || event.metaKey || event.altKey) return;
+        const dialog = event.currentTarget;
+        const controls = [...dialog.querySelectorAll<HTMLElement>('button,a[href],input:not([type="hidden"]),select,textarea,[tabindex]')]
+          .filter(element => element.tabIndex >= 0 && !element.matches(":disabled") && !element.closest("[inert]") && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden");
+        const first = controls[0], last = controls.at(-1);
+        if (!first || !last) { event.preventDefault(); dialog.focus(); return; }
+        if (!dialog.contains(document.activeElement) || (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+          event.preventDefault(); (event.shiftKey ? last : first).focus();
+        }
+      }}
+      onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}>
       <form className={styles.dialogBody} onSubmit={submit} aria-busy={busy}>
         <h2 id={titleId}>{title}</h2>
         {description ? <p className="kv-muted">{description}</p> : null}
