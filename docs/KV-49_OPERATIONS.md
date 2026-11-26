@@ -144,7 +144,7 @@ Pilot (KV-45) **staging'de gerçek kullanıcılarla** yapılır; bu yüzden stag
 | 5 | **İzleme ve alarm** | `staging-monitor` (API, worker, web, deploy gecikmesi, main dışı commit) ve `security-staging` sağlıklı olmalı. `staging-alarm` bildirimleri Faruk'a ulaşmalı. **#406 yanlış pozitif incelemesi / #408 PR kabulü bekleniyor**; eski ✅ durumu güncel onay değildir. | ⏳ güncel koşu ve bildirim kanıtı |
 | 6 | **Geri dönüş** | **15 Ekim Railway tatbikatı tarihsel**; güncel Neon/Render'da yedek + izole restore + kontrollü rollback ayrıca doğrulanacak. Pilot durdurma: `features.registration` ve gerekirse `maintenance.enabled`. | ⏳ güncel sağlayıcı kabulü |
 | 7 | **Durdurma ölçütleri** | P0 (veri sızıntısı, yetki atlatma, veri kaybı, ödeme/puan çift harcama) → bakım modu + olay müdahalesi + davetler durur. P1 → yeni davet durur, düzeltme aynı SHA'da tekrar test edilir (KV-45 §5) | ✅ tanımlı |
-| 8 | **KVKK** | Gerçek kişisel veri oluşur: yedek saklama 35 gün; restore sonrası anonimleştirmeleri yeniden uygulama (KV-48 restore 7. adım); veri dışa aktarma ve silme talepleri çalışıyor (#181) | ✅ süreç · ⏳ yedek |
+| 8 | **KVKK** | Gerçek kişisel veri oluşur: operasyonel DB yedek saklama en fazla 30 gün (8 Kasım 2026 kararı; deploy öncesi dump dahil); restore sonrası anonimleştirmeleri yeniden uygulama (KV-48 restore 7. adım); veri dışa aktarma ve silme talepleri çalışıyor (#181) | ✅ süreç · ⏳ yedek |
 | 9 | **QA hesapları** | Staging'deki test hesapları (`@example.test`) pilot ölçümüne girmez (KV-45 §4); davetten önce listelenir, gerekirse anonimleştirilir | ⏳ |
 
 ## Production'a geçiş listesi (Mehmet'in yayın kararından önce)
