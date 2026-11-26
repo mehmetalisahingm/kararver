@@ -50,6 +50,7 @@ import { createPrismaAuditStore } from "./modules/audit/prisma-store.ts";
 import { createPrismaRateLimitStore } from "./modules/rate-limit/prisma-store.ts";
 import { createPrismaMetricsStore } from "./modules/metrics/store.ts";
 import { createPrismaOpsProbe } from "./modules/ops/probe.ts";
+import { createPrismaSecurityAlertStore } from "./modules/security-alerts/store.ts";
 
 // Local'de repo kökündeki .env okunur; staging/production'da değerler ortamdan gelir.
 if (!process.env.APP_ENV) {
@@ -110,6 +111,7 @@ const app = buildApp({
   contentJobStore: createPrismaContentJobStore(prisma),
   metricsStore: createPrismaMetricsStore(prisma),
   opsProbe: createPrismaOpsProbe(prisma),
+  securityAlertStore: createPrismaSecurityAlertStore(prisma, (message, fields) => console.warn(message, fields)),
   commentStore: createPrismaCommentStore(prisma),
   hasher: createArgon2Hasher(),
   mailer: createMailer(config.mail),

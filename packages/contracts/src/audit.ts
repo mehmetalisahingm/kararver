@@ -30,6 +30,8 @@ export const auditTargetTypes = Object.freeze([
   "BULK_APPROVAL",
   // #185 audit export: hedef audit tablosunun kendisidir (target_id "audit_logs").
   "AUDIT",
+  // #185 güvenlik alarmı onayı: hedef security_alerts satırı.
+  "SECURITY_ALERT",
 ] as const);
 export type AuditTargetType = (typeof auditTargetTypes)[number];
 
@@ -62,6 +64,8 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   "privacy.export.download": ["download"],
   // #185 sunucu export'u: dışa aktarılan aralık, süzgeçler ve kayıt sayısı after özetindedir.
   "audit.export": ["export"],
+  // #185 alarm onayı: kim, ne zaman, hangi gerekçeyle inceledi. Alarmı kapatmaz.
+  "security.alert.ack": ["ack"],
   // #181 anonimleştirme: geri alınamaz; yasal saklama koyma/kaldırma ayrı işlemdir.
   "user.anonymize": ["anonymize"],
   // #181 e-posta değişimi: adres hiçbir kayıtta yoktur; yalnız talep kimliği ve kaynak. Kullanıcı/token işlemlerinin aktörü hesabın sahibidir.
@@ -170,6 +174,7 @@ export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditActi
   "user.content.bulk",
   "privacy.export.manage",
   "audit.export",
+  "security.alert.ack",
   "user.anonymize",
   "user.emailChange.manage",
   "user.legalHold.manage",
