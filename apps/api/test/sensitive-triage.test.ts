@@ -42,7 +42,7 @@ describe("hassas içerik envanteri (postgres)", { skip: backend && url ? false :
     ids.combinedPoll = (await poll("Genel bir soru", ["Alevi", "Sünni"])).id;
     ids.combinedAddendum = (await db.pollAddendum.create({ data: { pollId: ids.combinedPoll, body: "Hangisisin?" } })).id;
     ids.addendum = (await db.pollAddendum.create({ data: { pollId: ids.neutralPoll, body: "Bu arada siyasi görüşün ne?" } })).id;
-    ids.sensitiveComment = (await db.comment.create({ data: { pollId: ids.neutralPoll, authorId: ids.user, body: "Sen kime oy verdin?" } })).id;
+    ids.sensitiveComment = (await db.comment.create({ data: { pollId: ids.neutralPoll, authorId: ids.user, body: "Son seçimde kime oy verdin?" } })).id;
     ids.neutralComment = (await db.comment.create({ data: { pollId: ids.neutralPoll, authorId: ids.user, body: "Ben filtre kahve içerim." } })).id;
   });
 

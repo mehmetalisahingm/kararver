@@ -130,3 +130,154 @@ test("annotated personal categories are blocked but topic-only descriptions rema
   assert.deepEqual(detectSensitiveSurvey({ title: "Hangi hastalığın var?" }),
     { field: "title", category: "health" });
 });
+
+
+test("direct sensitive respondent prompts in polite Turkish are rejected without blocking neutral topics", () => {
+  const blocked = [
+    ["İnancınız nedir?", "belief"],
+    ["Mezhebiniz nedir?", "belief"],
+    ["Cinsel yöneliminiz nedir?", "sexual"],
+    ["Sabıka kaydınız var mı?", "justice"],
+    ["Parmak iziniz nedir?", "biometric"],
+    ["Parmak izinizi paylaşır mısınız?", "biometric"],
+  ] as const;
+  for (const [title, category] of blocked) {
+    const result = detectSensitiveSurvey({ title });
+    assert.deepEqual(result, { field: "title", category }, title);
+  }
+  for (const title of [
+    "İnanç özgürlüğü hakkında kamu hizmetleri nasıl iyileştirilmeli?",
+    "Sabıka kayıtlarına erişim prosedürü nasıl geliştirilmeli?",
+    "Parmak izi sensörleri daha hızlı çalışmalı mı?",
+  ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
+});
+
+
+test("review #371: bypass probes are rejected before unmoderated publication", () => {
+  const choose = (...labels: string[]) => labels.map(label => ({ label }));
+  const forbidden = [
+    { title: "Hangi par\u200bti\u200byi seçtin?" },
+    { title: "S1yas1 görüşün ne?" },
+    { title: "Hangisisin?", options: choose("HDP", "DEM") },
+    { title: "Hangisisin?", options: choose("CHP'li", "AK Partili") },
+    { title: "Sence?", options: choose("Ben AKP'liyim", "Ben CHP'liyim") },
+    { title: "Which party did you vote for?" },
+    { title: "What is your religion?" },
+    { title: "Depresyon tanısı aldın mı?" },
+    { title: "Eşcinsel misin?" },
+    { title: "Ramazanda oruç tutuyor musun?" },
+    { title: "Namaz kılıyor musun?" },
+    { title: "Başörtüsü takıyor musun?" },
+    { title: "Kürt müsün Türk müsün?", options: choose("Kürt", "Türk") },
+    { title: "Hangisisin?", options: choose("Kürt", "Türk", "Arap") },
+    { title: "Engelli raporun var mı?" },
+  ];
+  for (const input of forbidden) {
+    const result = detectSensitiveSurvey(input);
+    assert.ok(result, JSON.stringify(input) + " must be rejected or reviewed");
+    assert.match(result.field, /^(title|options\.\d+\.label)$/);
+  }
+});
+
+test("review #371: ordinary policy and product questions remain allowed", () => {
+  for (const title of [
+    "Seçim barajı düşürülmeli mi?",
+    "Kanser araştırmalarına daha çok fon ayrılmalı mı?",
+    "Türkçe dil kurslarının fiyatları ne olmalı?",
+    "Hangi telefon daha iyi?",
+  ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
+});
+
+
+test("review #371: generalized P1 bypass variants are blocked (independent of the original 15)", () => {
+  const forbidden = [
+    ["Ramazanda oruç tutuyor musunuz?", "belief"],
+    ["Namaz kılıyor musunuz?", "belief"],
+    ["Başörtüsü takıyor musunuz?", "belief"],
+    ["Depresyon teşhisi kondu mu?", "health"],
+    ["Gay misin?", "sexual"],
+    ["Lezbiyen misiniz?", "sexual"],
+    ["Kürt müsünüz?", "ethnicity"],
+    ["Dinin hangisi?", "belief"],
+    ["Allah'a inanıyor musun?", "belief"],
+    ["Hiç tutuklandın mı?", "justice"],
+    ["HIV testin pozitif mi çıktı?", "health"],
+    ["Son seçimde kimi destekledin?", "political"],
+    ["Cumhurbaşkanlığı seçiminde tercihin?", "political"],
+    ["Are you gay?", "sexual"],
+    ["Do you pray five times a day?", "belief"],
+    ["Have you been diagnosed with depression?", "health"],
+    ["How did you vote in the last election?", "political"],
+    ["Hangi pаrtiye oy verdin?", "political"], // Cyrillic U+0430
+    ["Hangi pαrtiye oy verdin?", "political"], // Greek U+03B1
+  ] as const;
+  for (const [title, category] of forbidden) {
+    const result = detectSensitiveSurvey({ title });
+    assert.deepEqual(result, { field: "title", category }, title);
+  }
+  for (const title of ["Sence?", "Bu seçeneklerden hangisi daha yakın?"]) {
+    for (const labels of [
+      ["AKP'liyim", "CHP'liyim"],
+      ["Ben AKP'liyim", "Ben CHP'liyim"],
+    ]) {
+      const result = detectSensitiveSurvey({ title, options: labels.map(label => ({ label })) });
+      assert.deepEqual(result, { field: "options.0.label", category: "political" }, title);
+    }
+  }
+});
+
+test("review #371: new generalizations do not classify neutral policy topics as personal data", () => {
+  for (const title of [
+    "Son seçimde katılım oranı yükseldi mi?",
+    "Cumhurbaşkanlığı seçiminin tarihi ne zaman?",
+    "Ramazanda oruç geleneğinin tarihi nedir?",
+    "HIV test merkezleri hangi şehirlerde?",
+    "Depresyon hakkında bilimsel araştırma var mı?",
+    "Parti afişlerinde hangi renkler tercih ediliyor?",
+  ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
+});
+
+test("review #371: self-identification and first-person voting options cannot bypass generic questions", () => {
+  const options = (...labels: string[]) => labels.map(label => ({ label }));
+  const cases = [
+    { title: "Kendinizi hangisine yakın hissediyorsunuz?", options: options("Alevi", "Sünni"), category: "belief" },
+    { title: "Sence?", options: options("Ben CHP'ye oy verdim", "Ben DEM'e oy verdim"), category: "political" },
+    { title: "Hangisini seçersiniz?", options: options("AKP'ye oy veriyorum", "MHP'ye oy veriyorum"), category: "political" },
+  ] as const;
+  for (const input of cases) {
+    assert.deepEqual(detectSensitiveSurvey(input), { field: "options.0.label", category: input.category }, input.title);
+  }
+});
+
+test("review #371: group-history and election-level discussion are not first-person disclosure", () => {
+  assert.equal(detectSensitiveSurvey({
+    title: "Kültür dersinde hangi konuya öncelik verilmeli?",
+    options: [{ label: "Alevilik tarihi" }, { label: "Sünnilik tarihi" }],
+  }), null);
+  assert.equal(detectSensitiveSurvey({ title: "Partilerin oy oranları nasıl değişti?" }), null);
+});
+
+
+test("review #371: general contests, election history and indirect medical discussion are not hard-rejected", () => {
+  for (const title of [
+    "Yarışmada kime oy verdin?", "Eurovision'da kime oy verdiniz?",
+    "1950 seçimini hangi parti kazandı?", "Dün akşamki maçta kimi destekledin?",
+    "Depresyon teşhisi kondu mu diye nereden anlarız?",
+  ]) assert.equal(detectSensitiveSurvey({ title }), null, title);
+});
+
+test("review #371: tense, formal address and first-person choice variants", () => {
+  for (const title of ["Bu ramazan oruç tuttun mu?", "Ramazanda oruç tutar mısın?", "Namaz kılar mısınız?", "Allah'a inanır mısın?", "Oruç tutuyor musun?", "Are you Muslim?", "Biseksüel misin?", "Are you lesbian?", "Arap mısın?", "кürt müsünüz?"]) assert.ok(detectSensitiveSurvey({ title }), title);
+  for (const label of ["CHP'ye oy verdik", "CHP'ye oy vereceğim", "CHP'yi destekliyorum", "Oyum CHP'ye", "CHP seçmeniyim"]) assert.deepEqual(detectSensitiveSurvey({ title: "Sence?", options: [{ label }, { label: "Diğer" }] }), { field: "options.0.label", category: "political" }, label);
+  assert.deepEqual(detectSensitiveSurvey({ title: "Kendinize en yakın inanç hangisi?", options: [{ label: "Alevi" }, { label: "Sünni" }] }), { field: "options.0.label", category: "belief" });
+});
+
+
+test("review #371: obfuscated political respondent prompts remain protected after narrowing generic voting", () => {
+  for (const title of ["Hangi p4rtiye oy verdin?", "H a n g i  p a r t i y e oy verdin?", "Hangi pаrtiye yakınsın?", "Hangi partiye yakınsınız?"]) {
+    assert.equal(detectSensitiveSurvey({ title })?.category, "political", title);
+  }
+  assert.equal(detectSensitiveSurvey({ title: "Sana hiç depresyon teşhisi kondu mu?" })?.category, "health");
+  assert.equal(detectSensitiveSurvey({ title: "Yarışmada kime oy verdin?" }), null);
+  assert.equal(detectSensitiveSurvey({ title: "Depresyon teşhisi kondu mu diye nereden anlarız?" }), null);
+});

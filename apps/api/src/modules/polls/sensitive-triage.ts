@@ -84,7 +84,7 @@ export async function triageSensitiveContent(tx: Tx, onHit: (hit: TriageHit) => 
 /** fn'i READ ONLY transaction içinde çalıştırır: yanlışlıkla bir yazma olursa PostgreSQL reddeder (SQLSTATE 25006). */
 export function withReadOnly<T>(prisma: PrismaClient, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
+    await tx.$executeRawUnsafe("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY");
     return fn(tx);
   }, { timeout: 10 * 60 * 1000, maxWait: 10_000 });
 }
