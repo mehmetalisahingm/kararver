@@ -40,15 +40,18 @@ FROM base AS runtime
 ARG PG_MAJOR=18
 ARG WITH_MODERATION=false
 # PGDG deposu (CI ile aynı resmî yöntem): sunucuyla aynı major istemci.
-# İndirilen imzalama anahtarının ana parmak izi sabitlenir; anahtar değişirse build durur (#406).
+# İndirilen dosyada tam olarak bir birincil anahtar olmalı ve parmak izi sabit değerle eşleşmeli. signed-by dosyadaki
+# bütün anahtarlara güvendiği için arkasına eklenmiş ikinci bir anahtar da build'i durdurur (#406, #407).
 # PGDG "PostgreSQL Debian Repository" anahtarı; kısa kimliği ACCC4CF8 parmak izinin son 8 hanesidir.
 ARG PGDG_KEY_FPR=B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
  && install -d /usr/share/postgresql-common/pgdg \
  && curl -fsSL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 15 --max-time 60 -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
- && fpr="$(gpg --batch --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc | awk -F: '$1 == "fpr" { print $10; exit }')" \
- && if [ "$fpr" != "$PGDG_KEY_FPR" ]; then echo "PGDG anahtar parmak izi beklenmiyor: ${fpr:-yok}" >&2; exit 1; fi \
+ && keys="$(gpg --batch --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc)" \
+ && n="$(printf '%s\n' "$keys" | awk -F: '$1 == "pub"' | wc -l)" \
+ && fpr="$(printf '%s\n' "$keys" | awk -F: '$1 == "pub" { p = 1; next } p && $1 == "fpr" { print $10; exit }')" \
+ && if [ "$n" -ne 1 ] || [ "$fpr" != "$PGDG_KEY_FPR" ]; then echo "PGDG anahtar dosyası beklenmiyor: anahtar=$n parmak izi=${fpr:-yok}" >&2; exit 1; fi \
  && apt-get purge -y --auto-remove gnupg \
  && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
  && apt-get update \
