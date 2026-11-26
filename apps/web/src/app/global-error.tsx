@@ -11,8 +11,8 @@ export default function GlobalError({ retry }: { retry: () => void }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <style>{`
           .kv-fatal {
-            --background: #faf8f2; --surface: #fff; --text: #292826;
-            --accent: #815b21; --border: #e6dfd2;
+            --background: #f2efe5; --surface: #faf7ef; --text: #20281f;
+            --accent: #3d562e; --border: #b6bdac;
             margin: 0; min-height: 100vh; background: var(--background);
             color: var(--text); font-family: system-ui, sans-serif; line-height: 1.6;
           }
@@ -20,9 +20,10 @@ export default function GlobalError({ retry }: { retry: () => void }) {
             box-sizing: border-box; width: calc(100% - 48px); max-width: 36rem;
             margin: clamp(24px, 10vh, 96px) auto; padding: 24px;
             background: var(--surface); border: 1px solid var(--border);
-            border-radius: 22px; overflow-wrap: anywhere;
+            border-radius: 0; overflow-wrap: anywhere;
           }
-          .kv-fatal h1 { line-height: 1.2; }
+          .kv-fatal h1 { line-height: 1.1; font-size: clamp(32px, 6vw, 48px); letter-spacing: -.045em; font-weight: 500; }
+          .kv-fatal main::before { content: "↗"; display: grid; place-items: center; width: 72px; height: 72px; border: 1px solid var(--border); border-radius: 50%; color: var(--accent); font-size: 32px; margin-block: 8px 32px; }
           .kv-fatal-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
           .kv-fatal button, .kv-fatal a {
             box-sizing: border-box; display: inline-flex; align-items: center;
@@ -30,8 +31,8 @@ export default function GlobalError({ retry }: { retry: () => void }) {
             padding: 12px 16px; font: inherit;
           }
           .kv-fatal button {
-            background: #d9ba7f; color: #292826; border: 1px solid #815b21;
-            border-radius: 12px; font-weight: 600; cursor: pointer;
+            background: #dbe99b; color: #182113; border: 1px solid #8c9991;
+            border-radius: 0; font-weight: 600; cursor: pointer;
           }
           .kv-fatal a { color: var(--accent); text-underline-offset: 4px; }
           .kv-fatal :is(button, a):focus-visible {
@@ -39,8 +40,8 @@ export default function GlobalError({ retry }: { retry: () => void }) {
           }
           @media (prefers-color-scheme: dark) {
             .kv-fatal {
-              --background: #181715; --surface: #23211d; --text: #f7f2e8;
-              --accent: #e8cd99; --border: #494338;
+              --background: #101212; --surface: #191c1c; --text: #f1f0e7;
+              --accent: #dbe99b; --border: #39433e;
             }
           }
         `}</style>

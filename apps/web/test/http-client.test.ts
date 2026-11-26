@@ -19,9 +19,14 @@ test("HTTP uses credentialed no-store requests and preserves idempotency across 
     assert.equal(init.credentials, "include"); assert.equal(init.cache, "no-store");
     assert.equal((init.headers as Record<string,string>)["Idempotency-Key"], "same-key-123");
     const body = JSON.parse(init.body as string);
-    assert.equal(body.categoryId, draft.categoryId); assert.equal(body.kind, "POLL"); assert.equal(body.durationHours, 72); assert.equal(body.resultsVisibility, "AFTER_VOTE");
+    assert.equal(body.categoryId, draft.categoryId); assert.equal(body.kind, "POLL"); assert.equal(body.durationHours, 72); assert.equal(body.resultsVisibility, "ALWAYS");
     assert.equal("balance" in body, false);
   }
+  // Explicit author override still uses the private AFTER_VOTE contract.
+  await client.create({ ...draft, visibility: "after_vote" }, "after-vote-key");
+  const privateBody = JSON.parse(seen.at(-1)!.body as string);
+  assert.equal(privateBody.resultsVisibility, "AFTER_VOTE");
+  assert.equal((seen.at(-1)!.headers as Record<string,string>)["Idempotency-Key"], "after-vote-key");
 });
 test("viewer projection stays hidden and malformed hidden payload is rejected", async () => {
   const client = new ApiClient("http://api.test", async () => reply("polls.get", "guest-hidden"));

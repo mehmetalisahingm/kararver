@@ -73,6 +73,21 @@ test("removed content cannot be indexed or presented as active social share", ()
   assert.ok(leakIds.includes("removed-description-private"));
 });
 
+test("removed poll soft-404 HTTP 200 is FAIL even with generic noindex metadata", async () => {
+  const opts = { html: gone, status: 200, url: new URL(removed), removed: true, environment: "staging" };
+  assert.deepEqual(failed(verifyPreview(opts)), ["removed-status"]);
+  // An intentional 410 tombstone is allowed if it still has safe/noindex metadata.
+  assert.deepEqual(failed(verifyPreview({ ...opts, status: 410 })), []);
+  const report = await checkSharePreview({ live, removed, environment: "staging" }, async url =>
+    new Response(url === live ? body() : gone, {
+      // Regression: staging returned HTTP 200 for a missing poll before #405.
+      status: 200, headers: { "content-type": "text/html; charset=utf-8" }
+    }));
+  assert.equal(report.totals.fail, 2); // X + WhatsApp removed pages must both fail.
+  assert.equal(report.externalCacheVerified, false);
+  assert.deepEqual(report.cases.filter(c => c.type === "removed").flatMap(c => failed(c.checks)), ["removed-status", "removed-status"]);
+});
+
 test("both crawler user agents only GET live/removed without cookies, and never claim external cache", async () => {
   const calls = [];
   const report = await checkSharePreview({ live, removed, environment: "staging" }, async (url, init) => {

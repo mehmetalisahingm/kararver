@@ -1,3 +1,7 @@
+## 8 Kasım 2026 — yeni anketlerde sonuç görünürlüğü kararı
+
+Mehmet'in kesin ürün kararı: **Yeni anketlerde `ALWAYS` (herkese açık sonuçlar) varsayılan**; daha önce oluşturulmuş ve `AFTER_VOTE` seçilmiş anketler **otomatik değiştirilmez**. Yeni anket sahibi yine `AFTER_VOTE` seçebilir. Misafirler yalnız mevcut görünürlük projeksiyonunun izin verdiği sonuçlara erişebilir; kişiye bağlanabilir tekil oy/veri geçmişi veya gizli anketlerin yeniden görünmesi bu karara dahil değil. [Teknik, SEO, KVKK ve kabul matrisi](LEGAL_52_PUBLIC_RESULTS_DEFAULT_2026_11_08.md). #52/#53/#285/#289 ve #54 kabulü kapanmadı.
+
 # #285 — İşletmeci kararı ve veri işleme karar paketi
 
 1 Kasım 2026. Bağlantılar: #284, #285–#291, #181, #183, #51/#53/#54. Bu dosya teknik hazırlık ve açık karar kaydıdır; onaylı aydınlatma/sözleşme metni veya hukuki kabul değildir.
@@ -6,7 +10,7 @@
 
 Mehmet, KararVer'de **yeni kayıtların 18 yaş ve üzeriyle sınırlandırılmasını** seçti. Bu ürün kuralı, genel bir yasal yaş eşiği olduğu iddiası değildir. Teknik ürün kararı ve güçlü yaş doğrulaması arasındaki fark, mevcut hesapların geçişi ve hukuki değerlendirmede kalan #289 kapıları [ayrı dosyada](LEGAL_289_AGE18_PRODUCT_POLICY.md) açıklıdır. #285/#286 yasal metinleri onaylanmadan bu ürün tercihi tek başına hukuki GO değildir.
 
-İletişim için `karariniverdestek@gmail.com` hesabı açılacağı bildirildi. **Açıldığı ve işletildiği henüz onaylanmadığından** önceki eksik/henüz public olmayan kanal durumu sürer.
+19 Kasım 2026: Mehmet, kamuya açık başvuru ve destek adresi olarak `karariniverdestek@gmail.com` adresini belirledi; hesabı açtığını ve giriş yapabildiğini bildirdi. Gelen posta teslimi ve düzenli başvuru takibi henüz doğrulanmadı; bu doğrulama ve diğer yasal kabul koşulları açık kalır.
 
 ## 8 Kasım 2026 — hesap ve içerik silme işletmeci kararı
 
@@ -17,7 +21,7 @@ Karar ve mevcut kod arasındaki **uyumsuzluklar** (anket/yorum tombstone DB sat�
 ## Hesap sahibinden alınmış gerçek karar
 
 - **Kesinleşti:** şirket bulunmuyor; hizmet kendi adına gerçek kişi olarak yayımlanacak. Bu karar kullanıcının 1 Kasım 2026 cevabıdır. Bir şirket/unvan/vergi kaydı uydurulmaz.
-- **Eksik:** kamuya açık başvuru e-postası henüz yok (kullanıcının aynı gün cevabı). Mevcut özel Gmail hesapları otomatik olarak public iletişim adresine dönüştürülmez. Faaliyete uygun başvuru yöntemi ve yayımlanması gereken gerçek kimlik/iletişim bilgileri ayrıca kesinleştirilir; kimlik/adres belgeleri public repoya konmaz.
+- **Başvuru kanalı:** Mehmet 19 Kasım'da `karariniverdestek@gmail.com` adresini seçti ve hesabı açıp erişebildiğini bildirdi. Gelen posta teslimi ve başvuruların nasıl takip edileceği doğrulanmadı. Faaliyete uygun başvuru yöntemi ve yayımlanması gereken gerçek kimlik/iletişim bilgileri ayrıca kesinleştirilir; kimlik/adres belgeleri public repoya konmaz.
 - **Bütçe:** ilk 12 ay tüm hizmetler/vergiler/ödeme masrafları dahil en fazla 750 TL; otomatik kullanım aşımı yok. Ücretli hukuk danışmanlığı veya resmî başvuru harcaması onaylanmış değildir. Bu bütçe yükümlülüklerin karşılandığı veya uygulanmadığı kararı sayılmaz.
 - **Yayın:** gerçek SUPER_ADMIN güvenlik kabulü ve hukuki/operasyon kapıları açık; public GO verilmedi. Bir tercih panelinin eklenmesi bu durumu değiştirmez.
 
