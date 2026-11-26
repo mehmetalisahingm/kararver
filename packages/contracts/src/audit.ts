@@ -85,6 +85,7 @@ export const auditOperations: Readonly<Partial<Record<ActionId, readonly string[
   "media.ban.manage": ["create", "delete"],
   "report.resolve": ["actioned", "dismissed"],
   // #183 yüksek hacimli toplu moderasyon için ikinci onay: talep (aktör = başlatan), onay/ret (aktör = ikinci onaycı), geri çekme (başlatan).
+  "moderation.appeal.reject": ["reject"],
   "moderation.bulk.approve": ["request", "approve", "reject"],
   "moderation.bulk.cancel": ["cancel"],
   "moderation.poll.apply": moderationOps,
@@ -133,6 +134,7 @@ export const auditOutcomeOverrides: Readonly<Partial<Record<AuditAction, Readonl
     "media.review": { reject: "REJECTED" },
     "report.resolve": { dismissed: "REJECTED" },
     "community.request.review": { reject: "REJECTED" },
+    "moderation.appeal.reject": { reject: "REJECTED" },
     "moderation.bulk.approve": { reject: "REJECTED" },
     "user.content.bulk": { cancel: "CANCELLED" },
     "account.emailChange.manage": { cancel: "CANCELLED" },
@@ -181,6 +183,7 @@ export const reasonRequiredActions: ReadonlySet<AuditAction> = new Set<AuditActi
   "vote.invalidate",
   "points.adjust",
   "category.manage",
+  "moderation.appeal.reject",
   "moderation.bulk.approve",
   "moderation.bulk.cancel",
   "moderation.poll.apply",

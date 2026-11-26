@@ -159,7 +159,8 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
 
   test("UNDER_REVIEW moderatör reddi gerçek yayın ücretini tek sefer iade eder; tekrar ve yanlış kaldırma iade etmez", async () => {
     const owner = await login(await registerVerified());
-    const reviewer = await login(await registerVerified());
+    const reviewerAccount = await registerVerified();
+    const reviewer = await login(reviewerAccount);
     await db.userRole.create({ data: { userId: reviewer.id, role: "SUPER_ADMIN" } });
 
     const pendingBody = {
@@ -432,6 +433,24 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     await assert.rejects(() => db.moderationAppealWindow.update({
       where: { rejectionActionId: boundaryRejectionId }, data: { filedReason: null },
     }), /APPEAL_FILING_IMMUTABLE/);
+    const freshReviewer = await login(reviewerAccount);
+    const rejectPath = `/admin/moderation/appeals/${boundaryRejectionId}/reject`;
+    const reasonCode = { reason: "ORIGINAL_DECISION_UPHELD" };
+    assert.equal((await send("POST", rejectPath, reasonCode, boundarySession.cookie)).statusCode, 403);
+    const ledgerCount = await db.pointLedgerEntry.count({ where: { referenceId: boundaryPollId } });
+    const reject = await send("POST", rejectPath, reasonCode, freshReviewer.cookie);
+    assert.equal(reject.statusCode, 200, reject.body);
+    const retryReject = await send("POST", rejectPath, reasonCode, freshReviewer.cookie);
+    assert.deepEqual(retryReject.json().data, reject.json().data);
+    assert.equal((await send("POST", rejectPath, { reason: "SENSITIVE_DATA_REQUEST" }, freshReviewer.cookie)).statusCode, 409);
+    const receiptPath = `/me/moderation-appeals/${boundaryRejectionId}/rejected-receipt`;
+    const privateReceipt = await send("GET", receiptPath, undefined, boundarySession.cookie);
+    assert.deepEqual(privateReceipt.json().data, reject.json().data);
+    assert.equal((await send("GET", receiptPath, undefined, lateSession.cookie)).statusCode, 404);
+    assert.equal((await send("GET", receiptPath)).statusCode, 401);
+    assert.equal(await db.pointLedgerEntry.count({ where: { referenceId: boundaryPollId } }), ledgerCount);
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: boundaryPollId } })).status, "REMOVED");
+    assert.equal(await db.auditLog.count({ where: { action: "moderation.appeal.reject", targetId: boundaryPollId } }), 1);
     const beforeErasure = await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: boundaryRejectionId } });
     const erasure = await createPrismaAccountErasureStore(db).anonymize({
       userId: boundaryOwner.id, actorId: boundaryOwner.id, self: true,

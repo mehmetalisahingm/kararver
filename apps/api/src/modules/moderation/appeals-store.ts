@@ -7,6 +7,13 @@
  * filing deadline. Filing is NOT a public poll restoration.
  */
 import type { PrismaClient } from "@kararver/db";
+import type { AppealRejectionReason } from "@kararver/contracts";
+import type { z } from "zod";
+import { writeAudit } from "../audit/write.ts";
+
+type ReasonCode = z.infer<typeof AppealRejectionReason>;
+type RejectedReceipt = { rejectionActionId: string; resolvedAt: Date; reason: ReasonCode };
+type RejectResult = { kind: "ok"; receipt: RejectedReceipt } | { kind: "not_found" | "forbidden" | "conflict" };
 
 type Receipt = {
   rejectionActionId: string;
@@ -23,6 +30,8 @@ export type AppealFileResult =
 export type AppealQueueRow = { rejectionActionId: string; pollId: string; filedAt: Date };
 export type AppealAcceptedReceipt = { rejectionActionId: string; pollId: string; resolvedAt: Date };
 export interface ModerationAppealStore {
+  reject(input: { rejectionActionId: string; actorId: string; reason: ReasonCode; requestId: string }): Promise<RejectResult>;
+  getRejected(userId: string, rejectionActionId: string): Promise<RejectedReceipt | null>;
   getAccepted(userId: string, rejectionActionId: string): Promise<AppealAcceptedReceipt | null>;
   listPending(input: { after: { at: Date; id: string } | null; limit: number }): Promise<{ rows: AppealQueueRow[]; evaluatedAt: Date }>;
   get(userId: string, rejectionActionId: string): Promise<(Receipt & { evaluatedAt: Date }) | null>;
@@ -55,7 +64,7 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient, options:
         JOIN moderation_actions m ON m.id = w.rejection_action_id
         JOIN polls p ON p.id = m.poll_id AND p.author_id = w.recipient_id
         JOIN users u ON u.id = w.recipient_id AND u.deleted_at IS NULL
-        WHERE w.filed_at IS NOT NULL
+        WHERE w.filed_at IS NOT NULL AND w.rejected_at IS NULL
           AND m.action = 'REMOVE' AND m.from_status = 'UNDER_REVIEW' AND m.to_status = 'REMOVED'
           AND NOT EXISTS (
             SELECT 1 FROM moderation_actions undo
@@ -81,11 +90,72 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient, options:
         JOIN polls p ON p.id = m.poll_id AND p.author_id = w.recipient_id
         JOIN moderation_actions undo ON undo.undo_of_id = m.id AND undo.poll_id = m.poll_id
         WHERE w.recipient_id = ${userId}::uuid AND w.rejection_action_id = ${rejectionActionId}::uuid
-          AND w.filed_at BETWEEN w.delivered_at AND w.deadline_at
+          AND w.filed_at BETWEEN w.delivered_at AND w.deadline_at AND w.rejected_at IS NULL
           AND m.action = 'REMOVE' AND m.from_status = 'UNDER_REVIEW' AND m.to_status = 'REMOVED'
           AND undo.action = 'RESTORE' AND undo.from_status = 'REMOVED' AND undo.to_status = 'ACTIVE'
           AND undo.created_at >= w.filed_at`;
       return row ?? null;
+    },
+    async getRejected(userId, rejectionActionId) {
+      const [row] = await prisma.$queryRaw<RejectedReceipt[]>`
+        SELECT w.rejection_action_id::text AS "rejectionActionId",
+               w.rejected_at AS "resolvedAt", w.rejection_reason_code AS reason
+        FROM moderation_appeal_windows w
+        JOIN users u ON u.id = w.recipient_id AND u.deleted_at IS NULL
+        WHERE w.recipient_id = ${userId}::uuid AND w.rejection_action_id = ${rejectionActionId}::uuid
+          AND w.rejected_at IS NOT NULL`;
+      return row ?? null;
+    },
+    async reject({ rejectionActionId, actorId, reason, requestId }) {
+      return prisma.$transaction(async (tx): Promise<RejectResult> => {
+        const initial = await tx.moderationAppealWindow.findUnique({
+          where: { rejectionActionId },
+          select: { recipientId: true, rejection: { select: { pollId: true } } },
+        });
+        if (!initial?.rejection.pollId) return { kind: "not_found" };
+        if (initial.recipientId === actorId) return { kind: "forbidden" };
+        // User -> poll -> appeal window. Same poll lock as the audited undo.
+        const [recipient] = await tx.$queryRaw<Array<{ deleted: boolean }>>`
+          SELECT deleted_at IS NOT NULL AS deleted FROM users
+           WHERE id = ${initial.recipientId}::uuid FOR NO KEY UPDATE`;
+        if (!recipient || recipient.deleted) return { kind: "not_found" };
+        const [poll] = await tx.$queryRaw<Array<{ status: string; author_id: string }>>`
+          SELECT status::text, author_id::text FROM polls
+           WHERE id = ${initial.rejection.pollId}::uuid FOR UPDATE`;
+        if (!poll || poll.author_id !== initial.recipientId) return { kind: "not_found" };
+        const [staff] = await tx.$queryRaw<Array<{ allowed: boolean }>>`
+          SELECT EXISTS (SELECT 1 FROM users u JOIN user_roles r ON r.user_id=u.id
+            WHERE u.id=${actorId}::uuid AND u.deleted_at IS NULL AND u.status='ACTIVE'
+              AND r.role IN ('ADMIN','SUPER_ADMIN')) AS allowed`;
+        if (!staff?.allowed) return { kind: "forbidden" };
+        const [row] = await tx.$queryRaw<Array<{ filed_at: Date | null; delivered_at: Date; deadline_at: Date; rejected_at: Date | null; rejection_reason_code: ReasonCode | null }>>`
+          SELECT filed_at, delivered_at, deadline_at, rejected_at, rejection_reason_code
+          FROM moderation_appeal_windows WHERE rejection_action_id=${rejectionActionId}::uuid
+          AND recipient_id=${initial.recipientId}::uuid FOR UPDATE`;
+        if (!row) return { kind: "not_found" };
+        if (row.rejected_at && row.rejection_reason_code) {
+          if (row.rejection_reason_code !== reason) return { kind: "conflict" };
+          return { kind: "ok", receipt: { rejectionActionId, resolvedAt: row.rejected_at, reason } };
+        }
+        if (!row.filed_at || row.filed_at < row.delivered_at || row.filed_at > row.deadline_at || poll.status !== "REMOVED")
+          return { kind: "conflict" };
+        const latest = await tx.moderationAction.findFirst({
+          where: { pollId: initial.rejection.pollId },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: { id: true, action: true, fromStatus: true, toStatus: true, undoOfId: true },
+        });
+        if (latest?.id !== rejectionActionId || latest.action !== "REMOVE" ||
+          latest.fromStatus !== "UNDER_REVIEW" || latest.toStatus !== "REMOVED" || latest.undoOfId !== null)
+          return { kind: "conflict" };
+        const now = await dbNow(tx);
+        if (now < row.filed_at) return { kind: "conflict" };
+        await tx.moderationAppealWindow.update({ where: { rejectionActionId }, data: { rejectedAt: now, rejectionReasonCode: reason } });
+        await writeAudit(tx, { source: "API", actorId, action: "moderation.appeal.reject",
+          operation: "reject", target: { type: "POLL", id: initial.rejection.pollId },
+          reason, before: { appealStatus: "FILED" }, after: { appealStatus: "REJECTED", rejectionActionId },
+          requestId, at: now });
+        return { kind: "ok", receipt: { rejectionActionId, resolvedAt: now, reason } };
+      });
     },
     async get(userId, rejectionActionId) {
       // Do not leak existence, reason or identity to unrelated accounts.
