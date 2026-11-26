@@ -54,3 +54,11 @@ Yeni oturumlu/özel API (açık public poll URL'sinden bağımsız):
 - [KVKK — Bildirim usulü kamuoyu duyurusu](https://www.kvkk.gov.tr/Icerik/9024/ilgili-kisilerin-basvurularina-verilecek-cevabin-bildirim-usulune-iliskin-kamuoyu-duyurusu)
 
 **DURUM: STACKED DRAFT / NO-GO**: #326 hassas konu, #328 risk kuyruğu, #333 ret puan iadesi, #336 ücretsiz yeniden yayın, bu PR teslim+itiraz süresi; tam CI/review/staging ve gerçek bildirim/itiraz UX kabulü olmadan yayın yapılmaz.
+
+
+## 26 Kasım — Tek şema ve 14 günlük uyarı entegrasyon kararı (geliştirme adayı)
+
+- #360 kanonik `moderation_appeal_windows` ve `filed_at` kayıtları kullanılacak. #339'un aynı zaman önekli alternatif `moderation_appeal_notice_receipts` ve #341'in `moderation_appeal_cases` migration'ları bu zincire **birleştirilmeyecek**. Eski PR'lar referans olarak açık; sahiplerinin incelemesiyle arşivlenebilir. Uygulanmış alternatif şema varsa otomatik DROP veya backfill yok; private migration envanteri ve izole restore ile manuel veri uzlaştırması gerekir.
+- Temiz migration testinde tek kanonik tablo, kanonik teslim migration'ı ve serbest metin redaction migration'ı doğrulanır; alternatif tabloların varlığı testi kırar. Bu test canlı migration geçmişini doğrulamaz.
+- #341'den bildirim niyeti şablonu taşındı. `appealReminderCandidate` yalnız başvuru anından 12×24 saat sonra DUE_SOON ve 14×24 saat +1ms sonra OVERDUE önerir; her ret ID ve aşama için aynı dedupe anahtarı. Çözülmüş/silinmiş kayıtlar uyarı üretmez; puan veya içerik değişmez. Worker/cron ve kalıcı dedupe/teslim henüz bağlı değil.
+- Gerekçeli sonuçlandırma: kabul mevcut denetimli tekil undo ile atomik kalmalı. Ret için aynı kanonik kayda bağlı ayrı sonuç kanıtı, yetkili insan kararı, eşzamanlı kabul/ret kilidi, karar metninin silme ve saklama politikası, bildirim ve kullanıcı read-contract birlikte tasarlanmalı. Bu adım tamamlanmadan gerekçeli ret veya otomatik uyarı teslimi var sayılmaz.
