@@ -20,9 +20,11 @@ export type AppealFileResult =
   | { kind: "expired" }
   | { kind: "not_reviewable" };
 
+export type AppealQueueRow = { rejectionActionId: string; pollId: string; filedAt: Date };
 export interface ModerationAppealStore {
-  get(userId: string, rejectionActionId: string): Promise<Receipt | null>;
-  file(input: { userId: string; rejectionActionId: string; reason: string; now: Date }): Promise<AppealFileResult>;
+  listPending(input: { after: { at: Date; id: string } | null; limit: number }): Promise<{ rows: AppealQueueRow[]; evaluatedAt: Date }>;
+  get(userId: string, rejectionActionId: string): Promise<(Receipt & { evaluatedAt: Date }) | null>;
+  file(input: { userId: string; rejectionActionId: string; reason: string }): Promise<AppealFileResult>;
 }
 
 export function appealStatus(r: Receipt, now: Date): "OPEN" | "FILED" | "EXPIRED" {
@@ -30,18 +32,56 @@ export function appealStatus(r: Receipt, now: Date): "OPEN" | "FILED" | "EXPIRED
   return now.getTime() <= r.deadlineAt.getTime() ? "OPEN" : "EXPIRED";
 }
 
-export function createPrismaModerationAppealStore(prisma: PrismaClient): ModerationAppealStore {
+export function createPrismaModerationAppealStore(prisma: PrismaClient, options: { testClock?: () => Date } = {}): ModerationAppealStore {
+  // Production always uses PostgreSQL time, the source of the delivery receipt.
+  // Test harnesses can explicitly inject a deterministic clock for boundary tests.
+  async function dbNow(client: Pick<PrismaClient, "$queryRaw">): Promise<Date> {
+    if (options.testClock) return options.testClock();
+    const [row] = await client.$queryRaw<Array<{ evaluated_at: Date }>>`SELECT clock_timestamp()::timestamptz(3) AS evaluated_at`;
+    if (!row) throw new Error("appeal_db_clock_unavailable");
+    return row.evaluated_at;
+  }
   return {
+    async listPending({ after, limit }) {
+      // Metadata only. No user ID, title, reason, or notification data.
+      // Only ADMIN+ sees this global queue. A successful audited restore
+      // removes an item; rejected-resolution records are not implemented yet.
+      const rows = await prisma.$queryRaw<AppealQueueRow[]>`
+        SELECT w.rejection_action_id::text AS "rejectionActionId",
+               m.poll_id::text AS "pollId", w.filed_at AS "filedAt"
+        FROM moderation_appeal_windows w
+        JOIN moderation_actions m ON m.id = w.rejection_action_id
+        JOIN polls p ON p.id = m.poll_id AND p.author_id = w.recipient_id
+        JOIN users u ON u.id = w.recipient_id AND u.deleted_at IS NULL
+        WHERE w.filed_at IS NOT NULL
+          AND m.action = 'REMOVE' AND m.from_status = 'UNDER_REVIEW' AND m.to_status = 'REMOVED'
+          AND NOT EXISTS (
+            SELECT 1 FROM moderation_actions undo
+            WHERE undo.undo_of_id = m.id AND undo.action = 'RESTORE'
+              AND undo.from_status = 'REMOVED' AND undo.to_status = 'ACTIVE'
+          )
+          AND (${after?.at ?? null}::timestamptz IS NULL OR
+               (w.filed_at, w.rejection_action_id) > (${after?.at ?? null}::timestamptz, ${after?.id ?? null}::uuid))
+        ORDER BY w.filed_at ASC, w.rejection_action_id ASC
+        LIMIT ${limit}`;
+      return { rows, evaluatedAt: await dbNow(prisma) };
+    },
     async get(userId, rejectionActionId) {
       // Do not leak existence, reason or identity to unrelated accounts.
       const result = await prisma.moderationAppealWindow.findFirst({
-        where: { rejectionActionId, recipientId: userId },
+        where: { rejectionActionId, recipientId: userId, recipient: { deletedAt: null } },
         select: { rejectionActionId: true, deliveredAt: true, deadlineAt: true, filedAt: true },
       });
-      return result;
+      return result ? { ...result, evaluatedAt: await dbNow(prisma) } : null;
     },
-    async file({ userId, rejectionActionId, reason, now }) {
+    async file({ userId, rejectionActionId, reason }) {
       return prisma.$transaction(async (tx): Promise<AppealFileResult> => {
+        // Same user-first lock as account erasure. A stale authenticated
+        // request cannot reintroduce free text after successful erasure.
+        const [recipient] = await tx.$queryRaw<Array<{ deleted: boolean }>>`
+          SELECT deleted_at IS NOT NULL AS deleted FROM users
+          WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
+        if (!recipient || recipient.deleted) return { kind: "not_found" };
         // Serialize repeated user submissions with a row-level lock. A
         // competing retry can never overwrite the first filing timestamp.
         const [receipt] = await tx.$queryRaw<Array<{
@@ -60,8 +100,10 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient): Moderat
           deadlineAt: receipt.deadline_at, filedAt: receipt.filed_at,
         };
         if (original.filedAt) return { kind: "ok", receipt: original };
-        if (now.getTime() > original.deadlineAt.getTime()) return { kind: "expired" };
-        if (now.getTime() < original.deliveredAt.getTime()) return { kind: "not_reviewable" };
+        // Check the clock after obtaining the receipt lock, not at request start.
+        const lockedAt = await dbNow(tx);
+        if (lockedAt.getTime() > original.deadlineAt.getTime()) return { kind: "expired" };
+        if (lockedAt.getTime() < original.deliveredAt.getTime()) return { kind: "not_reviewable" };
 
         // A user can only appeal the rejection of their OWN still-removed
         // poll; deleted accounts and superseded ret decisions fail closed.
@@ -86,6 +128,11 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient): Moderat
         });
         if (latest?.id !== rejectionActionId) return { kind: "not_reviewable" };
 
+        // Re-read after eligibility checks so a long lock/query cannot produce
+        // a filing timestamp outside the immutable delivery window.
+        const now = await dbNow(tx);
+        if (now.getTime() > original.deadlineAt.getTime()) return { kind: "expired" };
+        if (now.getTime() < original.deliveredAt.getTime()) return { kind: "not_reviewable" };
         const saved = await tx.moderationAppealWindow.update({
           where: { rejectionActionId },
           data: { filedAt: now, filedReason: reason },

@@ -606,7 +606,29 @@ export const MyModerationAppealView = z.strictObject({
   status: z.enum(["OPEN", "FILED", "EXPIRED"]),
 });
 
+export const AdminAppealQueueItem = z.strictObject({
+  rejectionActionId: Id, pollId: Id, filedAt: Timestamp, resolutionTargetAt: Timestamp,
+  urgency: z.enum(["OPEN", "DUE_SOON", "OVERDUE"]),
+});
 export const moderationEndpoints = [
+  defineEndpoint({
+    id: "admin.moderation.appeals.list",
+    domain: "moderation",
+    method: "GET",
+    path: "/admin/moderation/appeals",
+    summary: "Bekleyen itiraz kayıtları ve 14 günlük hedef",
+    auth: "admin",
+    provider: moderation,
+    consumers: adminUi,
+    unblocks: ["#290", "#327"],
+    availability: { status: "ready" },
+    request: { query: CursorQuery },
+    responses: { 200: pageOf(AdminAppealQueueItem) },
+    errors: ["INVALID_CURSOR"],
+    idempotency: "none",
+    cache: "private",
+    notes: ["Yalnız ADMIN+; en eski başvuru önce. Başvuru gerekçesi, kullanıcı kimliği ve içerik metni dönmez. 14 gün operasyon hedefidir; hiçbir otomatik karar veya puan değişikliği yoktur. Kabul edilen geri alma işlemleri listeden çıkar; ayrı ret sonucu kaydı henüz yoktur."],
+  }),
   defineEndpoint({
     id: "me.moderationAppeals.get",
     domain: "moderation",

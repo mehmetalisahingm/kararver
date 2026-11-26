@@ -7,6 +7,8 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { ErrorBody, PointsSummary } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
+import { createPrismaAccountErasureStore } from "../src/modules/account-erasure/prisma-store.ts";
+import { createPrismaModerationAppealStore } from "../src/modules/moderation/appeals-store.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
 const backend = prismaBackend();
@@ -237,6 +239,14 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
         deadlineAt: new Date(inboxDeliveredAt.getTime() + 30 * 24 * 60 * 60 * 1000),
       },
     });
+    // The production store uses the database clock even while the HTTP harness
+    // intentionally runs with a fixed, unrelated clock.
+    const [dbBefore] = await db.$queryRaw<Array<{ at: Date }>>`SELECT clock_timestamp()::timestamptz(3) AS at`;
+    const realReceipt = await createPrismaModerationAppealStore(db).get(owner.id, rejectedAction.id);
+    const [dbAfter] = await db.$queryRaw<Array<{ at: Date }>>`SELECT clock_timestamp()::timestamptz(3) AS at`;
+    assert.ok(realReceipt);
+    assert.ok(realReceipt.evaluatedAt.getTime() >= dbBefore!.at.getTime());
+    assert.ok(realReceipt.evaluatedAt.getTime() <= dbAfter!.at.getTime());
     const otherViewer = await login(await registerVerified());
     const forbiddenRead = await send("GET", `/me/moderation-appeals/${rejectedAction.id}`, undefined, otherViewer.cookie);
     assert.equal(forbiddenRead.statusCode, 404, forbiddenRead.body);
@@ -257,6 +267,17 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal((await db.moderationAppealWindow.findUniqueOrThrow({
       where: { rejectionActionId: rejectedAction.id },
     })).filedReason, "Yanlış ret kararı verildi; genel ulaşım hizmeti değerlendirmesi yapıyorum.");
+
+    const queuePath = "/admin/moderation/appeals";
+    assert.equal((await send("GET", queuePath)).statusCode, 401);
+    assert.equal((await send("GET", queuePath, undefined, owner.cookie)).statusCode, 403);
+    const queue = await send("GET", queuePath, undefined, reviewer.cookie);
+    assert.equal(queue.statusCode, 200, queue.body);
+    assert.match(String(queue.headers["cache-control"]), /no-store/);
+    const entry = queue.json().data.find((r: { rejectionActionId: string }) => r.rejectionActionId === rejectedAction.id);
+    assert.deepEqual(entry, { rejectionActionId: rejectedAction.id, pollId, filedAt: inboxDeliveredAt.toISOString(),
+      resolutionTargetAt: new Date(inboxDeliveredAt.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString(), urgency: "OPEN" });
+    assert.equal((await send("GET", queuePath + "?cursor=bad", undefined, reviewer.cookie)).statusCode, 400);
 
     const preview = await send("GET", `/admin/moderation/actions/${rejectedAction.id}/undo/preview`,
       undefined, reviewer.cookie);
@@ -298,6 +319,9 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(appealAccepted.json().data.outcome.status, "ACTIVE");
     const reopened = await db.poll.findUniqueOrThrow({ where: { id: pollId } });
     assert.equal(reopened.status, "ACTIVE");
+    const afterQueue = await send("GET", queuePath, undefined, reviewer.cookie);
+    assert.equal(afterQueue.statusCode, 200, afterQueue.body);
+    assert.equal(afterQueue.json().data.some((r: { rejectionActionId: string }) => r.rejectionActionId === rejectedAction.id), false);
     assert.equal(reopened.opensAt.getTime(), h.clock.now.getTime());
     assert.equal(reopened.closesAt!.getTime() - reopened.opensAt.getTime(),
       beforeRestore.closesAt!.getTime() - beforeRestore.opensAt.getTime(),
@@ -392,6 +416,32 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(tooLate.json().error.details[0].code, "appeal_window_closed");
     assert.equal((await send("GET", `/me/moderation-appeals/${rejectionId}`, undefined, lateSession.cookie)).json().data.status, "EXPIRED");
     assert.equal((await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: rejectionId } })).filedAt, null);
+
+    // A live account cannot silently redact or rewrite its filing.
+    await assert.rejects(() => db.moderationAppealWindow.update({
+      where: { rejectionActionId: boundaryRejectionId }, data: { filedReason: null },
+    }), /APPEAL_FILING_IMMUTABLE/);
+    const beforeErasure = await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: boundaryRejectionId } });
+    const erasure = await createPrismaAccountErasureStore(db).anonymize({
+      userId: boundaryOwner.id, actorId: boundaryOwner.id, self: true,
+      reason: "Sentetik silme testi", confirmUsername: boundaryAccount.username,
+      now: h.clock.now, requestId: randomUUID(),
+    });
+    assert.equal(erasure.kind, "anonymized");
+    const afterErasure = await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: boundaryRejectionId } });
+    assert.equal(afterErasure.filedReason, null);
+    assert.deepEqual(afterErasure.filedAt, beforeErasure.filedAt);
+    assert.deepEqual(afterErasure.deadlineAt, beforeErasure.deadlineAt);
+    const appealStore = createPrismaModerationAppealStore(db, { testClock: () => h.clock.now });
+    assert.equal(await appealStore.get(boundaryOwner.id, boundaryRejectionId), null);
+    assert.deepEqual(await appealStore.file({ userId: boundaryOwner.id, rejectionActionId: boundaryRejectionId,
+      reason: "Silme sonrasında tekrar yazılmaması gereken gerekçe" }), { kind: "not_found" });
+    await assert.rejects(() => db.moderationAppealWindow.update({
+      where: { rejectionActionId: boundaryRejectionId }, data: { filedReason: "Silinen gerekçeyi geri yazma" },
+    }), /APPEAL_FILING_IMMUTABLE/);
+    const erasedQueue = await send("GET", "/admin/moderation/appeals", undefined, reviewer.cookie);
+    assert.equal(erasedQueue.statusCode, 200, erasedQueue.body);
+    assert.equal(erasedQueue.json().data.some((r: { rejectionActionId: string }) => r.rejectionActionId === boundaryRejectionId), false);
   });
 
   test("ledger sayfalı okunur ve DB'de UPDATE/DELETE edilemez", async () => {

@@ -251,6 +251,12 @@ export function createPrismaAccountErasureStore(prisma: PrismaClient): AccountEr
           },
         });
 
+        // Account erasure redacts only appeal free text; immutable evidence remains.
+        await tx.moderationAppealWindow.updateMany({
+          where: { recipientId: userId, filedReason: { not: null } },
+          data: { filedReason: null },
+        });
+
         const summary = { removed, retained };
         const record = await tx.accountErasure.create({
           data: { userId, requestedById: actorId, reason: input.reason, summary: summary as unknown as Prisma.InputJsonObject, createdAt: now },

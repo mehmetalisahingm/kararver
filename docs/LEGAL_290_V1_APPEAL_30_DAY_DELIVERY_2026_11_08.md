@@ -30,7 +30,7 @@ Yeni oturumlu/özel API (açık public poll URL'sinden bağımsız):
 | --- | --- | --- |
 | Gelen kutusundaki zorunlu ret bildirimi | Yalnız alıcı, eylem/anket ID; moderatör kimliği ve serbest not yok | Mevcut okunan bildirim 90 gün sonra, silinmiş hesap bildirimi 30 gün sonra temizlenir; bu **itiraz süresi başlangıcı değildir** |
 | Teslim ve son başvuru kanıtı | Yalnız ret ID, alıcı ID, bildirim ID, iki zaman damgası; idempotent ve değişmez | Ürün 30 günlük dosyalama penceresi belirlendi, **kanıtın hukuken gerekli saklama süresi henüz belirlenmedi**. Otomatik silme/yok etme koyulmadı |
-| Başvuru gerekçesi ve ilk dosyalama tarihi | Kısıtlı, özel işlem kaydı, ilk dosyalama değiştirilemez; üçüncü kişilerin bilgileri dışarı çıkmaz | Başvuru çözümlenmesi, haklar, uyuşmazlık ve ispat ihtiyacı ayrı saklama/imha kararı bekler; süresiz tutma da otomatik onay değildir |
+| Başvuru gerekçesi ve ilk dosyalama tarihi | Kısıtlı, özel işlem kaydı, ilk dosyalama değiştirilemez; tamamlanmış hesap silme işleminde serbest gerekçe aynı transaction içinde NULL yapılır, ilk dosyalama kanıtı korunur. Aktif yasal saklama engeli varsa silme gerçekleşmez. | Başvuru çözümlenmesi, haklar, uyuşmazlık ve ispat ihtiyacı ayrı saklama/imha kararı bekler; süresiz tutma da otomatik onay değildir |
 | Moderasyon kararları, audit ve puan defteri | Değişmez iş/itiraz bağlantısı; +10 geri ödeme korunur | Kendi hukuki saklama/inceleme süreçlerine göre ayrı |
 | Operasyonel DB yedeği | İşletmeci 30 gün saklama tercihi; restore sonrası silme/itiraz zamanları dış kayıtlara göre yeniden doğrulanır | **Yedek 30 gün ≠ itiraz 30 gün ≠ kişisel veri saklama 30 gün** |
 
