@@ -49,7 +49,7 @@ export async function lowerBound(prisma: PrismaClient, now: Date): Promise<Date>
 export async function findExpired(prisma: PrismaClient, since: Date, now: Date, limit: number): Promise<string[]> {
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT p.id::text AS id FROM polls p
-    WHERE p.kind = 'POLL' AND p.closed_at IS NULL
+    WHERE p.kind = 'POLL' AND p.status IN ('ACTIVE', 'LOCKED') AND p.closed_at IS NULL
       AND p.closes_at <= ${now.toISOString()}::timestamptz AND p.closes_at >= ${since.toISOString()}::timestamptz
       AND NOT EXISTS (SELECT 1 FROM domain_events e WHERE e.natural_key = 'poll.closed:' || p.id::text)
     ORDER BY p.closes_at, p.id
@@ -61,10 +61,11 @@ export async function findExpired(prisma: PrismaClient, since: Date, now: Date, 
 export async function emitExpired(deps: PollExpiryDeps, pollId: string): Promise<boolean> {
   const now = deps.now();
   return deps.prisma.$transaction(async (tx) => {
-    const [poll] = await tx.$queryRaw<{ closesAt: Date | null; closedAt: Date | null }[]>`
-      SELECT closes_at AS "closesAt", closed_at AS "closedAt" FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
+    const [poll] = await tx.$queryRaw<{ closesAt: Date | null; closedAt: Date | null; status: string }[]>`
+      SELECT closes_at AS "closesAt", closed_at AS "closedAt", status::text AS status
+      FROM polls WHERE id = ${pollId}::uuid FOR UPDATE`;
     await deps.afterLock?.(pollId);
-    if (!poll || poll.closedAt !== null || poll.closesAt === null || poll.closesAt > now) return false;
+    if (!poll || !["ACTIVE", "LOCKED"].includes(poll.status) || poll.closedAt !== null || poll.closesAt === null || poll.closesAt > now) return false;
     const at = poll.closesAt;
     const { written } = await writeWorkerEvent(
       tx,

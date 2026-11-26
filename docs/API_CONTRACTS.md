@@ -74,7 +74,7 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 
 | Endpoint | Yetki | Başarı | Idempotency | Sağlayıcı | Tüketici | Açtığı iş | Durum |
 |---|---|---|---|---|---|---|---|
-| `POST /polls`<br>Anket veya tartışma gönderisi yayımlar (10 puan) · `polls.create` | V | 201 | **key zorunlu** | Faruk `polls` | Ümit (web) | #12 #66 #67 #15 #22 | hazır |
+| `POST /polls`<br>Anket veya tartışma gönderisi yayımlar (10 puan) · `polls.create` | V | 201/202 | **key zorunlu** | Faruk `polls` | Ümit (web) | #12 #66 #67 #15 #22 | hazır |
 | `GET /polls/:id`<br>Anket detayı (izleyiciye göre sonuç projeksiyonu) · `polls.get` | G | 200 | — | Faruk `polls` | Ümit (web), Mehmet (paylaşım/SEO, KV-25) | #12 #15 #20 #27 | hazır |
 | `GET /polls/lookup`<br>SEO URL'indeki publicId'den detay (/karar/<slug>-<publicId>) · `polls.lookup` | G | 200 | — | Faruk `polls` | Ümit (web), Mehmet (paylaşım/SEO, KV-25) | #12 #27 | hazır |
 | `PATCH /polls/:id`<br>Sahibinin düzenlemesi · `polls.update` | O | 200 | doğal | Faruk `polls` | Ümit (web) | #12 | hazır |
