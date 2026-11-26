@@ -11,6 +11,13 @@ type Appeal = ReturnType<typeof MyModerationAppealView.parse>;
 const date = (value: string) => new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(new Date(value));
 
 export function AppealScreen({ id }: { id: string }) {
+  const { user } = useProduct();
+  // A change of viewer or rejection must unmount private local state
+  // synchronously, before effects or a delayed previous response can run.
+  return <AppealScreenScope key={JSON.stringify([user?.id ?? null, id])} id={id} />;
+}
+
+function AppealScreenScope({ id }: { id: string }) {
   const { client, user } = useProduct();
   const [appeal, setAppeal] = useState<Appeal | null>(null);
   const [reason, setReason] = useState("");
@@ -19,6 +26,8 @@ export function AppealScreen({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [attempt, retry] = useState(0);
   const submitting = useRef(false);
+  const submission = useRef<AbortController | null>(null);
+  useEffect(() => () => submission.current?.abort(), []);
   const valid = Id.safeParse(id).success;
   const real = client instanceof ApiClient ? client : null;
   const reload = useCallback(() => retry(n => n + 1), []);
@@ -38,9 +47,17 @@ export function AppealScreen({ id }: { id: string }) {
     if (!real || !appeal || appeal.status !== "OPEN" || submitting.current) return;
     if (reason.trim().length < 10) { setError("İtiraz gerekçesi en az 10 karakter olmalı."); return; }
     submitting.current = true; setBusy(true); setError("");
-    try { setAppeal(await real.fileModerationAppeal(id, reason.trim())); }
-    catch (cause) { setError(message(cause)); }
-    finally { submitting.current = false; setBusy(false); }
+    const controller = new AbortController();
+    submission.current = controller;
+    try {
+      const result = await real.fileModerationAppeal(id, reason.trim(), controller.signal);
+      if (!controller.signal.aborted) setAppeal(result);
+    } catch (cause) {
+      if (!controller.signal.aborted) setError(message(cause));
+    } finally {
+      if (submission.current === controller) submission.current = null;
+      if (!controller.signal.aborted) { submitting.current = false; setBusy(false); }
+    }
   }
   return <section className="kv-card screen-stack" aria-labelledby="appeal-title">
     <h1 id="appeal-title">Moderasyon kararına itiraz</h1>

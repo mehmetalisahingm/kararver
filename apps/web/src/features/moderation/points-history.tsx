@@ -9,6 +9,12 @@ import { ApiClient } from "../../lib/api-client";
 type Entry = ReturnType<typeof LedgerEntry.parse>;
 const labels: Record<Entry["reason"], string> = { INITIAL_GRANT: "Başlangıç puanı", PUBLISH: "İçerik gönderimi", ADMIN_ADJUSTMENT: "Hesap düzeltmesi", MODERATION_REFUND: "Moderasyon iadesi" };
 export function PointsHistory() {
+  const { user } = useProduct();
+  // Never reuse a previous viewer's ledger entries or pagination cursor.
+  return <PointsHistoryScope key={user?.id ?? "guest"} />;
+}
+
+function PointsHistoryScope() {
   const { client, user } = useProduct();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [next, setNext] = useState<string | null>(null);
@@ -16,7 +22,6 @@ export function PointsHistory() {
   const [attempt, retry] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => { setEntries([]); setCursor(undefined); setNext(null); }, [user?.id]);
   useEffect(() => {
     const controller = new AbortController();
     if (!(client instanceof ApiClient) || !user) return;

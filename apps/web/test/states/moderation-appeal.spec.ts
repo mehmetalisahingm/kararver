@@ -145,3 +145,30 @@ test("ledger shows confirmed refund amount once across overlapping pages, withou
   await page.screenshot({ path: info.outputPath("ledger-refund.png"), fullPage: true });
   expect(mock.unexpected).toEqual([]);
 });
+
+
+test("wrong rejection ID in a read response exposes neither dates nor form", async ({ page }) => {
+  const mock = await api(page);
+  mock.handlers.set("me.moderationAppeals.get", r => r.fulfill({ json: { data: {
+    ...view, rejectionActionId: "01998b9a-0000-7000-8000-000000000099",
+  } } }));
+  await page.goto(path);
+  await expect(page.locator("main").getByRole("alert")).toContainText("Başvuru bilgisi doğrulanamadı");
+  await expect(page.locator("main time")).toHaveCount(0);
+  await expect(page.getByLabel("İtiraz gerekçen")).toHaveCount(0);
+});
+
+test("wrong rejection ID in a filing receipt is not treated as successful submission", async ({ page }) => {
+  const mock = await api(page);
+  mock.handlers.set("me.moderationAppeals.get", r => r.fulfill({ json: { data: view } }));
+  mock.handlers.set("me.moderationAppeals.file", r => r.fulfill({ json: { data: {
+    ...view, rejectionActionId: "01998b9a-0000-7000-8000-000000000099",
+    status: "FILED", filedAt: "2026-11-10T12:00:00Z",
+  } } }));
+  await page.goto(path);
+  await page.getByLabel("İtiraz gerekçen").fill(reason);
+  await page.getByRole("button", { name: "İtirazımı gönder" }).click();
+  await expect(page.locator("main").getByRole("alert")).toContainText("Başvurunun kaydedildiği doğrulanamadı");
+  await expect(page.getByText(/Başvurun kaydedildi/)).toHaveCount(0);
+  await expect(page.getByLabel("İtiraz gerekçen")).toHaveValue(reason);
+});

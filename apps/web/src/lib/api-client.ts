@@ -16,11 +16,13 @@ export { mapPoll } from "./poll-mapper.ts";
 
 export class ApiClient implements ProductClient {
   async moderationAppeal(id: string, signal?: AbortSignal) {
-    return dataOf(MyModerationAppealView).parse(await this.http.request("me.moderationAppeals.get", { params: { id }, signal })).data;
+    const view = dataOf(MyModerationAppealView).parse(await this.http.request("me.moderationAppeals.get", { params: { id }, signal })).data;
+    if (view.rejectionActionId.toLowerCase() !== id.toLowerCase()) throw new UiError("INVALID_RESPONSE", "Başvuru bilgisi doğrulanamadı.");
+    return view;
   }
-  async fileModerationAppeal(id: string, reason: string) {
-    const view = dataOf(MyModerationAppealView).parse(await this.http.request("me.moderationAppeals.file", { params: { id }, body: { reason } })).data;
-    if (view.status !== "FILED" || !view.filedAt) throw new UiError("INVALID_RESPONSE", "Başvurunun kaydedildiği doğrulanamadı. Durumunu tekrar kontrol et.");
+  async fileModerationAppeal(id: string, reason: string, signal?: AbortSignal) {
+    const view = dataOf(MyModerationAppealView).parse(await this.http.request("me.moderationAppeals.file", { params: { id }, body: { reason }, signal })).data;
+    if (view.rejectionActionId.toLowerCase() !== id.toLowerCase() || view.status !== "FILED" || !view.filedAt) throw new UiError("INVALID_RESPONSE", "Başvurunun kaydedildiği doğrulanamadı. Durumunu tekrar kontrol et.");
     return view;
   }
   async pointsLedger(cursor?: string, signal?: AbortSignal) {
