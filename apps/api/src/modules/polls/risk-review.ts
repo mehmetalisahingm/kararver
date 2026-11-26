@@ -46,7 +46,7 @@ const SENSITIVE_CONTEXT = /\b(?:siyas\w*|politik\w*|politic\w*|parti(?!kul)\w*|a
 // Fourth-round guard (#371): only queue personally directed questions that
 // also mention a special-category context. Do not turn these into 400 rejects.
 // Broad subject-only questions (e.g. cancer research funding) stay publishable.
-const DIRECT_PERSONAL_QUESTION = /\b(?:are you|do you|did you|have you|what is your|which|your|kendin(?:i|izi|e|ize)|kendim(?:i)?|sen(?:in|i|den)?|siz(?:in|i|den)?|misin|misiniz|musun|musunuz|musun|m[ıi]s[ıi]n|destekliyor(?:sun|sunuz)|gider\s+misin|goru(?:yor|r)\s+musun|kullaniyor\s+musun|oldun\s+mu|yattin\s+mi|ne\s+dedin|inaniyor\s+musun)\b/;
+const DIRECT_PERSONAL_QUESTION = /\b(?:are you|do you|did you|have you|what is your|your|kendin(?:i|izi|e|ize)|kendim(?:i)?|sen(?:in|i|den)?|siz(?:in|i|den)?|misin|misiniz|musun|musunuz|musun|m[ıi]s[ıi]n|destekliyor(?:sun|sunuz)|gider\s+misin|goru(?:yor|r)\s+musun|kullaniyor\s+musun|oldun\s+mu|yattin\s+mi|ne\s+dedin|inaniyor\s+musun)\b/;
 const ADDITIONAL_SENSITIVE_CATEGORIES = /\b(?:christian\w*|atheist\w*|jewish|buddhis\w*|hindu\w*|god|believe|kilise\w*|sinagog\w*|cemevi\w*|tesettur\w*|kanser\w*|cancer\w*|insulin\w*|epilep\w*|multiple sclerosis|tedavi\w*|antidepresan\w*|ameliyat\w*|engelli\w*|hamile\w*|kurtaj\w*|trans|queer|sexual orientation|ermeni\w*|rum|zaza\w*|laz|hapis|mahkum\w*|convict\w*|crime|criminal record|prison\w*|union member|muhalefet\w*|iktidar\w*|referandum\w*|cumhurbaskan\w*)\b/;
 const PERSONALLY_SENSITIVE = (text: string) => {
   const value = normalized(text);

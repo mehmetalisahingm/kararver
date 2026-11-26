@@ -71,5 +71,5 @@ test("cross-field personal context cannot bypass human review", () => {
 });
 
 test("new sensitive vocabulary alone does not block neutral discussion", () => {
-  for (const title of ["Buddhist architecture and cultural heritage", "Insulin manufacturing capacity", "Multiple sclerosis research funding", "Prison library policy"]) assert.deepEqual(screenV1Publication(poll(title)), { action: "PUBLISH", signals: [] }, title);
+  for (const title of ["Buddhist architecture and cultural heritage", "Insulin manufacturing capacity", "Multiple sclerosis research funding", "Prison library policy", "Which prison library policy is more effective?"]) assert.deepEqual(screenV1Publication(poll(title)), { action: "PUBLISH", signals: [] }, title);
 });
