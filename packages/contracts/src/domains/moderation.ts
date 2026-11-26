@@ -610,7 +610,52 @@ export const AdminAppealQueueItem = z.strictObject({
   rejectionActionId: Id, pollId: Id, filedAt: Timestamp, resolutionTargetAt: Timestamp,
   urgency: z.enum(["OPEN", "DUE_SOON", "OVERDUE"]),
 });
+export const AcceptedModerationAppealReceipt = z.strictObject({
+  rejectionActionId: Id, pollId: Id, resolvedAt: Timestamp,
+  outcome: z.literal("ACCEPTED"), message: z.string(),
+});
+// Controlled, human-selected reason codes; no personal text copied into immutable audit.
+export const AppealRejectionReason = z.enum(["SENSITIVE_DATA_REQUEST", "CONTENT_POLICY_VIOLATION", "ORIGINAL_DECISION_UPHELD"]);
+export const RejectedModerationAppealReceipt = z.strictObject({
+  rejectionActionId: Id, resolvedAt: Timestamp, outcome: z.literal("REJECTED"), reason: AppealRejectionReason,
+});
 export const moderationEndpoints = [
+  defineEndpoint({
+    id: "admin.moderation.appeals.reject", domain: "moderation", method: "POST",
+    path: "/admin/moderation/appeals/:id/reject", summary: "İtirazı gerekçe koduyla sonuçlandır",
+    auth: "admin", provider: moderation, consumers: adminUi, unblocks: ["#290", "#327"],
+    availability: { status: "ready" },
+    request: { params: IdParams, body: z.strictObject({ reason: AppealRejectionReason }) },
+    responses: { 200: dataOf(RejectedModerationAppealReceipt) },
+    errors: ["NOT_FOUND", "CONFLICT", "FORBIDDEN"], idempotency: "natural", cache: "private",
+    notes: ["İnsan kararı, ADMIN+, kendi itirazını sonuçlandıramaz. Aynı gerekçe idempotent, farklı gerekçe veya kabul edilmiş/süresi dışında başvuru 409. Puan/içerik değişmez."],
+  }),
+  defineEndpoint({
+    id: "me.moderationAppeals.rejectedReceipt", domain: "moderation", method: "GET",
+    path: "/me/moderation-appeals/:id/rejected-receipt", summary: "Kendi reddedilmiş itiraz makbuzunu oku",
+    auth: "user", provider: moderation, consumers: ["Ümit (itiraz sonucu UI)"], unblocks: ["#290", "#327"],
+    availability: { status: "ready" }, request: { params: IdParams },
+    responses: { 200: dataOf(RejectedModerationAppealReceipt) }, errors: ["NOT_FOUND"], idempotency: "none", cache: "private",
+    notes: ["Yalnız hak sahibi; gerekçe kodu, karar tarihi; yönetici kimliği/serbest metin yok."],
+  }),
+  defineEndpoint({
+    id: "me.moderationAppeals.acceptedReceipt",
+    domain: "moderation",
+    method: "GET",
+    path: "/me/moderation-appeals/:id/accepted-receipt",
+    summary: "Kendi kabul edilmiş itiraz makbuzunu oku",
+    auth: "user",
+    provider: moderation,
+    consumers: ["Ümit (itiraz sonucu UI)"],
+    unblocks: ["#290", "#327"],
+    availability: { status: "ready" },
+    request: { params: IdParams },
+    responses: { 200: dataOf(AcceptedModerationAppealReceipt) },
+    errors: ["NOT_FOUND"],
+    idempotency: "none",
+    cache: "private",
+    notes: ["Sadece zamanında dosyalanmış ve denetimli tekil RESTORE ile kabul edilmiş kendi itirazı. Daha sonra içerik tekrar gizlenmiş olabilir; güncel yayın durumu değildir. Yönetici serbest metni ve kimliği dönmez. Ret sonucu bu endpoint üzerinden üretilmez."],
+  }),
   defineEndpoint({
     id: "admin.moderation.appeals.list",
     domain: "moderation",
@@ -627,7 +672,7 @@ export const moderationEndpoints = [
     errors: ["INVALID_CURSOR"],
     idempotency: "none",
     cache: "private",
-    notes: ["Yalnız ADMIN+; en eski başvuru önce. Başvuru gerekçesi, kullanıcı kimliği ve içerik metni dönmez. 14 gün operasyon hedefidir; hiçbir otomatik karar veya puan değişikliği yoktur. Kabul edilen geri alma işlemleri listeden çıkar; ayrı ret sonucu kaydı henüz yoktur."],
+    notes: ["Yalnız ADMIN+; en eski başvuru önce. Başvuru gerekçesi, kullanıcı kimliği ve içerik metni dönmez. 14 gün operasyon hedefidir; hiçbir otomatik karar veya puan değişikliği yoktur. Kabul edilen veya gerekçeli reddedilen işlemler listeden çıkar."],
   }),
   defineEndpoint({
     id: "me.moderationAppeals.get",

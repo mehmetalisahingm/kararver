@@ -201,6 +201,7 @@ describe("migration", () => {
         "domain_events_immutable",
         "moderation_actions_append_only",
         "moderation_appeal_windows_immutable_receipt",
+        "moderation_appeal_windows_immutable_rejection",
         "point_ledger_entries_append_only",
         "poll_options_check_kind",
         "poll_options_guard_locked",
@@ -216,6 +217,25 @@ describe("migration", () => {
         "votes_mark_first_valid",
       ],
     );
+  });
+
+  test("#339/#341: only canonical appeal window schema exists after migration", async () => {
+    const tables = await one(db.$queryRaw<{ canonical: boolean; legacy_receipt: boolean; legacy_case: boolean }[]>`
+      SELECT to_regclass('public.moderation_appeal_windows') IS NOT NULL AS canonical,
+        to_regclass('public.moderation_appeal_notice_receipts') IS NOT NULL AS legacy_receipt,
+        to_regclass('public.moderation_appeal_cases') IS NOT NULL AS legacy_case`);
+    assert.deepEqual(tables, { canonical: true, legacy_receipt: false, legacy_case: false });
+    const migrations = await db.$queryRaw<{ migration_name: string }[]>`
+      SELECT migration_name FROM _prisma_migrations
+      WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL
+        AND migration_name IN ('20261108173000_v1_moderation_appeal_delivery_window',
+          '20261108173000_v1_appeal_delivery_evidence', '20261108180000_v1_appeal_resolution_cases',
+          '20261126190000_appeal_erasure_reason_redaction')
+      ORDER BY migration_name`;
+    assert.deepEqual(migrations.map(r => r.migration_name), [
+      "20261108173000_v1_moderation_appeal_delivery_window",
+      "20261126190000_appeal_erasure_reason_redaction",
+    ]);
   });
 
   test("schema ile veritabanı arasında fark yok", () => {

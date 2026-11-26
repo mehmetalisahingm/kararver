@@ -159,7 +159,8 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
 
   test("UNDER_REVIEW moderatör reddi gerçek yayın ücretini tek sefer iade eder; tekrar ve yanlış kaldırma iade etmez", async () => {
     const owner = await login(await registerVerified());
-    const reviewer = await login(await registerVerified());
+    const reviewerAccount = await registerVerified();
+    const reviewer = await login(reviewerAccount);
     await db.userRole.create({ data: { userId: reviewer.id, role: "SUPER_ADMIN" } });
 
     const pendingBody = {
@@ -268,6 +269,8 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
       where: { rejectionActionId: rejectedAction.id },
     })).filedReason, "Yanlış ret kararı verildi; genel ulaşım hizmeti değerlendirmesi yapıyorum.");
 
+    const acceptedPath = `/me/moderation-appeals/${rejectedAction.id}/accepted-receipt`;
+    assert.equal((await send("GET", acceptedPath, undefined, owner.cookie)).statusCode, 404);
     const queuePath = "/admin/moderation/appeals";
     assert.equal((await send("GET", queuePath)).statusCode, 401);
     assert.equal((await send("GET", queuePath, undefined, owner.cookie)).statusCode, 403);
@@ -319,6 +322,15 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(appealAccepted.json().data.outcome.status, "ACTIVE");
     const reopened = await db.poll.findUniqueOrThrow({ where: { id: pollId } });
     assert.equal(reopened.status, "ACTIVE");
+    const accepted = await send("GET", acceptedPath, undefined, owner.cookie);
+    assert.equal(accepted.statusCode, 200, accepted.body);
+    assert.match(String(accepted.headers["cache-control"]), /no-store/);
+    assert.equal(accepted.json().data.outcome, "ACCEPTED");
+    assert.equal(accepted.json().data.rejectionActionId, rejectedAction.id);
+    assert.equal(accepted.json().data.pollId, pollId);
+    assert.equal((await send("GET", acceptedPath, undefined, otherViewer.cookie)).statusCode, 404);
+    assert.equal((await send("GET", acceptedPath)).statusCode, 401);
+    assert.ok(!accepted.body.includes(reviewer.id));
     const afterQueue = await send("GET", queuePath, undefined, reviewer.cookie);
     assert.equal(afterQueue.statusCode, 200, afterQueue.body);
     assert.equal(afterQueue.json().data.some((r: { rejectionActionId: string }) => r.rejectionActionId === rejectedAction.id), false);
@@ -421,6 +433,41 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     await assert.rejects(() => db.moderationAppealWindow.update({
       where: { rejectionActionId: boundaryRejectionId }, data: { filedReason: null },
     }), /APPEAL_FILING_IMMUTABLE/);
+    const freshReviewer = await login(reviewerAccount);
+    const rejectPath = `/admin/moderation/appeals/${boundaryRejectionId}/reject`;
+    const reasonCode = { reason: "ORIGINAL_DECISION_UPHELD" };
+    assert.equal((await send("POST", rejectPath, reasonCode, boundarySession.cookie)).statusCode, 403);
+    const ledgerCount = await db.pointLedgerEntry.count({ where: { referenceId: boundaryPollId } });
+    const reject = await send("POST", rejectPath, reasonCode, freshReviewer.cookie);
+    assert.equal(reject.statusCode, 200, reject.body);
+    const retryReject = await send("POST", rejectPath, reasonCode, freshReviewer.cookie);
+    assert.deepEqual(retryReject.json().data, reject.json().data);
+    assert.equal((await send("POST", rejectPath, { reason: "SENSITIVE_DATA_REQUEST" }, freshReviewer.cookie)).statusCode, 409);
+    const receiptPath = `/me/moderation-appeals/${boundaryRejectionId}/rejected-receipt`;
+    const privateReceipt = await send("GET", receiptPath, undefined, boundarySession.cookie);
+    assert.deepEqual(privateReceipt.json().data, reject.json().data);
+    assert.equal((await send("GET", receiptPath, undefined, lateSession.cookie)).statusCode, 404);
+    assert.equal((await send("GET", receiptPath)).statusCode, 401);
+    assert.equal(await db.pointLedgerEntry.count({ where: { referenceId: boundaryPollId } }), ledgerCount);
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: boundaryPollId } })).status, "REMOVED");
+    assert.equal(await db.auditLog.count({ where: { action: "moderation.appeal.reject", targetId: boundaryPollId } }), 1);
+    await assert.rejects(() => db.moderationAppealWindow.update({
+      where: { rejectionActionId: boundaryRejectionId },
+      data: { rejectionReasonCode: "CONTENT_POLICY_VIOLATION" },
+    }), /APPEAL_REJECTION_IMMUTABLE/);
+    const deniedPreview = await send("GET", `/admin/moderation/actions/${boundaryRejectionId}/undo/preview`, undefined, freshReviewer.cookie);
+    assert.equal(deniedPreview.statusCode, 200, deniedPreview.body);
+    // The preview may already block the attempt; the actual mutation must
+    // also fail closed when a current digest is available.
+    const deniedDigest = deniedPreview.json().data.digest;
+    if (typeof deniedDigest === "string") {
+      const deniedRestore = await send("POST", `/admin/moderation/actions/${boundaryRejectionId}/undo`,
+        { digest: deniedDigest, reason: "Reddedilen itirazı yanlışlıkla geri alma denemesi" }, freshReviewer.cookie);
+      assert.equal(deniedRestore.statusCode, 409, deniedRestore.body);
+    }
+    assert.equal(await db.moderationAction.count({ where: { undoOfId: boundaryRejectionId, action: "RESTORE" } }), 0);
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: boundaryPollId } })).status, "REMOVED");
+    assert.equal((await send("GET", `/me/moderation-appeals/${boundaryRejectionId}/accepted-receipt`, undefined, boundarySession.cookie)).statusCode, 404);
     const beforeErasure = await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: boundaryRejectionId } });
     const erasure = await createPrismaAccountErasureStore(db).anonymize({
       userId: boundaryOwner.id, actorId: boundaryOwner.id, self: true,
@@ -439,7 +486,7 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     await assert.rejects(() => db.moderationAppealWindow.update({
       where: { rejectionActionId: boundaryRejectionId }, data: { filedReason: "Silinen gerekçeyi geri yazma" },
     }), /APPEAL_FILING_IMMUTABLE/);
-    const erasedQueue = await send("GET", "/admin/moderation/appeals", undefined, reviewer.cookie);
+    const erasedQueue = await send("GET", "/admin/moderation/appeals", undefined, freshReviewer.cookie);
     assert.equal(erasedQueue.statusCode, 200, erasedQueue.body);
     assert.equal(erasedQueue.json().data.some((r: { rejectionActionId: string }) => r.rejectionActionId === boundaryRejectionId), false);
   });

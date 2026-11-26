@@ -141,6 +141,9 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 
 | Endpoint | Yetki | Başarı | Idempotency | Sağlayıcı | Tüketici | Açtığı iş | Durum |
 |---|---|---|---|---|---|---|---|
+| `POST /admin/moderation/appeals/:id/reject`<br>İtirazı gerekçe koduyla sonuçlandır · `admin.moderation.appeals.reject` | A | 200 | doğal | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #290 #327 | hazır |
+| `GET /me/moderation-appeals/:id/rejected-receipt`<br>Kendi reddedilmiş itiraz makbuzunu oku · `me.moderationAppeals.rejectedReceipt` | U | 200 | — | Mert `moderation` | Ümit (itiraz sonucu UI) | #290 #327 | hazır |
+| `GET /me/moderation-appeals/:id/accepted-receipt`<br>Kendi kabul edilmiş itiraz makbuzunu oku · `me.moderationAppeals.acceptedReceipt` | U | 200 | — | Mert `moderation` | Ümit (itiraz sonucu UI) | #290 #327 | hazır |
 | `GET /admin/moderation/appeals`<br>Bekleyen itiraz kayıtları ve 14 günlük hedef · `admin.moderation.appeals.list` | A | 200 | — | Mert `moderation` | Mert (admin moderasyon UI, KV-37) | #290 #327 | hazır |
 | `GET /me/moderation-appeals/:id`<br>Kendi ret bildiriminin teyitli teslim ve son itiraz tarihini oku · `me.moderationAppeals.get` | U | 200 | — | Mert `moderation` | Ümit (itiraz ve bildirim UI) | #290 #327 | hazır |
 | `POST /me/moderation-appeals/:id`<br>30 gün içinde tek seferlik moderasyon itirazını kaydet · `me.moderationAppeals.file` | U | 200 | doğal | Mert `moderation` | Ümit (itiraz başvurusu) | #290 #327 | hazır |
@@ -326,8 +329,8 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
 | #185 | `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `POST /admin/audit/export` |
 | #186 | `GET /admin/ops` |
-| #290 | `GET /admin/moderation/appeals`, `GET /me/moderation-appeals/:id`, `POST /me/moderation-appeals/:id` |
-| #327 | `GET /admin/moderation/appeals`, `GET /me/moderation-appeals/:id`, `POST /me/moderation-appeals/:id` |
+| #290 | `POST /admin/moderation/appeals/:id/reject`, `GET /me/moderation-appeals/:id/rejected-receipt`, `GET /me/moderation-appeals/:id/accepted-receipt`, `GET /admin/moderation/appeals`, `GET /me/moderation-appeals/:id`, `POST /me/moderation-appeals/:id` |
+| #327 | `POST /admin/moderation/appeals/:id/reject`, `GET /me/moderation-appeals/:id/rejected-receipt`, `GET /me/moderation-appeals/:id/accepted-receipt`, `GET /admin/moderation/appeals`, `GET /me/moderation-appeals/:id`, `POST /me/moderation-appeals/:id` |
 <!-- END:unblocks -->
 
 Bağımlılığı olmayan KV-03 tüketicileri: #8 (KV-06, mock fixture ve CI) bu paketin `examples` ve şemalarını mock sunucu için kullanır; #6 (KV-04) olay ve yetki sözleşmesini bu envanterdeki `auth` seviyeleriyle eşler.

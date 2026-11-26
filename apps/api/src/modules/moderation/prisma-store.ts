@@ -163,9 +163,9 @@ async function applyToPoll(tx: Tx, input: ApplyInput): Promise<ApplyResult> {
       // invent/backdate a receipt or use a free RESTORE without an appeal.
       const appeal = await tx.moderationAppealWindow.findUnique({
         where: { rejectionActionId: latest.id },
-        select: { recipientId: true, deliveredAt: true, deadlineAt: true, filedAt: true },
+        select: { recipientId: true, deliveredAt: true, deadlineAt: true, filedAt: true, rejectedAt: true },
       });
-      if (!appeal || appeal.recipientId !== author.authorId || !appeal.filedAt ||
+      if (!appeal || appeal.rejectedAt || appeal.recipientId !== author.authorId || !appeal.filedAt ||
           appeal.filedAt < appeal.deliveredAt || appeal.filedAt > appeal.deadlineAt) {
         return { kind: "conflict", reason: "invalid_transition" };
       }

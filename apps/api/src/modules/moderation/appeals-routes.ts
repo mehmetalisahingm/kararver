@@ -45,6 +45,34 @@ export function registerMyModerationAppealRoutes(
     })), page: { nextCursor, hasMore: nextCursor !== null } } };
   });
 
+  const rejectionView = (r: { rejectionActionId: string; resolvedAt: Date; reason: string }) => ({
+    rejectionActionId: r.rejectionActionId, resolvedAt: r.resolvedAt.toISOString(),
+    outcome: "REJECTED", reason: r.reason,
+  });
+  route("admin.moderation.appeals.reject", async ({ viewer, params, body, request, moderationScope }) => {
+    if (!(await moderationScope()).all) throw new ApiError("FORBIDDEN", "İtiraz kararı yalnız yöneticilere açıktır.");
+    const result = await deps.store.reject({ rejectionActionId: params.id, actorId: viewer!.id, reason: body.reason, requestId: request.id });
+    if (result.kind === "forbidden") throw new ApiError("FORBIDDEN", "Bu itirazı sonuçlandıramazsın.");
+    if (result.kind === "not_found") throw new ApiError("NOT_FOUND", "İtiraz bulunamadı.");
+    if (result.kind !== "ok") throw new ApiError("CONFLICT", "İtiraz artık bu şekilde sonuçlandırılamıyor.");
+    return { status: 200, body: { data: rejectionView(result.receipt) } };
+  });
+  route("me.moderationAppeals.rejectedReceipt", async ({ viewer, params }) => {
+    const r = await deps.store.getRejected(viewer!.id, params.id);
+    if (!r) throw new ApiError("NOT_FOUND", "Ret makbuzu bulunamadı.");
+    return { status: 200, body: { data: rejectionView(r) } };
+  });
+
+  route("me.moderationAppeals.acceptedReceipt", async ({ viewer, params }) => {
+    const receipt = await deps.store.getAccepted(viewer!.id, params.id);
+    if (!receipt) throw new ApiError("NOT_FOUND", "Kabul edilmiş itiraz makbuzu bulunamadı.");
+    return { status: 200, body: { data: {
+      rejectionActionId: receipt.rejectionActionId, pollId: receipt.pollId,
+      resolvedAt: receipt.resolvedAt.toISOString(), outcome: "ACCEPTED",
+      message: "İtirazın kabul edildi. Bu karar için yeniden yayın ücreti alınmadı.",
+    } } };
+  });
+
   route("me.moderationAppeals.get", async ({ viewer, params }) => {
     const receipt = await deps.store.get(viewer!.id, params.id);
     if (!receipt) throw new ApiError("NOT_FOUND", "İtiraz başvurusu veya ret bildirimi bulunamadı.");

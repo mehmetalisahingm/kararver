@@ -146,6 +146,8 @@ model ModerationAppealWindow {
   deadlineAt        DateTime @map("deadline_at") @db.Timestamptz(3)
   filedAt           DateTime? @map("filed_at") @db.Timestamptz(3)
   filedReason       String?  @map("filed_reason") @db.VarChar(1000)
+  rejectedAt        DateTime? @map("rejected_at") @db.Timestamptz(3)
+  rejectionReasonCode String? @map("rejection_reason_code") @db.VarChar(40)
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   rejection ModerationAction @relation(fields: [rejectionActionId], references: [id], onDelete: Restrict)
