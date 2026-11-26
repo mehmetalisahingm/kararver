@@ -18,7 +18,7 @@ describe("#341 periodic SLA aggregate (PostgreSQL)", { skip: url ? false : "TEST
     const now = Date.now();
     const day = 86400000;
     const ids: string[] = [];
-    for (const [age, rejected] of [[3,false],[13,false],[15,false],[16,true]] as const) {
+    for (const [age, rejected, erased] of [[3,false,false],[13,false,false],[15,false,false],[16,true,false],[17,false,true]] as const) {
       const poll = await f.poll({ categoryId, opensAt: new Date(now - 20*day) });
       await db.poll.update({ where: { id: poll.id }, data: { status: "REMOVED" } });
       const action = await db.moderationAction.create({ data: { actorId: moderator!, action:"REMOVE",
@@ -29,6 +29,7 @@ describe("#341 periodic SLA aggregate (PostgreSQL)", { skip: url ? false : "TEST
         notificationId:randomUUID(), deliveredAt:filedAt, deadlineAt:new Date(filedAt.getTime()+30*day),
         filedAt, filedReason:"Sentetik başvuru gerekçesi",
         ...(rejected ? { rejectedAt:new Date(now-day), rejectionReasonCode:"ORIGINAL_DECISION_UPHELD" } : {}) } });
+      if (erased) await db.user.update({ where:{id:poll.authorId}, data:{deletedAt:new Date(now-day)} });
     }
     const beforeRows = await db.moderationAppealWindow.findMany({ where:{rejectionActionId:{in:ids}}, orderBy:{rejectionActionId:"asc"} });
     const result = await readAppealSlaWorkload(db);

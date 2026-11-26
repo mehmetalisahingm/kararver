@@ -451,6 +451,23 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(await db.pointLedgerEntry.count({ where: { referenceId: boundaryPollId } }), ledgerCount);
     assert.equal((await db.poll.findUniqueOrThrow({ where: { id: boundaryPollId } })).status, "REMOVED");
     assert.equal(await db.auditLog.count({ where: { action: "moderation.appeal.reject", targetId: boundaryPollId } }), 1);
+    await assert.rejects(() => db.moderationAppealWindow.update({
+      where: { rejectionActionId: boundaryRejectionId },
+      data: { rejectionReasonCode: "CONTENT_POLICY_VIOLATION" },
+    }), /APPEAL_REJECTION_IMMUTABLE/);
+    const deniedPreview = await send("GET", `/admin/moderation/actions/${boundaryRejectionId}/undo/preview`, undefined, freshReviewer.cookie);
+    assert.equal(deniedPreview.statusCode, 200, deniedPreview.body);
+    // The preview may already block the attempt; the actual mutation must
+    // also fail closed when a current digest is available.
+    const deniedDigest = deniedPreview.json().data.digest;
+    if (typeof deniedDigest === "string") {
+      const deniedRestore = await send("POST", `/admin/moderation/actions/${boundaryRejectionId}/undo`,
+        { digest: deniedDigest, reason: "Reddedilen itirazı yanlışlıkla geri alma denemesi" }, freshReviewer.cookie);
+      assert.equal(deniedRestore.statusCode, 409, deniedRestore.body);
+    }
+    assert.equal(await db.moderationAction.count({ where: { undoOfId: boundaryRejectionId, action: "RESTORE" } }), 0);
+    assert.equal((await db.poll.findUniqueOrThrow({ where: { id: boundaryPollId } })).status, "REMOVED");
+    assert.equal((await send("GET", `/me/moderation-appeals/${boundaryRejectionId}/accepted-receipt`, undefined, boundarySession.cookie)).statusCode, 404);
     const beforeErasure = await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: boundaryRejectionId } });
     const erasure = await createPrismaAccountErasureStore(db).anonymize({
       userId: boundaryOwner.id, actorId: boundaryOwner.id, self: true,

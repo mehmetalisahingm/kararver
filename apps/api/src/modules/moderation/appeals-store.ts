@@ -66,6 +66,8 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient, options:
         JOIN users u ON u.id = w.recipient_id AND u.deleted_at IS NULL
         WHERE w.filed_at IS NOT NULL AND w.rejected_at IS NULL AND p.status = 'REMOVED'
           AND m.action = 'REMOVE' AND m.from_status = 'UNDER_REVIEW' AND m.to_status = 'REMOVED'
+          AND NOT EXISTS (SELECT 1 FROM moderation_actions later WHERE later.poll_id=m.poll_id
+            AND (later.created_at, later.id) > (m.created_at,m.id))
           AND NOT EXISTS (
             SELECT 1 FROM moderation_actions undo
             WHERE undo.undo_of_id = m.id AND undo.action = 'RESTORE'
