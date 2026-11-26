@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { ErrorBody, PointsSummary } from "@kararver/contracts";
 import type { PrismaClient } from "@kararver/db";
+import { createPrismaAccountErasureStore } from "../src/modules/account-erasure/prisma-store.ts";
 import { createPrismaModerationAppealStore } from "../src/modules/moderation/appeals-store.ts";
 import { createHarness, prismaBackend, sessionCookie, tokenFrom, WEB_ORIGIN, type Harness } from "./support/harness.ts";
 
@@ -415,6 +416,32 @@ describe("yayın puanı (postgres)", { skip: backend ? false : "TEST_DATABASE_UR
     assert.equal(tooLate.json().error.details[0].code, "appeal_window_closed");
     assert.equal((await send("GET", `/me/moderation-appeals/${rejectionId}`, undefined, lateSession.cookie)).json().data.status, "EXPIRED");
     assert.equal((await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: rejectionId } })).filedAt, null);
+
+    // A live account cannot silently redact or rewrite its filing.
+    await assert.rejects(() => db.moderationAppealWindow.update({
+      where: { rejectionActionId: boundaryRejectionId }, data: { filedReason: null },
+    }), /APPEAL_FILING_IMMUTABLE/);
+    const beforeErasure = await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: boundaryRejectionId } });
+    const erasure = await createPrismaAccountErasureStore(db).anonymize({
+      userId: boundaryOwner.id, actorId: boundaryOwner.id, self: true,
+      reason: "Sentetik silme testi", confirmUsername: boundaryAccount.username,
+      now: h.clock.now, requestId: randomUUID(),
+    });
+    assert.equal(erasure.kind, "anonymized");
+    const afterErasure = await db.moderationAppealWindow.findUniqueOrThrow({ where: { rejectionActionId: boundaryRejectionId } });
+    assert.equal(afterErasure.filedReason, null);
+    assert.deepEqual(afterErasure.filedAt, beforeErasure.filedAt);
+    assert.deepEqual(afterErasure.deadlineAt, beforeErasure.deadlineAt);
+    const appealStore = createPrismaModerationAppealStore(db, { testClock: () => h.clock.now });
+    assert.equal(await appealStore.get(boundaryOwner.id, boundaryRejectionId), null);
+    assert.deepEqual(await appealStore.file({ userId: boundaryOwner.id, rejectionActionId: boundaryRejectionId,
+      reason: "Silme sonrasında tekrar yazılmaması gereken gerekçe" }), { kind: "not_found" });
+    await assert.rejects(() => db.moderationAppealWindow.update({
+      where: { rejectionActionId: boundaryRejectionId }, data: { filedReason: "Silinen gerekçeyi geri yazma" },
+    }), /APPEAL_FILING_IMMUTABLE/);
+    const erasedQueue = await send("GET", "/admin/moderation/appeals", undefined, reviewer.cookie);
+    assert.equal(erasedQueue.statusCode, 200, erasedQueue.body);
+    assert.equal(erasedQueue.json().data.some((r: { rejectionActionId: string }) => r.rejectionActionId === boundaryRejectionId), false);
   });
 
   test("ledger sayfalı okunur ve DB'de UPDATE/DELETE edilemez", async () => {

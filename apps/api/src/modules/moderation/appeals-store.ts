@@ -69,13 +69,19 @@ export function createPrismaModerationAppealStore(prisma: PrismaClient, options:
     async get(userId, rejectionActionId) {
       // Do not leak existence, reason or identity to unrelated accounts.
       const result = await prisma.moderationAppealWindow.findFirst({
-        where: { rejectionActionId, recipientId: userId },
+        where: { rejectionActionId, recipientId: userId, recipient: { deletedAt: null } },
         select: { rejectionActionId: true, deliveredAt: true, deadlineAt: true, filedAt: true },
       });
       return result ? { ...result, evaluatedAt: await dbNow(prisma) } : null;
     },
     async file({ userId, rejectionActionId, reason }) {
       return prisma.$transaction(async (tx): Promise<AppealFileResult> => {
+        // Same user-first lock as account erasure. A stale authenticated
+        // request cannot reintroduce free text after successful erasure.
+        const [recipient] = await tx.$queryRaw<Array<{ deleted: boolean }>>`
+          SELECT deleted_at IS NOT NULL AS deleted FROM users
+          WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
+        if (!recipient || recipient.deleted) return { kind: "not_found" };
         // Serialize repeated user submissions with a row-level lock. A
         // competing retry can never overwrite the first filing timestamp.
         const [receipt] = await tx.$queryRaw<Array<{
