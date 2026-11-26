@@ -77,6 +77,8 @@ test("202 submission waits for the API and stays private instead of opening a pu
 
 for (const status of [400, 403, 409, 500, "network"] as const) test(`appeal ${status}: no optimistic success, retained reason, explicit retry`, async ({ page }, info) => {
   const mock = await api(page); let failed = true; let calls = 0;
+  mock.handlers.set("me.moderationAppeals.acceptedReceipt", r => r.fulfill({ status:404, json:failure("NOT_FOUND") }));
+  mock.handlers.set("me.moderationAppeals.rejectedReceipt", r => r.fulfill({ status:404, json:failure("NOT_FOUND") }));
   mock.handlers.set("me.moderationAppeals.get", r => r.fulfill({ json: { data: view } }));
   mock.handlers.set("me.moderationAppeals.file", r => {
     calls++; expect(r.request().postDataJSON()).toEqual({ reason });
@@ -171,4 +173,19 @@ test("wrong rejection ID in a filing receipt is not treated as successful submis
   await expect(page.locator("main").getByRole("alert")).toContainText("Başvurunun kaydedildiği doğrulanamadı");
   await expect(page.getByText(/Başvurun kaydedildi/)).toHaveCount(0);
   await expect(page.getByLabel("İtiraz gerekçen")).toHaveValue(reason);
+});
+
+
+for (const outcome of ["ACCEPTED","REJECTED","BOTH","WRONG_ID"] as const) test("private appeal outcome: "+outcome, async ({page}) => {
+  const mock = await api(page);
+  const absent = (r: Parameters<NonNullable<ReturnType<typeof mock.handlers.get>>>[0]) => r.fulfill({status:404,json:failure("NOT_FOUND")});
+  mock.handlers.set("me.moderationAppeals.get", r => r.fulfill({json:{data:{...view,status:"FILED",filedAt:"2026-11-10T12:00:00Z"}}}));
+  mock.handlers.set("me.moderationAppeals.acceptedReceipt", r => outcome === "REJECTED" ? absent(r) : r.fulfill({json:{data:{rejectionActionId:outcome==="WRONG_ID"?"01998b9a-0000-7000-8000-000000000099":id,pollId:id,resolvedAt:"2026-11-15T12:00:00Z",outcome:"ACCEPTED",message:"sentetik"}}}));
+  mock.handlers.set("me.moderationAppeals.rejectedReceipt", r => outcome === "REJECTED" || outcome === "BOTH" ? r.fulfill({json:{data:{rejectionActionId:id,resolvedAt:"2026-11-15T12:00:00Z",outcome:"REJECTED",reason:"ORIGINAL_DECISION_UPHELD"}}}) : absent(r));
+  await page.goto(path);
+  const result = page.getByRole("region",{name:"İtiraz sonucu"});
+  if(outcome==="ACCEPTED") await expect(result.getByRole("status")).toContainText("İtirazın kabul edildi");
+  else if(outcome==="REJECTED") { await expect(result.getByRole("status")).toContainText("İtirazın reddedildi"); await expect(result).toContainText("ilk karar geçerli"); }
+  else { await expect(result.getByRole("alert")).toContainText("doğrulanamadı"); await expect(result.locator("time")).toHaveCount(0); }
+  expect(mock.unexpected).toEqual([]);
 });
