@@ -277,6 +277,45 @@ describe("#303 moderasyon yetki retleri ve kaldırılmış içerik (postgres)", 
     }
   });
 
+  test("#377 active to hidden to removed: public discovery and lookup revoke previously visible poll", async () => {
+    const author = await signUp();
+    const viewer = await signUp();
+    const group = await community();
+    const poll = await createPoll(author, group.id);
+    const marker = (await db.poll.findUniqueOrThrow({ where: { id: poll.id }, select: { title: true } })).title;
+    const listPaths = [
+      `/feed?tab=new&categoryId=${categoryId}&limit=100`,
+      `/feed?tab=new&communityId=${group.id}&limit=100`,
+      `/search?type=polls&q=${encodeURIComponent(marker)}&limit=100`,
+      `/profiles/${author.username}/polls?limit=100`,
+    ];
+    const detailPaths = [`/polls/${poll.id}`, `/polls/lookup?publicId=${poll.publicId}`];
+    for (const cookie of [undefined, viewer.cookie]) {
+      for (const url of [...listPaths, ...detailPaths]) {
+        const res = await get(url, cookie);
+        assert.equal(res.statusCode, 200, url);
+        assert.ok(res.body.includes(poll.id), `positive control: ${url}`);
+      }
+    }
+    for (const status of ["HIDDEN", "REMOVED"] as const) {
+      const res = await moderate("polls", poll.id, status === "HIDDEN" ? "HIDE" : "REMOVE", admin.cookie);
+      assert.equal(res.statusCode, 200, res.body);
+      assert.equal((await db.poll.findUniqueOrThrow({ where: { id: poll.id } })).status, status);
+      for (const cookie of [undefined, viewer.cookie]) {
+        for (const url of listPaths) {
+          const result = await get(url, cookie);
+          assert.equal(result.statusCode, 200, url);
+          assert.ok(!result.body.includes(poll.id) && !result.body.includes(marker), `${status}: ${url}`);
+        }
+        for (const url of detailPaths) {
+          const result = await get(url, cookie);
+          assertError(result, 404, "NOT_FOUND", url);
+          assert.ok(!result.body.includes(marker), url);
+        }
+      }
+    }
+  });
+
   test("kaldırılan yorum: metni sızmaz, profilde yok; tepki, düzenleme ve cevap yazılamaz", async () => {
     const author = await signUp();
     const commenter = await signUp();
