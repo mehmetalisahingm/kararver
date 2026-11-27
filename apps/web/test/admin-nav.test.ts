@@ -24,6 +24,7 @@ const primaryEndpoint: Record<AdminSectionId, string> = {
   users: "admin.users.list",
   polls: "admin.content.polls",
   comments: "admin.content.comments",
+  appeals: "admin.moderation.appeals.list",
   reports: "admin.reports.list",
   media: "admin.media.list",
   categories: "admin.categories.list",
