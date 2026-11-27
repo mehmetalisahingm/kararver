@@ -152,6 +152,8 @@ export function safeReturnTo(value: string | null): string {
     (/^\/$/.test(value) ||
       /^\/olustur$/.test(value) ||
       /^\/hesap$/.test(value) ||
+      /^\/hesap\/puanlar$/.test(value) ||
+      /^\/hesap\/itiraz\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ||
         /^\/hesap\/guvenlik$/.test(value) ||
       /^\/bildirimler$/.test(value) ||
       /^\/ilgi-alanlari$/.test(value) ||

@@ -1,25 +1,39 @@
 import {test,expect} from "@playwright/test";
 import {api,failure,sample} from "./api";
 
-test("first guest can leave onboarding and returning guests browse the feed without a login wall",async({page})=>{
+test("first guest enters the scroll experience and returning guests browse without a login wall",async({page})=>{
+  // This suite checks shell navigation, not the embedded WebGL simulation.
+  // Software GPU rendering can starve Chromium's main thread on shared CI.
+  // Keep the real iframe mount/URL contract, with a deterministic document.
+  await page.route("**/experiences/cabin/index.html?embed=1", route => route.fulfill({
+    contentType:"text/html",
+    body:"<!doctype html><html lang=\"tr\"><title>Kabin test sahnesi</title><body>Kabin</body></html>",
+  }));
   const mock=await api(page);
   mock.handlers.set("me.get",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toBeVisible();
-  await page.getByRole("button",{name:"Üye olmadan akışı keşfet"}).click();
-  await expect(page.getByRole("heading",{name:"Senin için"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Bir fikre kapıl."})).toBeVisible();
+  // The 3D engine must not load while visitors are reading the first scene.
+  await expect(page.locator("#cabin-stage iframe")).toHaveCount(0);
+  await page.getByRole("link",{name:/Aşağı in/}).click();
+  await expect(page.locator("#cabin-stage iframe")).toHaveCount(1);
+  await expect(page.locator("#cabin-stage iframe")).toHaveAttribute("src", "/experiences/cabin/index.html?embed=1");
+  await expect(page).toHaveURL(/#cabin-stage$/);
+  await page.getByRole("link", {name:/Keşfetmeye devam et/}).click();
+  await expect(page).toHaveURL(/#discovery-stage$/);
+  await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:"Senin için"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toHaveCount(0);
+  await expect(page.locator(".space-welcome").getByRole("heading",{name:"Dünyanın nabzını tut."})).toHaveCount(0);
   expect(mock.unexpected).toEqual([]);
 });
 
 test("authenticated first visit goes directly to feed",async({page})=>{
   await api(page);
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:"Senin için"})).toBeVisible();
-  await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toHaveCount(0);
+  await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
+  await expect(page.locator(".space-welcome").getByRole("heading",{name:"Dünyanın nabzını tut."})).toHaveCount(0);
 });
 
 test("premium onboarding saves real category ids once after login and never casts a demo vote",async({page})=>{
@@ -39,7 +53,7 @@ test("premium onboarding saves real category ids once after login and never cast
     await r.fulfill({json:sample("votes.put")});
   });
 
-  await page.goto("/");
+  await page.goto("/basla");
   await page.getByRole("button",{name:"Bir karar verelim"}).click();
   await page.getByRole("button",{name:"Kendin dene"}).click();
   await page.getByRole("button",{name:"Beklerim",exact:false}).click();
@@ -54,7 +68,7 @@ test("premium onboarding saves real category ids once after login and never cast
   await page.getByRole("button",{name:"Giriş yap",exact:true}).click();
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading",{name:"Senin için"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Bugünün kararları"})).toBeVisible();
   expect(interestWrites).toBe(1);
   expect(savedIds.length).toBe(1);
   expect(voteWrites).toBe(0);
@@ -74,6 +88,10 @@ test("existing interests are preserved instead of being silently overwritten",as
   });
 
   await page.addInitScript(({categoryId})=>{
+    // Run this fixture only on the first document: auth redirects may reload the page.
+    // Re-seeding on every navigation would resurrect a draft cleared after a successful save.
+    if (sessionStorage.getItem("kv-test-welcome-seeded") === "1") return;
+    sessionStorage.setItem("kv-test-welcome-seeded", "1");
     localStorage.setItem("kv-welcome-v1","1");
     localStorage.setItem("kv-welcome-draft-v1",JSON.stringify({
       version:1,
@@ -98,7 +116,7 @@ test("direct content links bypass onboarding even for first-time guests",async({
   mock.handlers.set("me.get",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
   const path=sample("polls.get").data.canonicalPath as string;
   await page.goto(path);
-  await expect(page.getByRole("heading",{name:"İnsanlar gerçekten ne düşünüyor?"})).toHaveCount(0);
+  await expect(page.locator(".space-welcome").getByRole("heading",{name:"Dünyanın nabzını tut."})).toHaveCount(0);
   await expect(page.locator("main h1").first()).toBeVisible();
   expect(mock.unexpected).toEqual([]);
 });
@@ -117,6 +135,10 @@ test("post-login interests API failure keeps draft and allows retry without logg
     await r.fulfill({json: {data: {categoryIds: [categoryId]}}});
   });
   await page.addInitScript(({categoryId}) => {
+    // Run this fixture only on the first document: auth redirects may reload the page.
+    // Re-seeding on every navigation would resurrect a draft cleared after a successful save.
+    if (sessionStorage.getItem("kv-test-welcome-seeded") === "1") return;
+    sessionStorage.setItem("kv-test-welcome-seeded", "1");
     localStorage.setItem("kv-welcome-v1", "1");
     localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({
       version: 1, categoryIds: [categoryId], demoChoice: "wait", returnTo: "/",
@@ -156,6 +178,10 @@ test("401 during post-login interest save returns to login and keeps draft for a
     await r.fulfill({json: {data: {categoryIds: [categoryId]}}});
   });
   await page.addInitScript(({categoryId}) => {
+    // Run this fixture only on the first document: auth redirects may reload the page.
+    // Re-seeding on every navigation would resurrect a draft cleared after a successful save.
+    if (sessionStorage.getItem("kv-test-welcome-seeded") === "1") return;
+    sessionStorage.setItem("kv-test-welcome-seeded", "1");
     localStorage.setItem("kv-welcome-v1", "1");
     localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({
       version: 1, categoryIds: [categoryId], demoChoice: "wait", returnTo: "/",
@@ -194,6 +220,10 @@ test("registration confirms login and retains post-signup interests retry after 
     return writes === 1 ? r.fulfill({status:503,json:failure()}) : r.fulfill({json:{data:{categoryIds:[categoryId]}}});
   });
   await page.addInitScript(({categoryId}) => {
+    // Run this fixture only on the first document: auth redirects may reload the page.
+    // Re-seeding on every navigation would resurrect a draft cleared after a successful save.
+    if (sessionStorage.getItem("kv-test-welcome-seeded") === "1") return;
+    sessionStorage.setItem("kv-test-welcome-seeded", "1");
     localStorage.setItem("kv-welcome-v1","1");
     localStorage.setItem("kv-welcome-draft-v1",JSON.stringify({version:1,categoryIds:[categoryId],demoChoice:"wait",returnTo:"/"}));
   },{categoryId});
@@ -226,6 +256,10 @@ test("unverified sign-in redirects to email verification without consuming onboa
     return r.fulfill({json: {data: {categoryIds: [categoryId]}}});
   });
   await page.addInitScript(({categoryId}) => {
+    // Run this fixture only on the first document: auth redirects may reload the page.
+    // Re-seeding on every navigation would resurrect a draft cleared after a successful save.
+    if (sessionStorage.getItem("kv-test-welcome-seeded") === "1") return;
+    sessionStorage.setItem("kv-test-welcome-seeded", "1");
     localStorage.setItem("kv-welcome-v1", "1");
     localStorage.setItem("kv-welcome-draft-v1", JSON.stringify({
       version: 1, categoryIds: [categoryId], demoChoice: "wait", returnTo: "/",

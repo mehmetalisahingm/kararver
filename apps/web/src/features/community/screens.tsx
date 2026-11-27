@@ -97,26 +97,31 @@ function CommunityCardView({ community }: { community: CommunitySummary }) {
 
 export function CommunitiesScreen() {
   const { client } = useProduct();
+  const [query, setQuery] = useState("");
   const api = client.community;
   const load = useCallback((cursor: string | undefined, signal: AbortSignal) => api!.list(cursor, signal), [api]);
   const list = usePaged(api ? load : null);
+  const needle = query.trim().toLocaleLowerCase("tr-TR");
+  const filtered = list.items.filter(community => (community.name + " " + (community.description ?? "")).toLocaleLowerCase("tr-TR").includes(needle));
 
   if (!api) {
     return (
       <section className="kv-card kv-state">
         <span className="eyebrow">TOPLULUKLAR</span>
-        <h1>Topluluklar</h1>
+        <h2>Ekibini bul.</h2>
         <p className="kv-muted">Topluluklar demo veri kipinde gösterilmez; gerçek API ile açılır.</p>
       </section>
     );
   }
   return (
-    <section className="screen-stack">
-      <div>
-        <span className="eyebrow">TOPLULUKLAR</span>
-        <h1>Topluluklar</h1>
-        <p className="kv-muted">Ortak ilgi alanları etrafında toplanan topluluklara katıl; sorularını onlara sor.</p>
-      </div>
+    <section className="screen-stack mission-communities" aria-labelledby="community-directory-title">
+      <header className="mission-directory-heading"><div>
+        <span className="eyebrow">AYNI FREKANSTA</span>
+        <h2 id="community-directory-title">Ekibini bul.</h2>
+      </div><p>Ortak bir merak, yeni bir başlangıç.<br />Kendine yakın bir topluluk bul.</p></header>
+      <label className="mission-community-search">Yüklenen topluluklarda ara
+        <input className="kv-input" type="search" placeholder="Bir isim veya ilgi alanı…" value={query} maxLength={100} onChange={event => setQuery(event.target.value)} />
+      </label>
       {list.loading ? <Loading label="Topluluklar yükleniyor…" /> : null}
       {list.error ? (
         <div className="kv-card kv-state">
@@ -127,7 +132,8 @@ export function CommunitiesScreen() {
       {!list.loading && !list.error && list.items.length === 0 ? (
         <div className="kv-card kv-state"><p className="kv-muted">Henüz açık topluluk yok.</p></div>
       ) : null}
-      {list.items.map((community) => <CommunityCardView key={community.id} community={community} />)}
+      <div className="mission-community-list">{filtered.map((community) => <CommunityCardView key={community.id} community={community} />)}</div>
+      {query && !list.loading && list.items.length > 0 && filtered.length === 0 ? <div className="screen-stack"><p className="kv-muted">Yüklenen topluluklarda eşleşme yok. Daha fazlasını yükleyebilir veya aramayı temizleyebilirsin.</p><button className="kv-button kv-button--secondary" onClick={() => setQuery("")}>Aramayı temizle</button></div> : null}
       {list.hasMore ? (
         <button className="kv-button kv-button--secondary" onClick={list.loadMore} disabled={list.more}>
           {list.more ? "Yükleniyor…" : "Daha fazla göster"}

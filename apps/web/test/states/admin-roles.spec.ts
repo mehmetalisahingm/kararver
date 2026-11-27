@@ -7,9 +7,9 @@ import { examples } from "@kararver/contracts/fixtures";
 import { api, empty, failure, sample } from "./api";
 
 type Role = "USER" | "MODERATOR" | "ADMIN" | "SUPER_ADMIN";
-const ALL = ["Dashboard", "Kullanıcılar", "İçerikler", "Yorumlar", "Raporlar", "Medya", "Kategoriler", "Topluluklar", "Öne çıkarılanlar", "Ayarlar", "Audit"];
+const ALL = ["Dashboard", "Kullanıcılar", "İçerikler", "Yorumlar", "İtirazlar", "Raporlar", "Medya", "Kategoriler", "Topluluklar", "Öne çıkarılanlar", "Ayarlar", "Audit"];
 const MODERATION = ["İçerikler", "Yorumlar", "Raporlar", "Medya", "Topluluklar"];
-const SECTIONS = ["/admin", "/admin/users", "/admin/polls", "/admin/comments", "/admin/reports", "/admin/media", "/admin/categories", "/admin/communities", "/admin/featured", "/admin/settings", "/admin/audit"];
+const SECTIONS = ["/admin", "/admin/users", "/admin/polls", "/admin/comments", "/admin/appeals", "/admin/reports", "/admin/media", "/admin/categories", "/admin/communities", "/admin/featured", "/admin/settings", "/admin/audit"];
 const axe = (page: Page) => new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
 
 async function as(page: Page, role: Role) {

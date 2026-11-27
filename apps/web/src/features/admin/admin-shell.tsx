@@ -9,6 +9,7 @@ import type { AdminClient } from "./admin-client.ts";
 import { adminNav, canEnterAdmin, canSeeAdminItem, type AdminRole, type AdminSectionId } from "./admin-model";
 import styles from "./admin-shell.module.css";
 import { AdminRolesContext } from "./admin-ui";
+import { AppealsPanel } from "./appeals-panel";
 import { AuditPanel } from "./audit-panel";
 import { CategoriesPanel } from "./categories-panel";
 import { CommunitiesPanel } from "./communities-panel";
@@ -149,6 +150,7 @@ const sectionMeta: Record<AdminSectionId, { title: string; intro: string }> = {
   users: { title: "Kullanıcılar", intro: "Hesap, rol ve yaptırım işlemleri için ortak çalışma alanı." },
   polls: { title: "İçerikler", intro: "Anket ve tartışmaların görünürlük ve moderasyon durumu." },
   comments: { title: "Yorumlar", intro: "Yorum ve cevap moderasyonu için filtrelenebilir liste." },
+  appeals: { title: "Moderasyon itirazları", intro: "Bekleyen başvurular ve 14 günlük inceleme hedefi." },
   reports: { title: "Raporlar", intro: "Açık raporları gerekçeli biçimde sonuçlandırma kuyruğu." },
   media: { title: "Medya", intro: "Karantina, inceleme ve görsel risk durumları." },
   categories: { title: "Kategoriler", intro: "Kategori sırası, açıklama ve aktiflik yönetimi." },
@@ -164,6 +166,7 @@ const demoMetrics: Record<AdminSectionId, [string, string][]> = {
   users: [["Aktif", "1.248"], ["Kısıtlı", "9"], ["Yeni / 24s", "43"]],
   polls: [["Aktif", "386"], ["Kilitli", "4"], ["İncelemede", "11"]],
   comments: [["Bugün", "214"], ["Raporlu", "8"], ["Kaldırılan", "3"]],
+  appeals: [],
   reports: [["Açık", "12"], ["Bugün sonuçlanan", "31"], ["SLA dışı", "2"]],
   media: [["Bekleyen", "7"], ["Karantina", "2"], ["Onaylanan", "118"]],
   categories: [["Aktif", "13"], ["Pasif", "1"], ["İçerik", "386"]],
@@ -178,6 +181,7 @@ function livePanel(section: AdminSectionId, admin: AdminClient) {
   switch (section) {
     case "users": return <UsersPanel admin={admin} />;
     case "dashboard": return <DashboardPanel admin={admin} />;
+    case "appeals": return <AppealsPanel admin={admin} />;
     case "reports":
       return <ReportsPanel admin={admin} />;
     case "media":

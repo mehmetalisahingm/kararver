@@ -71,6 +71,11 @@ route("admin.reports.resolve", async ({ params, authorize }) => {
 
 ### 1.3 İşlem kataloğu
 
+İtiraz işlemlerinin ADMIN+ eki (#360/#366):
+
+- `moderation.appeal.reject`: `admin`; insan incelemesi sonrası gerekçe koduyla itirazı reddeder. Genel MODERATOR rolüne açık değildir.
+- `moderation.appeal.queue.read`: `admin`; bekleyen itirazların dosya metaverilerini ve 14 günlük operasyon hedefini salt okunur listeler. Otomatik karar vermez.
+
 111 endpoint'in her biri tam olarak bir işleme bağlıdır. Eşlemesi olmayan endpoint, registry'de olmayan eşleme, kullanılmayan işlem veya endpoint `auth` seviyesiyle uyuşmayan kural testte kırılır.
 
 | Seviye | İşlemler |

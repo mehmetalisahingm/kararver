@@ -1,5 +1,6 @@
 import { DataExportPackage, SelfDeletionDone, SelfDeletionPreview, SelfDeletionStarted, EmailChangeCancelled, EmailChangeConfirmed, EmailChangeStarted, EmailChangeView, DecisionState, DecisionUpdate, Category, CommentView, CommunityCard, Me, PointsSummary, PollCard, PollDetail, PendingPollReceipt, PublicProfile as WirePublicProfile, VoteResult, SearchResult as WireSearchResult, TrendPage as WireTrendPage, dataOf, pageOf } from "@kararver/contracts";
 import { HttpClient } from "./http-client.ts";
+import { MyModerationAppealView, AcceptedModerationAppealReceipt, RejectedModerationAppealReceipt, LedgerEntry } from "@kararver/contracts";
 import { AdminClient } from "../features/admin/admin-client.ts";
 import { CommunityClient, ReportClient } from "../features/community/community-client.ts";
 import { NotificationClient } from "../features/notifications/notification-client.ts";
@@ -14,6 +15,35 @@ import type { FeedTab, SearchType, SearchResult, TrendFormat, TrendPage } from "
 export { mapPoll } from "./poll-mapper.ts";
 
 export class ApiClient implements ProductClient {
+  async moderationAppeal(id: string, signal?: AbortSignal) {
+    const view = dataOf(MyModerationAppealView).parse(await this.http.request("me.moderationAppeals.get", { params: { id }, signal })).data;
+    if (view.rejectionActionId.toLowerCase() !== id.toLowerCase()) throw new UiError("INVALID_RESPONSE", "Başvuru bilgisi doğrulanamadı.");
+    return view;
+  }
+  async fileModerationAppeal(id: string, reason: string, signal?: AbortSignal) {
+    const view = dataOf(MyModerationAppealView).parse(await this.http.request("me.moderationAppeals.file", { params: { id }, body: { reason }, signal })).data;
+    if (view.rejectionActionId.toLowerCase() !== id.toLowerCase() || view.status !== "FILED" || !view.filedAt) throw new UiError("INVALID_RESPONSE", "Başvurunun kaydedildiği doğrulanamadı. Durumunu tekrar kontrol et.");
+    return view;
+  }
+  async appealOutcome(id: string, signal?: AbortSignal) {
+    // Both endpoints are private and use 404 for absent outcomes. Never infer
+    // acceptance from a filed request or from a public poll status.
+    const absent = (e: unknown) => { if (e instanceof UiError && e.code === "NOT_FOUND") return null; throw e; };
+    const [accepted, rejected] = await Promise.all([
+      this.http.request("me.moderationAppeals.acceptedReceipt", { params: { id }, signal })
+        .then(v => dataOf(AcceptedModerationAppealReceipt).parse(v).data).catch(absent),
+      this.http.request("me.moderationAppeals.rejectedReceipt", { params: { id }, signal })
+        .then(v => dataOf(RejectedModerationAppealReceipt).parse(v).data).catch(absent),
+    ]);
+    if (accepted && rejected) throw new UiError("INVALID_RESPONSE", "İtiraz sonucu doğrulanamadı.");
+    const result = accepted ?? rejected;
+    if (result && result.rejectionActionId.toLowerCase() !== id.toLowerCase())
+      throw new UiError("INVALID_RESPONSE", "İtiraz sonucu doğrulanamadı.");
+    return result;
+  }
+  async pointsLedger(cursor?: string, signal?: AbortSignal) {
+    return pageOf(LedgerEntry).parse(await this.http.request("points.ledger", { query: { cursor }, signal }));
+  }
   readonly media: MediaClient;
   /** Yönetim ekranları (KV-14/24/32/37/38); demo adapter'da yoktur, ekran yer tutucuya düşer. */
   readonly admin: AdminClient;

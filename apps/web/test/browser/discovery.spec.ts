@@ -70,7 +70,8 @@ test("feed pagination retries preserve items; expired cursor restarts; filters a
   await expect(cards).toHaveCount(3);
   for (const author of await cards.locator(".author small").allTextContents())
     expect(author).toContain("Teknoloji");
-  await expect(page.locator("#main")).toBeFocused();
+  // Filtering returns keyboard focus to the results, keeping the landing scene above.
+  await expect(page.locator("#mission-content")).toBeFocused();
   await expect(
     page.getByRole("button", { name: "Daha fazla göster", exact: true }),
   ).toHaveCount(0);
@@ -162,6 +163,8 @@ test("five trends differ; hidden counts stay hidden; movement has exact dated ta
   await page
     .getByLabel("Trend görünümü", { exact: true })
     .selectOption("WEEKLY_MOVERS");
+  await expect(page).toHaveURL(/format=WEEKLY_MOVERS/);
+  await expect(page.getByLabel("Trend görünümü", { exact: true })).toHaveValue("WEEKLY_MOVERS");
   await expect(page.locator(".trend-results > article")).toHaveCount(2);
   const movement = page.locator(".trend-results > article").first();
   await expect(movement).toContainText("+20 yüzde puan");
@@ -181,6 +184,7 @@ test("five trends differ; hidden counts stay hidden; movement has exact dated ta
     "none",
   );
   await page.getByLabel("Kategori", { exact: true }).selectOption("seyahat");
+  await expect(page).toHaveURL(/category=seyahat/);
   await expect(
     page.getByRole("heading", {
       name: "Karşılaştırma için yeterli geçmiş yok.",
@@ -190,7 +194,11 @@ test("five trends differ; hidden counts stay hidden; movement has exact dated ta
   await page
     .getByLabel("Trend görünümü", { exact: true })
     .selectOption("DAILY_RISING");
+  await expect(page).toHaveURL(/format=DAILY_RISING/);
+  await expect(page.getByLabel("Trend görünümü", { exact: true })).toHaveValue("DAILY_RISING");
+  await expect(page.getByLabel("Kategori", { exact: true })).toHaveValue("seyahat");
   await page.getByLabel("Kategori", { exact: true }).selectOption("spor");
+  await expect(page).toHaveURL(/category=spor/);
   await expect(
     page.getByRole("heading", { name: "Bu kategoride henüz trend yok." }),
   ).toBeVisible();
@@ -258,7 +266,7 @@ test("discovery screens support mobile/desktop, both themes and accessible chart
         page.locator(".discovery-results, .category-grid, .trend-results"),
       ).toBeVisible();
       for (const theme of ["dark", "light"]) {
-        // UI-V2 defaults to light and persists a chosen theme. Tests must verify
+        // The selected design defaults to dark and persists a chosen theme. Tests must verify
         // both modes regardless of the current persisted browser preference.
         if (await page.locator(".product").getAttribute("data-theme") !== theme) {
           await page.getByRole("button", { name: /temaya geç/ }).click();

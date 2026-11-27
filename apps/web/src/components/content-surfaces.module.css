@@ -29,3 +29,7 @@
 .community p { margin: 0; line-height: 1.65; }
 .community > a { justify-self: start; }
 @media(max-width:480px) { .screen :global(.notification-heading) { padding: 20px; } .screen :global(.notification-open) { grid-template-columns: 10px minmax(0,1fr) 12px; } .profileHeader > :global(.kv-row) { align-items: flex-start; } }
+
+:global(.product[data-experience="studio"]) .profileHeader { background:transparent; border:0; border-bottom:1px solid var(--kv-border); border-radius:0; padding:0 0 30px; }
+:global(.product[data-experience="studio"]) .profileHeader img { border-radius:2px; }
+:global(.product[data-experience="studio"]) .stats :global(.kv-badge) { border-radius:0; min-height:70px; font-weight:500; background:var(--kv-surface); border:0; border-top:1px solid var(--kv-control-border); }
