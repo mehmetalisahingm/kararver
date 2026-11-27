@@ -22,7 +22,7 @@ const server = createServer((request, response) => {
 });
 await new Promise(resolve => server.listen(4015, "127.0.0.1", resolve));
 const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--hostname", "127.0.0.1", "--port", "3006"], {
-  stdio: "inherit", env: { ...process.env, APP_ENV: "production", NEXT_PUBLIC_KV_DATA_MODE: "api", NEXT_PUBLIC_API_URL: "http://127.0.0.1:4015", API_URL: "http://127.0.0.1:4015", WEB_URL: "http://127.0.0.1:3006" },
+  stdio: "inherit", env: { ...process.env, APP_ENV: process.env.PUBLIC_READ_APP_ENV ?? "production", NEXT_PUBLIC_KV_DATA_MODE: "api", NEXT_PUBLIC_API_URL: "http://127.0.0.1:4015", API_URL: "http://127.0.0.1:4015", WEB_URL: "http://127.0.0.1:3006" },
 });
 for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { child.kill(signal); server.close(); });
 child.once("exit", code => { server.close(); process.exit(code ?? 1); });
