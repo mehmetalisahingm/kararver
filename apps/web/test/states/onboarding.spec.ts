@@ -2,6 +2,13 @@ import {test,expect} from "@playwright/test";
 import {api,failure,sample} from "./api";
 
 test("first guest enters the scroll experience and returning guests browse without a login wall",async({page})=>{
+  // This suite checks shell navigation, not the embedded WebGL simulation.
+  // Software GPU rendering can starve Chromium's main thread on shared CI.
+  // Keep the real iframe mount/URL contract, with a deterministic document.
+  await page.route("**/experiences/cabin/index.html?embed=1", route => route.fulfill({
+    contentType:"text/html",
+    body:"<!doctype html><html lang=\"tr\"><title>Kabin test sahnesi</title><body>Kabin</body></html>",
+  }));
   const mock=await api(page);
   mock.handlers.set("me.get",r=>r.fulfill({status:401,json:failure("UNAUTHENTICATED")}));
   await page.goto("/");
@@ -10,6 +17,7 @@ test("first guest enters the scroll experience and returning guests browse witho
   await expect(page.locator("#cabin-stage iframe")).toHaveCount(0);
   await page.getByRole("link",{name:/Aşağı in/}).click();
   await expect(page.locator("#cabin-stage iframe")).toHaveCount(1);
+  await expect(page.locator("#cabin-stage iframe")).toHaveAttribute("src", "/experiences/cabin/index.html?embed=1");
   await expect(page).toHaveURL(/#cabin-stage$/);
   await page.getByRole("link", {name:/Keşfetmeye devam et/}).click();
   await expect(page).toHaveURL(/#discovery-stage$/);
