@@ -14,11 +14,12 @@ import { TrendFormat } from "./domains/discovery.ts";
 import { LedgerReason } from "./domains/growth.ts";
 import { ModerationAction, ReportReason, ReportTargetType } from "./domains/moderation.ts";
 import type { NotificationType } from "./domains/notifications.ts";
+import { SecurityAlertRuleId, SecurityAlertSeverity } from "./security-alerts.ts";
 import { PollKind, ResultsVisibility } from "./domains/polls.ts";
 import type { Owner } from "./endpoint.ts";
 import { eventEnvelope, type EventEnvelope } from "./helpers.ts";
 
-export const EventSubjectType = z.enum(["USER", "POLL", "COMMENT", "COMMUNITY", "REPORT", "ANNOUNCEMENT", "SETTING"]);
+export const EventSubjectType = z.enum(["USER", "POLL", "COMMENT", "COMMUNITY", "REPORT", "ANNOUNCEMENT", "SETTING", "SECURITY_ALERT"]);
 export type EventSubjectType = z.infer<typeof EventSubjectType>;
 
 /**
@@ -287,6 +288,19 @@ export const eventCatalog = Object.freeze({
     notification: "ANNOUNCEMENT_PUBLISHED",
     sensitive: [],
     naturalKey: (e) => `announcement.published:${e.subject.id}`,
+  }),
+  // #185 kritik güvenlik alarmı açıldı (worker security.alerts). Yalnız açılışta bir kez; konu security_alerts satırı.
+  "security.alert.opened": define({
+    summary: "Kritik güvenlik alarmı açıldı (audit eşiği aşıldı)",
+    producer: utku("security-alerts"),
+    subjects: ["SECURITY_ALERT"],
+    actor: "system",
+    payload: z.strictObject({ rule: SecurityAlertRuleId, severity: SecurityAlertSeverity, count: z.number().int().positive(), windowMinutes: z.number().int().positive() }),
+    consumers: ["notifications"],
+    analytics: [],
+    notification: "SECURITY_ALERT",
+    sensitive: [],
+    naturalKey: (e) => `security.alert.opened:${e.subject.id}`,
   }),
   "report.created": define({
     summary: "Rapor oluşturuldu veya kapanmış rapor yeniden açıldı",

@@ -55,7 +55,7 @@ describe("olay kataloğu", () => {
     assert.deepEqual([...catalogTypes].sort(), [...eventTypes].sort());
   });
 
-  test("#64 ve KV-03 tipleri korunur; KV-04 yedi tip ekler", () => {
+  test("#64 ve KV-03 tipleri korunur; KV-04 yedi tip, #185 bir tip ekler", () => {
     const legacy = [
       "user.registered", "poll.created", "poll.closed", "vote.submitted", "comment.created", "alternative.created",
       "decision.updated", "poll.milestone", "poll.trending", "community.featured", "moderation.applied",
@@ -66,7 +66,9 @@ describe("olay kataloğu", () => {
     for (const t of ["vote.invalidated", "report.resolved", "sanction.applied", "sanction.lifted", "role.changed", "settings.changed", "featured.applied"]) {
       assert.ok(eventTypes.has(t), t);
     }
-    assert.equal(eventTypes.size, 26);
+    // #185: security.alert.opened
+    assert.ok(eventTypes.has("security.alert.opened"));
+    assert.equal(eventTypes.size, 27);
   });
 
   test("kabul koşulu: oy/kapanış/karar/yorum/alternatif/trend/moderasyon olayları listeli", () => {
@@ -320,6 +322,7 @@ describe("bildirim verisi (KV-21 PR-3)", () => {
     COMMUNITY_FEATURED: { communityId: OPTION_B },
     SANCTION_APPLIED: { sanctionType: "WARNING", endsAt: null },
     ANNOUNCEMENT_PUBLISHED: { level: "INFO" },
+    SECURITY_ALERT: { rule: "role.change.burst", severity: "CRITICAL", count: 3 },
   };
 
   test("her bildirim tipinin data şeması var; örnek hem tipe özgü şemadan hem NotificationView.data'dan geçer", () => {
@@ -339,7 +342,7 @@ describe("bildirim verisi (KV-21 PR-3)", () => {
   });
 
   test("kapatılamayan tipler ve kilometre taşları", () => {
-    assert.deepEqual([...MANDATORY_NOTIFICATION_TYPES].sort(), ["MODERATION_APPLIED", "SANCTION_APPLIED"]);
+    assert.deepEqual([...MANDATORY_NOTIFICATION_TYPES].sort(), ["MODERATION_APPLIED", "SANCTION_APPLIED", "SECURITY_ALERT"]);
     assert.ok(MANDATORY_NOTIFICATION_TYPES.every((t) => NotificationType.options.includes(t)));
     assert.deepEqual([...POLL_MILESTONES], [10, 50, 100, 500, 1000, 5000, 10000]);
     assert.deepEqual([...POLL_MILESTONES].sort((a, b) => a - b), [...POLL_MILESTONES]);

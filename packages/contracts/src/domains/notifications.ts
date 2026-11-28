@@ -5,6 +5,7 @@ import { defineEndpoint } from "../endpoint.ts";
 import { SanctionType } from "./admin.ts";
 import { TrendFormat } from "./discovery.ts";
 import { ModerationAction } from "./moderation.ts";
+import { SecurityAlertRuleId, SecurityAlertSeverity } from "../security-alerts.ts";
 
 /** Açık enum (API_CONTRACTS §5): istemci bilinmeyen tipi genel gösterir. Yeni değer sona eklenir (DB enum'u aynı sırada). */
 export const NotificationType = z.enum([
@@ -19,11 +20,13 @@ export const NotificationType = z.enum([
   "COMMUNITY_FEATURED",
   "SANCTION_APPLIED",
   "ANNOUNCEMENT_PUBLISHED",
+  // #185: yalnız SUPER_ADMIN'lere; kapatılamaz.
+  "SECURITY_ALERT",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 
 /** Kullanıcının kapatamayacağı tipler (KV-34 tercihleri ve anket sessizi bunlara uygulanmaz). */
-export const MANDATORY_NOTIFICATION_TYPES: readonly NotificationType[] = Object.freeze(["MODERATION_APPLIED", "SANCTION_APPLIED"]);
+export const MANDATORY_NOTIFICATION_TYPES: readonly NotificationType[] = Object.freeze(["MODERATION_APPLIED", "SANCTION_APPLIED", "SECURITY_ALERT"]);
 
 /** Oy kilometre taşları (KV-21 §4): yalnız anket sahibine. Üretici (poll.milestone) ve bildirim tüketicisi aynı listeyi kullanır. */
 export const POLL_MILESTONES: readonly number[] = Object.freeze([10, 50, 100, 500, 1000, 5000, 10000]);
@@ -43,13 +46,14 @@ export const notificationData = Object.freeze({
   MODERATION_APPLIED: z.strictObject({ action: ModerationAction, toStatus: ContentStatus }),
   COMMUNITY_FEATURED: z.strictObject({ communityId: Id }),
   ANNOUNCEMENT_PUBLISHED: z.strictObject({ level: z.enum(["INFO", "WARNING"]) }),
+  SECURITY_ALERT: z.strictObject({ rule: SecurityAlertRuleId, severity: SecurityAlertSeverity, count: z.number().int().positive() }),
   SANCTION_APPLIED: z.strictObject({ sanctionType: SanctionType.extract(["WARNING", "RESTRICT_COMMENTS", "RESTRICT_POSTING"]), endsAt: Timestamp.nullable() }),
 } satisfies Record<NotificationType, z.ZodObject>);
 
 export const NotificationView = z.strictObject({
   id: Id,
   type: NotificationType,
-  subject: z.strictObject({ type: z.enum(["POLL", "COMMENT", "COMMUNITY", "USER", "ANNOUNCEMENT"]), id: Id }),
+  subject: z.strictObject({ type: z.enum(["POLL", "COMMENT", "COMMUNITY", "USER", "ANNOUNCEMENT", "SECURITY_ALERT"]), id: Id }),
   actor: PublicUser.nullable(),
   /** Tipe göre küçük özet alanlar (ör. milestone: 100). Oy seçimi veya özel veri içermez. */
   data: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),

@@ -139,6 +139,8 @@ enum NotificationType {
   // KV-21 PR-3: yalnız WARNING / RESTRICT_* yaptırımı (kapatılamaz).
   SANCTION_APPLIED
   ANNOUNCEMENT_PUBLISHED
+  // #185: kritik güvenlik alarmı (yalnız SUPER_ADMIN).
+  SECURITY_ALERT
 
   @@map("notification_type")
 }
@@ -515,4 +517,22 @@ model AccountDeletionRequest {
   @@index([userId, createdAt(sort: Desc)])
   @@index([status, expiresAt])
   @@map("account_deletion_requests")
+}
+
+// #185 kritik güvenlik alarmı (dilim 1). Worker security.alerts yazar; kurallar contracts security-alerts.ts.
+// Kural + kapsam başına tek açık alarm: kısmi UNIQUE "security_alerts_open_key" (status = 'OPEN') ve CHECK'ler
+// migration SQL'inde elle. scope_key: aktör kapsamlı kuralda aktörün UUID'si, genel kuralda '*'. Kişisel veri yok.
+model SecurityAlert {
+  id         String    @id @db.Uuid
+  rule       String    @db.VarChar(60)
+  severity   String    @db.VarChar(10)
+  scopeKey   String    @map("scope_key") @db.VarChar(64)
+  status     String    @default("OPEN") @db.VarChar(10)
+  peakCount  Int       @map("peak_count")
+  openedAt   DateTime  @map("opened_at") @db.Timestamptz(3)
+  lastSeenAt DateTime  @map("last_seen_at") @db.Timestamptz(3)
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(3)
+
+  @@index([status, openedAt(sort: Desc)])
+  @@map("security_alerts")
 }

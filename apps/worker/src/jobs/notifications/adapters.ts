@@ -221,4 +221,19 @@ export const notificationAdapters: Readonly<Partial<Record<EventType, Notificati
         : null,
     recipients: async (_tx, e) => ({ userIds: [e.subject.id] }),
   }),
+  "security.alert.opened": define({
+    eventType: "security.alert.opened",
+    type: "SECURITY_ALERT",
+    // #185: yalnız SUPER_ADMIN'lere (ortak süzgeç: silinmiş/BANNED hariç). Kapatılamaz; kişisel veri yok, ayrıntı ops panelinde.
+    draft: (e) =>
+      draftOf(e, "SECURITY_ALERT", {
+        subject: { type: "SECURITY_ALERT", id: e.subject.id },
+        pollId: null,
+        actorId: null,
+        data: { rule: e.payload.rule, severity: e.payload.severity, count: e.payload.count },
+      }),
+    recipients: async (tx) => ({
+      userIds: (await tx.userRole.findMany({ where: { role: "SUPER_ADMIN" }, select: { userId: true }, orderBy: { userId: "asc" } })).map((r) => r.userId),
+    }),
+  }),
 });

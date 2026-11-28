@@ -1,5 +1,6 @@
 "use client";
 
+import { securityAlertRule, SecurityAlertRuleId } from "@kararver/contracts";
 import { useEffect, useState } from "react";
 import type { AdminClient, OpsView } from "./admin-client";
 import { errorMessage } from "./admin-ui";
@@ -66,6 +67,7 @@ export function OpsPanel({ admin }: { admin: AdminClient }) {
             </table>
           </div>}
       </article>
+      <SecurityAlerts alerts={status.security.alerts} />
       <article className="kv-card"><h3>Acil durum anahtarları</h3>
         {status.switches == null ? <p>Anahtar durumu: Ölçüm yok</p> : <>
           <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Acil durum anahtarları tablosu">
@@ -84,4 +86,39 @@ export function OpsPanel({ admin }: { admin: AdminClient }) {
       <p className="kv-muted">Ortam: {status.release.env} · Sürüm: {status.release.sha ?? "Ölçüm yok"} · Son güncelleme: <time dateTime={status.generatedAt}>{date(status.generatedAt)}</time></p>
     </> : null}
   </section>;
+}
+
+const severityLabel = { CRITICAL: "Kritik", HIGH: "Yüksek" } as const;
+
+/** #185 kritik güvenlik alarmları: açıklar önce, sonra son 24 saatte kapananlar. Önem ve durum metinle yazılır (renk tek başına anlam taşımaz). */
+function SecurityAlerts({ alerts }: { alerts: OpsView["security"]["alerts"] }) {
+  const open = alerts?.filter(a => a.status === "OPEN") ?? [];
+  const closed = alerts?.filter(a => a.status === "RESOLVED") ?? [];
+  return <article className="kv-card" id="guvenlik-alarmlari" aria-labelledby="guvenlik-alarmlari-baslik">
+    <h3 id="guvenlik-alarmlari-baslik">Güvenlik alarmları</h3>
+    {alerts == null ? <p>Alarm durumu: Ölçüm yok</p> : <>
+      <p role="status">{open.length ? `${numbers.format(open.length)} açık alarm var.` : "Açık alarm yok."}</p>
+      {alerts.length ? <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Güvenlik alarmları tablosu">
+        <table className={styles.table}>
+          <caption>Açık alarmlar ve son 24 saatte kapananlar</caption>
+          <thead><tr><th scope="col">Alarm</th><th scope="col">Önem</th><th scope="col">Durum</th><th scope="col">Kapsam</th><th scope="col">En yüksek sayı</th><th scope="col">Açıldı</th><th scope="col">Son görülme / kapanış</th><th scope="col">İlk adım</th></tr></thead>
+          <tbody>{[...open, ...closed].map(a => {
+            const rule = SecurityAlertRuleId.safeParse(a.rule);
+            const r = rule.success ? securityAlertRule(rule.data) : null;
+            return <tr key={a.id} data-status={a.status}>
+              <th scope="row">{r?.label ?? a.rule}</th>
+              <td>{severityLabel[a.severity]}</td>
+              <td>{a.status === "OPEN" ? "Açık" : "Kapandı"}</td>
+              <td>{a.actor ? <span title={a.actor.id}>{a.actor.displayName} <small className="kv-muted">@{a.actor.username}</small></span> : "Genel"}</td>
+              <td>{measure(a.peakCount)}{r ? <small className="kv-muted"> (eşik {r.threshold} / {r.windowMinutes} dk)</small> : null}</td>
+              <td>{date(a.openedAt)}</td>
+              <td>{a.status === "OPEN" ? date(a.lastSeenAt) : date(a.resolvedAt)}</td>
+              <td>{r?.firstStep ?? "—"}</td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div> : null}
+      <p className="kv-muted">Alarmlar audit kayıtlarından 5 dakikada bir hesaplanır; açılınca SUPER_ADMIN'lere bildirim gider, sayı eşiğin altına inince kendiliğinden kapanır. Ayrıntı için audit ekranında aktörü ve zaman aralığını süz. Runbook: KV-49 “Güvenlik alarmları”.</p>
+    </>}
+  </article>;
 }
