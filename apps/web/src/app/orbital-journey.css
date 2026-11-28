@@ -13,6 +13,10 @@
 .decision-bay[data-selected=explore] .decision-path--left,.decision-bay[data-selected=create] .decision-path--right{background-size:100% 100%,220% 110%}.decision-bay[data-selected=explore] .decision-path--right,.decision-bay[data-selected=create] .decision-path--left{opacity:.35}
 .orbit-window-copy a,.decision-bottom a{min-height:44px;align-items:center}
 .decision-bottom a{display:inline-flex}
+/* A minimum height must not transfer through aspect-ratio into an oversized
+   auto width on landscape phones. Include each card's padding in its half. */
+.decision-bay{width:100%;box-sizing:border-box}
+.decision-path{box-sizing:border-box}
 .orbit-window[data-still=true] .orbit-window-earth{transform:scale(1.16);will-change:auto}.decision-capsules[data-still=true] .decision-path{transition:none}
 .decision-capsules[data-still=true] .decision-path:hover,.decision-capsules[data-still=true] .decision-path:focus-visible{background-size:100% 100%,200% 100%}
 @media(max-width:700px){.orbit-window{min-height:760px;align-items:end}.orbit-window-art img{object-position:65% center}.orbit-window-shade{background:linear-gradient(0deg,#0d1312 0%,#0d1312ea 25%,#0d13123b 68%,#0d131211)}.orbit-window-copy{padding:60px 24px 90px}.product[data-theme] .orbit-window h2,.product[data-theme] .decision-heading h2{font-size:clamp(43px,11vw,65px)}.orbit-window-copy p{font-size:14px}.orbit-window-coordinate{right:24px;top:35px;bottom:auto}.decision-capsules{padding:40px 20px 50px}.decision-topline span:last-child{display:none}.decision-heading{display:block;padding:35px 0 30px}.decision-heading p{margin:25px 0 0}.decision-bay{aspect-ratio:auto;min-height:720px}.decision-bay>img{object-position:center;object-fit:cover}.decision-path{width:100%;height:50%;padding:25px}.decision-path--left{top:0;bottom:auto;border-right:0;border-bottom:1px solid #dbe7c944}.decision-path--right{top:50%;bottom:0}.decision-path-title{font-size:38px;margin:12px 0}.decision-action{font-size:11px}.decision-bottom span{max-width:160px}}
