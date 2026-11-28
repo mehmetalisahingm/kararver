@@ -5,11 +5,13 @@ type Options = { params?: Record<string, string>; query?: Record<string, string 
 export class HttpClient {
   readonly baseUrl: string;
   private fetcher: typeof fetch;
+  private readonly readTimeoutMs: number;
   onUnauthorized: () => void = () => {};
-  constructor(baseUrl: string, fetcher: typeof fetch = fetch) {
+  constructor(baseUrl: string, fetcher: typeof fetch = fetch, readTimeoutMs = 15_000) {
     this.baseUrl = baseUrl ? baseUrl.replace(/\/$/, "").replace(/\/v1$/, "") + "/v1" : "";
     // Do not call the browser's native fetch with this HttpClient as its receiver.
     this.fetcher = (input, init) => fetcher(input, init);
+    this.readTimeoutMs = readTimeoutMs;
   }
   async request(id: string, options: Options = {}): Promise<unknown> {
     if (!this.baseUrl) throw new UiError("API_UNCONFIGURED", "API adresi yapılandırılmamış.");
@@ -21,18 +23,31 @@ export class HttpClient {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (options.body !== undefined) headers["Content-Type"] = "application/json";
     if (options.key) headers["Idempotency-Key"] = options.key;
+    // Bound reads through body consumption, including session restoration.
+    // Writes retain their caller's signal: a timeout must not trigger a replay.
+    const deadline = endpoint.method === "GET" ? new AbortController() : null;
+    const cancelRead = () => deadline?.abort(options.signal?.reason);
+    options.signal?.addEventListener("abort", cancelRead, { once: true });
+    let timedOut = false;
+    const timer = deadline ? setTimeout(() => { timedOut = true; deadline.abort(); }, this.readTimeoutMs) : undefined;
     let response: Response;
+    let text: string;
     try {
+      options.signal?.throwIfAborted();
       response = await this.fetcher(`${this.baseUrl}${path}${query.size ? `?${query}` : ""}`, {
         method: endpoint.method, credentials: "include", cache: "no-store", headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body), signal: options.signal,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body), signal: deadline?.signal ?? options.signal,
       });
+      if (response.status === 401 && id !== "auth.login") this.onUnauthorized();
+      text = await response.text();
     } catch (error) {
       if (options.signal?.aborted) throw error;
+      if (timedOut) throw new UiError("REQUEST_TIMEOUT", "Sunucunun yanıtı gecikti. Tekrar deneyebilirsin.");
       throw new UiError("NETWORK_ERROR", "Sunucuya ulaşılamadı. İşlemin durumunu kontrol edip tekrar deneyebilirsin.");
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      options.signal?.removeEventListener("abort", cancelRead);
     }
-    if (response.status === 401 && id !== "auth.login") this.onUnauthorized();
-    const text = await response.text();
     let body: unknown = null;
     try { body = text ? JSON.parse(text) : null; } catch { /* Rejected below, never render proxy HTML. */ }
     if (!response.ok) {
