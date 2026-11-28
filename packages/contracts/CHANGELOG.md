@@ -9,6 +9,21 @@
 Kurallar: [`docs/API_CONTRACTS.md` §5](../../docs/API_CONTRACTS.md#5-versiyonlama-ve-deprecation).
 Kırıcı değişiklikler `contract-breaking` etiketiyle, bütün tüketici sahipleri reviewer olarak eklenerek yapılır.
 
+## 1.45.0 — 2026-11-21 (Ümit, #365 / #381: aşamalı yaş beyanı UI sözleşmesi)
+
+- `Me.adultDeclarationEnforced?: boolean`: yalnız kendi hesap/login/profil yanıtında, sunucunun mevcut session yayın anahtarından türetilen etkin katılım kısıtı. `adultDeclarationRequired` eksik beyanı bildirmeye devam eder; açık `false` değerinde web engellemeden hatırlatma sunar.
+- Alan optional ve eklemelidir; eski fixture'lar geçerlidir. Yeni alanı vermeyen sunucuda web önceki koruyucu davranışı sürdürür. Yeni kayıt beyan şartı, backend yetki kuralları ve yayın anahtarının değeri değişmez.
+- Paket minor sürümü artırıldı; wire `contractVersion = "1.0"` aynı. API/web aynı aday sürümde doğrulanır; migration/flag, staging ve hukuki kabul ayrı kalır.
+
+## 1.44.0 — 2026-11-09 (Faruk, #289 karar 54A: eski hesaplarda 18+ öz beyanı)
+
+- Yeni hata kodu `ADULT_DECLARATION_REQUIRED` (403). `verified` seviyesindeki katılım işlemleri (`poll.create`, `vote.cast`, `comment.create`, `media.upload`) beyanı olmayan hesapta bu kodu döner. Eklemedir, kırıcı değildir; bilinmeyen kodu 403 olarak gösteren istemci etkilenmez.
+- `account.emailChange.manage` `dataRight` olarak işaretlendi: veri düzeltme hakkı beyan istemez.
+- `TrustedActor.adultDeclared?`: yalnız açıkça `false` iken reddeder; alanı vermeyen çağıran (worker) etkilenmez.
+- Yeni endpoint `me.adultDeclaration.confirm` (`POST /me/adult-declaration`, `{ adultConfirmed: true }` → `{ declaredAt }`). İlk beyan zamanı korunur. Yeni işlem `account.adult.declare`, audit türü `declare`.
+- `Me.adultDeclarationRequired?: boolean`: API her zaman gönderir; alanın isteğe bağlı olması eski fixture'ları kırmamak içindir.
+- Öz beyan gerçek yaş doğrulaması değildir. Sürüm numarası, açık dallarda 1.42.0 (#300) ve 1.43.0 (#315 zinciri, #185) kullanıldığı için 1.44.0'dır.
+
 ## 1.41.0 — 2026-10-24 (Utku, #185 audit sonuç süzgeci, dilim 3)
 
 Kırıcı değişiklik yok: yeni isteğe bağlı süzgeç ve yanıtta yeni alan.

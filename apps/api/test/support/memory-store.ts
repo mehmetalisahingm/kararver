@@ -66,6 +66,7 @@ export function createMemoryAuthStore(): MemoryAuthStore {
         id: randomUUID(),
         status: "ACTIVE",
         emailVerifiedAt: null,
+        adultDeclaredAt: user.adultDeclaredAt ?? null,
         bio: null,
         avatarMediaId: null,
         lastLoginAt: null,
@@ -132,6 +133,12 @@ export function createMemoryAuthStore(): MemoryAuthStore {
       if (patch.bio !== undefined) user.bio = patch.bio;
       if (patch.avatarMediaId !== undefined) user.avatarMediaId = patch.avatarMediaId;
       return toRecord(user);
+    },
+    async declareAdult(userId, now) {
+      const user = users.get(userId);
+      if (!user || user.deletedAt) return null;
+      user.adultDeclaredAt ??= now;
+      return user.adultDeclaredAt;
     },
     async getPointsSummary(userId) {
       return { balance: pointBalances.get(userId) ?? 0, publishCost: PUBLISH_COST };

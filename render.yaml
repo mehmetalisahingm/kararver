@@ -45,6 +45,9 @@ services:
         value: "false"
       - key: ROLE_APPROVALS_REQUIRED
         value: "false"
+      # #289: web 18+ beyan ekranı yayına girmeden açılmaz.
+      - key: LEGACY_ADULT_DECLARATION_ENFORCED
+        value: "false"
       - key: RATE_LIMIT_ENABLED
         value: "true"
       - key: MAIL_TRANSPORT

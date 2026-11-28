@@ -15,6 +15,10 @@ export const Me = z.strictObject({
   displayName: z.string().min(1).max(60),
   email: Email,
   emailVerified: z.boolean(),
+  /** #289 54A: eski hesabın 18+ öz beyanı eksik; yayın anahtarından bağımsız hatırlatma. */
+  adultDeclarationRequired: z.boolean().optional(),
+  /** Katılım kapısının bu hesap için etkin durumu; sunucunun yayın anahtarından gelir. */
+  adultDeclarationEnforced: z.boolean().optional(),
   avatarUrl: Url.nullable(),
   bio: z.string().max(300).nullable(),
   status: UserStatus,
@@ -280,6 +284,19 @@ export const authEndpoints = [
     idempotency: "natural",
     cache: "private",
     notes: ["avatarMediaId kullanıcının kendi AVATAR amaçlı, REJECTED olmayan görseli olmalı; APPROVED olana kadar avatarUrl null döner."],
+  }),
+  defineEndpoint({
+    id: "me.adultDeclaration.confirm", domain: "auth", method: "POST", path: "/me/adult-declaration",
+    summary: "Eski hesapta 18+ öz beyanı (#289, karar 54A)", auth: "user",
+    provider: users, consumers: web, unblocks: ["#289"],
+    availability: { status: "ready" },
+    request: { body: z.strictObject({ adultConfirmed: z.literal(true) }) },
+    responses: { 200: dataOf(z.strictObject({ declaredAt: Timestamp })) },
+    errors: [], idempotency: "natural", cache: "private",
+    notes: [
+      "Öz beyandır; kimlik veya gerçek yaş doğrulaması değildir. İlk beyan zamanı korunur, tekrar istek aynı declaredAt'i döner.",
+      "Beyan verilmeden okuma, veri dışa aktarma, hesap silme ve e-posta düzeltme açık kalır; yalnız katılım işlemleri ADULT_DECLARATION_REQUIRED alır.",
+    ],
   }),
   defineEndpoint({
     id: "me.emailChange.request",

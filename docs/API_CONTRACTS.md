@@ -59,6 +59,7 @@ Bütün yollar `/v1` önekiyle yayınlanır (ör. `GET /v1/polls/:id`). "Başar�
 | `POST /me/mfa/step-up`<br>Mevcut oturum için 5 dakikalık MFA yeniden doğrulama · `me.mfa.stepup` | U | 200 | — | Faruk `auth` | Ümit (web, KV-13) | #180 #182 | hazır |
 | `GET /me`<br>Oturum sahibinin hesabı · `me.get` | U | 200 | — | Faruk `users` | Ümit (web, KV-13), Mehmet (profil, KV-22) | #11 #15 #24 | hazır |
 | `PATCH /me`<br>Görünen ad, biyografi, avatar · `me.update` | U | 200 | doğal | Faruk `users` | Ümit (web, KV-13), Mehmet (profil, KV-22) | #11 #24 | hazır |
+| `POST /me/adult-declaration`<br>Eski hesapta 18+ öz beyanı (#289, karar 54A) · `me.adultDeclaration.confirm` | U | 200 | doğal | Faruk `users` | Ümit (web, KV-13) | #289 | hazır |
 | `POST /me/email-change`<br>E-posta değişimi başlat (parola + yeni adres) · `me.emailChange.request` | V | 202 | — | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
 | `GET /me/email-change`<br>Son e-posta değişimi talebinin durumu · `me.emailChange.get` | V | 200 | — | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
 | `DELETE /me/email-change`<br>Açık e-posta değişimi talebini iptal et · `me.emailChange.cancel` | V | 200 | doğal | Mert `email-change` | Ümit (web, KV-13) | #181 | hazır |
@@ -323,6 +324,7 @@ Sözleşme tamamlandığında aşağıdaki issue'lar mock/adapter ile geliştirm
 | #184 | `PUT /admin/communities/:id/owner`, `POST /admin/communities/:id/owner/release`, `POST /communities/:id/owner/release`, `GET /admin/communities`, `GET /admin/communities/:id/overview`, `GET /admin/communities/:id/members` |
 | #185 | `GET /admin/moderation/actions/:id/undo/preview`, `POST /admin/moderation/actions/:id/undo`, `GET /admin/moderation/batches/:id/undo/preview`, `POST /admin/moderation/batches/:id/undo`, `POST /admin/audit/export` |
 | #186 | `GET /admin/ops` |
+| #289 | `POST /me/adult-declaration` |
 <!-- END:unblocks -->
 
 Bağımlılığı olmayan KV-03 tüketicileri: #8 (KV-06, mock fixture ve CI) bu paketin `examples` ve şemalarını mock sunucu için kullanır; #6 (KV-04) olay ve yetki sözleşmesini bu envanterdeki `auth` seviyeleriyle eşler.

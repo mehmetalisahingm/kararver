@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useProduct } from "../../components/product-provider";
 import { ApiClient } from "../../lib/api-client";
 import { ErrorMessage, Field } from "../../components/fields";
@@ -12,6 +13,7 @@ import {
   emptyDraft,
   UiError,
   validateDraft,
+  needsAdultDeclaration,
 } from "../../lib/model";
 import type { FieldErrors } from "../../lib/model";
 import styles from "./polls.module.css";
@@ -68,7 +70,7 @@ export function Composer() {
       );
       return;
     }
-    if (!requireUser("/olustur")) return;
+    if (!requireUser("/olustur", true)) return;
     dialog.current?.showModal();
   }
   async function publish() {
@@ -96,6 +98,7 @@ export function Composer() {
       setBusy(false);
     }
   }
+  if (needsAdultDeclaration(user)) return <section className="kv-card screen-stack"><h1>Katılım için 18+ beyanı gerekiyor.</h1><p>Görsel yüklemeden veya anket oluşturmadan önce yaş beyanını tamamla. Kamuya açık içerikleri okumaya devam edebilirsin.</p><Link className="kv-button" href="/hesap/yas-beyani?returnTo=%2Folustur">Yaş beyanına git</Link><Link href="/kesfet">İçerikleri keşfet</Link></section>;
   return (
     <section className={`screen-stack ${styles.editor}`}>
       <div>
