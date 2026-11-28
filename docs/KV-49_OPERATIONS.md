@@ -31,6 +31,10 @@
 - Neon `DATABASE_URL` gizli ortam değişkenidir; migration kontrollü adımında pooler olmayan doğrudan bağlantı kullanılır. Eski Railway `${{Postgres.DATABASE_URL}}` referansı **güncel staging için geçerli değildir**.
 - Zorunlu güvenlik değişkenleri (`config.ts` staging/production'da zorlar): `SESSION_COOKIE_SECURE=true`, `MAIL_TRANSPORT≠console`, `AUTH_TOKEN_PEPPER` (≥ 32 karakter), bütün `S3_*`, `RATE_LIMIT_ENABLED` kapatılamaz.
 - Geçici erişimler iş bitince kapatılır: KV-48 tatbikatında açılan Postgres TCP proxy kapatıldı.
+- **MFA anahtarları (#300, [runbook](SA180_MFA_KEY_ROTATION.md)):**
+  - `MFA_ENCRYPTION_KEY`, production'da zorunlu. Kaybedilirse bütün v2 MFA kayıtları çözülemez. İki yetkili koruyucuda, şifre yöneticisi ve çevrimdışı güvenli kopyada tutulur; kontrolsüz değiştirilmez.
+  - `MFA_LEGACY_PEPPERS`: bütün eski `AUTH_TOKEN_PEPPER` değerleri, virgülle. Liste yalnız büyür; değerler log/issue'ya yazılmaz.
+  - **Restore şartı:** Restore edilen DB aynı iki değerle açılır; gerçek kurtarma kabulü #300/#291 açık.
 
 ## Deploy ve rollback
 
@@ -54,6 +58,7 @@
 > Railway dönemi (21 Ekim'e kadar): migration'lar Railway'in pre-deploy adımında (`db:deploy`) otomatik uygulanıyordu. Railway servisleri durduruldu (#297).
 
 **Rollback (uygulama — güncel Render):** Önce etkisini ve migration uyumunu değerlendir; Render'da uygun **önceki başarılı** uygulama sürümüne kontrollü geri dönüş yapılır. Sonra `/health` → `release.sha`, DB ve worker durumları ve anonim smoke kontrol edilir. **Render üzerinde aynı-SHA rollback kabulü henüz kayda geçmediği için 15 Ekim Railway tatbikatı güncel kabul sayılamaz.**
+- **MFA uyarısı (#300):** `MFA_ENCRYPTION_KEY` verildikten sonra yazılan v2 MFA kayıtlarını #300'den **önceki** bir sürüm okuyamaz; eski sürüme rollback MFA'lı hesapların step-up erişimini kilitleyebilir. [SA180_MFA_KEY_ROTATION.md](SA180_MFA_KEY_ROTATION.md) geri dönüş şartları ve owner kurtarma kabulü uygulanmadan anahtar/pepper değişimi yapılmaz.
 - **Migration'lar geri alınmaz:** Prisma'da otomatik down migration yoktur. Eski sürümün yeni şema ile uyumu expand/contract kuralıyla önceden doğrulanmalıdır. Render API/worker kendiliğinden `db:deploy` çalıştırmaz; mevcut ve geçmiş sürüm aynı DB üzerinde değerlendirilir (KV-48/#301).
 - **Veri bozulduysa:** KV-48 restore runbook'uyla **ayrı DB** üzerinde doğrulama yap, veri kaybı penceresini işletmeciyle kararlaştır, sonrasında onaylı bağlantı değişimi ve smoke gerçekleştir. Railway'de tarihsel ölçülen 5,2 dk RTO, **güncel Neon/Render için taahhüt veya kabul değildir**.
 

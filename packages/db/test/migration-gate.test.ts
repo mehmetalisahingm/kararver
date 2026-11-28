@@ -41,7 +41,7 @@ describe("migration kapısı kararı", () => {
   });
   test("repodaki migration listesi: yalnız zaman damgalı klasörler, sıralı", async () => {
     const list = await expectedMigrations();
-    assert.ok(list.length >= 52);
+    assert.ok(list.length >= 53);
     assert.deepEqual(list, [...list].sort());
     assert.ok(list.every((m) => /^\d{14}_/.test(m)));
   });

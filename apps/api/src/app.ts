@@ -96,7 +96,7 @@ import { registerMetricsRoutes } from "./modules/metrics/routes.ts";
 import type { MetricsStore } from "./modules/metrics/store.ts";
 import type { OpsProbe } from "./modules/ops/probe.ts";
 import { registerOpsRoutes } from "./modules/ops/routes.ts";
-import { buildHealth, cachedDatabaseCheck } from "./modules/ops/health.ts";
+import { buildHealth, cachedDatabaseCheck, cachedMfaKeyCheck } from "./modules/ops/health.ts";
 import { emergencySwitchesView } from "./modules/ops/switches.ts";
 import { createOpsTelemetry, type OpsTelemetry } from "./modules/ops/telemetry.ts";
 
@@ -306,7 +306,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return roles.length > 0 ? roles : ["USER" as const];
   };
 
-  if (deps.mfaStore) registerMfaRoutes(route, { store: deps.mfaStore, hasher: deps.hasher, now });
+  if (deps.mfaStore) registerMfaRoutes(route, { store: deps.mfaStore, hasher: deps.hasher, now, mailer: deps.mailer, webUrl: config.webUrl });
   registerAuthRoutes(route, {
     rolesOf,
     store: deps.authStore,
@@ -467,7 +467,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerAccountErasureRoutes(route, { store: deps.accountErasureStore, users: deps.adminUserStore, now });
   }
   if (deps.metricsStore) registerMetricsRoutes(route, { store: deps.metricsStore });
+  // /health ve /admin/ops aynı önbellekli MFA anahtar denetimini paylaşır (açılışta ilk istekte, sonra 10 dk).
+  const healthMfaKey = cachedMfaKeyCheck(deps.mfaStore?.keyCheck?.bind(deps.mfaStore));
   registerOpsRoutes(route, {
+    mfaKey: healthMfaKey,
     probe: deps.opsProbe,
     telemetry,
     env: config.appEnv,
@@ -516,6 +519,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       env: config.appEnv,
       sha: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.RENDER_GIT_COMMIT ?? process.env.GIT_COMMIT_SHA ?? null,
       workerExpected: process.env.WORKER_HEARTBEAT_EXPECTED === "true",
+      mfaKeyCheck: healthMfaKey,
     });
     return reply.code(httpStatus).header("Cache-Control", "no-store").send(body);
   });

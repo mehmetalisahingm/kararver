@@ -95,8 +95,17 @@ describe("operasyon telemetrisi (birim)", () => {
     assert.equal(status.components.database.status, "down");
     assert.equal(status.components.queue.status, "unknown");
     assert.deepEqual([status.backup.status, status.backup.lastBackupAt], ["unknown", null]);
-    assert.deepEqual([status.security.lockedLogins, status.security.adminActions24h], [null, null]);
+    assert.deepEqual([status.security.lockedLogins, status.security.adminActions24h, status.security.mfaKey], [null, null, null]);
     assert.ok(!JSON.stringify(status).includes("postgres://"), "hata ayrıntısı/bağlantı adresi sızmaz");
+  });
+
+  test("#300: MFA anahtar ayrıntısı yalnız yetkili ops görünümünde; denetim hata verirse null", async () => {
+    const base = { telemetry: createOpsTelemetry(), env: "test", startedAt: new Date(), now: () => new Date() };
+    const mismatch = await buildOpsStatus({ ...base, mfaKey: async () => "mismatch" as const });
+    OpsStatus.parse(mismatch);
+    assert.equal(mismatch.security.mfaKey, "mismatch");
+    const broken = await buildOpsStatus({ ...base, mfaKey: async () => { throw new Error("db"); } });
+    assert.equal(broken.security.mfaKey, null);
   });
 });
 

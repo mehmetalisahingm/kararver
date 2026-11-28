@@ -179,6 +179,10 @@ model UserMfaCredential {
   lastAcceptedStep   BigInt   @default(-1) @map("last_accepted_step")
   failedAttempts     Int      @default(0) @map("failed_attempts")
   lockedUntil        DateTime? @map("locked_until") @db.Timestamptz(6)
+  // #180/#291 doğrulayıcı yenileme: bekleyen yeni sır; eski sır (secret_cipher) onaya kadar geçerli.
+  reenrollSecretCipher Bytes?    @map("reenroll_secret_cipher")
+  reenrollSessionId    String?   @map("reenroll_session_id") @db.Uuid
+  reenrollExpiresAt    DateTime? @map("reenroll_expires_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   recoveryCodes MfaRecoveryCode[]
@@ -192,6 +196,7 @@ model MfaRecoveryCode {
   codeHash String @map("code_hash") @db.Char(64)
   createdAt DateTime @map("created_at") @db.Timestamptz(6)
   usedAt DateTime? @map("used_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
   credential UserMfaCredential @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@id([userId, codeHash])

@@ -35,6 +35,11 @@ services:
         sync: false
       - key: AUTH_TOKEN_PEPPER
         sync: false
+      # #300: MFA sırları için ayrı anahtar ve eski pepper listesi (docs/SA180_MFA_KEY_ROTATION.md); değerler yalnız panelde.
+      - key: MFA_ENCRYPTION_KEY
+        sync: false
+      - key: MFA_LEGACY_PEPPERS
+        sync: false
       - key: SESSION_COOKIE_NAME
         value: kv_session
       - key: SESSION_COOKIE_SECURE

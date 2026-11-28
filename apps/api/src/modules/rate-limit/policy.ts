@@ -18,6 +18,8 @@ export type RateLimitSettings = {
   reportsPerHour: number;
   newAccountReportsPerHour: number;
   uploadsPerHour: number;
+  /** #373: MFA kurulum/kurtarma/yenileme (parola soran uçlar), hesap başına saatte. */
+  mfaReauthPerHour: number;
   newAccountUploadsPerHour: number;
   searchesPerMinute: number;
   writesPerMinute: number;
@@ -40,6 +42,7 @@ export const DEFAULT_RATE_LIMIT_SETTINGS: Readonly<RateLimitSettings> = Object.f
   reportsPerHour: 10,
   newAccountReportsPerHour: 5,
   uploadsPerHour: 20,
+  mfaReauthPerHour: 5,
   newAccountUploadsPerHour: 5,
   searchesPerMinute: 60,
   writesPerMinute: 60,
@@ -68,6 +71,9 @@ export type Rule = {
 
 const rule = (name: string, scope: RuleScope, windowMs: number, limit: Rule["limit"]): Rule => ({ name, scope, windowMs, limit });
 
+/** Parola soran MFA uçlarında hesap başına saatlik deneme; üç uç tek sayacı paylaşır (#373). */
+const MFA_REAUTH_RULE = rule("mfa.reauth.hour", "actor", HOUR, (s) => s.mfaReauthPerHour);
+
 /** Uç noktaya özel kurallar. Burada olmayan yazma uç noktaları WRITE_RULES'a, GET'ler kuralsız. */
 export const ENDPOINT_RULES: Readonly<Record<string, readonly Rule[]>> = Object.freeze({
   "auth.register": [rule("register.ip", "ip", HOUR, (s) => s.registerPerIpHour)],
@@ -88,6 +94,10 @@ export const ENDPOINT_RULES: Readonly<Record<string, readonly Rule[]>> = Object.
   "reports.create": [rule("report.hour", "actor", HOUR, (s, n) => (n ? s.newAccountReportsPerHour : s.reportsPerHour))],
   "media.uploads.create": [rule("upload.hour", "actor", HOUR, (s, n) => (n ? s.newAccountUploadsPerHour : s.uploadsPerHour))],
   "search.query": [rule("search.min", "actor", MINUTE, (s) => s.searchesPerMinute)],
+  // #373 P1: parola soran MFA uçları (kurulum, kurtarma, yenileme) ortak sayaçla hesap başına saatte 5 deneme.
+  "me.mfa.setup": [MFA_REAUTH_RULE],
+  "me.mfa.recover": [MFA_REAUTH_RULE],
+  "me.mfa.reenroll.begin": [MFA_REAUTH_RULE],
 });
 
 export const WRITE_RULES: readonly Rule[] = [rule("write.min", "actor", MINUTE, (s, n) => (n ? s.newAccountWritesPerMinute : s.writesPerMinute))];

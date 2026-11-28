@@ -83,6 +83,8 @@ export type OpsStatusDeps = {
   loginLimits?: () => Promise<LoginLimits>;
   /** Acil durum anahtarları (KV-40); verilmezse `switches: null`. */
   switches?: () => Promise<SwitchesView>;
+  /** #300: MFA anahtar denetimi (önbellekli, /health ile ortak). Verilmezse `security.mfaKey: null`. */
+  mfaKey?: () => Promise<"ok" | "mismatch" | "unverified" | "unknown">;
 };
 
 export type SwitchName = "maintenance" | "registration" | "pollCreation" | "comments" | "uploads";
@@ -101,6 +103,7 @@ export async function buildOpsStatus(deps: OpsStatusDeps) {
     settle(probe && deps.loginLimits ? async () => probe.securitySignals(await deps.loginLimits!()) : undefined),
     settle(deps.switches),
   ]);
+  const mfaKey = await settle(deps.mfaKey);
   const now = deps.now();
   // İki iz varsa yenisi: dosya heartbeat'i (aynı servis) ya da worker'ın aldığı son iş (ayrı servis).
   const file = readHeartbeatFile();
@@ -126,6 +129,7 @@ export async function buildOpsStatus(deps: OpsStatusDeps) {
       ...security,
       lockedLogins: signals.ok ? signals.value.lockedLogins : null,
       adminActions24h: signals.ok ? signals.value.adminActions24h : null,
+      mfaKey: mfaKey.ok ? mfaKey.value : null,
     },
     // Son yedek `db:backup` kaydından (ops_backup_runs); tatbikat kanıtı KV-48'den.
     backup: {

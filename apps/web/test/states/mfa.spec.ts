@@ -91,3 +91,76 @@ test("single SUPER_ADMIN: approval form cannot request promotion or approve a le
   await expect(rolePanel.getByRole("button", { name: "Bağımsız incelemeyi MFA ile onayla" })).toHaveCount(0);
   expect(mock.unexpected).toEqual([]);
 });
+
+test("re-enrollment cannot close while a begin or confirm response is pending", async ({ page }) => {
+  const mock = await api(page);
+  mock.handlers.set("me.mfa.status", route => route.fulfill({ json: { data: { enabled: true, stepUpExpiresAt: new Date(Date.now() + 300000).toISOString() } } }));
+  let releaseBegin!: () => void;
+  let releaseConfirm!: () => void;
+  const beginGate = new Promise<void>(resolve => { releaseBegin = resolve; });
+  const confirmGate = new Promise<void>(resolve => { releaseConfirm = resolve; });
+  mock.handlers.set("me.mfa.reenroll.begin", async route => { await beginGate; await route.fulfill({ json: sample("me.mfa.reenroll.begin") }); });
+  mock.handlers.set("me.mfa.reenroll.confirm", async route => { await confirmGate; await route.fulfill({ json: sample("me.mfa.reenroll.confirm") }); });
+  await page.goto("/hesap/guvenlik");
+  const toggle = page.getByRole("button", { name: "Doğrulayıcıyı yenile", exact: true });
+  await toggle.click();
+  try {
+    await page.getByLabel("Yenileme için mevcut şifren").fill("local-fixture-password");
+    await page.getByRole("button", { name: "Yenilemeyi başlat", exact: true }).click();
+    await expect(toggle).toBeDisabled();
+    releaseBegin();
+    await expect(page.getByText("Yeni doğrulayıcı anahtarı", { exact: true })).toBeVisible();
+    await expect(toggle).toBeEnabled();
+    await page.getByLabel("Yeni doğrulayıcı kodu", { exact: true }).fill("654321");
+    await page.getByRole("button", { name: "Yeni doğrulayıcıyı onayla", exact: true }).click();
+    await expect(toggle).toBeDisabled();
+    releaseConfirm();
+    await expect(page.getByRole("region", { name: "Kurtarma kodların" })).toBeVisible();
+    await expect(toggle).toBeEnabled();
+    await expect(page.getByText("Yeni doğrulayıcı anahtarı", { exact: true })).toHaveCount(0);
+    expect(mock.unexpected).toEqual([]);
+  } finally { releaseBegin(); releaseConfirm(); }
+});
+
+test("authenticator re-enrollment needs step-up, keeps the old authenticator on a wrong code and shows new recovery codes once", async ({ page }) => {
+  const mock = await api(page);
+  let stepUpExpiresAt: string | null = null;
+  let begins = 0;
+  let wrongCode = true;
+  mock.handlers.set("me.mfa.status", route => route.fulfill({ json: { data: { enabled: true, stepUpExpiresAt } } }));
+  mock.handlers.set("me.mfa.stepup", route => {
+    stepUpExpiresAt = new Date(Date.now() + 300000).toISOString();
+    return route.fulfill({ json: sample("me.mfa.stepup") });
+  });
+  mock.handlers.set("me.mfa.reenroll.begin", route => {
+    begins++;
+    if (!stepUpExpiresAt) return route.fulfill({ status: 403, json: failure("FORBIDDEN") });
+    stepUpExpiresAt = null;
+    return route.fulfill({ json: sample("me.mfa.reenroll.begin") });
+  });
+  mock.handlers.set("me.mfa.reenroll.confirm", route =>
+    wrongCode ? route.fulfill({ status: 403, json: failure("FORBIDDEN") }) : route.fulfill({ json: sample("me.mfa.reenroll.confirm") }));
+  await page.goto("/hesap/guvenlik");
+  await page.getByRole("button", { name: "Doğrulayıcıyı yenile", exact: true }).click();
+  await expect(page.getByText("Bu oturumda geçerli bir yeniden doğrulama yok.")).toBeVisible();
+  await page.getByLabel("Yenileme için mevcut şifren").fill("correct-password123");
+  await page.getByRole("button", { name: "Yenilemeyi başlat", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "İstek tamamlanamadı." })).toBeVisible();
+  await page.getByLabel("Kritik işlem için kodun").fill("123456");
+  await page.getByRole("button", { name: "Yeniden doğrula", exact: true }).click();
+  await expect(page.getByText("Bu oturumda geçerli bir yeniden doğrulama yok.")).toHaveCount(0);
+  await page.getByLabel("Yenileme için mevcut şifren").fill("correct-password123");
+  await page.getByRole("button", { name: "Yenilemeyi başlat", exact: true }).click();
+  await expect(page.getByText("Yeni doğrulayıcı anahtarı", { exact: true })).toBeVisible();
+  await page.getByLabel("Yeni doğrulayıcı kodu", { exact: true }).fill("654321");
+  await page.getByRole("button", { name: "Yeni doğrulayıcıyı onayla", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "İstek tamamlanamadı." })).toBeVisible();
+  await expect(page.getByText("Yeni doğrulayıcı anahtarı", { exact: true })).toBeVisible();
+  wrongCode = false;
+  await page.getByRole("button", { name: "Yeni doğrulayıcıyı onayla", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Kurtarma kodların" })).toBeVisible();
+  await expect(page.getByText("Doğrulayıcın yenilendi.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Yeni doğrulayıcı anahtarı", { exact: true })).toHaveCount(0);
+  expect(begins).toBe(2);
+  expect(mock.unexpected).toEqual([]);
+});
